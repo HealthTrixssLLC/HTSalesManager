@@ -1,7 +1,7 @@
 // Main application sidebar with navigation
 // Based on Shadcn sidebar patterns
 
-import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload } from "lucide-react";
+import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -24,6 +24,11 @@ const menuItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
+  },
+  {
+    title: "Analytics",
+    url: "/analytics",
+    icon: BarChart3,
   },
   {
     title: "Accounts",
