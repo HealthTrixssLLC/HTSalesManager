@@ -225,7 +225,31 @@ export default function HelpPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Step 2: Prepare Your Data</h3>
+                <h3 className="text-lg font-semibold">Step 2: Preserve Custom IDs (Critical for Downstream Systems)</h3>
+                <Alert>
+                  <Database className="h-4 w-4" />
+                  <AlertTitle>Preserve Existing IDs for Downstream Systems</AlertTitle>
+                  <AlertDescription>
+                    If you have downstream systems (APIs, integrations, reports) that reference your Dynamics 365 record IDs, <strong>include the original IDs in your CSV exports</strong>. Health Trixss CRM will preserve these exact IDs during import, ensuring all your external systems continue to work without changes.
+                  </AlertDescription>
+                </Alert>
+                <div className="bg-muted p-4 rounded-md">
+                  <p className="text-sm font-semibold mb-2">Example CSV with Custom IDs:</p>
+                  <pre className="text-xs overflow-x-auto bg-background p-2 rounded">
+{`id,name,type,industry
+ACCT-D365-12345,Mercy Hospital,customer,Healthcare
+ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
+                  </pre>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    ✓ IDs preserved exactly as provided<br/>
+                    ✓ Leave ID column empty for auto-generation<br/>
+                    ✓ Works for all entities: Accounts, Contacts, Leads, Opportunities
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-lg font-semibold">Step 3: Prepare Your Data (Field Mapping)</h3>
                 <div className="bg-muted p-4 rounded-md space-y-3">
                   <p className="text-sm font-medium">Field Mapping Guide:</p>
                   
@@ -292,7 +316,7 @@ export default function HelpPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Step 3: Stage Conversion</h3>
+                <h3 className="text-lg font-semibold">Step 4: Stage Conversion</h3>
                 <div className="bg-muted p-4 rounded-md">
                   <p className="text-sm font-medium mb-2">Map Dynamics stages to Health Trixss stages:</p>
                   <table className="w-full text-sm">
@@ -315,7 +339,7 @@ export default function HelpPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Step 4: Import Order</h3>
+                <h3 className="text-lg font-semibold">Step 5: Import Order</h3>
                 <Alert>
                   <Zap className="h-4 w-4" />
                   <AlertTitle>Important: Import in the correct order!</AlertTitle>
@@ -332,7 +356,7 @@ export default function HelpPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Step 5: Use the Import Tool</h3>
+                <h3 className="text-lg font-semibold">Step 6: Use the Import Tool</h3>
                 <p className="text-sm text-muted-foreground">
                   Once your CSV files are ready with proper field mapping:
                 </p>
@@ -353,7 +377,7 @@ export default function HelpPage() {
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold">Step 6: Validation</h3>
+                <h3 className="text-lg font-semibold">Step 7: Validation</h3>
                 <div className="bg-muted p-4 rounded-md">
                   <p className="text-sm font-medium mb-2">After importing, verify:</p>
                   <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">

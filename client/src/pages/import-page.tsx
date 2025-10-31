@@ -350,7 +350,7 @@ export default function ImportPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <ul className="list-disc list-inside space-y-1">
             <li>CSV file must have a header row with column names</li>
-            <li>ID column can be left empty for auto-generation</li>
+            <li><strong className="text-foreground">Custom IDs are preserved:</strong> If migrating from Dynamics 365 or other systems, include your existing IDs in the CSV to maintain references in downstream systems. Leave empty for auto-generation.</li>
             <li>Required fields must be filled (firstName, lastName for contacts/leads)</li>
             <li>Dates should be in ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)</li>
             <li>For relationships, use the ID of the related record (e.g., accountId for contacts)</li>
