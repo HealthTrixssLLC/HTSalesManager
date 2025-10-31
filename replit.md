@@ -182,15 +182,18 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
-- **2025-10-31**: Sales Waterfall Chart Implementation
-  - Replaced "Pipeline by Stage" chart with interactive Sales Waterfall chart
+- **2025-10-31**: Sales Waterfall Chart Implementation (Stacked Bar Visualization)
+  - Replaced "Pipeline by Stage" chart with true waterfall chart using stacked bars
+  - **Waterfall Logic**: Each bar starts where the previous bar ended (floating bars)
+  - **First Bar**: "Gap to Target" (red) shows how much pipeline is needed to reach goal
+  - **Opportunity Bars**: Each opportunity (teal) stacks on top, showing incremental contribution
+  - **Visual Structure**: Uses transparent base bars + stacked value bars to create floating effect
   - Added ability to set and save annual sales targets per year (stored in localStorage)
   - Created year selector to view waterfalls for different calendar years
   - Implemented `/api/dashboard/sales-waterfall/:year` endpoint to fetch opportunities by year
-  - Waterfall visualization shows: Target → Each Opportunity → Gap/Surplus
-  - Displays Target, Actual, and Gap summary statistics
-  - Uses ComposedChart with bars (opportunity values) and line (cumulative progress)
-  - Reference line shows target threshold
+  - Reference line (red dashed) shows annual sales target
+  - Displays Target, Actual Pipeline, and Gap to Close summary statistics
+  - Bar labels show value on top in short format ($XXk)
 - **2025-10-31**: ID Pattern Enhancement - Custom Starting Values
   - Added `startValue` field to ID patterns (already in schema, now editable in UI)
   - Enhanced ID generation to calculate: `startValue + (counter - 1)`

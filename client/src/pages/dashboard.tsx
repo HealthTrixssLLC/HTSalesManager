@@ -32,6 +32,7 @@ type WaterfallDataPoint = {
   name: string;
   value: number;
   cumulative: number;
+  base?: number;
   isTotal?: boolean;
   isTarget?: boolean;
 };
@@ -74,46 +75,33 @@ export default function Dashboard() {
     localStorage.setItem(`salesTarget_${selectedYear}`, newTarget.toString());
   };
 
-  // Build waterfall data
+  // Build waterfall data with stacked bars (each starts where previous ended)
   const waterfallData: WaterfallDataPoint[] = [];
   if (opportunities) {
+    const totalActual = opportunities.reduce((sum, opp) => sum + opp.amount, 0);
+    const gap = Math.max(0, salesTarget - totalActual);
     let cumulative = 0;
     
-    // Add target as reference
-    waterfallData.push({
-      name: `${selectedYear} Target`,
-      value: salesTarget,
-      cumulative: salesTarget,
-      isTarget: true,
-    });
-    
-    // Add each opportunity
-    opportunities.forEach((opp, index) => {
-      cumulative += opp.amount;
-      waterfallData.push({
-        name: opp.name.length > 15 ? opp.name.substring(0, 15) + "..." : opp.name,
-        value: opp.amount,
-        cumulative: cumulative,
-      });
-    });
-    
-    // Add gap/surplus
-    const gap = salesTarget - cumulative;
+    // Start with Gap to Target (if exists)
     if (gap > 0) {
       waterfallData.push({
         name: "Gap to Target",
         value: gap,
-        cumulative: salesTarget,
+        cumulative: gap,
         isTotal: true,
       });
-    } else {
-      waterfallData.push({
-        name: "Over Target",
-        value: 0,
-        cumulative: cumulative,
-        isTotal: true,
-      });
+      cumulative = gap;
     }
+    
+    // Add each opportunity (stacked on top)
+    opportunities.forEach((opp) => {
+      waterfallData.push({
+        name: opp.name.length > 15 ? opp.name.substring(0, 15) + "..." : opp.name,
+        value: opp.amount,
+        cumulative: cumulative + opp.amount,
+      });
+      cumulative += opp.amount;
+    });
   }
 
   if (isLoading) {
@@ -215,8 +203,13 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={waterfallData}>
+            <ResponsiveContainer width="100%" height={350}>
+              <ComposedChart 
+                data={waterfallData.map((d, i) => ({
+                  ...d,
+                  base: i === 0 ? 0 : waterfallData[i - 1].cumulative,
+                }))}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="name" 
@@ -237,26 +230,40 @@ export default function Dashboard() {
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "0.5rem",
                   }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, "Amount"]}
+                  formatter={(value: number, name: string) => {
+                    if (name === "base") return null;
+                    return [`$${value.toLocaleString()}`, "Amount"];
+                  }}
+                  labelFormatter={(label) => label}
                 />
                 <ReferenceLine 
                   y={salesTarget} 
                   stroke="hsl(var(--destructive))" 
                   strokeDasharray="3 3"
-                  label={{ value: "Target", position: "right", fill: "hsl(var(--destructive))" }}
+                  label={{ value: `Target: $${salesTarget.toLocaleString()}`, position: "right", fill: "hsl(var(--destructive))", fontSize: 12 }}
+                />
+                <Bar 
+                  dataKey="base" 
+                  stackId="waterfall"
+                  fill="transparent"
                 />
                 <Bar 
                   dataKey="value" 
-                  fill="hsl(var(--primary))"
+                  stackId="waterfall"
                   radius={[4, 4, 0, 0]}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="cumulative" 
-                  stroke="hsl(var(--chart-2))" 
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--chart-2))", r: 4 }}
-                />
+                  label={{
+                    position: 'top',
+                    formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`,
+                    fontSize: 10,
+                  }}
+                >
+                  {waterfallData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.isTotal ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
+                    />
+                  ))}
+                </Bar>
               </ComposedChart>
             </ResponsiveContainer>
             <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
@@ -265,13 +272,13 @@ export default function Dashboard() {
                 <p className="font-semibold">${salesTarget.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Actual</p>
-                <p className="font-semibold">${waterfallData.reduce((sum, d) => !d.isTarget && !d.isTotal ? sum + d.value : sum, 0).toLocaleString()}</p>
+                <p className="text-muted-foreground">Actual Pipeline</p>
+                <p className="font-semibold text-primary">${waterfallData.filter(d => !d.isTotal).reduce((sum, d) => sum + d.value, 0).toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Gap</p>
+                <p className="text-muted-foreground">Gap to Close</p>
                 <p className="font-semibold text-destructive">
-                  ${Math.max(0, salesTarget - waterfallData.reduce((sum, d) => !d.isTarget && !d.isTotal ? sum + d.value : sum, 0)).toLocaleString()}
+                  ${(waterfallData.find(d => d.isTotal)?.value || 0).toLocaleString()}
                 </p>
               </div>
             </div>
