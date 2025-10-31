@@ -19,6 +19,7 @@ import ContactsPage from "@/pages/contacts-page";
 import LeadsPage from "@/pages/leads-page";
 import OpportunitiesPage from "@/pages/opportunities-page";
 import ActivitiesPage from "@/pages/activities-page";
+import ImportPage from "@/pages/import-page";
 import AdminConsole from "@/pages/admin-console";
 import AuditLogPage from "@/pages/audit-log-page";
 import HelpPage from "@/pages/help-page";
@@ -64,6 +65,7 @@ function Router() {
       <ProtectedRoute path="/leads" component={LeadsPage} />
       <ProtectedRoute path="/opportunities" component={OpportunitiesPage} />
       <ProtectedRoute path="/activities" component={ActivitiesPage} />
+      <ProtectedRoute path="/import" component={ImportPage} />
       <ProtectedRoute path="/help" component={HelpPage} />
       <ProtectedRoute path="/admin" component={AdminConsole} />
       <ProtectedRoute path="/audit-log" component={AuditLogPage} />

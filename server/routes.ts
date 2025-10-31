@@ -15,6 +15,11 @@ import {
   insertActivitySchema,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
+import multer from "multer";
+import { parse } from "csv-parse/sync";
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Audit logging helper
 async function createAudit(req: AuthRequest, action: string, resource: string, resourceId: string | null, before: any, after: any) {
@@ -796,6 +801,297 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Export activities error:", error);
       return res.status(500).json({ error: "Failed to export activities" });
+    }
+  });
+  
+  // ========== CSV IMPORT ROUTES ==========
+  
+  app.post("/api/import/accounts", authenticate, requirePermission("Account", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      // Parse CSV
+      const csvContent = req.file.buffer.toString("utf-8");
+      const records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+      
+      const results = {
+        total: records.length,
+        success: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; error: string; data: any }>,
+      };
+      
+      // Process each record
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        try {
+          // Prepare account data
+          const accountData: any = {
+            id: row.id || "", // Will be auto-generated if empty
+            name: row.name,
+            type: row.type || null,
+            industry: row.industry || null,
+            website: row.website || null,
+            phone: row.phone || null,
+            billingAddress: row.billingAddress || null,
+            shippingAddress: row.shippingAddress || null,
+            ownerId: req.user!.id,
+          };
+          
+          // Validate with schema
+          const validated = insertAccountSchema.parse(accountData);
+          
+          // Create account
+          await storage.createAccount(validated);
+          await createAudit(req, "import", "Account", validated.id, null, validated);
+          
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: i + 2, // +2 because CSV has header row and arrays are 0-indexed
+            error: error.message,
+            data: row,
+          });
+        }
+      }
+      
+      return res.json(results);
+    } catch (error: any) {
+      console.error("Import accounts error:", error);
+      return res.status(500).json({ error: "Failed to import accounts", details: error.message });
+    }
+  });
+  
+  app.post("/api/import/contacts", authenticate, requirePermission("Contact", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const csvContent = req.file.buffer.toString("utf-8");
+      const records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+      
+      const results = {
+        total: records.length,
+        success: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; error: string; data: any }>,
+      };
+      
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        try {
+          const contactData: any = {
+            id: row.id || "",
+            firstName: row.firstName,
+            lastName: row.lastName,
+            email: row.email || null,
+            phone: row.phone || null,
+            title: row.title || null,
+            accountId: row.accountId || null,
+            ownerId: req.user!.id,
+          };
+          
+          const validated = insertContactSchema.parse(contactData);
+          await storage.createContact(validated);
+          await createAudit(req, "import", "Contact", validated.id, null, validated);
+          
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: i + 2,
+            error: error.message,
+            data: row,
+          });
+        }
+      }
+      
+      return res.json(results);
+    } catch (error: any) {
+      console.error("Import contacts error:", error);
+      return res.status(500).json({ error: "Failed to import contacts", details: error.message });
+    }
+  });
+  
+  app.post("/api/import/leads", authenticate, requirePermission("Lead", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const csvContent = req.file.buffer.toString("utf-8");
+      const records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+      
+      const results = {
+        total: records.length,
+        success: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; error: string; data: any }>,
+      };
+      
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        try {
+          const leadData: any = {
+            id: row.id || "",
+            firstName: row.firstName,
+            lastName: row.lastName,
+            company: row.company || null,
+            email: row.email || null,
+            phone: row.phone || null,
+            status: row.status || "new",
+            source: row.source || "other",
+            ownerId: req.user!.id,
+          };
+          
+          const validated = insertLeadSchema.parse(leadData);
+          await storage.createLead(validated);
+          await createAudit(req, "import", "Lead", validated.id, null, validated);
+          
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: i + 2,
+            error: error.message,
+            data: row,
+          });
+        }
+      }
+      
+      return res.json(results);
+    } catch (error: any) {
+      console.error("Import leads error:", error);
+      return res.status(500).json({ error: "Failed to import leads", details: error.message });
+    }
+  });
+  
+  app.post("/api/import/opportunities", authenticate, requirePermission("Opportunity", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const csvContent = req.file.buffer.toString("utf-8");
+      const records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+      
+      const results = {
+        total: records.length,
+        success: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; error: string; data: any }>,
+      };
+      
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        try {
+          const oppData: any = {
+            id: row.id || "",
+            name: row.name,
+            accountId: row.accountId,
+            stage: row.stage || "prospecting",
+            amount: row.amount ? String(row.amount) : "0",
+            probability: row.probability ? Number(row.probability) : 0,
+            closeDate: row.closeDate ? (row.closeDate.trim() === "" ? null : row.closeDate) : null,
+            ownerId: req.user!.id,
+          };
+          
+          const validated = insertOpportunitySchema.parse(oppData);
+          await storage.createOpportunity(validated);
+          await createAudit(req, "import", "Opportunity", validated.id, null, validated);
+          
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: i + 2,
+            error: error.message,
+            data: row,
+          });
+        }
+      }
+      
+      return res.json(results);
+    } catch (error: any) {
+      console.error("Import opportunities error:", error);
+      return res.status(500).json({ error: "Failed to import opportunities", details: error.message });
+    }
+  });
+  
+  app.post("/api/import/activities", authenticate, requirePermission("Activity", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      
+      const csvContent = req.file.buffer.toString("utf-8");
+      const records = parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      });
+      
+      const results = {
+        total: records.length,
+        success: 0,
+        failed: 0,
+        errors: [] as Array<{ row: number; error: string; data: any }>,
+      };
+      
+      for (let i = 0; i < records.length; i++) {
+        const row = records[i];
+        try {
+          const activityData: any = {
+            id: row.id || "",
+            type: row.type || "task",
+            subject: row.subject,
+            dueAt: row.dueAt ? (row.dueAt.trim() === "" ? null : row.dueAt) : null,
+            completedAt: row.completedAt ? (row.completedAt.trim() === "" ? null : row.completedAt) : null,
+            relatedType: row.relatedType || null,
+            relatedId: row.relatedId || null,
+            notes: row.notes || null,
+            ownerId: req.user!.id,
+          };
+          
+          const validated = insertActivitySchema.parse(activityData);
+          await storage.createActivity(validated);
+          await createAudit(req, "import", "Activity", validated.id, null, validated);
+          
+          results.success++;
+        } catch (error: any) {
+          results.failed++;
+          results.errors.push({
+            row: i + 2,
+            error: error.message,
+            data: row,
+          });
+        }
+      }
+      
+      return res.json(results);
+    } catch (error: any) {
+      console.error("Import activities error:", error);
+      return res.status(500).json({ error: "Failed to import activities", details: error.message });
     }
   });
 }
