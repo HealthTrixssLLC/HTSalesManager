@@ -2,7 +2,7 @@
 // Based on CPDO requirements for lightweight self-hosted CRM
 
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -47,13 +47,19 @@ export const userRoles = pgTable("user_roles", {
   userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   roleId: varchar("role_id", { length: 50 }).notNull().references(() => roles.id, { onDelete: "cascade" }),
   assignedAt: timestamp("assigned_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("user_roles_user_id_idx").on(table.userId),
+  roleIdIdx: index("user_roles_role_id_idx").on(table.roleId),
+}));
 
 export const rolePermissions = pgTable("role_permissions", {
   roleId: varchar("role_id", { length: 50 }).notNull().references(() => roles.id, { onDelete: "cascade" }),
   permissionId: varchar("permission_id", { length: 50 }).notNull().references(() => permissions.id, { onDelete: "cascade" }),
   assignedAt: timestamp("assigned_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  roleIdIdx: index("role_permissions_role_id_idx").on(table.roleId),
+  permissionIdIdx: index("role_permissions_permission_id_idx").on(table.permissionId),
+}));
 
 // ========== CRM ENTITY TABLES ==========
 
@@ -69,7 +75,10 @@ export const accounts = pgTable("accounts", {
   shippingAddress: text("shipping_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  ownerIdIdx: index("accounts_owner_id_idx").on(table.ownerId),
+  nameIdx: index("accounts_name_idx").on(table.name),
+}));
 
 export const contacts = pgTable("contacts", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: CONT-2501-00001
@@ -82,7 +91,11 @@ export const contacts = pgTable("contacts", {
   ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  accountIdIdx: index("contacts_account_id_idx").on(table.accountId),
+  ownerIdIdx: index("contacts_owner_id_idx").on(table.ownerId),
+  emailIdx: index("contacts_email_idx").on(table.email),
+}));
 
 export const leads = pgTable("leads", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: LEAD-000001
@@ -100,7 +113,11 @@ export const leads = pgTable("leads", {
   convertedAt: timestamp("converted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  ownerIdIdx: index("leads_owner_id_idx").on(table.ownerId),
+  statusIdx: index("leads_status_idx").on(table.status),
+  emailIdx: index("leads_email_idx").on(table.email),
+}));
 
 export const opportunities = pgTable("opportunities", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: OPP-2025-000001
@@ -113,7 +130,12 @@ export const opportunities = pgTable("opportunities", {
   probability: integer("probability").default(0), // 0-100
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  accountIdIdx: index("opportunities_account_id_idx").on(table.accountId),
+  ownerIdIdx: index("opportunities_owner_id_idx").on(table.ownerId),
+  stageIdx: index("opportunities_stage_idx").on(table.stage),
+  closeDateIdx: index("opportunities_close_date_idx").on(table.closeDate),
+}));
 
 export const activities = pgTable("activities", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACT-2501-00001
@@ -127,7 +149,11 @@ export const activities = pgTable("activities", {
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  ownerIdIdx: index("activities_owner_id_idx").on(table.ownerId),
+  relatedIdx: index("activities_related_idx").on(table.relatedType, table.relatedId),
+  dueAtIdx: index("activities_due_at_idx").on(table.dueAt),
+}));
 
 // ========== AUDIT & SYSTEM TABLES ==========
 
@@ -142,7 +168,11 @@ export const auditLogs = pgTable("audit_logs", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  resourceIdx: index("audit_logs_resource_idx").on(table.resource, table.resourceId),
+  actorIdIdx: index("audit_logs_actor_id_idx").on(table.actorId),
+  createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+}));
 
 export const idPatterns = pgTable("id_patterns", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
