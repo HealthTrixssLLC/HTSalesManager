@@ -29,8 +29,11 @@ export default function AdminConsole() {
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
 
   const updatePatternMutation = useMutation({
-    mutationFn: async (data: { id: string; pattern: string }) => {
-      const res = await apiRequest("PATCH", `/api/admin/id-patterns/${data.id}`, { pattern: data.pattern });
+    mutationFn: async (data: { id: string; pattern: string; startValue?: number }) => {
+      const res = await apiRequest("PATCH", `/api/admin/id-patterns/${data.id}`, { 
+        pattern: data.pattern,
+        startValue: data.startValue
+      });
       return await res.json();
     },
     onSuccess: () => {
@@ -280,7 +283,7 @@ export default function AdminConsole() {
                           Preview: <span className="font-mono">{generatePreview(pattern.pattern)}</span>
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Counter: {pattern.counter} | Last Issued: {pattern.lastIssued || "None"}
+                          Counter: {pattern.counter} | Start: {pattern.startValue || 1} | Last Issued: {pattern.lastIssued || "None"}
                         </p>
                       </div>
                       <Button
@@ -302,7 +305,7 @@ export default function AdminConsole() {
                   <div><code className="bg-background px-1.5 py-0.5 rounded">{"{YYYY}"}</code> - 4-digit year</div>
                   <div><code className="bg-background px-1.5 py-0.5 rounded">{"{YY}"}</code> - 2-digit year</div>
                   <div><code className="bg-background px-1.5 py-0.5 rounded">{"{MM}"}</code> - 2-digit month</div>
-                  <div><code className="bg-background px-1.5 py-0.5 rounded">{"{SEQ:n}"}</code> - n-digit sequence</div>
+                  <div><code className="bg-background px-1.5 py-0.5 rounded">{"{SEQ:n}"}</code> - n-digit sequence (starts from custom value)</div>
                 </div>
               </Card>
             </CardContent>
@@ -417,13 +420,32 @@ export default function AdminConsole() {
                   Preview: <span className="font-mono">{patternPreview || generatePreview(selectedPattern.pattern)}</span>
                 </p>
               </div>
+              <div>
+                <Label>Starting Value</Label>
+                <Input
+                  type="number"
+                  value={selectedPattern.startValue || 1}
+                  onChange={(e) => {
+                    setSelectedPattern({ ...selectedPattern, startValue: parseInt(e.target.value) || 1 });
+                  }}
+                  min="1"
+                  data-testid="input-start-value"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  The sequence will start from this number (e.g., 1000 for ACCT-2025-01000)
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setSelectedPattern(null)}>
                 Cancel
               </Button>
               <Button
-                onClick={() => updatePatternMutation.mutate({ id: selectedPattern.id, pattern: selectedPattern.pattern })}
+                onClick={() => updatePatternMutation.mutate({ 
+                  id: selectedPattern.id, 
+                  pattern: selectedPattern.pattern,
+                  startValue: selectedPattern.startValue || undefined
+                })}
                 disabled={updatePatternMutation.isPending}
                 data-testid="button-save-pattern"
               >

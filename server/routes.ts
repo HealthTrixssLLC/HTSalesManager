@@ -528,8 +528,14 @@ export function registerRoutes(app: Express) {
   
   app.patch("/api/admin/id-patterns/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
-      const { pattern } = req.body;
-      const updatedPattern = await storage.updateIdPattern(req.params.id, { pattern });
+      const { pattern, startValue, counter } = req.body;
+      const updates: any = {};
+      
+      if (pattern !== undefined) updates.pattern = pattern;
+      if (startValue !== undefined) updates.startValue = startValue;
+      if (counter !== undefined) updates.counter = counter;
+      
+      const updatedPattern = await storage.updateIdPattern(req.params.id, updates);
       
       await createAudit(req, "update", "IdPattern", req.params.id, null, updatedPattern);
       

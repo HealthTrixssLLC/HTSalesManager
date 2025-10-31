@@ -315,6 +315,11 @@ export class PostgresStorage implements IStorage {
     
     const updatedPattern = result[0];
     const counter = updatedPattern.counter;
+    const startValue = updatedPattern.startValue || 1;
+    
+    // Calculate actual sequence number: startValue + (counter - 1)
+    // This allows users to set custom starting values like 1000
+    const sequenceNumber = startValue + (counter - 1);
     
     // Parse pattern and generate ID
     const now = new Date();
@@ -323,7 +328,7 @@ export class PostgresStorage implements IStorage {
       .replace("{YYYY}", now.getFullYear().toString())
       .replace("{YY}", now.getFullYear().toString().slice(2))
       .replace("{MM}", (now.getMonth() + 1).toString().padStart(2, "0"))
-      .replace(/{SEQ:(\d+)}/g, (_, len) => counter.toString().padStart(parseInt(len), "0"));
+      .replace(/{SEQ:(\d+)}/g, (_, len) => sequenceNumber.toString().padStart(parseInt(len), "0"));
     
     // Update last issued
     await db.update(schema.idPatterns)
