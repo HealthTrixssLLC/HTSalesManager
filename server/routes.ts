@@ -3,7 +3,7 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { storage } from "./db";
+import { storage, db, eq, and, sql, asc, desc, inArray } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
 import { requirePermission, requireRole, DEFAULT_ROLE } from "./rbac";
 import {
@@ -13,6 +13,14 @@ import {
   insertLeadSchema,
   insertOpportunitySchema,
   insertActivitySchema,
+  insertCommentSchema,
+  insertCommentReactionSchema,
+  insertCommentAttachmentSchema,
+  comments,
+  commentReactions,
+  commentAttachments,
+  commentSubscriptions,
+  users,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import multer from "multer";
@@ -1105,6 +1113,456 @@ export function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Import activities error:", error);
       return res.status(500).json({ error: "Failed to import activities", details: error.message });
+    }
+  });
+
+  // ========== COMMENTS SYSTEM ENDPOINTS ==========
+
+  // List comments for an entity
+  app.get("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "read"), async (req: AuthRequest, res) => {
+    try {
+      const { entity, id } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = Math.min(parseInt(req.query.pageSize as string) || 25, 100);
+      const sort = req.query.sort as string || "newest";
+      const filter = req.query.filter as string || "all";
+      const search = req.query.search as string || "";
+      
+      const offset = (page - 1) * pageSize;
+      
+      // Build query conditions - accumulate all predicates
+      const conditions: any[] = [
+        eq(comments.entity, entity),
+        eq(comments.entityId, id),
+      ];
+      
+      // Apply filters
+      if (filter === "withAttachments") {
+        const commentsWithAttachments = await db
+          .select({ commentId: commentAttachments.commentId })
+          .from(commentAttachments)
+          .groupBy(commentAttachments.commentId);
+        
+        const commentIds = commentsWithAttachments.map(c => c.commentId);
+        if (commentIds.length === 0) {
+          // No attachments exist, return empty result
+          return res.json({
+            comments: [],
+            pagination: { page, pageSize, total: 0, totalPages: 0 },
+          });
+        }
+        conditions.push(inArray(comments.id, commentIds));
+      } else if (filter === "mentionsMe") {
+        conditions.push(sql`${comments.mentions}::jsonb @> '[{"userId": "${req.user!.id}"}]'`);
+      } else if (filter === "fromMe") {
+        conditions.push(eq(comments.createdBy, req.user!.id));
+      } else if (filter === "resolved") {
+        conditions.push(eq(comments.isResolved, true));
+      } else if (filter === "unresolved") {
+        conditions.push(eq(comments.isResolved, false));
+      }
+      
+      // Apply search
+      if (search) {
+        conditions.push(sql`${comments.body} ILIKE ${'%' + search + '%'}`);
+      }
+      
+      // Build query with all conditions combined (only join creator, we'll load editor separately)
+      const baseQuery = db
+        .select({
+          comment: comments,
+          createdByUser: {
+            id: users.id,
+            name: users.name,
+            email: users.email,
+          },
+        })
+        .from(comments)
+        .leftJoin(users, eq(comments.createdBy, users.id))
+        .where(and(...conditions));
+      
+      // Apply sorting
+      let query = baseQuery;
+      if (sort === "oldest") {
+        query = query.orderBy(asc(comments.createdAt));
+      } else {
+        query = query.orderBy(desc(comments.createdAt));
+      }
+      
+      // Apply pagination
+      const results = await query.limit(pageSize).offset(offset);
+      
+      // Batch load reactions, attachments, replies, and editors to avoid N+1
+      const commentIds = results.map(r => r.comment.id);
+      const editorIds = results
+        .map(r => r.comment.editedBy)
+        .filter((id): id is string => id !== null);
+      
+      const [allReactions, allAttachments, allReplyCounts, editors] = await Promise.all([
+        commentIds.length > 0
+          ? db.select().from(commentReactions).where(inArray(commentReactions.commentId, commentIds))
+          : Promise.resolve([]),
+        commentIds.length > 0
+          ? db.select().from(commentAttachments).where(inArray(commentAttachments.commentId, commentIds))
+          : Promise.resolve([]),
+        commentIds.length > 0
+          ? db.select({ 
+              parentId: comments.parentId, 
+              count: sql<number>`count(*)` 
+            })
+            .from(comments)
+            .where(inArray(comments.parentId, commentIds))
+            .groupBy(comments.parentId)
+          : Promise.resolve([]),
+        editorIds.length > 0
+          ? db.select({ 
+              id: users.id, 
+              name: users.name, 
+              email: users.email 
+            })
+            .from(users)
+            .where(inArray(users.id, editorIds))
+          : Promise.resolve([]),
+      ]);
+      
+      // Group data by comment ID and user ID
+      const reactionsByComment = new Map<string, typeof allReactions>();
+      const attachmentsByComment = new Map<string, typeof allAttachments>();
+      const repliesByComment = new Map<string, number>();
+      const editorsByUserId = new Map<string, typeof editors[0]>();
+      
+      for (const reaction of allReactions) {
+        if (!reactionsByComment.has(reaction.commentId)) {
+          reactionsByComment.set(reaction.commentId, []);
+        }
+        reactionsByComment.get(reaction.commentId)!.push(reaction);
+      }
+      
+      for (const attachment of allAttachments) {
+        if (!attachmentsByComment.has(attachment.commentId)) {
+          attachmentsByComment.set(attachment.commentId, []);
+        }
+        attachmentsByComment.get(attachment.commentId)!.push(attachment);
+      }
+      
+      for (const replyCount of allReplyCounts) {
+        if (replyCount.parentId) {
+          repliesByComment.set(replyCount.parentId, Number(replyCount.count));
+        }
+      }
+      
+      for (const editor of editors) {
+        editorsByUserId.set(editor.id, editor);
+      }
+      
+      // Enrich comments with loaded data
+      const enrichedComments = results.map((result) => {
+        const reactionsData = reactionsByComment.get(result.comment.id) || [];
+        
+        // Aggregate reactions
+        const reactions: Record<string, number> = {};
+        for (const reaction of reactionsData) {
+          reactions[reaction.emoji] = (reactions[reaction.emoji] || 0) + 1;
+        }
+        
+        // Find user's reaction
+        const userReaction = reactionsData.find(r => r.userId === req.user!.id)?.emoji || null;
+        
+        // Get editor info
+        const editedByUser = result.comment.editedBy 
+          ? editorsByUserId.get(result.comment.editedBy) || null
+          : null;
+        
+        return {
+          ...result.comment,
+          createdByUser: result.createdByUser,
+          editedByUser,
+          attachments: attachmentsByComment.get(result.comment.id) || [],
+          reactions,
+          replyCount: repliesByComment.get(result.comment.id) || 0,
+          userReaction,
+        };
+      });
+      
+      // Get total count with same conditions
+      const [{ count: total }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(comments)
+        .where(and(...conditions));
+      
+      return res.json({
+        comments: enrichedComments,
+        pagination: {
+          page,
+          pageSize,
+          total: Number(total),
+          totalPages: Math.ceil(Number(total) / pageSize),
+        },
+      });
+    } catch (error: any) {
+      console.error("List comments error:", error);
+      return res.status(500).json({ error: "Failed to list comments", details: error.message });
+    }
+  });
+
+  // Create a new comment
+  app.post("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "create"), async (req: AuthRequest, res) => {
+    try{
+      
+      const { entity, id } = req.params;
+      const { body, parentId, mentions } = req.body;
+      
+      // Calculate depth if reply
+      let depth = 0;
+      if (parentId) {
+        const [parentComment] = await db.select().from(comments).where(eq(comments.id, parentId)).limit(1);
+        if (parentComment) {
+          depth = parentComment.depth + 1;
+          if (depth > 2) {
+            return res.status(400).json({ error: "Maximum comment depth exceeded" });
+          }
+        }
+      }
+      
+      const [newComment] = await db.insert(comments).values({
+        entity,
+        entityId: id,
+        body,
+        parentId: parentId || null,
+        depth,
+        mentions: mentions || [],
+        createdBy: req.user!.id,
+      }).returning();
+      
+      await createAudit(req, "create", "Comment", newComment.id, null, newComment);
+      
+      return res.status(201).json(newComment);
+    } catch (error: any) {
+      console.error("Create comment error:", error);
+      return res.status(500).json({ error: "Failed to create comment", details: error.message });
+    }
+  });
+
+  // Update a comment
+  app.patch("/api/:entity/:id/comments/:commentId", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { commentId } = req.params;
+      const { body } = req.body;
+      
+      // Get existing comment
+      const [existingComment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      
+      // Check if user owns the comment or has update permission
+      if (existingComment.createdBy !== req.user!.id) {
+        await requirePermission(req, "Comment", "update");
+      }
+      
+      // Check edit window (15 minutes)
+      const now = new Date();
+      const createdAt = new Date(existingComment.createdAt);
+      const minutesSinceCreation = (now.getTime() - createdAt.getTime()) / 1000 / 60;
+      
+      if (minutesSinceCreation > 15 && existingComment.createdBy === req.user!.id) {
+        return res.status(403).json({ error: "Edit window has expired (15 minutes)" });
+      }
+      
+      // Add to edit history
+      const editHistory = Array.isArray(existingComment.editHistory) ? existingComment.editHistory : [];
+      editHistory.push({
+        at: now.toISOString(),
+        by: req.user!.id,
+        from: existingComment.body,
+        to: body,
+      });
+      
+      const [updatedComment] = await db.update(comments)
+        .set({
+          body,
+          editedBy: req.user!.id,
+          editHistory,
+          updatedAt: now,
+        })
+        .where(eq(comments.id, commentId))
+        .returning();
+      
+      await createAudit(req, "update", "Comment", commentId, existingComment, updatedComment);
+      
+      return res.json(updatedComment);
+    } catch (error: any) {
+      console.error("Update comment error:", error);
+      return res.status(500).json({ error: "Failed to update comment", details: error.message });
+    }
+  });
+
+  // Delete a comment
+  app.delete("/api/:entity/:id/comments/:commentId", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { commentId } = req.params;
+      
+      const [existingComment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      
+      // Check if user owns the comment or has delete permission
+      if (existingComment.createdBy !== req.user!.id) {
+        await requirePermission(req, "Comment", "delete");
+      }
+      
+      await db.delete(comments).where(eq(comments.id, commentId));
+      await createAudit(req, "delete", "Comment", commentId, existingComment, null);
+      
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error("Delete comment error:", error);
+      return res.status(500).json({ error: "Failed to delete comment", details: error.message });
+    }
+  });
+
+  // Toggle pin on a comment
+  app.post("/api/:entity/:id/comments/:commentId/pin", authenticate, requirePermission("Comment", "pin"), async (req: AuthRequest, res) => {
+    try {
+      
+      const { commentId } = req.params;
+      const [existingComment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+      
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      
+      const [updatedComment] = await db.update(comments)
+        .set({ isPinned: !existingComment.isPinned, updatedAt: new Date() })
+        .where(eq(comments.id, commentId))
+        .returning();
+      
+      await createAudit(req, existingComment.isPinned ? "unpin" : "pin", "Comment", commentId, existingComment, updatedComment);
+      
+      return res.json(updatedComment);
+    } catch (error: any) {
+      console.error("Toggle pin error:", error);
+      return res.status(500).json({ error: "Failed to toggle pin", details: error.message });
+    }
+  });
+
+  // Toggle resolve on a comment
+  app.post("/api/:entity/:id/comments/:commentId/resolve", authenticate, requirePermission("Comment", "resolve"), async (req: AuthRequest, res) => {
+    try {
+      
+      const { commentId } = req.params;
+      const [existingComment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
+      
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      
+      const [updatedComment] = await db.update(comments)
+        .set({ isResolved: !existingComment.isResolved, updatedAt: new Date() })
+        .where(eq(comments.id, commentId))
+        .returning();
+      
+      await createAudit(req, existingComment.isResolved ? "unresolve" : "resolve", "Comment", commentId, existingComment, updatedComment);
+      
+      return res.json(updatedComment);
+    } catch (error: any) {
+      console.error("Toggle resolve error:", error);
+      return res.status(500).json({ error: "Failed to toggle resolve", details: error.message });
+    }
+  });
+
+  // Add/remove reaction
+  app.post("/api/:entity/:id/comments/:commentId/reactions", authenticate, requirePermission("Comment", "react"), async (req: AuthRequest, res) => {
+    try {
+      
+      const { commentId } = req.params;
+      const { emoji } = req.body;
+      
+      if (!["👍", "❤️", "🎉", "👀", "🚀"].includes(emoji)) {
+        return res.status(400).json({ error: "Invalid emoji" });
+      }
+      
+      // Check if reaction already exists
+      const [existingReaction] = await db.select()
+        .from(commentReactions)
+        .where(
+          and(
+            eq(commentReactions.commentId, commentId),
+            eq(commentReactions.userId, req.user!.id),
+            eq(commentReactions.emoji, emoji)
+          )
+        )
+        .limit(1);
+      
+      if (existingReaction) {
+        // Remove reaction
+        await db.delete(commentReactions).where(eq(commentReactions.id, existingReaction.id));
+        return res.json({ action: "removed", emoji });
+      } else {
+        // Add reaction
+        await db.insert(commentReactions).values({
+          commentId,
+          userId: req.user!.id,
+          emoji,
+        });
+        return res.json({ action: "added", emoji });
+      }
+    } catch (error: any) {
+      console.error("Toggle reaction error:", error);
+      return res.status(500).json({ error: "Failed to toggle reaction", details: error.message });
+    }
+  });
+
+  // Subscribe to comment thread
+  app.post("/api/:entity/:id/comments/:commentId/subscribe", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { commentId } = req.params;
+      
+      // Check if already subscribed
+      const [existing] = await db.select()
+        .from(commentSubscriptions)
+        .where(
+          and(
+            eq(commentSubscriptions.commentId, commentId),
+            eq(commentSubscriptions.userId, req.user!.id)
+          )
+        )
+        .limit(1);
+      
+      if (existing) {
+        return res.json({ subscribed: true, message: "Already subscribed" });
+      }
+      
+      await db.insert(commentSubscriptions).values({
+        commentId,
+        userId: req.user!.id,
+      });
+      
+      return res.json({ subscribed: true });
+    } catch (error: any) {
+      console.error("Subscribe error:", error);
+      return res.status(500).json({ error: "Failed to subscribe", details: error.message });
+    }
+  });
+
+  // Unsubscribe from comment thread
+  app.delete("/api/:entity/:id/comments/:commentId/subscribe", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { commentId } = req.params;
+      
+      await db.delete(commentSubscriptions)
+        .where(
+          and(
+            eq(commentSubscriptions.commentId, commentId),
+            eq(commentSubscriptions.userId, req.user!.id)
+          )
+        );
+      
+      return res.json({ subscribed: false });
+    } catch (error: any) {
+      console.error("Unsubscribe error:", error);
+      return res.status(500).json({ error: "Failed to unsubscribe", details: error.message });
     }
   });
 }

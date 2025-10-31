@@ -45,6 +45,13 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Activity", action: "update" },
       { resource: "Activity", action: "delete" },
       { resource: "AuditLog", action: "read" },
+      { resource: "Comment", action: "read" },
+      { resource: "Comment", action: "create" },
+      { resource: "Comment", action: "update" },
+      { resource: "Comment", action: "delete" },
+      { resource: "Comment", action: "pin" },
+      { resource: "Comment", action: "resolve" },
+      { resource: "Comment", action: "react" },
     ],
   },
   {
@@ -67,6 +74,10 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Activity", action: "read" },
       { resource: "Activity", action: "create" },
       { resource: "Activity", action: "update" },
+      { resource: "Comment", action: "read" },
+      { resource: "Comment", action: "create" },
+      { resource: "Comment", action: "update" },
+      { resource: "Comment", action: "react" },
     ],
   },
   {
@@ -78,6 +89,7 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Lead", action: "read" },
       { resource: "Opportunity", action: "read" },
       { resource: "Activity", action: "read" },
+      { resource: "Comment", action: "read" },
     ],
   },
 ];
