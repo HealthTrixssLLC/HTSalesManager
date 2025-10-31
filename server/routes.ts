@@ -327,7 +327,16 @@ export function registerRoutes(app: Express) {
   app.post("/api/leads/:id/convert", authenticate, requirePermission("Lead", "convert"), async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
-      const { createAccount, accountName, createContact, createOpportunity, opportunityName, opportunityAmount } = req.body;
+      const { 
+        accountId: existingAccountId, 
+        accountData, 
+        createAccount, 
+        accountName, 
+        createOpportunity, 
+        opportunityData,
+        opportunityName,
+        opportunityAmount
+      } = req.body;
       
       const lead = await storage.getLeadById(leadId);
       if (!lead) {
@@ -338,48 +347,52 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Lead already converted" });
       }
       
-      let accountId = null;
+      let accountId = existingAccountId;
       let contactId = null;
       let opportunityId = null;
       
-      // Create Account if requested
-      if (createAccount) {
+      // Create Account if requested (backwards compatible with old wizard)
+      if (createAccount || (!accountId && accountData)) {
         const account = await storage.createAccount({
           id: "",
-          name: accountName || lead.company || `${lead.firstName} ${lead.lastName}`,
-          type: "customer",
+          name: accountData?.name || accountName || lead.company || `${lead.firstName} ${lead.lastName}`,
+          type: accountData?.type || "customer",
+          industry: accountData?.industry || null,
+          website: accountData?.website || null,
+          phone: accountData?.phone || null,
+          billingAddress: accountData?.billingAddress || null,
+          shippingAddress: accountData?.shippingAddress || null,
           ownerId: lead.ownerId,
         });
         accountId = account.id;
         await createAudit(req, "create", "Account", account.id, null, account);
       }
       
-      // Create Contact if requested
-      if (createContact) {
-        const contact = await storage.createContact({
-          id: "",
-          firstName: lead.firstName,
-          lastName: lead.lastName,
-          email: lead.email || null,
-          phone: lead.phone || null,
-          accountId: accountId,
-          ownerId: lead.ownerId,
-        });
-        contactId = contact.id;
-        await createAudit(req, "create", "Contact", contact.id, null, contact);
-      }
+      // Always create contact from lead
+      const contact = await storage.createContact({
+        id: "",
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        email: lead.email || null,
+        phone: lead.phone || null,
+        title: null,
+        accountId: accountId,
+        ownerId: lead.ownerId,
+      });
+      contactId = contact.id;
+      await createAudit(req, "create", "Contact", contact.id, null, contact);
       
-      // Create Opportunity if requested
+      // Create Opportunity if requested (backwards compatible with old wizard)
       if (createOpportunity && accountId) {
         const opportunity = await storage.createOpportunity({
           id: "",
-          name: opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`,
+          name: opportunityData?.name || opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`,
           accountId,
-          stage: "prospecting",
-          amount: opportunityAmount || "0",
+          stage: opportunityData?.stage || "prospecting",
+          amount: opportunityData?.amount || opportunityAmount || "0",
+          probability: opportunityData?.probability !== undefined ? opportunityData.probability : 10,
+          closeDate: opportunityData?.closeDate || null,
           ownerId: lead.ownerId,
-          probability: 10,
-          closeDate: null,
         });
         opportunityId = opportunity.id;
         await createAudit(req, "create", "Opportunity", opportunity.id, null, opportunity);

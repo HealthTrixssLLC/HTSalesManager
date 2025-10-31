@@ -1,0 +1,192 @@
+{
+"feature": "Configurable List + Detail Views with Comments",
+"scope": ["accounts", "contacts", "leads", "opportunities"],
+"listView": "unchanged from prior spec",
+"detailView": {
+"description": "Adds first class comments on every record, accessible from the detail page or slide over. Comments support mentions, attachments, reactions, and optional threaded replies.",
+"tabsAppend": [
+{
+"id": "comments",
+"label": "Comments",
+"sections": [
+{
+"id": "commentsFeed",
+"type": "comments",
+"threading": "threaded",
+"composer": {
+"placeholders": {
+"default": "Write a comment…",
+"reply": "Reply…"
+},
+"supports": {
+"markdown": true,
+"mentions": true,
+"attachments": true,
+"emojiPicker": true,
+"codeBlocks": true
+},
+"maxAttachmentCount": 5,
+"maxAttachmentSizeMb": 25
+},
+"features": {
+"editOwnComment": true,
+"editWindowMinutes": 15,
+"showEditedBadge": true,
+"deleteOwnComment": true,
+"pinComment": true,
+"resolveThread": true,
+"subscribeToThread": true,
+"reactions": ["👍", "❤️", "🎉", "👀", "🚀"],
+"copyPermalink": true
+},
+"sorting": {
+"default": ["newest", "desc"],
+"options": [
+["newest", "desc"],
+["oldest", "asc"],
+["mostReacted", "desc"]
+]
+},
+"filters": {
+"type": ["all", "withAttachments", "mentionsMe", "fromMe", "resolved", "unresolved"],
+"dateRange": true,
+"author": true,
+"textSearch": true
+},
+"pagination": {
+"pageSize": 25,
+"serverSide": true
+}
+}
+]
+}
+],
+"inRecordSearchAppend": ["comments"],
+"permissionsAppend": {
+"comments": {
+"canComment": true,
+"canEditAny": false,
+"canDeleteAny": false,
+"canPin": "role:owner or admin",
+"canResolve": "role:owner or admin or commentAuthor"
+}
+},
+"notifications": {
+"onNewComment": ["recordSubscribers", "mentionedUsers"],
+"onReply": ["parentCommentAuthor", "threadSubscribers"],
+"channels": ["inApp", "email"]
+},
+"apiAppend": {
+"listComments": "GET /api/{entity}/{id}/comments?page=1&pageSize=25&sort=newest&filter=mentionsMe&search=string",
+"createComment": "POST /api/{entity}/{id}/comments",
+"getComment": "GET /api/{entity}/{id}/comments/{commentId}",
+"updateComment": "PATCH /api/{entity}/{id}/comments/{commentId}",
+"deleteComment": "DELETE /api/{entity}/{id}/comments/{commentId}",
+"replyToComment": "POST /api/{entity}/{id}/comments/{commentId}/replies",
+"togglePin": "POST /api/{entity}/{id}/comments/{commentId}/pin",
+"toggleResolve": "POST /api/{entity}/{id}/comments/{commentId}/resolve",
+"react": "POST /api/{entity}/{id}/comments/{commentId}/reactions",
+"subscribeThread": "POST /api/{entity}/{id}/comments/{commentId}/subscribe",
+"unsubscribeThread": "POST /api/{entity}/{id}/comments/{commentId}/unsubscribe"
+},
+"payloadSchemaAppend": {
+"comment": {
+"id": "string",
+"entity": "string",
+"entityId": "string",
+"parentId": "string or null",
+"depth": "number",
+"body": "markdown string",
+"bodyHtml": "sanitized html string",
+"mentions": [
+{
+"userId": "string",
+"display": "string"
+}
+],
+"attachments": [
+{
+"id": "string",
+"fileName": "string",
+"contentType": "string",
+"size": "number",
+"url": "string",
+"thumbnailUrl": "string or null"
+}
+],
+"reactions": {
+"emoji": "count map, for example {"👍": 3, "❤️": 1}"
+},
+"isPinned": "boolean",
+"isResolved": "boolean",
+"createdAt": "ISO datetime",
+"updatedAt": "ISO datetime",
+"createdBy": {
+"id": "string",
+"name": "string",
+"avatarUrl": "string or null"
+},
+"editedBy": {
+"id": "string or null",
+"name": "string or null"
+},
+"editHistory": [
+{
+"at": "ISO datetime",
+"by": "user id",
+"from": "markdown string",
+"to": "markdown string"
+}
+]
+}
+},
+"dataModelAppend": {
+"storage": "comments table keyed by entity and entityId",
+"indexes": [
+"btree on (entity, entityId, createdAt desc)",
+"btree on parentId",
+"gin or trigram on body for search if supported"
+],
+"limits": {
+"maxCommentsPerRecord": 5000,
+"maxDepth": 2
+}
+}
+},
+"rbacAppend": {
+"whitelistActions": [
+"comments.list",
+"comments.create",
+"comments.updateSelf",
+"comments.deleteSelf",
+"comments.pin",
+"comments.resolve",
+"comments.react"
+]
+},
+"acceptanceCriteriaAppend": [
+"Comments tab appears on every record detail view and loads server side with pagination.",
+"Users can post, edit within the edit window, delete their own comments, and attach files.",
+"Mentions notify mentioned users and render as chips with hover cards.",
+"Threaded replies display beneath the parent with collapse and expand controls.",
+"Pin and resolve actions are restricted by RBAC and visibly indicated in the UI.",
+"Record search returns matches from comments body and author names when enabled.",
+"All comment actions emit timeline events and respect field level and row level security."
+],
+"exampleRequests": {
+"createComment": {
+"method": "POST",
+"path": "/api/opportunities/OPP-2025-00123/comments",
+"body": {
+"body": "Met with Acme today. Next step is legal review by @Laura.",
+"attachments": [
+{ "id": "file_9f2", "fileName": "notes.pdf" }
+]
+}
+},
+"listComments": {
+"method": "GET",
+"path": "/api/accounts/ACCT-2025-00001/comments?page=1&pageSize=25&sort=newest&filter=all"
+}
+}
+}
