@@ -15,10 +15,15 @@ import { AppSidebar } from "@/components/app-sidebar";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import AccountsPage from "@/pages/accounts-page";
+import AccountDetailPage from "@/pages/account-detail-page";
 import ContactsPage from "@/pages/contacts-page";
+import ContactDetailPage from "@/pages/contact-detail-page";
 import LeadsPage from "@/pages/leads-page";
+import LeadDetailPage from "@/pages/lead-detail-page";
 import OpportunitiesPage from "@/pages/opportunities-page";
+import OpportunityDetailPage from "@/pages/opportunity-detail-page";
 import ActivitiesPage from "@/pages/activities-page";
+import ActivityDetailPage from "@/pages/activity-detail-page";
 import ImportPage from "@/pages/import-page";
 import AdminConsole from "@/pages/admin-console";
 import AuditLogPage from "@/pages/audit-log-page";
@@ -60,10 +65,15 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       
       <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/accounts/:id" component={AccountDetailPage} />
       <ProtectedRoute path="/accounts" component={AccountsPage} />
+      <ProtectedRoute path="/contacts/:id" component={ContactDetailPage} />
       <ProtectedRoute path="/contacts" component={ContactsPage} />
+      <ProtectedRoute path="/leads/:id" component={LeadDetailPage} />
       <ProtectedRoute path="/leads" component={LeadsPage} />
+      <ProtectedRoute path="/opportunities/:id" component={OpportunityDetailPage} />
       <ProtectedRoute path="/opportunities" component={OpportunitiesPage} />
+      <ProtectedRoute path="/activities/:id" component={ActivityDetailPage} />
       <ProtectedRoute path="/activities" component={ActivitiesPage} />
       <ProtectedRoute path="/import" component={ImportPage} />
       <ProtectedRoute path="/help" component={HelpPage} />

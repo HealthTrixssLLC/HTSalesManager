@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Loader2, Building2, Download, MessageSquare } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,6 +24,7 @@ import { CommentSystem } from "@/components/comment-system";
 export default function AccountsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [commentsAccountId, setCommentsAccountId] = useState<string | null>(null);
   const [commentsAccountName, setCommentsAccountName] = useState<string | null>(null);
@@ -279,13 +281,18 @@ export default function AccountsPage() {
               </TableHeader>
               <TableBody>
                 {accounts.map((account) => (
-                  <TableRow key={account.id} data-testid={`row-account-${account.id}`}>
+                  <TableRow 
+                    key={account.id} 
+                    data-testid={`row-account-${account.id}`}
+                    className="cursor-pointer hover-elevate active-elevate-2"
+                    onClick={() => setLocation(`/accounts/${account.id}`)}
+                  >
                     <TableCell className="font-mono text-sm">{account.id}</TableCell>
                     <TableCell className="font-medium">{account.name}</TableCell>
                     <TableCell className="capitalize">{account.type || "-"}</TableCell>
                     <TableCell>{account.industry || "-"}</TableCell>
                     <TableCell>{account.phone || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-2">
                         <Button 
                           size="icon" 
