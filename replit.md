@@ -181,10 +181,14 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
-- **2025-10-31**: Completed Backup & Restore implementation
+- **2025-10-31**: Completed Backup & Restore implementation with security fixes
   - Built BackupService with AES-256-GCM encryption and gzip compression
   - Embedded SHA-256 checksum in backup files for integrity verification
-  - Created restore service with data validation and dependency-order restoration
+  - Created restore service with transaction-wrapped atomic restoration
+  - Full table truncation (including users/roles/permissions) to avoid FK constraint violations
+  - **SECURITY FIX**: Removed hard-coded default encryption key fallback
+  - Added `BACKUP_ENCRYPTION_KEY` environment variable requirement (set to dev key by default)
+  - Implemented proper error handling and backup job status updates (failed/completed/in_progress)
   - Implemented database reset preserving system configuration
   - Added file download/upload UI in Admin Console
   - Fixed LSP errors and schema field name mismatches
