@@ -1,0 +1,50 @@
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+time="2025-10-31T16:11:19-05:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Building 0.5s (18/21)
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 544B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 1.76kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.2s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 746B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 5.90kB                                                                                             0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => CACHED [builder 3/8] COPY package*.json ./                                                                                  0.0s
+ => CACHED [production  4/11] RUN npm ci --legacy-peer-deps --only=production                                                   0.0s
+ => CACHED [builder 4/8] RUN npm ci --legacy-peer-deps                                                                          0.0s
+ => CACHED [builder 5/8] COPY . .                                                                                               0.0s
+ => CACHED [builder 6/8] RUN npm run build                                                                                      0.0s
+ => CACHED [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                  0.0s
+ => CACHED [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                  0.0s
+ => CACHED [production  5/11] COPY --from=builder /app/dist ./dist                                                              0.0s
+ => CACHED [production  6/11] COPY --from=builder /app/shared ./shared                                                          0.0s
+ => CACHED [production  7/11] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                    0.0s
+ => ERROR [production  8/11] COPY --from=builder /app/migrations ./migrations                                                   0.0s
+------
+ > [production  8/11] COPY --from=builder /app/migrations ./migrations:
+------
+Dockerfile:36
+
+--------------------
+
+  34 |     COPY --from=builder /app/shared ./shared
+
+  35 |     COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+
+  36 | >>> COPY --from=builder /app/migrations ./migrations
+
+  37 |
+
+  38 |     # Install drizzle-kit for migrations (needed at runtime for db:push)
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref cf211060-ba9e-4bfe-998c-2767998d3924::ty1ihwnsxphpm778zcdnui5ek: "/app/migrations": not found
+
+
+
+View build details: docker-desktop://dashboard/build/default/default/lm6c7eekbutdhj2txqjno2ynt
