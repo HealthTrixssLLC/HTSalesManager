@@ -198,6 +198,64 @@ export const backupJobs = pgTable("backup_jobs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ========== COMMENTS SYSTEM ==========
+
+export const comments = pgTable("comments", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  entity: text("entity").notNull(), // "Account", "Contact", "Lead", "Opportunity"
+  entityId: varchar("entity_id", { length: 100 }).notNull(), // ID of the record
+  parentId: varchar("parent_id", { length: 50 }).references((): any => comments.id, { onDelete: "cascade" }),
+  depth: integer("depth").notNull().default(0), // 0 = top-level, max 2
+  body: text("body").notNull(), // Markdown content
+  bodyHtml: text("body_html"), // Sanitized HTML (optional)
+  mentions: jsonb("mentions").default([]), // Array of {userId, display}
+  isPinned: boolean("is_pinned").notNull().default(false),
+  isResolved: boolean("is_resolved").notNull().default(false),
+  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  editedBy: varchar("edited_by", { length: 50 }).references(() => users.id),
+  editHistory: jsonb("edit_history").default([]), // Array of {at, by, from, to}
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  entityIdx: index("comments_entity_idx").on(table.entity, table.entityId, table.createdAt),
+  parentIdx: index("comments_parent_idx").on(table.parentId),
+  createdByIdx: index("comments_created_by_idx").on(table.createdBy),
+}));
+
+export const commentReactions = pgTable("comment_reactions", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id", { length: 50 }).notNull().references(() => comments.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: text("emoji").notNull(), // "👍", "❤️", "🎉", "👀", "🚀"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  commentIdx: index("comment_reactions_comment_idx").on(table.commentId),
+  uniqueReaction: index("comment_reactions_unique_idx").on(table.commentId, table.userId, table.emoji),
+}));
+
+export const commentAttachments = pgTable("comment_attachments", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id", { length: 50 }).notNull().references(() => comments.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(), // bytes
+  url: text("url").notNull(), // Storage path or URL
+  thumbnailUrl: text("thumbnail_url"), // For images/PDFs
+  uploadedBy: varchar("uploaded_by", { length: 50 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  commentIdx: index("comment_attachments_comment_idx").on(table.commentId),
+}));
+
+export const commentSubscriptions = pgTable("comment_subscriptions", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id", { length: 50 }).notNull().references(() => comments.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  uniqueSubscription: index("comment_subscriptions_unique_idx").on(table.commentId, table.userId),
+}));
+
 // ========== RELATIONS ==========
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -362,4 +420,58 @@ export type ActivityWithRelations = Activity & {
 
 export type UserWithRoles = User & {
   roles: (Role & { permissions: Permission[] })[];
+};
+
+// Comments
+export const insertCommentSchema = createInsertSchema(comments).omit({ 
+  id: true,
+  createdAt: true, 
+  updatedAt: true,
+  bodyHtml: true,
+  editHistory: true,
+}).extend({
+  body: z.string().min(1, "Comment body is required"),
+  entity: z.enum(["Account", "Contact", "Lead", "Opportunity"]),
+  entityId: z.string().min(1, "Entity ID is required"),
+  depth: z.number().max(2, "Maximum comment depth is 2"),
+});
+export type InsertComment = z.infer<typeof insertCommentSchema>;
+export type Comment = typeof comments.$inferSelect;
+
+// Comment Reactions
+export const insertCommentReactionSchema = createInsertSchema(commentReactions).omit({ 
+  id: true,
+  createdAt: true,
+}).extend({
+  emoji: z.enum(["👍", "❤️", "🎉", "👀", "🚀"]),
+});
+export type InsertCommentReaction = z.infer<typeof insertCommentReactionSchema>;
+export type CommentReaction = typeof commentReactions.$inferSelect;
+
+// Comment Attachments
+export const insertCommentAttachmentSchema = createInsertSchema(commentAttachments).omit({ 
+  id: true,
+  createdAt: true,
+}).extend({
+  size: z.number().max(25 * 1024 * 1024, "File size must be less than 25MB"),
+});
+export type InsertCommentAttachment = z.infer<typeof insertCommentAttachmentSchema>;
+export type CommentAttachment = typeof commentAttachments.$inferSelect;
+
+// Comment Subscriptions
+export const insertCommentSubscriptionSchema = createInsertSchema(commentSubscriptions).omit({ 
+  id: true,
+  createdAt: true,
+});
+export type InsertCommentSubscription = z.infer<typeof insertCommentSubscriptionSchema>;
+export type CommentSubscription = typeof commentSubscriptions.$inferSelect;
+
+// Comment with full details (for API responses)
+export type CommentWithDetails = Comment & {
+  createdByUser: User;
+  editedByUser?: User | null;
+  attachments: CommentAttachment[];
+  reactions: Record<string, number>;
+  replyCount?: number;
+  userReaction?: string | null;
 };
