@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, Users, Mail, Phone, Download } from "lucide-react";
+import { Plus, Loader2, Users, Mail, Phone, Download, MessageSquare } from "lucide-react";
 import { Contact, InsertContact, insertContactSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { CommentSystem } from "@/components/comment-system";
 
 export default function ContactsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [commentsContactId, setCommentsContactId] = useState<string | null>(null);
+  const [commentsContactName, setCommentsContactName] = useState<string | null>(null);
 
   const { data: contacts, isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
@@ -231,6 +234,7 @@ export default function ContactsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -255,6 +259,19 @@ export default function ContactsPage() {
                         </span>
                       ) : "-"}
                     </TableCell>
+                    <TableCell>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        onClick={() => {
+                          setCommentsContactId(contact.id);
+                          setCommentsContactName(`${contact.firstName} ${contact.lastName}`);
+                        }}
+                        data-testid={`button-comments-${contact.id}`}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -267,6 +284,21 @@ export default function ContactsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={commentsContactId !== null} onOpenChange={(open) => !open && setCommentsContactId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          {commentsContactId && (
+            <CommentSystem
+              entity="contacts"
+              entityId={commentsContactId}
+              entityName={commentsContactName || undefined}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

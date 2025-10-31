@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, DollarSign, Calendar, Download } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { CommentSystem } from "@/components/comment-system";
 
 const stages = [
   { id: "prospecting", label: "Prospecting", color: "bg-gray-500" },
@@ -31,6 +32,8 @@ export default function OpportunitiesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [commentsOpportunityId, setCommentsOpportunityId] = useState<string | null>(null);
+  const [commentsOpportunityName, setCommentsOpportunityName] = useState<string | null>(null);
 
   const { data: opportunities, isLoading } = useQuery<Opportunity[]>({
     queryKey: ["/api/opportunities"],
@@ -303,6 +306,18 @@ export default function OpportunitiesPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setCommentsOpportunityId(opp.id);
+                            setCommentsOpportunityName(opp.name);
+                          }}
+                          data-testid={`button-comments-${opp.id}`}
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           className="h-7 text-xs flex-1"
                           onClick={() => {
                             // View details
@@ -333,6 +348,21 @@ export default function OpportunitiesPage() {
           </div>
         ))}
       </div>
+
+      <Dialog open={commentsOpportunityId !== null} onOpenChange={(open) => !open && setCommentsOpportunityId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          {commentsOpportunityId && (
+            <CommentSystem
+              entity="opportunities"
+              entityId={commentsOpportunityId}
+              entityName={commentsOpportunityName || undefined}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, UserPlus, ArrowRightCircle, Download } from "lucide-react";
+import { Plus, Loader2, UserPlus, ArrowRightCircle, Download, MessageSquare } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
+import { CommentSystem } from "@/components/comment-system";
 
 const statusColors: Record<string, string> = {
   new: "bg-blue-500",
@@ -33,6 +34,8 @@ export default function LeadsPage() {
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [commentsLeadId, setCommentsLeadId] = useState<string | null>(null);
+  const [commentsLeadName, setCommentsLeadName] = useState<string | null>(null);
 
   const { data: leads, isLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads"],
@@ -315,17 +318,30 @@ export default function LeadsPage() {
                     </TableCell>
                     <TableCell className="capitalize">{lead.source || "-"}</TableCell>
                     <TableCell>
-                      {lead.status !== "converted" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedLeadId(lead.id)}
-                          data-testid={`button-convert-${lead.id}`}
+                      <div className="flex gap-2">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setCommentsLeadId(lead.id);
+                            setCommentsLeadName(`${lead.firstName} ${lead.lastName}`);
+                          }}
+                          data-testid={`button-comments-${lead.id}`}
                         >
-                          <ArrowRightCircle className="h-4 w-4 mr-1" />
-                          Convert
+                          <MessageSquare className="h-4 w-4" />
                         </Button>
-                      )}
+                        {lead.status !== "converted" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedLeadId(lead.id)}
+                            data-testid={`button-convert-${lead.id}`}
+                          >
+                            <ArrowRightCircle className="h-4 w-4 mr-1" />
+                            Convert
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -347,6 +363,21 @@ export default function LeadsPage() {
           onClose={() => setSelectedLeadId(null)}
         />
       )}
+
+      <Dialog open={commentsLeadId !== null} onOpenChange={(open) => !open && setCommentsLeadId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          {commentsLeadId && (
+            <CommentSystem
+              entity="leads"
+              entityId={commentsLeadId}
+              entityName={commentsLeadName || undefined}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

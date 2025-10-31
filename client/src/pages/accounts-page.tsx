@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, Building2, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Building2, Download, MessageSquare } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { CommentSystem } from "@/components/comment-system";
 
 export default function AccountsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [commentsAccountId, setCommentsAccountId] = useState<string | null>(null);
+  const [commentsAccountName, setCommentsAccountName] = useState<string | null>(null);
 
   const { data: accounts, isLoading } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
@@ -284,6 +287,17 @@ export default function AccountsPage() {
                     <TableCell>{account.phone || "-"}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={() => {
+                            setCommentsAccountId(account.id);
+                            setCommentsAccountName(account.name);
+                          }}
+                          data-testid={`button-comments-${account.id}`}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
                         <Button size="icon" variant="ghost" data-testid={`button-edit-${account.id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -304,6 +318,21 @@ export default function AccountsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={commentsAccountId !== null} onOpenChange={(open) => !open && setCommentsAccountId(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Comments</DialogTitle>
+          </DialogHeader>
+          {commentsAccountId && (
+            <CommentSystem
+              entity="accounts"
+              entityId={commentsAccountId}
+              entityName={commentsAccountName || undefined}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
