@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Loader2, UserPlus, ArrowRightCircle, Download, MessageSquare } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,6 +33,7 @@ const statusColors: Record<string, string> = {
 export default function LeadsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [commentsLeadId, setCommentsLeadId] = useState<string | null>(null);
@@ -306,7 +308,12 @@ export default function LeadsPage() {
               </TableHeader>
               <TableBody>
                 {leads.map((lead) => (
-                  <TableRow key={lead.id} data-testid={`row-lead-${lead.id}`}>
+                  <TableRow 
+                    key={lead.id} 
+                    data-testid={`row-lead-${lead.id}`}
+                    className="cursor-pointer hover-elevate active-elevate-2"
+                    onClick={() => setLocation(`/leads/${lead.id}`)}
+                  >
                     <TableCell className="font-mono text-sm">{lead.id}</TableCell>
                     <TableCell className="font-medium">{lead.firstName} {lead.lastName}</TableCell>
                     <TableCell>{lead.company || "-"}</TableCell>
@@ -317,7 +324,7 @@ export default function LeadsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="capitalize">{lead.source || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <div className="flex gap-2">
                         <Button 
                           size="icon" 

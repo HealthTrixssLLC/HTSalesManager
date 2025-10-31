@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download } from "lucide-react";
 import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,6 +31,7 @@ const activityIcons = {
 export default function ActivitiesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   const { data: activities, isLoading } = useQuery<Activity[]>({
@@ -259,7 +261,12 @@ export default function ActivitiesPage() {
               {activities.map((activity) => {
                 const Icon = activityIcons[activity.type];
                 return (
-                  <Card key={activity.id} className="p-4" data-testid={`card-activity-${activity.id}`}>
+                  <Card 
+                    key={activity.id} 
+                    className="p-4 cursor-pointer hover-elevate active-elevate-2" 
+                    data-testid={`card-activity-${activity.id}`}
+                    onClick={() => setLocation(`/activities/${activity.id}`)}
+                  >
                     <div className="flex gap-4">
                       <div className="flex-shrink-0">
                         <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">

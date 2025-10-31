@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Loader2, Users, Mail, Phone, Download, MessageSquare } from "lucide-react";
 import { Contact, InsertContact, insertContactSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,6 +22,7 @@ import { CommentSystem } from "@/components/comment-system";
 export default function ContactsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [commentsContactId, setCommentsContactId] = useState<string | null>(null);
   const [commentsContactName, setCommentsContactName] = useState<string | null>(null);
@@ -239,11 +241,16 @@ export default function ContactsPage() {
               </TableHeader>
               <TableBody>
                 {contacts.map((contact) => (
-                  <TableRow key={contact.id} data-testid={`row-contact-${contact.id}`}>
+                  <TableRow 
+                    key={contact.id} 
+                    data-testid={`row-contact-${contact.id}`}
+                    className="cursor-pointer hover-elevate active-elevate-2"
+                    onClick={() => setLocation(`/contacts/${contact.id}`)}
+                  >
                     <TableCell className="font-mono text-sm">{contact.id}</TableCell>
                     <TableCell className="font-medium">{contact.firstName} {contact.lastName}</TableCell>
                     <TableCell>{contact.title || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {contact.email ? (
                         <a href={`mailto:${contact.email}`} className="text-primary hover:underline flex items-center gap-1">
                           <Mail className="h-3 w-3" />
@@ -259,7 +266,7 @@ export default function ContactsPage() {
                         </span>
                       ) : "-"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <Button 
                         size="icon" 
                         variant="ghost" 

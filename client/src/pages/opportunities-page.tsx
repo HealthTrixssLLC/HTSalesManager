@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
@@ -31,6 +32,7 @@ const stages = [
 export default function OpportunitiesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [commentsOpportunityId, setCommentsOpportunityId] = useState<string | null>(null);
   const [commentsOpportunityName, setCommentsOpportunityName] = useState<string | null>(null);
@@ -272,7 +274,12 @@ export default function OpportunitiesPage() {
               </CardHeader>
               <CardContent className="space-y-3 min-h-[400px]">
                 {groupedOpportunities[stage.id].map((opp) => (
-                  <Card key={opp.id} className="p-4 hover-elevate cursor-pointer" data-testid={`card-opportunity-${opp.id}`}>
+                  <Card 
+                    key={opp.id} 
+                    className="p-4 hover-elevate cursor-pointer" 
+                    data-testid={`card-opportunity-${opp.id}`}
+                    onClick={() => setLocation(`/opportunities/${opp.id}`)}
+                  >
                     <div className="space-y-2">
                       <h4 className="font-medium text-sm">{opp.name}</h4>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -288,7 +295,7 @@ export default function OpportunitiesPage() {
                           {new Date(opp.closeDate).toLocaleDateString()}
                         </div>
                       )}
-                      <div className="flex gap-1 pt-2">
+                      <div className="flex gap-1 pt-2" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
                           variant="outline"
@@ -319,9 +326,7 @@ export default function OpportunitiesPage() {
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs flex-1"
-                          onClick={() => {
-                            // View details
-                          }}
+                          onClick={() => setLocation(`/opportunities/${opp.id}`)}
                         >
                           View
                         </Button>
