@@ -56,15 +56,35 @@ export function registerRoutes(app: Express) {
         password: hashedPassword,
       });
       
-      // Assign default role (SalesRep)
+      // Assign role: If no admin users exist, make this user an admin
       try {
         const roles = await storage.getAllRoles();
-        const defaultRole = roles.find(r => r.name === DEFAULT_ROLE);
-        if (defaultRole) {
-          await storage.assignRoleToUser(user.id, defaultRole.id);
+        const adminRole = roles.find(r => r.name === "Admin");
+        
+        // Check if there are any admin users
+        const allUsers = await storage.getAllUsers();
+        let hasAdmin = false;
+        
+        for (const u of allUsers) {
+          const userRoles = await storage.getUserRoles(u.id);
+          if (userRoles.some(r => r.name === "Admin")) {
+            hasAdmin = true;
+            break;
+          }
+        }
+        
+        // If no admin exists, make this user an admin
+        if (!hasAdmin && adminRole) {
+          await storage.assignRoleToUser(user.id, adminRole.id);
+        } else {
+          // Otherwise, assign default role (SalesRep)
+          const defaultRole = roles.find(r => r.name === DEFAULT_ROLE);
+          if (defaultRole) {
+            await storage.assignRoleToUser(user.id, defaultRole.id);
+          }
         }
       } catch (error) {
-        console.error("Error assigning default role:", error);
+        console.error("Error assigning role:", error);
       }
       
       // Generate token
