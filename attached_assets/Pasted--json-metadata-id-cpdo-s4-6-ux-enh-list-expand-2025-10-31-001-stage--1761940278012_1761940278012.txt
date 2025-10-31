@@ -1,0 +1,386 @@
+```json
+{
+  "metadata": {
+    "id": "cpdo.s4.6.ux.enh.list_expand.2025-10-31-001",
+    "stage": "4.6",
+    "version": "v1.0.0",
+    "generated_at": "2025-10-31T00:00:00Z",
+    "title": "Expandable Related Transactions in List Views"
+  },
+  "applies_to_views": [
+    "V-AccountList",
+    "V-ContactList",
+    "V-OpportunityList",
+    "V-LeadList",
+    "V-ActivityList"
+  ],
+  "goal": "From any list view a user can expand a row to preview related transactions and click through to any related transaction detail page.",
+  "workflows": [
+    {
+      "id": "WF-LIST-EXPAND-RELATED",
+      "name": "Expand related transactions in list",
+      "actors_personas": ["Sales Rep", "Sales Manager"],
+      "triggers": ["User activates row expand control or presses Enter on focused row"],
+      "preconditions": ["User has permission to view parent entity and its relations"],
+      "main_steps": [
+        "User expands a row",
+        "System fetches related collections according to view config",
+        "System renders each related collection as an inline table with top N rows and a View all link"
+      ],
+      "alternate_paths": [
+        "No related data found then show empty state text",
+        "Large related set then paginate inside the inline table"
+      ],
+      "error_states": [
+        "Network error then show inline error with retry",
+        "Authorization error then hide data and show permission message"
+      ],
+      "exit_criteria": [
+        "Expanded row shows related records with working links and counts"
+      ],
+      "usability_test_script": "Ask user to expand a row and identify which related area changed the most this period"
+    },
+    {
+      "id": "WF-LIST-NAV-RELATED-DETAIL",
+      "name": "Click through to a related transaction detail",
+      "actors_personas": ["Sales Rep", "Sales Manager"],
+      "triggers": ["User clicks a related record link inside expanded row"],
+      "preconditions": ["Related record exists and user has permission"],
+      "main_steps": [
+        "User clicks related record",
+        "System routes to the related transaction detail view",
+        "Detail view loads record and related panels"
+      ],
+      "alternate_paths": ["Record not found then show not found with back to list"],
+      "error_states": ["Navigation or fetch error then show toast and stay in list"],
+      "exit_criteria": ["Related detail page is displayed and usable"],
+      "usability_test_script": "Ask user to open a related contact from an account row and return to the list"
+    }
+  ],
+  "application_map_updates": {
+    "views": [
+      {
+        "view_id": "V-AccountList",
+        "title": "Accounts",
+        "description": "Tabular list of accounts with expandable related previews",
+        "primary_actions": ["Add Account", "Import CSV"],
+        "components": [
+          "DataTable",
+          "ChevronToggle",
+          "InlineRelationTable",
+          "Link",
+          "Badge",
+          "Toast"
+        ],
+        "row_schema": {
+          "key": "account_id",
+          "columns": [
+            {"id": "name", "label": "Account", "type": "text", "link_to": "V-AccountDetail"},
+            {"id": "owner", "label": "Owner", "type": "text"},
+            {"id": "status", "label": "Status", "type": "badge"},
+            {"id": "updated_at", "label": "Updated", "type": "date"}
+          ],
+          "expandables": [
+            {
+              "entity": "Contact",
+              "title": "Contacts",
+              "columns": [
+                {"id": "name", "label": "Name"},
+                {"id": "email", "label": "Email"}
+              ],
+              "max_rows": 5,
+              "view_all_link": "V-ContactList?account_id={account_id}",
+              "row_link_to": "V-ContactDetail"
+            },
+            {
+              "entity": "Opportunity",
+              "title": "Opportunities",
+              "columns": [
+                {"id": "name", "label": "Name"},
+                {"id": "stage", "label": "Stage"},
+                {"id": "amount", "label": "Amount"}
+              ],
+              "max_rows": 5,
+              "view_all_link": "V-OpportunityList?account_id={account_id}",
+              "row_link_to": "V-OpportunityDetail"
+            },
+            {
+              "entity": "Activity",
+              "title": "Activities",
+              "columns": [
+                {"id": "type", "label": "Type"},
+                {"id": "due_date", "label": "Due"}
+              ],
+              "max_rows": 5,
+              "view_all_link": "V-ActivityList?account_id={account_id}",
+              "row_link_to": "V-ActivityDetail"
+            }
+          ]
+        }
+      },
+      {
+        "view_id": "V-ContactList",
+        "title": "Contacts",
+        "components": ["DataTable", "ChevronToggle", "InlineRelationTable", "Link", "Toast"],
+        "row_schema": {
+          "key": "contact_id",
+          "columns": [
+            {"id": "name", "label": "Name", "type": "text", "link_to": "V-ContactDetail"},
+            {"id": "email", "label": "Email", "type": "text"},
+            {"id": "phone", "label": "Phone", "type": "text"}
+          ],
+          "expandables": [
+            {
+              "entity": "Account",
+              "title": "Account",
+              "columns": [{"id": "name", "label": "Account"}],
+              "max_rows": 1,
+              "row_link_to": "V-AccountDetail"
+            },
+            {
+              "entity": "Opportunity",
+              "title": "Opportunities",
+              "columns": [
+                {"id": "name", "label": "Name"},
+                {"id": "stage", "label": "Stage"}
+              ],
+              "max_rows": 5,
+              "row_link_to": "V-OpportunityDetail"
+            },
+            {
+              "entity": "Activity",
+              "title": "Activities",
+              "columns": [
+                {"id": "type", "label": "Type"},
+                {"id": "due_date", "label": "Due"}
+              ],
+              "max_rows": 5,
+              "row_link_to": "V-ActivityDetail"
+            }
+          ]
+        }
+      },
+      {
+        "view_id": "V-OpportunityList",
+        "title": "Opportunities",
+        "components": ["DataTable", "ChevronToggle", "InlineRelationTable", "Link", "Toast"],
+        "row_schema": {
+          "key": "opportunity_id",
+          "columns": [
+            {"id": "name", "label": "Name", "type": "text", "link_to": "V-OpportunityDetail"},
+            {"id": "stage", "label": "Stage", "type": "text"},
+            {"id": "amount", "label": "Amount", "type": "currency"}
+          ],
+          "expandables": [
+            {
+              "entity": "Account",
+              "title": "Account",
+              "columns": [{"id": "name", "label": "Account"}],
+              "max_rows": 1,
+              "row_link_to": "V-AccountDetail"
+            },
+            {
+              "entity": "Contact",
+              "title": "Contacts",
+              "columns": [{"id": "name", "label": "Name"}],
+              "max_rows": 5,
+              "row_link_to": "V-ContactDetail"
+            },
+            {
+              "entity": "Activity",
+              "title": "Activities",
+              "columns": [{"id": "type", "label": "Type"}],
+              "max_rows": 5,
+              "row_link_to": "V-ActivityDetail"
+            }
+          ]
+        }
+      },
+      {
+        "view_id": "V-LeadList",
+        "title": "Leads",
+        "components": ["DataTable", "ChevronToggle", "InlineRelationTable", "Link", "Toast"],
+        "row_schema": {
+          "key": "lead_id",
+          "columns": [
+            {"id": "name", "label": "Lead", "type": "text", "link_to": "V-LeadDetail"},
+            {"id": "source", "label": "Source", "type": "text"},
+            {"id": "status", "label": "Status", "type": "badge"}
+          ],
+          "expandables": [
+            {
+              "entity": "Activity",
+              "title": "Activities",
+              "columns": [{"id": "type", "label": "Type"}],
+              "max_rows": 5,
+              "row_link_to": "V-ActivityDetail"
+            }
+          ]
+        }
+      },
+      {
+        "view_id": "V-ActivityList",
+        "title": "Activities",
+        "components": ["DataTable", "ChevronToggle", "InlineRelationTable", "Link", "Toast"],
+        "row_schema": {
+          "key": "activity_id",
+          "columns": [
+            {"id": "type", "label": "Type", "type": "text", "link_to": "V-ActivityDetail"},
+            {"id": "due_date", "label": "Due", "type": "date"},
+            {"id": "owner", "label": "Owner", "type": "text"}
+          ],
+          "expandables": [
+            {
+              "entity": "Account",
+              "title": "Account",
+              "columns": [{"id": "name", "label": "Account"}],
+              "max_rows": 1,
+              "row_link_to": "V-AccountDetail"
+            },
+            {
+              "entity": "Contact",
+              "title": "Contact",
+              "columns": [{"id": "name", "label": "Name"}],
+              "max_rows": 1,
+              "row_link_to": "V-ContactDetail"
+            },
+            {
+              "entity": "Opportunity",
+              "title": "Opportunity",
+              "columns": [{"id": "name", "label": "Name"}],
+              "max_rows": 1,
+              "row_link_to": "V-OpportunityDetail"
+            },
+            {
+              "entity": "Lead",
+              "title": "Lead",
+              "columns": [{"id": "name", "label": "Lead"}],
+              "max_rows": 1,
+              "row_link_to": "V-LeadDetail"
+            }
+          ]
+        }
+      }
+    ],
+    "navigation_graph_mermaid_additions": "graph TD\nV-AccountList-- expand -->V-ContactDetail\nV-AccountList-- expand -->V-OpportunityDetail\nV-AccountList-- expand -->V-ActivityDetail\nV-ContactList-- expand -->V-AccountDetail\nV-ContactList-- expand -->V-OpportunityDetail\nV-ContactList-- expand -->V-ActivityDetail\nV-OpportunityList-- expand -->V-AccountDetail\nV-OpportunityList-- expand -->V-ContactDetail\nV-OpportunityList-- expand -->V-ActivityDetail\nV-LeadList-- expand -->V-ActivityDetail\nV-ActivityList-- expand -->V-AccountDetail\nV-ActivityList-- expand -->V-ContactDetail\nV-ActivityList-- expand -->V-OpportunityDetail\nV-ActivityList-- expand -->V-LeadDetail",
+    "component_inventory_additions": [
+      {"name": "ChevronToggle", "usage": "Expand or collapse row to show related previews", "states": ["collapsed", "expanded", "loading", "error"]},
+      {"name": "InlineRelationTable", "usage": "Compact table for related items inside a parent row", "states": ["empty", "loading", "ready", "error"]},
+      {"name": "Link", "usage": "Clickable navigation to related detail views", "states": ["default", "visited", "disabled"]}
+    ]
+  },
+  "wireframe_specs_updates": [
+    {
+      "view_id": "V-AccountList",
+      "layout_description": "Data table with left chevron toggle per row. Expanding reveals stacked inline tables for Contacts Opportunities and Activities with View all links.",
+      "key_components": ["DataTable", "ChevronToggle", "InlineRelationTable", "Link", "Badge", "Toast"],
+      "fields": [],
+      "states": {
+        "empty": "Table shows no records and a get started helper",
+        "loading": "Skeleton rows with disabled controls",
+        "error": "Inline error with retry at table and at inline tables",
+        "success": "Rows render and expandables load asynchronously"
+      },
+      "variants": {
+        "mobile": "Single column stacked cards per row with expandable panels",
+        "desktop": "Standard table with expandable sub rows"
+      },
+      "accessibility_notes": [
+        "ChevronToggle is a button with aria-expanded and aria-controls",
+        "Each InlineRelationTable has a caption and header cells",
+        "Keyboard users can expand with Enter or Space and tab into links"
+      ]
+    }
+  ],
+  "telemetry_updates": {
+    "events": [
+      {
+        "name": "list_row_expand",
+        "source_view": "*List",
+        "trigger": "click ChevronToggle",
+        "payload_schema": [
+          {"field": "view_id", "type": "string"},
+          {"field": "entity", "type": "string"},
+          {"field": "record_id", "type": "string"}
+        ],
+        "pii": false,
+        "retention_days": 365,
+        "kpi_link": "Exploration rate"
+      },
+      {
+        "name": "list_row_collapse",
+        "source_view": "*List",
+        "trigger": "click ChevronToggle collapse",
+        "payload_schema": [
+          {"field": "view_id", "type": "string"},
+          {"field": "entity", "type": "string"},
+          {"field": "record_id", "type": "string"}
+        ],
+        "pii": false,
+        "retention_days": 365,
+        "kpi_link": "Exploration rate"
+      },
+      {
+        "name": "relation_link_click",
+        "source_view": "*List",
+        "trigger": "click related record link",
+        "payload_schema": [
+          {"field": "parent_entity", "type": "string"},
+          {"field": "parent_id", "type": "string"},
+          {"field": "related_entity", "type": "string"},
+          {"field": "related_id", "type": "string"}
+        ],
+        "pii": false,
+        "retention_days": 365,
+        "kpi_link": "Click through rate to detail"
+      }
+    ]
+  },
+  "content_accessibility_updates": {
+    "content_style": "Use short labels for relation sections and include counts in headings",
+    "accessibility_checklist": [
+      {"area": "Keyboard Navigation", "status": "Pass", "notes": "Expand controls focusable and operable"},
+      {"area": "Labels & Instructions", "status": "Pass", "notes": "Section headings include entity name and count"},
+      {"area": "Error Identification", "status": "Pass", "notes": "InlineRelationTable shows row level errors with retry"}
+    ]
+  },
+  "traceability_updates": [
+    {
+      "feature_id": "F-ACCOUNT",
+      "view_ids": ["V-AccountList"],
+      "workflow_ids": ["WF-LIST-EXPAND-RELATED", "WF-LIST-NAV-RELATED-DETAIL"]
+    },
+    {
+      "feature_id": "F-CONTACT",
+      "view_ids": ["V-ContactList"],
+      "workflow_ids": ["WF-LIST-EXPAND-RELATED", "WF-LIST-NAV-RELATED-DETAIL"]
+    },
+    {
+      "feature_id": "F-OPPORTUNITY",
+      "view_ids": ["V-OpportunityList"],
+      "workflow_ids": ["WF-LIST-EXPAND-RELATED", "WF-LIST-NAV-RELATED-DETAIL"]
+    },
+    {
+      "feature_id": "F-LEAD",
+      "view_ids": ["V-LeadList"],
+      "workflow_ids": ["WF-LIST-EXPAND-RELATED", "WF-LIST-NAV-RELATED-DETAIL"]
+    },
+    {
+      "feature_id": "F-ACTIVITY",
+      "view_ids": ["V-ActivityList"],
+      "workflow_ids": ["WF-LIST-EXPAND-RELATED", "WF-LIST-NAV-RELATED-DETAIL"]
+    }
+  ],
+  "versioning_export": {
+    "revision_history": [
+      {
+        "version": "v1.0.0",
+        "date": "2025-10-31",
+        "author": "Stage 4.6 UX Author",
+        "description_of_change": "Added expandable related previews and click through to related detail for all list views"
+      }
+    ],
+    "export_notes": "Bind row_link_to targets to existing V-*Detail routes and reuse InlineRelationTable component across all list views"
+  }
+}
+```
