@@ -94,11 +94,106 @@ export async function getHistoricalMetrics(dateRange: DateRange) {
 // ========== STAGE CONVERSION RATES ==========
 
 export async function getStageConversionRates(dateRange: DateRange) {
-  // This is simplified - in production you'd track stage transitions via audit logs
-  // For now, we'll calculate based on current state
-  
-  const allOpps = await db.select().from(schema.opportunities);
+  const { start, end } = dateRange;
 
+  // Get audit logs for opportunity stage changes in the date range
+  const stageChanges = await db
+    .select()
+    .from(schema.auditLogs)
+    .where(
+      and(
+        eq(schema.auditLogs.resource, "Opportunity"),
+        eq(schema.auditLogs.action, "update"),
+        gte(schema.auditLogs.createdAt, start),
+        lte(schema.auditLogs.createdAt, end)
+      )
+    );
+
+  // Track stage transitions by parsing audit log diffs
+  const transitions: Record<string, { from: string; to: string; count: number }[]> = {};
+  const stageTransitionCounts: Record<string, number> = {
+    prospecting: 0,
+    qualification: 0,
+    proposal: 0,
+    negotiation: 0,
+    closed_won: 0,
+    closed_lost: 0,
+  };
+
+  stageChanges.forEach((log) => {
+    try {
+      const before = typeof log.before === 'string' ? JSON.parse(log.before) : log.before;
+      const after = typeof log.after === 'string' ? JSON.parse(log.after) : log.after;
+
+      // Check if stage changed
+      if (before?.stage && after?.stage && before.stage !== after.stage) {
+        const fromStage = before.stage;
+        const toStage = after.stage;
+        
+        // Track transitions from the "from" stage
+        stageTransitionCounts[fromStage] = (stageTransitionCounts[fromStage] || 0) + 1;
+        
+        const transitionKey = `${fromStage}_to_${toStage}`;
+        if (!transitions[transitionKey]) {
+          transitions[transitionKey] = [];
+        }
+        
+        // Find or create transition record
+        const existing = transitions[transitionKey].find(
+          (t) => t.from === fromStage && t.to === toStage
+        );
+        
+        if (existing) {
+          existing.count++;
+        } else {
+          transitions[transitionKey].push({ from: fromStage, to: toStage, count: 1 });
+        }
+      }
+    } catch (error) {
+      // Skip malformed audit logs
+    }
+  });
+
+  // Calculate conversion rates based on actual transitions
+  // Conversion rate = (deals moved to next stage) / (deals that were in previous stage)
+  const getTransitionCount = (from: string, to: string): number => {
+    const key = `${from}_to_${to}`;
+    return transitions[key]?.[0]?.count || 0;
+  };
+
+  const getTotalFromStage = (stage: string): number => {
+    return stageTransitionCounts[stage] || 0;
+  };
+
+  // Calculate stage-to-stage conversion rates
+  const conversions: Record<string, number> = {};
+  
+  // Prospecting → Qualification
+  const prospectingTotal = getTotalFromStage("prospecting");
+  conversions.prospecting_to_qualification = prospectingTotal > 0 
+    ? getTransitionCount("prospecting", "qualification") / prospectingTotal 
+    : 0;
+
+  // Qualification → Proposal
+  const qualificationTotal = getTotalFromStage("qualification");
+  conversions.qualification_to_proposal = qualificationTotal > 0 
+    ? getTransitionCount("qualification", "proposal") / qualificationTotal 
+    : 0;
+
+  // Proposal → Negotiation
+  const proposalTotal = getTotalFromStage("proposal");
+  conversions.proposal_to_negotiation = proposalTotal > 0 
+    ? getTransitionCount("proposal", "negotiation") / proposalTotal 
+    : 0;
+
+  // Negotiation → Closed Won
+  const negotiationTotal = getTotalFromStage("negotiation");
+  conversions.negotiation_to_won = negotiationTotal > 0 
+    ? getTransitionCount("negotiation", "closed_won") / negotiationTotal 
+    : 0;
+
+  // Current snapshot for reference (not used in conversion calculations)
+  const currentOpps = await db.select().from(schema.opportunities);
   const stageCount: Record<string, number> = {
     prospecting: 0,
     qualification: 0,
@@ -108,22 +203,16 @@ export async function getStageConversionRates(dateRange: DateRange) {
     closed_lost: 0,
   };
 
-  allOpps.forEach((opp) => {
+  currentOpps.forEach((opp) => {
     stageCount[opp.stage] = (stageCount[opp.stage] || 0) + 1;
   });
 
-  // Calculate conversion rates (simplified funnel analysis)
-  const total = allOpps.length;
-  const conversions = {
-    prospecting_to_qualification: total > 0 ? stageCount.qualification / total : 0,
-    qualification_to_proposal: stageCount.qualification > 0 ? stageCount.proposal / stageCount.qualification : 0,
-    proposal_to_negotiation: stageCount.proposal > 0 ? stageCount.negotiation / stageCount.proposal : 0,
-    negotiation_to_won: stageCount.negotiation > 0 ? stageCount.closed_won / stageCount.negotiation : 0,
-  };
-
   return {
-    stageCount,
     conversions,
+    stageCount, // Current snapshot for context
+    transitionCounts: stageTransitionCounts, // How many deals moved from each stage
+    periodStart: start,
+    periodEnd: end,
   };
 }
 

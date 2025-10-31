@@ -38,6 +38,15 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
 *   **Help & Migration Guide**: Comprehensive documentation including a guide for migrating data from Dynamics 365.
 *   **Dashboard**: Provides key insights such as pipeline status, win rates, and user activity summaries.
+*   **Analytics & Forecasting System**: OKR-driven analytics platform measuring outcomes and drivers, not activities:
+    *   **Revenue Forecasting**: Four forecasting models (stage-weighted, historical win rate, velocity-based, time-decay) providing conservative, most likely, and commit forecasts
+    *   **Pipeline Health Score**: Composite score (0-100) based on coverage, stage distribution, velocity, and freshness with actionable recommendations
+    *   **Sales Velocity Metrics**: Real-time pipeline velocity ($/day), stage conversion rates, and bottleneck identification
+    *   **Rep Performance Analytics**: Rankings by revenue, win rate, efficiency, with coaching insights and at-risk rep identification
+    *   **Deal Closing Predictions**: AI-enhanced predictions of which deals will close when, based on historical patterns and time decay
+    *   **Executive Dashboard**: Revenue vs target tracking, win rate trends, average deal size, sales cycle analysis
+    *   **API Endpoints**: 7 analytics endpoints (`/api/analytics/forecast`, `/velocity`, `/pipeline-health`, `/rep-performance`, `/predictions`, `/historical`, `/conversions`)
+    *   **Interactive Visualizations**: Multi-tab dashboard using Recharts for trends, funnels, and performance rankings
 *   **Comments System**: Full-featured commenting on Accounts, Contacts, Leads, and Opportunities with:
     *   Threaded comments (max depth 2) with reply functionality
     *   Emoji reactions (👍❤️🎉👀🚀) with user tracking
