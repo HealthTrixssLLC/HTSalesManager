@@ -265,6 +265,38 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Get related data for an account (contacts, opportunities, activities)
+  app.get("/api/accounts/:id/related", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+    try {
+      const accountId = req.params.id;
+      
+      // Verify account exists
+      const account = await storage.getAccountById(accountId);
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+      
+      // Fetch related data
+      const [allContacts, allOpportunities, allActivities] = await Promise.all([
+        storage.getAllContacts(),
+        storage.getAllOpportunities(),
+        storage.getAllActivities(),
+      ]);
+      
+      const contacts = allContacts.filter(c => c.accountId === accountId);
+      const opportunities = allOpportunities.filter(o => o.accountId === accountId);
+      const activities = allActivities.filter(a => a.relatedType === "Account" && a.relatedId === accountId);
+      
+      return res.json({
+        contacts: { items: contacts, total: contacts.length },
+        opportunities: { items: opportunities, total: opportunities.length },
+        activities: { items: activities, total: activities.length },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch related data" });
+    }
+  });
+  
   // ========== CONTACTS ROUTES ==========
   
   app.get("/api/contacts", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
@@ -273,6 +305,18 @@ export function registerRoutes(app: Express) {
       return res.json(contacts);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+  
+  app.get("/api/contacts/:id", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+    try {
+      const contact = await storage.getContactById(req.params.id);
+      if (!contact) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      return res.json(contact);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch contact" });
     }
   });
   
@@ -289,6 +333,35 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
       return res.status(500).json({ error: "Failed to create contact" });
+    }
+  });
+  
+  // Get related data for a contact (account, opportunities, activities)
+  app.get("/api/contacts/:id/related", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+    try {
+      const contactId = req.params.id;
+      
+      const contact = await storage.getContactById(contactId);
+      if (!contact) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      
+      const [account, allOpportunities, allActivities] = await Promise.all([
+        contact.accountId ? storage.getAccountById(contact.accountId) : Promise.resolve(null),
+        storage.getAllOpportunities(),
+        storage.getAllActivities(),
+      ]);
+      
+      const opportunities = allOpportunities.filter(o => o.accountId === contact.accountId);
+      const activities = allActivities.filter(a => a.relatedType === "Contact" && a.relatedId === contactId);
+      
+      return res.json({
+        account: account ? { items: [account], total: 1 } : { items: [], total: 0 },
+        opportunities: { items: opportunities, total: opportunities.length },
+        activities: { items: activities, total: activities.length },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch related data" });
     }
   });
   
@@ -328,6 +401,41 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
       return res.status(500).json({ error: "Failed to create lead" });
+    }
+  });
+  
+  // Get related data for a lead (activities, conversion info)
+  app.get("/api/leads/:id/related", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+    try {
+      const leadId = req.params.id;
+      
+      const lead = await storage.getLeadById(leadId);
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+      
+      const allActivities = await storage.getAllActivities();
+      const activities = allActivities.filter(a => a.relatedType === "Lead" && a.relatedId === leadId);
+      
+      // If converted, fetch the converted entities
+      const conversionData: any = {};
+      if (lead.status === "converted") {
+        const [convertedAccount, convertedContact, convertedOpportunity] = await Promise.all([
+          lead.convertedAccountId ? storage.getAccountById(lead.convertedAccountId) : Promise.resolve(null),
+          lead.convertedContactId ? storage.getContactById(lead.convertedContactId) : Promise.resolve(null),
+          lead.convertedOpportunityId ? storage.getOpportunityById(lead.convertedOpportunityId) : Promise.resolve(null),
+        ]);
+        conversionData.convertedAccount = convertedAccount;
+        conversionData.convertedContact = convertedContact;
+        conversionData.convertedOpportunity = convertedOpportunity;
+      }
+      
+      return res.json({
+        activities: { items: activities, total: activities.length },
+        ...conversionData,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch related data" });
     }
   });
   
@@ -440,6 +548,18 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.get("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const opportunity = await storage.getOpportunityById(req.params.id);
+      if (!opportunity) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+      return res.json(opportunity);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch opportunity" });
+    }
+  });
+  
   app.post("/api/opportunities", authenticate, requirePermission("Opportunity", "create"), async (req: AuthRequest, res) => {
     try {
       const data = insertOpportunitySchema.parse(req.body);
@@ -473,6 +593,35 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Get related data for an opportunity (account, contacts, activities)
+  app.get("/api/opportunities/:id/related", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const opportunityId = req.params.id;
+      
+      const opportunity = await storage.getOpportunityById(opportunityId);
+      if (!opportunity) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+      
+      const [account, allContacts, allActivities] = await Promise.all([
+        storage.getAccountById(opportunity.accountId),
+        storage.getAllContacts(),
+        storage.getAllActivities(),
+      ]);
+      
+      const contacts = allContacts.filter(c => c.accountId === opportunity.accountId);
+      const activities = allActivities.filter(a => a.relatedType === "Opportunity" && a.relatedId === opportunityId);
+      
+      return res.json({
+        account: account ? { items: [account], total: 1 } : { items: [], total: 0 },
+        contacts: { items: contacts, total: contacts.length },
+        activities: { items: activities, total: activities.length },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch related data" });
+    }
+  });
+  
   // ========== ACTIVITIES ROUTES ==========
   
   app.get("/api/activities", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
@@ -481,6 +630,18 @@ export function registerRoutes(app: Express) {
       return res.json(activities);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch activities" });
+    }
+  });
+  
+  app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const activity = await storage.getActivityById(req.params.id);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      return res.json(activity);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch activity" });
     }
   });
   
@@ -497,6 +658,38 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
       return res.status(500).json({ error: "Failed to create activity" });
+    }
+  });
+  
+  // Get related data for an activity (polymorphic parent entity)
+  app.get("/api/activities/:id/related", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const activityId = req.params.id;
+      
+      const activity = await storage.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      // Fetch the related entity based on relatedType and relatedId
+      let relatedEntity = null;
+      if (activity.relatedType && activity.relatedId) {
+        if (activity.relatedType === "Account") {
+          relatedEntity = await storage.getAccountById(activity.relatedId);
+        } else if (activity.relatedType === "Contact") {
+          relatedEntity = await storage.getContactById(activity.relatedId);
+        } else if (activity.relatedType === "Opportunity") {
+          relatedEntity = await storage.getOpportunityById(activity.relatedId);
+        } else if (activity.relatedType === "Lead") {
+          relatedEntity = await storage.getLeadById(activity.relatedId);
+        }
+      }
+      
+      return res.json({
+        relatedEntity: relatedEntity ? { type: activity.relatedType, data: relatedEntity } : null,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch related data" });
     }
   });
   
