@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText } from "lucide-react";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download } from "lucide-react";
 import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,32 @@ export default function ActivitiesPage() {
     createMutation.mutate(data);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch("/api/export/activities", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `activities-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Activities exported successfully" });
+    } catch (error) {
+      toast({ title: "Failed to export Activities", variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -85,13 +111,18 @@ export default function ActivitiesPage() {
           <h1 className="text-3xl font-semibold text-foreground">Activities</h1>
           <p className="text-muted-foreground">Track calls, meetings, tasks, and notes</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-activity">
-              <Plus className="h-4 w-4 mr-2" />
-              New Activity
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} data-testid="button-export-activities">
+            <Download className="h-4 w-4 mr-2" />
+            Export to CSV
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-activity">
+                <Plus className="h-4 w-4 mr-2" />
+                New Activity
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Activity</DialogTitle>
@@ -211,7 +242,8 @@ export default function ActivitiesPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <Card>

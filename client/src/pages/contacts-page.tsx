@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, Users, Mail, Phone } from "lucide-react";
+import { Plus, Loader2, Users, Mail, Phone, Download } from "lucide-react";
 import { Contact, InsertContact, insertContactSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,32 @@ export default function ContactsPage() {
     createMutation.mutate(data);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch("/api/export/contacts", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `contacts-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Contacts exported successfully" });
+    } catch (error) {
+      toast({ title: "Failed to export Contacts", variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -74,13 +100,18 @@ export default function ContactsPage() {
           <h1 className="text-3xl font-semibold text-foreground">Contacts</h1>
           <p className="text-muted-foreground">Manage your business contacts and relationships</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-contact">
-              <Plus className="h-4 w-4 mr-2" />
-              New Contact
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} data-testid="button-export-contacts">
+            <Download className="h-4 w-4 mr-2" />
+            Export to CSV
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-contact">
+                <Plus className="h-4 w-4 mr-2" />
+                New Contact
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Contact</DialogTitle>
@@ -179,7 +210,8 @@ export default function ContactsPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <Card>

@@ -667,4 +667,135 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to reset database" });
     }
   });
+  
+  // ========== CSV EXPORT ROUTES ==========
+  
+  // Helper function to convert array of objects to CSV
+  function arrayToCSV(data: any[], headers: string[]): string {
+    if (data.length === 0) {
+      return headers.join(",") + "\n";
+    }
+    
+    const csvRows = [];
+    
+    // Add header row
+    csvRows.push(headers.join(","));
+    
+    // Add data rows
+    for (const row of data) {
+      const values = headers.map(header => {
+        const value = row[header];
+        if (value === null || value === undefined) return "";
+        // Escape quotes and wrap in quotes if contains comma, quote, or newline
+        const stringValue = String(value);
+        if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      });
+      csvRows.push(values.join(","));
+    }
+    
+    return csvRows.join("\n");
+  }
+  
+  app.get("/api/export/accounts", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+    try {
+      const accounts = await storage.getAllAccounts();
+      
+      const headers = ["id", "name", "email", "phone", "address", "website", "industry", "annualRevenue", "ownerId", "createdAt"];
+      const csv = arrayToCSV(accounts, headers);
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="accounts-${Date.now()}.csv"`);
+      return res.send(csv);
+    } catch (error) {
+      console.error("Export accounts error:", error);
+      return res.status(500).json({ error: "Failed to export accounts" });
+    }
+  });
+  
+  app.get("/api/export/contacts", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+    try {
+      const contacts = await storage.getAllContacts();
+      
+      // Get account names for reference
+      const accounts = await storage.getAllAccounts();
+      const accountMap = new Map(accounts.map((a: any) => [a.id, a.name]));
+      
+      // Add account name to contacts
+      const enrichedContacts = contacts.map((contact: any) => ({
+        ...contact,
+        accountName: contact.accountId ? accountMap.get(contact.accountId) : "",
+      }));
+      
+      const headers = ["id", "firstName", "lastName", "email", "phone", "title", "accountId", "accountName", "createdAt"];
+      const csv = arrayToCSV(enrichedContacts, headers);
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="contacts-${Date.now()}.csv"`);
+      return res.send(csv);
+    } catch (error) {
+      console.error("Export contacts error:", error);
+      return res.status(500).json({ error: "Failed to export contacts" });
+    }
+  });
+  
+  app.get("/api/export/leads", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+    try {
+      const leads = await storage.getAllLeads();
+      
+      const headers = ["id", "company", "firstName", "lastName", "email", "phone", "title", "status", "source", "ownerId", "convertedAccountId", "convertedDate", "createdAt"];
+      const csv = arrayToCSV(leads, headers);
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="leads-${Date.now()}.csv"`);
+      return res.send(csv);
+    } catch (error) {
+      console.error("Export leads error:", error);
+      return res.status(500).json({ error: "Failed to export leads" });
+    }
+  });
+  
+  app.get("/api/export/opportunities", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const opportunities = await storage.getAllOpportunities();
+      
+      // Get account names for reference
+      const accounts = await storage.getAllAccounts();
+      const accountMap = new Map(accounts.map((a: any) => [a.id, a.name]));
+      
+      // Add account name to opportunities
+      const enrichedOpportunities = opportunities.map((opp: any) => ({
+        ...opp,
+        accountName: opp.accountId ? accountMap.get(opp.accountId) : "",
+      }));
+      
+      const headers = ["id", "name", "accountId", "accountName", "amount", "stage", "probability", "closeDate", "ownerId", "createdAt"];
+      const csv = arrayToCSV(enrichedOpportunities, headers);
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="opportunities-${Date.now()}.csv"`);
+      return res.send(csv);
+    } catch (error) {
+      console.error("Export opportunities error:", error);
+      return res.status(500).json({ error: "Failed to export opportunities" });
+    }
+  });
+  
+  app.get("/api/export/activities", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const activities = await storage.getAllActivities();
+      
+      const headers = ["id", "type", "subject", "description", "dueDate", "status", "priority", "relatedToType", "relatedToId", "assignedToId", "createdAt"];
+      const csv = arrayToCSV(activities, headers);
+      
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="activities-${Date.now()}.csv"`);
+      return res.send(csv);
+    } catch (error) {
+      console.error("Export activities error:", error);
+      return res.status(500).json({ error: "Failed to export activities" });
+    }
+  });
 }

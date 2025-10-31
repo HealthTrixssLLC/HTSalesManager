@@ -124,12 +124,23 @@ A comprehensive, self-hosted CRM platform built for healthcare professionals. Th
 - [x] Backup/restore service with AES-256-GCM encryption and checksum verification
 - [x] Database reset functionality preserving system configuration
 
-### 📋 Task 3: Integration, Polish & Testing
-- [ ] Connect frontend to backend APIs
-- [ ] Test core user journeys
-- [ ] Docker configuration
-- [ ] Replit deployment config
-- [ ] Final polish and architect review
+### 📋 Task 3: Help & Migration Tools (IN PROGRESS)
+- [x] Help page with comprehensive documentation
+- [x] Dynamics 365 migration guide with field mapping tables
+- [x] CSV export functionality (backend + frontend)
+- [x] Export buttons on all entity pages
+- [ ] CSV import backend endpoints
+- [ ] CSV import frontend UI with file upload
+- [ ] CSV template generation and download
+- [ ] End-to-end migration testing
+
+### 📋 Task 4: Final Polish & Production Deployment
+- [x] Frontend and backend fully integrated and functional
+- [ ] Comprehensive testing of all features
+- [ ] Docker configuration fixes (add BACKUP_ENCRYPTION_KEY)
+- [ ] Replit deployment configuration
+- [ ] Performance optimization
+- [ ] Production security review
 
 ## Design Philosophy
 
@@ -182,6 +193,21 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
+- **2025-10-31**: Help & Documentation with Dynamics 365 Migration Guide
+  - Created comprehensive Help page accessible from sidebar (/help route)
+  - Added 5 tabs: Getting Started, Features Guide, Dynamics Migration, Examples, FAQ
+  - Documented Dynamics 365 export process and field mapping tables
+  - Created migration workflow guide (export → prepare → import order)
+  - Added CSV template download section (placeholders for future implementation)
+  - Included example workflows for common CRM tasks
+  - Documented all features with clear descriptions and usage instructions
+- **2025-10-31**: CSV Export Functionality
+  - Added CSV export endpoints for all entities (GET /api/export/:entity)
+  - Implemented proper CSV formatting with quote escaping and comma handling
+  - Added "Export to CSV" buttons to all entity pages (Accounts, Contacts, Leads, Opportunities, Activities)
+  - Export includes account names in Contacts and Opportunities for better reference
+  - Enforced RBAC permissions on all export endpoints
+  - Files download with timestamp in filename (e.g., accounts-1698765432.csv)
 - **2025-10-31**: Sales Waterfall Chart Implementation (Stacked Bar by Stage)
   - Replaced "Pipeline by Stage" chart with true waterfall chart using stacked bars
   - **Waterfall Logic**: Each bar starts where the previous bar ended (floating bars)

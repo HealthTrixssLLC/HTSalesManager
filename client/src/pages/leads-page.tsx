@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, UserPlus, ArrowRightCircle } from "lucide-react";
+import { Plus, Loader2, UserPlus, ArrowRightCircle, Download } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,32 @@ export default function LeadsPage() {
     createMutation.mutate(data);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch("/api/export/leads", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `leads-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Leads exported successfully" });
+    } catch (error) {
+      toast({ title: "Failed to export Leads", variant: "destructive" });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -87,13 +113,18 @@ export default function LeadsPage() {
           <h1 className="text-3xl font-semibold text-foreground">Leads</h1>
           <p className="text-muted-foreground">Capture and convert leads into opportunities</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-lead">
-              <Plus className="h-4 w-4 mr-2" />
-              New Lead
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} data-testid="button-export-leads">
+            <Download className="h-4 w-4 mr-2" />
+            Export to CSV
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-lead">
+                <Plus className="h-4 w-4 mr-2" />
+                New Lead
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Lead</DialogTitle>
@@ -245,7 +276,8 @@ export default function LeadsPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <Card>

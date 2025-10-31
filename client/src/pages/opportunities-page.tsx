@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Loader2, DollarSign, Calendar } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,32 @@ export default function OpportunitiesPage() {
     createMutation.mutate(data);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch("/api/export/opportunities", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `opportunities-${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Opportunities exported successfully" });
+    } catch (error) {
+      toast({ title: "Failed to export Opportunities", variant: "destructive" });
+    }
+  };
+
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = opportunities?.filter((opp) => opp.stage === stage.id) || [];
     return acc;
@@ -103,13 +129,18 @@ export default function OpportunitiesPage() {
           <h1 className="text-3xl font-semibold text-foreground">Opportunities</h1>
           <p className="text-muted-foreground">Visual pipeline to track deals and close them faster</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-opportunity">
-              <Plus className="h-4 w-4 mr-2" />
-              New Opportunity
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} data-testid="button-export-opportunities">
+            <Download className="h-4 w-4 mr-2" />
+            Export to CSV
+          </Button>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-create-opportunity">
+                <Plus className="h-4 w-4 mr-2" />
+                New Opportunity
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Opportunity</DialogTitle>
@@ -219,7 +250,8 @@ export default function OpportunitiesPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Kanban Board */}
