@@ -1,0 +1,1070 @@
+{
+  "title": "CPDO Stage 4.3 \u2014 Business Requirements Specification",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker \u2014 Product Developer",
+    "role": "Stage 4.3 Business-Requirements Author",
+    "link_to_stage_2_artifact": "/mnt/data/CPDO-Stage2-Artifact.json",
+    "link_to_stage_4_1_artifact": "/mnt/data/CPDO-Stage4.1-Artifact.json",
+    "link_to_stage_4_2_artifact": "/mnt/data/CPDO-Stage4.2-Artifact.json",
+    "optional_application_design_image": "CPDO-Application-Design.png",
+    "optional_kpi_dashboard_wireframe": "KPI-Dashboard-Wireframe.png",
+    "optional_additional_documents": []
+  },
+  "sections": [
+    {
+      "section": "0 \u00b7 Executive Summary",
+      "subsections": [
+        {
+          "title": "0.1 Overview",
+          "content": "This Stage 4.3 Business Requirements (BR) converts approved PRD features (Stage 4.1) and User Stories (Stage 4.2) for the Lightweight Self Hosted CRM into measurable commitments with SMART KPIs, acceptance metrics, compliance tags, and sprint bundling. The BR focuses on cost reduction versus Dynamics 365, fast and reliable CRUD, secure RBAC with full audit, deterministic ID issuance, operational durability via backup/restore, accurate dashboards, and a reproducible Docker/Replit deployment."
+        },
+        {
+          "title": "0.2 Objectives & Non\u2011Negotiables",
+          "rows": [
+            {
+              "objective": "Reduce CRM software costs vs current Dynamics plan",
+              "target": "\u2265 60% savings",
+              "source": "Stage 1 Success Metrics"
+            },
+            {
+              "objective": "Performance",
+              "target": "Median page response \u2264 2s; P95 API reads \u2264 500ms",
+              "source": "Stage 1 / PRD"
+            },
+            {
+              "objective": "Security",
+              "target": "Deny\u2011by\u2011default RBAC with 100% protected route coverage",
+              "source": "Stage 1 / PRD"
+            },
+            {
+              "objective": "Resilience",
+              "target": "Backup \u2264 5 min and Restore \u2264 15 min for \u2264 2 GB",
+              "source": "Stage 1"
+            },
+            {
+              "objective": "Adoption",
+              "target": "\u2265 5 active users in first month",
+              "source": "Stage 1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "1 \u00b7 Feature Matrix (Reference)",
+      "subsections": [
+        {
+          "title": "1.1 Features \u2194 Epic \u2194 Sprint \u2194 Stakeholder",
+          "fields": [
+            "feature_id",
+            "feature_name",
+            "epic",
+            "sprint",
+            "primary_stakeholder"
+          ],
+          "rows": [
+            {
+              "feature_id": "F001",
+              "feature_name": "Data Model & CRUD",
+              "epic": "EPIC-1 \u2014 Data Model & CRUD",
+              "sprint": "1\u20132",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F002",
+              "feature_name": "Lead Conversion Wizard",
+              "epic": "EPIC-3 \u2014 Sales Workflow",
+              "sprint": "2",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F003",
+              "feature_name": "Opportunity Kanban & Probabilities",
+              "epic": "EPIC-3 \u2014 Sales Workflow",
+              "sprint": "2",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F004",
+              "feature_name": "Configurable ID Pattern Engine",
+              "epic": "EPIC-1 \u2014 Data Model & CRUD",
+              "sprint": "1",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F005",
+              "feature_name": "Dashboards & Basic Reports",
+              "epic": "EPIC-4 \u2014 Analytics & Reporting",
+              "sprint": "2\u20133",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F006",
+              "feature_name": "Custom RBAC Framework & Audit Log",
+              "epic": "EPIC-2 \u2014 Identity & Security",
+              "sprint": "1,3",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F007",
+              "feature_name": "Backup/Restore & Database Reset",
+              "epic": "EPIC-5 \u2014 Ops & Admin",
+              "sprint": "3",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F008",
+              "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+              "epic": "EPIC-5 \u2014 Ops & Admin",
+              "sprint": "1",
+              "primary_stakeholder": "Jay Baker"
+            },
+            {
+              "feature_id": "F009",
+              "feature_name": "CSV Migration/Import Tooling",
+              "epic": "EPIC-6 \u2014 Data Migration",
+              "sprint": "3",
+              "primary_stakeholder": "Jay Baker"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "2 \u00b7 Business-Requirement Cards (per Feature)",
+      "subsections": [
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F001 \u00b7 Data Model & CRUD",
+            "1_business_need": "Establish reliable, fast CRUD and relationships so daily sales workflows function end-to-end with minimal friction and complete auditability.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Median page response",
+                  "\u2264 2s",
+                  "Server timing on core CRUD pages",
+                  "Weekly"
+                ],
+                [
+                  "P95 API latency (simple reads)",
+                  "\u2264 500ms",
+                  "APM traces",
+                  "Weekly"
+                ],
+                [
+                  "Form save success rate",
+                  "\u2265 99.5%",
+                  "Error logs vs attempts",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-001-001",
+                  "Provide CRUD UIs and APIs for Accounts, Contacts, Leads, Opportunities, Activities with relational sub-grids.",
+                  "Must",
+                  "Feature parity demo; all forms save & list with filters.",
+                  "Product Dev",
+                  "1\u20132"
+                ],
+                [
+                  "BR-001-002",
+                  "Render list views with server-side paging, sorting, and owner/status filters up to 10k rows.",
+                  "Must",
+                  "List ops under 1s for 10k rows (p95).",
+                  "Product Dev",
+                  "1\u20132"
+                ],
+                [
+                  "BR-001-003",
+                  "Write AuditLog entries for all create/update/delete operations with field-level diffs.",
+                  "Must",
+                  "Audit confirms 100% coverage in tests.",
+                  "Product Dev",
+                  "1\u20132"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Security/Availability",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F001",
+              "user_story_ids": [
+                "US-001",
+                "US-004",
+                "US-011"
+              ],
+              "kpis": [
+                "Median page response",
+                "P95 API latency (simple reads)",
+                "Form save success rate"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F002 \u00b7 Lead Conversion Wizard",
+            "1_business_need": "Accelerate funnel progression by converting qualified leads into pipeline in one atomic, auditable step while reducing duplicate data.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Lead\u2192Pipeline time",
+                  "\u2264 30s median",
+                  "Audit event timings",
+                  "Weekly"
+                ],
+                [
+                  "Conversion success rate",
+                  "\u2265 98%",
+                  "Wizard completion vs start",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-002-001",
+                  "Wizard converts Lead into Account, Contact, Opportunity atomically with dedupe hints.",
+                  "Must",
+                  "Transaction succeeds and audit contains created IDs and mapping.",
+                  "Product Dev",
+                  "2"
+                ],
+                [
+                  "BR-002-002",
+                  "Allow linking to existing Account/Contact when duplicates detected.",
+                  "Should",
+                  "User can choose Link vs Create; path tested.",
+                  "Product Dev",
+                  "2"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Change Management/Security",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F002",
+              "user_story_ids": [
+                "US-002"
+              ],
+              "kpis": [
+                "Lead\u2192Pipeline time",
+                "Conversion success rate"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F003 \u00b7 Opportunity Kanban & Probabilities",
+            "1_business_need": "Improve pipeline hygiene and forecast accuracy through a visual Kanban with controlled stage transitions and probability mapping.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Stage update latency",
+                  "\u2264 1s avg",
+                  "Board action timings",
+                  "Weekly"
+                ],
+                [
+                  "Stage hygiene",
+                  "\u2265 90% updated weekly",
+                  "Deals touched per 7d",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-003-001",
+                  "Drag-and-drop Kanban updates stage and recalculates probability per configuration.",
+                  "Must",
+                  "Audit entry written; board totals refresh.",
+                  "Product Dev",
+                  "2"
+                ],
+                [
+                  "BR-003-002",
+                  "Block invalid stage transitions with clear message.",
+                  "Should",
+                  "Attempt returns user-friendly error; no change applied.",
+                  "Product Dev",
+                  "2"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Security/Processing Integrity",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F003",
+              "user_story_ids": [
+                "US-003"
+              ],
+              "kpis": [
+                "Stage update latency",
+                "Stage hygiene"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F004 \u00b7 Configurable ID Pattern Engine",
+            "1_business_need": "Ensure deterministic, human-readable identifiers that align with business processes and enable migration, support, and audits.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "ID collisions",
+                  "0",
+                  "Issuance error logs",
+                  "Continuous"
+                ],
+                [
+                  "Next-value preview accuracy",
+                  "100%",
+                  "Unit tests vs issued IDs",
+                  "On change"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-004-001",
+                  "Admin configures per-entity pattern with tokens {PREFIX},{YYYY},{YY},{MM},{SEQ:n}.",
+                  "Must",
+                  "Validation blocks invalid tokens; preview correct.",
+                  "Admin",
+                  "1"
+                ],
+                [
+                  "BR-004-002",
+                  "Issuance transactional with per-entity counters and race-safe increments.",
+                  "Must",
+                  "50-parallel create test yields unique sequential IDs.",
+                  "Product Dev",
+                  "1"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Change Management",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F004",
+              "user_story_ids": [
+                "US-007"
+              ],
+              "kpis": [
+                "ID collisions",
+                "Next-value preview accuracy"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable. Edge cases: Year/month token rollover and sequence padding verified."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F005 \u00b7 Dashboards & Basic Reports",
+            "1_business_need": "Provide leadership visibility with fast, accurate dashboards for forecasting and coaching while minimizing PII exposure.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Dashboard load time (p95)",
+                  "\u2264 2s",
+                  "Front-end perf logs",
+                  "Weekly"
+                ],
+                [
+                  "Win-rate calc accuracy",
+                  "100%",
+                  "Unit tests on query",
+                  "On change"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-005-001",
+                  "Provide widgets: Pipeline by Stage, New Leads by Week, Win Rate & Avg Sales Cycle, Activities by User.",
+                  "Must",
+                  "Widgets load \u2264 2s (p95) and totals match queries.",
+                  "Product Dev",
+                  "2\u20133"
+                ],
+                [
+                  "BR-005-002",
+                  "Enable drill-down from widgets to filtered lists.",
+                  "Should",
+                  "Click-through opens correct list filter.",
+                  "Product Dev",
+                  "2\u20133"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Availability/Confidentiality",
+              "cms": "",
+              "risk": "Operational/Financial"
+            },
+            "5_traceability": {
+              "feature_id": "F005",
+              "user_story_ids": [
+                "US-005",
+                "US-006",
+                "US-011"
+              ],
+              "kpis": [
+                "Dashboard load time (p95)",
+                "Win-rate calc accuracy"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable. Data integrity: Aggregations reconcile with underlying lists."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F006 \u00b7 Custom RBAC Framework & Audit Log",
+            "1_business_need": "Protect data and enforce least-privilege by covering every route with RBAC and maintaining a complete audit trail.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Protected route coverage",
+                  "100%",
+                  "Automated auth coverage report",
+                  "Per release"
+                ],
+                [
+                  "Unauthorized write incidents",
+                  "0",
+                  "Audit review",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-006-001",
+                  "Enforce deny-by-default policy; every protected route declares required permission.",
+                  "Must",
+                  "Automated scan shows 100% route coverage.",
+                  "Security",
+                  "1,3"
+                ],
+                [
+                  "BR-006-002",
+                  "Hide or disable unauthorized UI actions based on role.",
+                  "Must",
+                  "Role matrix test passes for all roles.",
+                  "Product Dev",
+                  "1,3"
+                ],
+                [
+                  "BR-006-003",
+                  "Capture audit events for RBAC changes and sensitive data mutations.",
+                  "Must",
+                  "Audit contains actor, before/after for sensitive fields.",
+                  "Security",
+                  "1,3"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Security/Confidentiality",
+              "cms": "",
+              "risk": "Regulatory/Security"
+            },
+            "5_traceability": {
+              "feature_id": "F006",
+              "user_story_ids": [],
+              "kpis": [
+                "Protected route coverage",
+                "Unauthorized write incidents"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable. Conflict check: Security actions audited; deny-by-default verified in tests."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F007 \u00b7 Backup/Restore & Database Reset",
+            "1_business_need": "Guarantee operational durability through verified backups, quick restores, and a safe factory reset for demo/sandbox turnover.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Backup duration (\u22642GB)",
+                  "\u2264 5 min",
+                  "Job metadata",
+                  "Daily"
+                ],
+                [
+                  "Restore to ready (\u22642GB)",
+                  "\u2264 15 min",
+                  "Restore logs",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-007-001",
+                  "Implement on-demand and scheduled encrypted backups with checksum and metadata.",
+                  "Must",
+                  "Job produces archive with checksum verified.",
+                  "Admin",
+                  "3"
+                ],
+                [
+                  "BR-007-002",
+                  "Support side-by-side restore with verification logs.",
+                  "Must",
+                  "Restore logs persisted and verification passes.",
+                  "Admin",
+                  "3"
+                ],
+                [
+                  "BR-007-003",
+                  "Factory reset requires multi-step confirmation and re-authentication.",
+                  "Should",
+                  "Reset blocked without confirmations; audit entry exists.",
+                  "Security",
+                  "3"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Availability",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F007",
+              "user_story_ids": [
+                "US-008",
+                "US-09",
+                "US-010"
+              ],
+              "kpis": [
+                "Backup duration (\u22642GB)",
+                "Restore to ready (\u22642GB)"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable. Conflict check: Security actions audited; deny-by-default verified in tests."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F008 \u00b7 Deployment & Ops Baseline (Docker/Replit)",
+            "1_business_need": "Enable reproducible deployments locally and on Replit so contributors can run, test, and ship quickly with confidence.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Bootstrap success on clean machine",
+                  "\u2265 95%",
+                  "CI smoke runs",
+                  "Per release"
+                ],
+                [
+                  "Health endpoint uptime",
+                  "\u2265 99.5%",
+                  "Uptime monitor",
+                  "Weekly"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-008-001",
+                  "One-command bootstrap builds, seeds, and starts containers with health endpoints.",
+                  "Must",
+                  "Bootstrap passes on clean machine in CI.",
+                  "DevOps",
+                  "1"
+                ],
+                [
+                  "BR-008-002",
+                  "Provide Replit deploy with persistent storage.",
+                  "Must",
+                  "Data persists across restarts in Replit.",
+                  "DevOps",
+                  "1"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Change Management",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F008",
+              "user_story_ids": [],
+              "kpis": [
+                "Bootstrap success on clean machine",
+                "Health endpoint uptime"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable."
+          }
+        },
+        {
+          "title": "2.1 Card",
+          "card": {
+            "feature_id_name": "F009 \u00b7 CSV Migration/Import Tooling",
+            "1_business_need": "Support cutover from Dynamics with a controlled, auditable import that preserves relationships and legacy references.",
+            "2_success_metrics_kpis": {
+              "table_headers": [
+                "KPI",
+                "Target",
+                "Measurement Method",
+                "Reporting Cadence"
+              ],
+              "rows": [
+                [
+                  "Initial import success",
+                  "\u2265 99%",
+                  "Reconciliation report",
+                  "Cutover"
+                ],
+                [
+                  "Rejected rows resolvable",
+                  "100%",
+                  "Error categories addressed",
+                  "Cutover"
+                ]
+              ]
+            },
+            "3_business_requirements": {
+              "table_headers": [
+                "ID",
+                "Requirement Description",
+                "Priority",
+                "Acceptance Metric",
+                "Owner",
+                "Sprint"
+              ],
+              "rows": [
+                [
+                  "BR-009-001",
+                  "Import wizard maps CSVs to schema with validation and dry-run staging.",
+                  "Must",
+                  "Reconciliation report shows counts and errors; no prod changes in dry-run.",
+                  "Admin",
+                  "3"
+                ],
+                [
+                  "BR-009-002",
+                  "Final import preserves legacy IDs and relationships; issues new IDs per patterns.",
+                  "Must",
+                  "Post-import audit/report confirms links and counts.",
+                  "Admin",
+                  "3"
+                ]
+              ]
+            },
+            "4_compliance_risk_tags": {
+              "hipaa": "PII only; avoid PHI",
+              "soc2": "Processing Integrity",
+              "cms": "",
+              "risk": "Operational"
+            },
+            "5_traceability": {
+              "feature_id": "F009",
+              "user_story_ids": [],
+              "kpis": [
+                "Initial import success",
+                "Rejected rows resolvable"
+              ]
+            },
+            "2_6_quality_gate_notes": "SMART: KPIs have explicit targets and cadence. Traceability: Linked to Stage 4.1 feature and Stage 1 user stories where applicable."
+          }
+        }
+      ]
+    },
+    {
+      "section": "3 \u00b7 KPI Dashboard Spec",
+      "subsections": [
+        {
+          "title": "3.1 Purpose",
+          "content": "Provide a minimal, high\u2011signal dashboard for forecasting and coaching. Widgets must load fast, reconcile to source lists, and support drill\u2011downs without exposing PII beyond what is necessary."
+        },
+        {
+          "title": "3.2 Draft Widget List",
+          "rows": [
+            {
+              "widget": "Pipeline by Stage",
+              "metric": "Count & Amount by Stage",
+              "target": "Accurate within \u00b11% of underlying data",
+              "owner": "Sales Manager"
+            },
+            {
+              "widget": "New Leads by Week",
+              "metric": "Weekly lead volume",
+              "target": "Trend accuracy 100%",
+              "owner": "Sales Manager"
+            },
+            {
+              "widget": "Win Rate & Avg Sales Cycle",
+              "metric": "Win% and days to close",
+              "target": "Correct calculations with definitions",
+              "owner": "Sales Manager"
+            },
+            {
+              "widget": "Activities by User",
+              "metric": "Open vs Completed",
+              "target": "Accurate counts by owner",
+              "owner": "Sales Manager"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "4 \u00b7 Risk & Compliance Overview",
+      "subsections": [
+        {
+          "title": "4.1 Summary",
+          "content": "Treat all CRM data as PII; avoid PHI. Enforce least privilege. Audit all admin actions and sensitive data mutations. Maintain encrypted backups with tested restores. Reconcile analytics to source data. Ensure container and secret hygiene for deployments. Keep ID patterns validated and issuance transaction\u2011safe."
+        },
+        {
+          "title": "4.2 Risk Register (BR-linked)",
+          "rows": [
+            {
+              "br_id": "BR-006-001",
+              "risk": "RBAC gap permits unauthorized action",
+              "likelihood": "Low",
+              "impact": "High",
+              "mitigation": "Deny-by-default; 100% route coverage tests"
+            },
+            {
+              "br_id": "BR-007-001",
+              "risk": "Backups not restorable",
+              "likelihood": "Low",
+              "impact": "High",
+              "mitigation": "Weekly restore drill; checksum verification"
+            },
+            {
+              "br_id": "BR-004-001",
+              "risk": "ID pattern misconfiguration creates duplicates",
+              "likelihood": "Low",
+              "impact": "Medium",
+              "mitigation": "Validation + race-safe issuance tests"
+            },
+            {
+              "br_id": "BR-005-001",
+              "risk": "Dashboard aggregates diverge from source",
+              "likelihood": "Med",
+              "impact": "Medium",
+              "mitigation": "Reconciliation queries and alerts"
+            },
+            {
+              "br_id": "BR-003-001",
+              "risk": "Pipeline drag-drop corrupts stage",
+              "likelihood": "Low",
+              "impact": "Medium",
+              "mitigation": "Optimistic UI with server reconciliation and audit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "5 \u00b7 Glossary",
+      "subsections": [
+        {
+          "title": "5.1 Terms",
+          "rows": [
+            {
+              "term": "RBAC",
+              "definition": "Role\u2011based access control using resource.action permissions with deny\u2011by\u2011default."
+            },
+            {
+              "term": "AuditLog",
+              "definition": "Append\u2011only record of sensitive actions and data mutations with before/after values."
+            },
+            {
+              "term": "ID Pattern",
+              "definition": "Configurable tokenized string defining human\u2011readable IDs with per\u2011entity counters."
+            },
+            {
+              "term": "Reconciliation Report",
+              "definition": "Import/export report comparing expected vs processed rows with errors listed."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "6 \u00b7 Review & Approval",
+      "subsections": [
+        {
+          "title": "6.1 Approval Table",
+          "approvals": [
+            {
+              "role": "Product Developer",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            },
+            {
+              "role": "Finance / KPI Owner",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            },
+            {
+              "role": "Security Lead",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Compliance Lead",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Leadership Reviewer",
+              "name": "",
+              "date": "",
+              "signature": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "7 \u00b7 Sprint Bundling & Handoff",
+      "subsections": [
+        {
+          "title": "7.1 Bundles",
+          "bundles": [
+            {
+              "sprint": "1",
+              "feature_ids": [
+                "F001",
+                "F004",
+                "F006",
+                "F008"
+              ],
+              "br_ids": [
+                "BR-001-001",
+                "BR-004-001",
+                "BR-006-001",
+                "BR-008-001"
+              ],
+              "notes": "Foundation of data model, security, deployment, and ID engine."
+            },
+            {
+              "sprint": "2",
+              "feature_ids": [
+                "F001",
+                "F002",
+                "F003",
+                "F005"
+              ],
+              "br_ids": [
+                "BR-001-002",
+                "BR-002-001",
+                "BR-003-001",
+                "BR-005-001"
+              ],
+              "notes": "Sales workflow acceleration and pipeline UX; begin analytics."
+            },
+            {
+              "sprint": "3",
+              "feature_ids": [
+                "F005",
+                "F006",
+                "F007",
+                "F009"
+              ],
+              "br_ids": [
+                "BR-005-002",
+                "BR-006-002",
+                "BR-007-001",
+                "BR-007-002",
+                "BR-009-001"
+              ],
+              "notes": "Ops durability (backup/restore), finish RBAC, import tooling."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "8 \u00b7 Versioning & Export",
+      "subsections": [
+        {
+          "title": "8.1 Revision History",
+          "rows": [
+            {
+              "version": "v1.0",
+              "date": "2025-10-31",
+              "author": "Jay Baker \u2014 Product Developer",
+              "description_of_change": "Initial Stage 4.3 draft"
+            }
+          ]
+        },
+        {
+          "title": "8.2 Export Notes",
+          "content": "Export BR cards to backlog/BI; align KPI queries and owners; keep IDs stable."
+        }
+      ]
+    }
+  ]
+}

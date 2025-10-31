@@ -1,0 +1,822 @@
+{
+  "title": "CPDO Stage 4.2 — User Stories",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker — Product Developer",
+    "role": "Stage 4.2 User-Story Author",
+    "link_to_stage_2_artifact": "CPDO-Stage2-Artifact.json",
+    "link_to_stage_4_1_artifact": "CPDO-Stage4.1-Artifact.json",
+    "application_design_file": "CPDO-Application-Design.png"
+  },
+  "sections": [
+    {
+      "section": "1 · Feature Inventory Table",
+      "fields": [
+        "feature_id",
+        "feature_name",
+        "linked_epic",
+        "status",
+        "owner",
+        "sprint_number",
+        "rbac_level"
+      ],
+      "rows": [
+        {
+          "feature_id": "F001",
+          "feature_name": "Data Model & CRUD",
+          "linked_epic": "EPIC-1 — Data Model & CRUD",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "1–2",
+          "rbac_level": "Seller, Manager, ReadOnly"
+        },
+        {
+          "feature_id": "F002",
+          "feature_name": "Lead Conversion Wizard",
+          "linked_epic": "EPIC-3 — Sales Workflow",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "2",
+          "rbac_level": "Seller, Manager"
+        },
+        {
+          "feature_id": "F003",
+          "feature_name": "Opportunity Kanban & Probabilities",
+          "linked_epic": "EPIC-3 — Sales Workflow",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "2",
+          "rbac_level": "Seller, Manager"
+        },
+        {
+          "feature_id": "F004",
+          "feature_name": "Configurable ID Pattern Engine",
+          "linked_epic": "EPIC-1 — Data Model & CRUD",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "1",
+          "rbac_level": "Admin"
+        },
+        {
+          "feature_id": "F005",
+          "feature_name": "Dashboards & Basic Reports",
+          "linked_epic": "EPIC-4 — Analytics & Reporting",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "2–3",
+          "rbac_level": "Manager, ReadOnly"
+        },
+        {
+          "feature_id": "F006",
+          "feature_name": "Custom RBAC Framework & Audit Log",
+          "linked_epic": "EPIC-2 — Identity & Security",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "1,3",
+          "rbac_level": "Admin"
+        },
+        {
+          "feature_id": "F007",
+          "feature_name": "Backup/Restore & Database Reset",
+          "linked_epic": "EPIC-5 — Ops & Admin",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "3",
+          "rbac_level": "Admin"
+        },
+        {
+          "feature_id": "F008",
+          "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+          "linked_epic": "EPIC-5 — Ops & Admin",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "1",
+          "rbac_level": "Admin"
+        },
+        {
+          "feature_id": "F009",
+          "feature_name": "CSV Migration/Import Tooling",
+          "linked_epic": "EPIC-6 — Data Migration",
+          "status": "Planned",
+          "owner": "Jay Baker",
+          "sprint_number": "3",
+          "rbac_level": "Admin"
+        }
+      ]
+    },
+    {
+      "section": "2 · User Story Cards (one per feature)",
+      "cards": [
+        {
+          "feature_id": "F001",
+          "feature_name": "Data Model & CRUD",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As a SalesRep, I want to create and maintain Accounts, Contacts, Leads, Opportunities, and Activities so that my daily selling workflow is fully supported without friction."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "Starting each morning, a SalesRep opens the CRM Home and navigates to Leads to capture two new prospects from a web form and a phone inquiry. The lead form enforces minimal fields (first/last name plus email or phone) and issues a human‑readable ID on save. Later, the rep edits a Contact to update a title and logs a call Activity with notes and a due date. On an Account record, related sub‑grids show linked Contacts, open Opportunities, and recent Activities in a single timeline, letting the rep click through without losing context. Validation errors appear inline with clear messages. Lists support paging, sorting, and basic filters like owner and status. Every create, update, and delete writes an audit entry with actor, timestamp, and before/after field diffs. Managers and ReadOnly users can review records but cannot edit unless their role permits. The system feels fast and consistent: p95 latency for simple reads stays under 500 ms, and forms save in under 2 seconds on standard hardware. These basics make the rest of the selling motion reliable and reduce context switching and duplicate work."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: Maintain seller activity volume week‑over‑week (±5%) after cutover",
+                "Compliance driver: PII protection with auditability (SOC2 Security/Availability)",
+                "Strategic alignment: Foundational capability for all downstream workflows and reporting"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "System state: Postgres schema initialized; baseline roles seeded",
+                "Required data: None for create; related IDs for relations"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Records persist with deterministic IDs",
+                "AuditLog entries captured for mutations",
+                "Activity timeline reflects changes"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given valid form data, When I save a record, Then it persists, an ID is issued, and an audit entry is written",
+                "Given missing required fields, When I submit, Then inline validation messages explain what to fix",
+                "Given an Account, When I view the detail page, Then related Contacts, Opportunities, and Activities are visible in sub‑grids",
+                "Given a list view, When I filter by owner and sort, Then results update server‑side within 1 second for 10k rows"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Depends on finalized schema and ID engine for issuance",
+                "No email/calendar sync in MVP"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Seller (CRUD within scope), Manager (CRUD), ReadOnly (read), Admin (all)",
+                "Logging/audit needs: Capture create/update/delete with diffs"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F001 · Sprint: 1–2 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F002",
+          "feature_name": "Lead Conversion Wizard",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As a SalesRep, I want to convert a qualified Lead so that an Account, Contact, and Opportunity are created and linked in one step."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "A qualified Lead with company, email, and phone is ready for conversion. From the Lead detail page, the rep clicks Convert. A wizard opens showing dedupe hints based on email/phone/company and any existing Accounts or Contacts. The rep selects “Create new” or “Link to existing” for Account and Contact, previews mapped fields, and edits names or the initial Opportunity amount and close date. On confirm, the system performs a transactional operation: create or link Account, create Contact, create Opportunity at the first pipeline stage, mark the Lead status as Converted, and write a comprehensive audit record listing the new IDs and field mappings used. If a duplicate is detected, the rep can cancel or merge. The page finishes with a success screen and deep links to each created record, plus an activity note posted to the Opportunity timeline. The entire flow completes in seconds and eliminates manual copying, reducing errors and increasing speed to pipeline."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: Time‑to‑pipeline from qualification ≤ 30 seconds median",
+                "Compliance driver: Least‑privilege access; auditable conversions",
+                "Strategic alignment: Faster funnel progression and cleaner data"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Lead exists and is in a convertible status",
+                "ID Pattern Engine active for target entities"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Account/Contact/Opportunity created or linked and cross‑referenced",
+                "Lead marked Converted and closed",
+                "Audit entry with mapping summary"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given a qualified Lead, When I click Convert and confirm, Then Account, Contact, and Opportunity are created/linked and the Lead is marked Converted",
+                "Given a duplicate match, When the wizard displays options, Then I can choose to link or create new and proceed",
+                "Given a successful conversion, When it completes, Then I see deep links to the created records and an audit entry exists"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Depends on F001 CRUD and F004 ID Engine",
+                "Dedupe is hint‑only in MVP"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Seller, Manager",
+                "Logging/audit needs: Record created IDs and field mapping decisions"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F002 · Sprint: 2 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F003",
+          "feature_name": "Opportunity Kanban & Probabilities",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As a SalesRep, I want to drag Opportunities across stages on a Kanban so that I can manage my pipeline visually and consistently."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "On the Opportunities board, cards are grouped by stage. A SalesRep drags a card from Qualify to Proposal. A confirmation tooltip shows the new probability based on stage configuration. On drop, the Opportunity updates, recalculating pipeline totals for the board header and the manager’s dashboard cache. The card logs a timeline note: “Stage changed from Qualify→Proposal by <user>.” Forbidden transitions are blocked with a clear message. The board supports quick filters for owner, time, and value thresholds, and remembers the last view per user. Managers can switch to a summary mode showing counts and amounts by stage. All interactions are snappy; dragging feels instantaneous and server updates complete in under a second on average. The configuration page allows admins to define stage names, order, and default probability mapping used for forecast rollups. This provides a familiar modern pipeline UX without vendor bloat, focusing reps on moving deals forward each day."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: Opportunity stage hygiene ≥ 90% updated weekly",
+                "Compliance driver: Audit trail for stage changes",
+                "Strategic alignment: Forecast accuracy and sales execution visibility"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Existing Opportunities populated",
+                "Stage configuration available with probabilities"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Opportunity updated with new stage and probability",
+                "Pipeline aggregates recalculated",
+                "Audit entry recorded for stage change"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given an Opportunity, When I drag it to a new stage, Then its stage and probability update and a timeline note is created",
+                "Given an invalid transition, When I attempt it, Then the action is blocked with an explanatory message",
+                "Given many cards, When I filter by owner and amount, Then the board updates within 1 second"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Depends on F001 CRUD; Admin stage configuration",
+                "Optimistic UI with server reconciliation"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Seller, Manager (edit); ReadOnly (view)",
+                "Logging/audit needs: Stage changes with before/after"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F003 · Sprint: 2 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F004",
+          "feature_name": "Configurable ID Pattern Engine",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As an Admin, I want to configure per‑entity ID patterns and starting values so that IDs follow our business rules and are predictable."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "The Admin opens the ID Pattern settings and selects “Account.” A form shows the current pattern string and a live preview of the next value. The Admin edits the pattern to ACCT-{YYYY}-{SEQ:5} and sets the start value to 10050. On save, the system validates tokens, zero‑padding, and uniqueness rules, then stores the pattern. The preview updates to ACCT‑2025‑10050. During record creation and lead conversion, IDs are issued transactionally with per‑entity counters so concurrent requests cannot duplicate. If a bad pattern is entered, the form blocks save and highlights the error with a clear explanation. All changes are audited, including the old and new strings and the actor. This engine decouples business‑friendly IDs from the internal database keys, facilitating support, imports, and audits without sacrificing integrity under load."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: 0 ID collisions under concurrent creation; next‑value preview accuracy 100%",
+                "Compliance driver: Change management and auditability of ID configuration",
+                "Strategic alignment: Smooth migration and supportability"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Per‑entity counters exist and are initialized",
+                "Validation rules implemented for tokens"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Pattern saved with previewed next value",
+                "Issuance service uses pattern for new records",
+                "AuditLog entry of configuration change"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given a valid pattern, When I save, Then the system stores it and shows the correct next value",
+                "Given an invalid token, When I save, Then the system blocks and explains the error",
+                "Given concurrent creates, When 50 records are created in parallel, Then all issued IDs are unique and sequential per entity"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Atomic sequence increments; race‑safe issuance",
+                "Per‑entity scoping of counters"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Admin only",
+                "Logging/audit needs: All configuration changes captured"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F004 · Sprint: 1 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F005",
+          "feature_name": "Dashboards & Basic Reports",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As a SalesManager, I want pipeline and activity dashboards so that I can forecast and coach effectively."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "A SalesManager opens the Dashboard and selects “This Quarter” with an owner filter for the team. The Pipeline by Stage widget shows counts and total amount per stage with a trend sparkline. Clicking a stage drills to the Opportunity list pre‑filtered. The New Leads by Week chart helps spot acquisition trends, while the Win Rate & Average Sales Cycle panel displays ratios with hover tooltips defining the calculations. A final widget shows Activities by User, split by open vs completed, enabling quick coaching. All widgets load within two seconds thanks to aggregation queries and a small read cache. The manager exports a snapshot for a weekly review and saves a default filter set. Configuration changes (like adding a widget) are restricted to Admin to keep the experience consistent. The dashboard gives leadership a clear, fast view of pipeline health and team execution without the bloat of enterprise tools."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: Dashboard load ≤ 2 seconds at p95; Win‑rate calculation accuracy 100%",
+                "Compliance driver: PII minimized in aggregates; access controlled",
+                "Strategic alignment: Visibility for data‑driven coaching and forecasting"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Sufficient data in Opportunities, Leads, and Activities",
+                "Aggregation queries and optional cache in place"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Charts render with correct totals and filters applied",
+                "Drill‑down links navigate to filtered lists",
+                "Optional export/snapshot available"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given filters, When I load the dashboard, Then widgets render within 2 seconds with accurate totals",
+                "Given a widget click, When I click a stage or user, Then I navigate to the relevant filtered list",
+                "Given ReadOnly role, When I view the dashboard, Then I can see but not edit widgets"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Depends on F001 data quality",
+                "Cache invalidated on writes to relevant entities"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Manager, ReadOnly; Sellers can view their relevant widgets",
+                "Logging/audit needs: Config changes logged; view metrics optional"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F005 · Sprint: 2–3 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F006",
+          "feature_name": "Custom RBAC Framework & Audit Log",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As an Admin, I want role‑based permissions enforced on every route so that access is least‑privilege and auditable."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "A new user is invited and assigned the SalesRep role. When they sign in, the UI hides admin controls and disables delete actions. Attempting to call a protected API without the required permission returns a 403 with a structured error and correlation ID. Admins manage roles and permissions via a matrix view and can add a granular permission (e.g., Opportunity.advance_stage). Every RBAC change writes an audit event with who, what, and when. Sensitive data mutations (like changing Opportunity amount) are also logged with before/after diffs. A ReadOnly user verifies they can browse lists and details but cannot edit. Security tests validate that every protected route declares and enforces a permission, and an automated report shows 100% coverage. JWT secrets rotate periodically, and sessions are invalidated when roles change. The system defaults to deny‑by‑default so new routes are safe until explicitly authorized. This framework provides a secure foundation for multi‑user operation and compliance reviews."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: 100% permission checks on protected routes; 0 unauthorized writes in audit review",
+                "Compliance driver: HIPAA 164.312 Access control (applied to PII) and SOC2 Security",
+                "Strategic alignment: Security baseline for internal CRM"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "User, Role, Permission tables seeded",
+                "JWT middleware and route guards in place"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Permissions enforced across UI and API",
+                "Audit trail available for RBAC changes and sensitive mutations"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given an unauthorized user, When they call a protected route, Then the request is denied and logged",
+                "Given a ReadOnly user, When they open a detail page, Then edit controls are hidden/disabled",
+                "Given an Admin, When they change a role’s permissions, Then the change is logged and takes effect on next request"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Integrates with all features; deny‑by‑default policy",
+                "Session invalidation on role changes"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Admin manages; all roles enforced",
+                "Logging/audit needs: 100% coverage of RBAC changes and sensitive mutations"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F006 · Sprint: 1,3 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F007",
+          "feature_name": "Backup/Restore & Database Reset",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As an Admin, I want encrypted backups, fast restores, and a guarded factory reset so that I can recover or re‑seed environments safely."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "From the Admin Console, the Admin schedules daily backups at 02:00 with a 14‑day retention. On demand, they run a backup now and see a job card updating from “running” to “verified.” The system creates an encrypted archive with checksum and stores metadata like size and duration. To test recovery, the Admin selects an archive and performs a side‑by‑side restore into a staging schema. Verification logs confirm checksum and migration compatibility before allowing a cutover. For a demo environment, the Admin initiates a factory reset. A multi‑step confirmation requires re‑authentication and typing the instance name. The reset wipes data, reseeds roles/config, and writes a prominent audit entry. All actions are visible in an audit feed, enabling compliance review. This capability reduces operational risk and gives confidence that the CRM can be restored quickly if something goes wrong."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: Backup success ≥ 99% rolling 30 days; verified restore time ≤ 15 minutes for ≤ 2 GB DB",
+                "Compliance driver: SOC2 Availability; auditable retention policy",
+                "Strategic alignment: Operational durability and governance"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Storage path and encryption keys configured",
+                "Postgres accessible with required permissions"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Encrypted archive created with checksum and verification report",
+                "Restore logs persisted; reset reseeds baseline data",
+                "Audit entries for all actions"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given a schedule, When the time occurs, Then a backup archive is created and verified with checksum",
+                "Given an archive, When I run a side‑by‑side restore, Then verification passes and logs are available",
+                "Given a reset request, When I complete all confirmations, Then the database resets and an audit entry is recorded"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Requires storage and encryption; careful handling of credentials",
+                "Offline or side‑by‑side restore option"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Admin only",
+                "Logging/audit needs: Backup/restore/reset fully logged with outcomes"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F007 · Sprint: 3 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F008",
+          "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As a Product Developer, I want a containerized app with health checks so that I can deploy locally and to Replit production quickly."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "A PD clones the repo and runs a single bootstrap command. Docker builds front‑end and API images, seeds the database, and starts services. Health endpoints return “ok,” and structured logs show request IDs. Environment variables and secrets are loaded from a .env and a secure secret store. In Replit, the same command brings up the app with persistent storage configured. A basic status page shows service health and versions. CI builds tagged images on main merges. This baseline reduces friction for onboarding and gives a repeatable path to run the CRM wherever needed without vendor lock‑in."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: One‑command bootstrap succeeds on a clean machine ≥ 95%",
+                "Compliance driver: Change management logs for builds/deploys",
+                "Strategic alignment: Fast iteration and reproducibility"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Docker and Postgres available",
+                "Environment variables configured"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Running containers with passing health checks",
+                "Replit deploy reachable with persistent storage"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given a clean environment, When I run the bootstrap, Then containers build and start with health = ok",
+                "Given Replit, When I deploy, Then the app is reachable and data persists across restarts",
+                "Given a new commit to main, When CI runs, Then images are built and tagged successfully"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Postgres instance required; networking and volumes configured",
+                "Secrets management policy in place"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Admin/DevOps",
+                "Logging/audit needs: Build/deploy logs retained"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F008 · Sprint: 1 · Owner: Jay Baker"
+            }
+          ]
+        },
+        {
+          "feature_id": "F009",
+          "feature_name": "CSV Migration/Import Tooling",
+          "sections": [
+            {
+              "title": "1. Story Statement",
+              "content": "As an Admin, I want to import Dynamics CSVs with a reconciliation report so that I can switch CRMs without losing data."
+            },
+            {
+              "title": "2. Rich Scenario",
+              "content": "In preparation for cutover, the Admin opens the Import Wizard, selects CSV files for Accounts, Contacts, Leads, Opportunities, and Activities, and maps columns to the target schema using smart defaults. The wizard validates emails and phones, and reports any broken relationships. A Dry‑Run option stages records into temporary tables and produces a reconciliation report showing expected vs imported row counts, rejected rows with reasons, and a preview of relationship links. After review, the Admin runs the final import, which upserts records, preserves legacy IDs in a custom field, and issues new IDs per the pattern engine where needed. All actions are logged and the final report is saved for audit. This controlled process reduces the risk of data loss and shortens the time to switch away from expensive licensing."
+            },
+            {
+              "title": "3. Business Impact",
+              "items": [
+                "ROI / KPI: ≥ 99% records imported successfully on first production run",
+                "Compliance driver: Processing integrity with auditable reports",
+                "Strategic alignment: Enables cost avoidance and quick adoption"
+              ]
+            },
+            {
+              "title": "4. Pre-conditions",
+              "items": [
+                "Finalized schema and ID engine active",
+                "CSV exports prepared and validated for basic format"
+              ]
+            },
+            {
+              "title": "5. Post-conditions",
+              "items": [
+                "Records imported with preserved relationships",
+                "Reconciliation report stored",
+                "Audit entries for import actions"
+              ]
+            },
+            {
+              "title": "6. Acceptance Criteria",
+              "items": [
+                "Given valid CSVs, When I run a dry‑run, Then a reconciliation report shows counts and errors without changing production tables",
+                "Given approval, When I run the final import, Then records are created with relationships and legacy IDs preserved in a custom field",
+                "Given errors, When they occur, Then failed rows are reported with clear reasons and can be re‑run"
+              ]
+            },
+            {
+              "title": "7. Dependencies & Constraints",
+              "items": [
+                "Depends on F001 and F004; large files require streaming and batching",
+                "Side‑by‑side staging before prod import"
+              ]
+            },
+            {
+              "title": "8. Security & RBAC",
+              "items": [
+                "Role(s) allowed: Admin",
+                "Logging/audit needs: Import actions, counts, and failures logged"
+              ]
+            },
+            {
+              "title": "9. Traceability",
+              "content": "Feature ID (4.1): F009 · Sprint: 3 · Owner: Jay Baker"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "3 · Compliance Checklist",
+      "table_headers": [
+        "Feature ID",
+        "HIPAA",
+        "SOC 2",
+        "RBAC Defined",
+        "Notes"
+      ],
+      "rows": [
+        [
+          "F001",
+          "☑",
+          "☑",
+          "☑",
+          "Treat as PII; encrypt at rest"
+        ],
+        [
+          "F002",
+          "☑",
+          "☑",
+          "☑",
+          "Dedupe is hint‑only"
+        ],
+        [
+          "F003",
+          "☑",
+          "☑",
+          "☑",
+          "Audit stage transitions"
+        ],
+        [
+          "F004",
+          "☑",
+          "☑",
+          "☑",
+          "Admin‑only configuration"
+        ],
+        [
+          "F005",
+          "☑",
+          "☑",
+          "☑",
+          "Aggregates; minimize PII exposure"
+        ],
+        [
+          "F006",
+          "☑",
+          "☑",
+          "☑",
+          "Deny‑by‑default; 100% route coverage"
+        ],
+        [
+          "F007",
+          "☑",
+          "☑",
+          "☑",
+          "Encrypted backups; verify restores"
+        ],
+        [
+          "F008",
+          "☑",
+          "☑",
+          "☑",
+          "Secure secrets handling"
+        ],
+        [
+          "F009",
+          "☑",
+          "☑",
+          "☑",
+          "Reconciliation report retained"
+        ]
+      ]
+    },
+    {
+      "section": "4 · Review & Approval",
+      "table_headers": [
+        "Role",
+        "Name",
+        "Date",
+        "Signature"
+      ],
+      "rows": [
+        {
+          "role": "Product Developer",
+          "name": "Jay Baker",
+          "date": "2025-10-31",
+          "signature": "Approved"
+        },
+        {
+          "role": "Domain SME",
+          "name": "",
+          "date": "",
+          "signature": ""
+        },
+        {
+          "role": "Security Lead",
+          "name": "",
+          "date": "",
+          "signature": ""
+        },
+        {
+          "role": "Leadership Reviewer",
+          "name": "",
+          "date": "",
+          "signature": ""
+        }
+      ]
+    },
+    {
+      "section": "5 · Sprint Bundling (Handoff)",
+      "bundles": [
+        {
+          "sprint": "1",
+          "feature_ids": [
+            "F001",
+            "F004",
+            "F006",
+            "F008"
+          ]
+        },
+        {
+          "sprint": "2",
+          "feature_ids": [
+            "F001",
+            "F002",
+            "F003",
+            "F005"
+          ]
+        },
+        {
+          "sprint": "3",
+          "feature_ids": [
+            "F005",
+            "F006",
+            "F007",
+            "F009"
+          ]
+        }
+      ]
+    }
+  ]
+}

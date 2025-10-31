@@ -1,0 +1,820 @@
+{
+  "title": "CPDO Stage 2 — Roadmap Planning Artifact",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker — Product Developer",
+    "role": "Industry or Domain Analyst",
+    "link_to_approved_stage_1_artifact": "CPDO-Stage1-Artifact.json",
+    "included_optional_charts": [],
+    "included_optional_workflows": [],
+    "included_optional_documents": [],
+    "solution_approach_title": "Self-Hosted, Dockerized CRM with Custom RBAC & ID Engine",
+    "solution_details": "A pared-down Dynamics/Salesforce-style CRM focused on core selling motions. It delivers CRUD for Accounts, Contacts, Leads, Opportunities, and Activities with relationships; a configurable ID pattern/issuance engine; dashboards for pipeline and activity tracking; and an admin console with backup/restore and database reset. Security is provided by a custom RBAC framework with audit logging. The app ships containerized for Docker and is runnable in Replit production."
+  },
+  "sections": [
+    {
+      "section": "1 · Feature Definition",
+      "subsections": [
+        {
+          "title": "1.1 Candidate Feature List",
+          "items": [
+            {
+              "feature_description": "Core entities CRUD & relationships (Accounts, Contacts, Leads, Opportunities) with Activity timeline.",
+              "source_problem_reference": "Stage 1 § Scope (MVP), Functional Requirements"
+            },
+            {
+              "feature_description": "Lead Conversion wizard (Lead → Account + Contact + Opportunity) with duplicate detection hints.",
+              "source_problem_reference": "Stage 1 § Workflows / Lead Management"
+            },
+            {
+              "feature_description": "Opportunities Kanban board with configurable stages and probability mapping.",
+              "source_problem_reference": "Stage 1 § Visualizations & Progress Tracking"
+            },
+            {
+              "feature_description": "Configurable ID Pattern Engine per entity with starting value controls and auto-issuance.",
+              "source_problem_reference": "Stage 1 § IDs & Data Operations"
+            },
+            {
+              "feature_description": "Dashboards & basic reports (Pipeline value, New leads, Win rate, Activities by user).",
+              "source_problem_reference": "Stage 1 § Visualizations & Reporting"
+            },
+            {
+              "feature_description": "Custom RBAC framework (roles, permissions, scopes) and Audit log.",
+              "source_problem_reference": "Stage 1 § Security (RBAC)"
+            },
+            {
+              "feature_description": "Admin Console with full Backup/Restore and Database Reset.",
+              "source_problem_reference": "Stage 1 § Admin • Backup & Restore"
+            },
+            {
+              "feature_description": "Deployment & Ops: Docker images, Replit prod runtime, health checks.",
+              "source_problem_reference": "Stage 1 § Deployment Targets"
+            },
+            {
+              "feature_description": "CSV migration/import tooling from legacy Dynamics exports with reconciliation report.",
+              "source_problem_reference": "Stage 1 § Migration Considerations"
+            }
+          ]
+        },
+        {
+          "title": "1.2 Consolidated Feature Narrative",
+          "content": "The MVP concentrates on foundational CRM selling flows: capturing leads, managing accounts and contacts, progressing opportunities, and logging activities. A configurable ID engine ensures deterministic, admin-controlled identifiers across entities. Dashboards surface the pipeline and activity trends. An admin console provides data durability (backup/restore) and a database reset for sandbox/tenancy use cases. A homegrown RBAC framework isolates permissions by role and action. Everything ships containerized to run on Docker and Replit production."
+        }
+      ]
+    },
+    {
+      "section": "2 · Prioritization",
+      "subsections": [
+        {
+          "title": "2.1 MoSCoW Table",
+          "rows": [
+            {
+              "feature": "Core entities CRUD & relationships",
+              "priority": "Must",
+              "rationale": "Foundation for all workflows; no value without data CRUD."
+            },
+            {
+              "feature": "Configurable ID Pattern Engine",
+              "priority": "Must",
+              "rationale": "Explicit MVP requirement; needed for data integrity and imports."
+            },
+            {
+              "feature": "Custom RBAC framework (baseline)",
+              "priority": "Must",
+              "rationale": "Security requirement; enables safe multi-user use."
+            },
+            {
+              "feature": "Deployment & Ops baseline (Docker/Replit)",
+              "priority": "Must",
+              "rationale": "Executable MVP requirement for hosting."
+            },
+            {
+              "feature": "Lead Conversion wizard",
+              "priority": "Should",
+              "rationale": "Accelerates sales motion; not strictly required for CRUD."
+            },
+            {
+              "feature": "Opportunities Kanban & probabilities",
+              "priority": "Should",
+              "rationale": "Drives pipeline visibility and forecasting."
+            },
+            {
+              "feature": "Dashboards & basic reports",
+              "priority": "Should",
+              "rationale": "Management visibility; can be delivered after CRUD."
+            },
+            {
+              "feature": "Backup/Restore & DB Reset",
+              "priority": "Should",
+              "rationale": "Data safety and admin capability; launch-critical but can land in Sprint 3."
+            },
+            {
+              "feature": "CSV migration/import tooling",
+              "priority": "Could",
+              "rationale": "Useful for switching from Dynamics; not required to demo MVP flows."
+            }
+          ]
+        },
+        {
+          "title": "2.2 RICE or WSJF Score Table",
+          "rows": [
+            {
+              "feature": "Configurable ID Pattern Engine",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.5 × Confidence 0.85",
+              "effort_sp": 8,
+              "score": 1.328
+            },
+            {
+              "feature": "Lead Conversion wizard",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.0 × Confidence 0.85",
+              "effort_sp": 10,
+              "score": 0.85
+            },
+            {
+              "feature": "Opportunities Kanban & probabilities",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.5 × Confidence 0.80",
+              "effort_sp": 14,
+              "score": 0.714
+            },
+            {
+              "feature": "Backup/Restore & DB Reset",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.0 × Confidence 0.80",
+              "effort_sp": 12,
+              "score": 0.667
+            },
+            {
+              "feature": "CSV migration/import tooling",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 1.5 × Confidence 0.70",
+              "effort_sp": 8,
+              "score": 0.656
+            },
+            {
+              "feature": "Deployment & Ops baseline (Docker/Replit)",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.0 × Confidence 0.90",
+              "effort_sp": 14,
+              "score": 0.643
+            },
+            {
+              "feature": "Custom RBAC framework (baseline)",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 3.0 × Confidence 0.80",
+              "effort_sp": 20,
+              "score": 0.6
+            },
+            {
+              "feature": "Dashboards & basic reports",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 2.5 × Confidence 0.75",
+              "effort_sp": 18,
+              "score": 0.521
+            },
+            {
+              "feature": "Core entities CRUD & relationships",
+              "reach": "5 users/mo",
+              "confidence_impact": "Impact 3.0 × Confidence 0.85",
+              "effort_sp": 28,
+              "score": 0.455
+            }
+          ]
+        },
+        {
+          "title": "2.3 Capacity Check by Priority Class",
+          "capacity": {
+            "must": "44 SP (Sprint 1)",
+            "should": "88 SP (Sprints 2–3)",
+            "could": "up to 8 SP (Sprint 3 buffer)",
+            "wont": "0 SP"
+          },
+          "notes": "Assume velocity 44 SP/sprint across a 10-day sprint with two engineers (~2.2 SP/day each) and a PD handling analysis/review. Total planned = 132 SP across 3 sprints; see Sprint Allocation for per-sprint distribution and dependency handling."
+        }
+      ]
+    },
+    {
+      "section": "3 · Sprints & Milestones",
+      "subsections": [
+        {
+          "title": "3.1 Sprint Allocation Table",
+          "sprints": [
+            {
+              "sprint": "1",
+              "milestone_business_outcome": "Foundation & Auth — Running app with secure login, CRUD for Accounts/Contacts, ID issuance.",
+              "features_included": [
+                "Core entities CRUD (subset: Accounts/Contacts + Activity seed)",
+                "ID Pattern Engine (baseline)",
+                "RBAC framework (baseline auth/roles)",
+                "Deployment & Ops baseline"
+              ],
+              "owner": "PD",
+              "duration_days": "10"
+            },
+            {
+              "sprint": "2",
+              "milestone_business_outcome": "Sales Flow — Leads/Opportunities live with Kanban; initial dashboards.",
+              "features_included": [
+                "Extend CRUD to Leads/Opportunities + relations",
+                "Lead Conversion wizard",
+                "Opportunities Kanban & probabilities",
+                "Dashboards (baseline widgets)"
+              ],
+              "owner": "PD + Dev",
+              "duration_days": "10"
+            },
+            {
+              "sprint": "3",
+              "milestone_business_outcome": "Stability & Launch — Backups, reset, migration tooling, hardening.",
+              "features_included": [
+                "Backup/Restore & DB Reset",
+                "CSV migration/import tooling",
+                "RBAC & Audit completion",
+                "Dashboards extensions",
+                "Ops hardening/health checks"
+              ],
+              "owner": "PD + Dev",
+              "duration_days": "10"
+            }
+          ]
+        },
+        {
+          "title": "3.2 Milestone Narrative",
+          "content": "Sprint 1 delivers a secure, runnable foundation with CRUD on core entities and deterministic ID issuance, enabling internal testing. Sprint 2 unlocks end-to-end selling motions with lead conversion and opportunity management plus first dashboards. Sprint 3 ensures operational durability via backup/restore and migration tools, plus RBAC and reporting completion for launch readiness."
+        },
+        {
+          "title": "3.3 EPIC / User-Story Breakdown",
+          "entries": [
+            {
+              "epic": "EPIC-1 — Data Model & CRUD",
+              "user_stories": [
+                "As a seller, I want to add and edit Accounts and Contacts so that I can maintain accurate customer records.",
+                "As a seller, I want to link Contacts to Accounts so that communications roll up to the right company.",
+                "As a user, I want a timeline of Activities for a record so that I can see recent work at a glance."
+              ],
+              "sp_estimate": "28 SP (S1: 18 SP, S2: 10 SP)"
+            },
+            {
+              "epic": "EPIC-2 — Identity & Security",
+              "user_stories": [
+                "As an admin, I want to assign roles and permissions so that only authorized users can view or edit records.",
+                "As a compliance owner, I want audit logs for key actions so that I can review who changed what and when."
+              ],
+              "sp_estimate": "20 SP (S1: 10 SP, S3: 10 SP)"
+            },
+            {
+              "epic": "EPIC-3 — Sales Workflow",
+              "user_stories": [
+                "As a seller, I want a Lead Conversion wizard so that I can quickly create the related Account, Contact, and Opportunity.",
+                "As a seller, I want to move Opportunities across stages on a Kanban so that I can manage pipeline visually."
+              ],
+              "sp_estimate": "24 SP (S2)"
+            },
+            {
+              "epic": "EPIC-4 — Analytics & Reporting",
+              "user_stories": [
+                "As a manager, I want a pipeline dashboard so that I can see current pipeline value and stage distribution.",
+                "As a manager, I want activity and win-rate widgets so that I can track team productivity and outcomes."
+              ],
+              "sp_estimate": "18 SP (S2: 10 SP, S3: 8 SP)"
+            },
+            {
+              "epic": "EPIC-5 — Ops & Admin",
+              "user_stories": [
+                "As an admin, I want to back up and restore the database so that I can recover from failures.",
+                "As an admin, I want a safe database reset so that I can clear demo or test data."
+              ],
+              "sp_estimate": "12 SP (S3)"
+            },
+            {
+              "epic": "EPIC-6 — Data Migration",
+              "user_stories": [
+                "As an admin, I want to import CSV exports from Dynamics and reconcile rows so that I can switch without lost data."
+              ],
+              "sp_estimate": "8 SP (S3)"
+            }
+          ]
+        },
+        {
+          "title": "3.4 Effort Estimate per EPIC/Feature",
+          "rows": [
+            {
+              "epic_feature": "F001 — Data Model & CRUD",
+              "story_points_sp": 28
+            },
+            {
+              "epic_feature": "F004 — ID Pattern Engine",
+              "story_points_sp": 8
+            },
+            {
+              "epic_feature": "F006 — RBAC & Audit",
+              "story_points_sp": 20
+            },
+            {
+              "epic_feature": "F008 — Deployment & Ops",
+              "story_points_sp": 14
+            },
+            {
+              "epic_feature": "F002 — Lead Conversion",
+              "story_points_sp": 10
+            },
+            {
+              "epic_feature": "F003 — Opportunity Kanban",
+              "story_points_sp": 14
+            },
+            {
+              "epic_feature": "F005 — Dashboards & Reports",
+              "story_points_sp": 18
+            },
+            {
+              "epic_feature": "F007 — Backup/Restore & Reset",
+              "story_points_sp": 12
+            },
+            {
+              "epic_feature": "F009 — CSV Migration Tooling",
+              "story_points_sp": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "4 · Roadmap Visualization & Tooling",
+      "subsections": [
+        {
+          "title": "4.1 Board Link or Snapshot",
+          "jira_linear_board_link": "jira://board/HT-CRM-MVP",
+          "attachment": "embedded after board creation"
+        },
+        {
+          "title": "4.2 Strategic Tags Applied",
+          "tags": [
+            "MVP",
+            "Security",
+            "DataOps",
+            "Reporting"
+          ]
+        }
+      ]
+    },
+    {
+      "section": "5 · Assumptions, Risks, Constraints",
+      "subsections": [
+        {
+          "title": "5.1 Key Assumptions",
+          "items": [
+            {
+              "assumption": "Two engineers available full-time per sprint; PD available for discovery/QA.",
+              "impact_if_wrong": "Velocity drops; push scope from S2/S3 or add Sprint 4."
+            },
+            {
+              "assumption": "Single-tenant deployment initially; multi-tenant not required for MVP.",
+              "impact_if_wrong": "RBAC and audit may need expansion; additional SP."
+            },
+            {
+              "assumption": "No email/calendar sync in MVP.",
+              "impact_if_wrong": "User workflow gaps; must defer to post-MVP."
+            }
+          ]
+        },
+        {
+          "title": "5.2 Risks & Mitigations",
+          "items": [
+            {
+              "risk": "Underestimated RBAC complexity",
+              "likelihood": "Med",
+              "impact": "High",
+              "mitigation": "Deliver baseline in S1 and finish in S3; keep permissions coarse-grained first."
+            },
+            {
+              "risk": "Data model changes late in S2",
+              "likelihood": "Med",
+              "impact": "Med",
+              "mitigation": "Lock core schema by end of S1; use migrations for adjustments."
+            },
+            {
+              "risk": "Replit limitations for persistent storage",
+              "likelihood": "Low",
+              "impact": "Med",
+              "mitigation": "Use external Postgres or Replit DB volume; test early in S1."
+            }
+          ]
+        },
+        {
+          "title": "5.3 External Dependencies",
+          "items": [
+            {
+              "dependency": "PostgreSQL instance for prod",
+              "owner": "Ops",
+              "needed_by_sprint": "1",
+              "impact_if_delayed": "Blocks CRUD testing in S1"
+            },
+            {
+              "dependency": "Replit environment and secrets",
+              "owner": "PD",
+              "needed_by_sprint": "1",
+              "impact_if_delayed": "Delays deploy testing"
+            },
+            {
+              "dependency": "Legacy Dynamics CSV exports for test",
+              "owner": "Admin",
+              "needed_by_sprint": "3",
+              "impact_if_delayed": "Delays migration feature validation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "6 · Business Alignment",
+      "subsections": [
+        {
+          "title": "6.1 Objectives & Expected Contributions",
+          "rows": [
+            {
+              "objective_okr": "Reduce CRM subscription cost by >80% within 60 days of launch",
+              "supporting_features": [
+                "Deployment & Ops",
+                "Data Migration"
+              ],
+              "expected_contribution": "Immediate cost avoidance vs. Dynamics 365."
+            },
+            {
+              "objective_okr": "Maintain seller productivity (no net loss in weekly activities)",
+              "supporting_features": [
+                "CRUD",
+                "Lead Conversion",
+                "Kanban",
+                "Dashboards"
+              ],
+              "expected_contribution": "Feature parity for core flows preserves output."
+            },
+            {
+              "objective_okr": "Achieve daily backup reliability ≥ 99%",
+              "supporting_features": [
+                "Backup/Restore & Reset"
+              ],
+              "expected_contribution": "Risk reduction and data durability."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "7 · Review & Approval",
+      "subsections": [
+        {
+          "title": "7.1 Approval Grid",
+          "approvals": [
+            {
+              "role": "Product Developer",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            },
+            {
+              "role": "Domain Stakeholder(s)",
+              "name": "Sales Lead",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Leadership Reviewer",
+              "name": "CEO/Owner",
+              "date": "",
+              "signature": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "8 · Revision History",
+      "subsections": [
+        {
+          "title": "8.1 Changes",
+          "rows": [
+            {
+              "version": "v1.0",
+              "date": "2025-10-31",
+              "author": "Jay Baker — Product Developer",
+              "description_of_change": "Initial Stage 2 draft"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "9 · Attachments & Optional Artifacts",
+      "subsections": [
+        {
+          "title": "9.1 Included Charts",
+          "files": []
+        },
+        {
+          "title": "9.2 Included Workflows",
+          "files": []
+        },
+        {
+          "title": "9.3 Additional Documents",
+          "files": []
+        }
+      ]
+    },
+    {
+      "section": "10 · Workflows",
+      "subsections": [
+        {
+          "title": "10.1 Workflow Catalog",
+          "workflows": [
+            {
+              "workflow_name": "Lead Capture",
+              "description": "Create Lead with minimal required fields; validate; save; show confirmation.",
+              "input": "Lead form",
+              "process": "Validation → Persist → Timeline note",
+              "output": "Lead record"
+            },
+            {
+              "workflow_name": "Lead Conversion",
+              "description": "Convert Lead into Account, Contact, and initial Opportunity; check for duplicates.",
+              "input": "Lead record",
+              "process": "Pre-checks → Create related records → Link & close Lead",
+              "output": "Account/Contact/Opportunity"
+            },
+            {
+              "workflow_name": "Opportunity Progression",
+              "description": "Drag Opportunity across stages on Kanban; set probability; log activity.",
+              "input": "Opportunity card",
+              "process": "Stage change → Persist → Recalc pipeline",
+              "output": "Updated Opportunity"
+            },
+            {
+              "workflow_name": "Activity Logging",
+              "description": "Log calls, emails, tasks; auto-stamp user and time; relate to parent.",
+              "input": "Activity form",
+              "process": "Validation → Persist → Timeline",
+              "output": "Activity record"
+            },
+            {
+              "workflow_name": "Admin Backup/Restore",
+              "description": "Run backup to storage; restore from selected snapshot.",
+              "input": "Admin console action",
+              "process": "Dump → Encrypt → Store / Restore → Restart",
+              "output": "Backup file / Restored DB"
+            },
+            {
+              "workflow_name": "ID Pattern Configuration",
+              "description": "Configure per-entity ID format and starting value; test issuance.",
+              "input": "Admin config form",
+              "process": "Validate pattern → Save → Apply to issuance service",
+              "output": "Active ID pattern"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "11 · Workflow Use Cases",
+      "subsections": [
+        {
+          "title": "11.1 Use Cases",
+          "entries": [
+            {
+              "workflow_name": "Lead Conversion",
+              "actors_personas": [
+                "Seller",
+                "Sales Manager"
+              ],
+              "preconditions": "Lead exists and is qualified",
+              "main_steps": [
+                "Open Lead",
+                "Click Convert",
+                "Resolve duplicates",
+                "Confirm create A/C/O",
+                "Verify links"
+              ],
+              "postconditions": "Lead closed; Account, Contact, Opportunity created and linked",
+              "alternate_exception_paths": [
+                "Duplicate detected → merge or cancel",
+                "Missing required field → prompt user"
+              ]
+            },
+            {
+              "workflow_name": "Opportunity Progression",
+              "actors_personas": [
+                "Seller"
+              ],
+              "preconditions": "Opportunity exists",
+              "main_steps": [
+                "Open Kanban",
+                "Drag to next stage",
+                "Set probability",
+                "Save"
+              ],
+              "postconditions": "Stage updated; pipeline metrics refreshed",
+              "alternate_exception_paths": [
+                "Invalid transition → blocked with message"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "12 · Data Caching, Audit & Compliance",
+      "subsections": [
+        {
+          "title": "12.1 Strategy",
+          "content": "Use server-side caching for read-heavy dashboards; invalidate on entity write. Maintain append-only audit log for create/update/delete with actor, timestamp, and diff. Backups encrypted at rest. Retention: daily snapshots for 14 days. No PHI/PII beyond contact info; follow least-privilege access for roles."
+        }
+      ]
+    },
+    {
+      "section": "13 · System Configurability",
+      "subsections": [
+        {
+          "title": "13.1 Options & Defaults",
+          "rows": [
+            {
+              "configurable_option": "ID pattern per entity (e.g., ACC-{YYYY}-{SEQ})",
+              "default_value": "ACC-{SEQ}",
+              "owner": "Admin",
+              "notes": "Supports tokens {SEQ}, {YYYY}, {MM}"
+            },
+            {
+              "configurable_option": "Opportunity stages & probabilities",
+              "default_value": "Prospect (10%), Qualify (25%), Proposal (50%), Commit (75%), Closed",
+              "owner": "Admin",
+              "notes": "Editable picklist"
+            },
+            {
+              "configurable_option": "Roles & permissions",
+              "default_value": "Admin, Manager, Seller, ReadOnly",
+              "owner": "Admin",
+              "notes": "CRUD scopes per entity"
+            },
+            {
+              "configurable_option": "Backup schedule",
+              "default_value": "Daily at 02:00",
+              "owner": "Admin",
+              "notes": "Cron-like UI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "14 · Evaluation & Scoring Methodology",
+      "subsections": [
+        {
+          "title": "14.1 Metrics & Validation",
+          "content": "Functional: pass rate of acceptance tests ≥ 95%. Performance: p95 API latency < 300 ms on CRUD, dashboard refresh < 2 s. Reliability: backup success rate ≥ 99% over rolling 30 days. Security: 100% RBAC checks on protected routes; audit event coverage ≥ 95% of data mutations."
+        }
+      ]
+    },
+    {
+      "section": "15 · Adaptive Intelligence & Learning",
+      "subsections": [
+        {
+          "title": "15.1 Learning Strategy",
+          "content": "Post-MVP enhancement: add simple rules-based lead scoring (configurable weights). Future iteration may integrate ML-based scoring; out of scope for MVP."
+        }
+      ]
+    },
+    {
+      "section": "16 · Feature ↔ Workflow Traceability",
+      "subsections": [
+        {
+          "title": "16.1 Traceability Map",
+          "rows": [
+            {
+              "feature": "F001 CRUD",
+              "associated_workflows": [
+                "Lead Capture",
+                "Lead Conversion",
+                "Opportunity Progression",
+                "Activity Logging"
+              ],
+              "required_system_capabilities": [
+                "Postgres persistence",
+                "REST API"
+              ],
+              "user_facing_components": [
+                "Entity forms",
+                "Activity timeline"
+              ],
+              "backend_integration_points": [
+                "Entity service",
+                "Audit service"
+              ]
+            },
+            {
+              "feature": "F004 ID Engine",
+              "associated_workflows": [
+                "Lead Capture",
+                "Lead Conversion"
+              ],
+              "required_system_capabilities": [
+                "Pattern parser",
+                "Sequence store"
+              ],
+              "user_facing_components": [
+                "Admin config UI"
+              ],
+              "backend_integration_points": [
+                "ID issuance service"
+              ]
+            },
+            {
+              "feature": "F006 RBAC & Audit",
+              "associated_workflows": [
+                "All"
+              ],
+              "required_system_capabilities": [
+                "AuthN/AuthZ",
+                "Audit log"
+              ],
+              "user_facing_components": [
+                "Login",
+                "Denied page",
+                "Audit viewer"
+              ],
+              "backend_integration_points": [
+                "JWT middleware",
+                "Audit store"
+              ]
+            },
+            {
+              "feature": "F003 Kanban",
+              "associated_workflows": [
+                "Opportunity Progression"
+              ],
+              "required_system_capabilities": [
+                "Drag/drop board"
+              ],
+              "user_facing_components": [
+                "Kanban board"
+              ],
+              "backend_integration_points": [
+                "Opportunity service"
+              ]
+            },
+            {
+              "feature": "F005 Dashboards",
+              "associated_workflows": [
+                "Reporting"
+              ],
+              "required_system_capabilities": [
+                "Aggregation queries",
+                "Caching"
+              ],
+              "user_facing_components": [
+                "Pipeline dashboard"
+              ],
+              "backend_integration_points": [
+                "Reporting service"
+              ]
+            },
+            {
+              "feature": "F007 Backup/Restore",
+              "associated_workflows": [
+                "Admin Backup/Restore"
+              ],
+              "required_system_capabilities": [
+                "DB dump/restore",
+                "Encryption"
+              ],
+              "user_facing_components": [
+                "Admin console"
+              ],
+              "backend_integration_points": [
+                "Backup job",
+                "Storage"
+              ]
+            },
+            {
+              "feature": "F009 Migration Tooling",
+              "associated_workflows": [
+                "Data Migration"
+              ],
+              "required_system_capabilities": [
+                "CSV import",
+                "Reconciliation"
+              ],
+              "user_facing_components": [
+                "Import wizard"
+              ],
+              "backend_integration_points": [
+                "Importer",
+                "Validator"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

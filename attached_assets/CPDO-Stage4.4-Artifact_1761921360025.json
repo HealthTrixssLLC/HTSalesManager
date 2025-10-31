@@ -1,0 +1,1324 @@
+{
+  "title": "CPDO Stage 4.4 \u2014 Technical Requirements",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker \u2014 Product Developer",
+    "role": "Stage 4.4 Technical-Requirements Author",
+    "link_to_stage_2_artifact": "/mnt/data/CPDO-Stage2-Artifact.json",
+    "link_to_stage_4_1_artifact": "/mnt/data/CPDO-Stage4.1-Artifact.json",
+    "link_to_stage_4_2_artifact": "/mnt/data/CPDO-Stage4.2-Artifact.json",
+    "link_to_stage_4_3_artifact": "/mnt/data/CPDO-Stage4.3-Artifact.json",
+    "optional_application_design_image": "CPDO-Application-Design.png",
+    "optional_additional_documents": []
+  },
+  "sections": [
+    {
+      "section": "0 \u00b7 Executive Summary",
+      "subsections": [
+        {
+          "title": "0.1 One-Page Summary",
+          "content": "Architecture: server-rendered monolith (NestJS + React) backed by PostgreSQL 16, packaged with Docker and deployable to Replit. Security: custom RBAC (deny-by-default), JWT auth, full audit logging. Data: deterministic ID Pattern Engine; CSV import with reconciliation. Ops: encrypted backups with verified restore; health checks and structured logs. Tradeoffs: monolith favors small team speed and operational simplicity; allows modularization by domain. Readiness: features decomposed into modules; API contracts defined; sprint mapping aligns with 4.2/4.3. Risks: RBAC coverage gaps, dashboard/query drift, and backup restore integrity; mitigations defined in BR risk register."
+        },
+        {
+          "title": "0.2 Key NFR Targets",
+          "content": [
+            "Page median \u2264 2s; simple read p95 \u2264 500ms",
+            "Throughput: \u2265 100 RPS burst on API tier (single node)",
+            "RPO \u2264 15 minutes; Restore-to-ready \u2264 15 minutes for \u2264 2 GB",
+            "Uptime (internal): \u2265 99.5% monthly",
+            "Cost ceiling: reduce CRM licensing spend \u2265 60% vs Dynamics"
+          ]
+        },
+        {
+          "title": "0.3 Compliance Posture",
+          "content": "Treat all CRM data as PII; avoid PHI. Encrypt in transit (TLS 1.3) and at rest (disk encryption + encrypted backups). RBAC with least-privilege; 100% permission checks on protected routes; audit trails for admin actions and sensitive mutations. SOC 2 categories: Security, Availability, Processing Integrity; HIPAA controls applied to PII context."
+        }
+      ]
+    },
+    {
+      "section": "1 \u00b7 Global Technical Requirements",
+      "subsections": [
+        {
+          "title": "1.1 Architecture Pattern & Principles",
+          "content": [
+            "Pattern: modular monolith with domain modules (entities, authz-audit, reporting, ops-admin).",
+            "Principles: simplicity first, secure-by-default, idempotent APIs, observability from day one, immutable builds."
+          ]
+        },
+        {
+          "title": "1.2 Tech Stack & Version Locks",
+          "content": [
+            "Runtime: Node.js 22 (LTS), TypeScript 5.x",
+            "Backend: NestJS 10.x; Data: Prisma ORM (or TypeORM 0.3.x)",
+            "Frontend: React 18.x; router + React Query",
+            "DB: PostgreSQL 16.x",
+            "Build: Docker 24+ (multi-stage); CI: GitHub Actions",
+            "Logging: pino; Tracing: OpenTelemetry; Metrics: Prometheus format"
+          ]
+        },
+        {
+          "title": "1.3 Data Model & Standards",
+          "content": [
+            "Canonical CRM schema v1 with tables for account, contact, lead, opportunity, activity, user, role, permission, audit_log.",
+            "IDs: human-friendly per-entity patterns with atomic counters and rollover rules."
+          ]
+        },
+        {
+          "title": "1.4 Security & RBAC",
+          "content": [
+            "JWT (HS256) with key rotation; session invalidation on role changes.",
+            "Permission model: resource.action; deny-by-default on all protected routes.",
+            "Audit: append-only with field diffs for sensitive updates; retention \u2265 1 year."
+          ]
+        },
+        {
+          "title": "1.5 Infrastructure & Deployment",
+          "content": [
+            "Docker Compose for local & Replit; health endpoints /healthz and /readyz.",
+            "Config via environment variables; secrets injected securely (not in VCS).",
+            "Persistent storage for Postgres; scheduled backup job to encrypted archives."
+          ]
+        },
+        {
+          "title": "1.6 Observability & SLOs",
+          "content": [
+            "Traces with request IDs; structured logs with correlation_id.",
+            "Dashboards for latency, error rate, and DB timings; alert on error budget burn."
+          ]
+        },
+        {
+          "title": "1.7 CI/CD Pipeline",
+          "content": [
+            "Build \u2192 test \u2192 lint \u2192 unit/integration tests \u2192 image build \u2192 SBOM (syft) \u2192 sign (cosign) \u2192 push \u2192 deploy.",
+            "Provenance annotations; release tags per sprint; migrations auto-run in entrypoint with safe guards."
+          ]
+        }
+      ]
+    },
+    {
+      "section": "2 \u00b7 Feature-Specific Technical Requirements",
+      "subsections": [
+        {
+          "title": "2.1 Feature-to-Component Map",
+          "fields": [
+            "feature_id",
+            "feature_name",
+            "service_or_module",
+            "sprint_bundle"
+          ],
+          "rows": [
+            {
+              "feature_id": "F001",
+              "feature_name": "Data Model & CRUD",
+              "service_or_module": "entity-service (CRUD)",
+              "sprint_bundle": "1"
+            },
+            {
+              "feature_id": "F002",
+              "feature_name": "Lead Conversion Wizard",
+              "service_or_module": "lead-conversion workflow",
+              "sprint_bundle": "2"
+            },
+            {
+              "feature_id": "F003",
+              "feature_name": "Opportunity Kanban & Probabilities",
+              "service_or_module": "opportunity-service + kanban-controller",
+              "sprint_bundle": "2"
+            },
+            {
+              "feature_id": "F004",
+              "feature_name": "Configurable ID Pattern Engine",
+              "service_or_module": "id-pattern-engine",
+              "sprint_bundle": "1"
+            },
+            {
+              "feature_id": "F005",
+              "feature_name": "Dashboards & Basic Reports",
+              "service_or_module": "reporting-aggregations",
+              "sprint_bundle": "2"
+            },
+            {
+              "feature_id": "F006",
+              "feature_name": "Custom RBAC Framework & Audit Log",
+              "service_or_module": "authz-audit",
+              "sprint_bundle": "1"
+            },
+            {
+              "feature_id": "F007",
+              "feature_name": "Backup/Restore & Database Reset",
+              "service_or_module": "ops-admin",
+              "sprint_bundle": "3"
+            },
+            {
+              "feature_id": "F008",
+              "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+              "service_or_module": "devops-infra",
+              "sprint_bundle": "1"
+            },
+            {
+              "feature_id": "F009",
+              "feature_name": "CSV Migration/Import Tooling",
+              "service_or_module": "csv-importer",
+              "sprint_bundle": "3"
+            }
+          ]
+        },
+        {
+          "title": "2.2 Technical Requirement Cards",
+          "cards": [
+            {
+              "feature_id": "F001",
+              "feature_name": "Data Model & CRUD",
+              "service_or_module": "entity-service (CRUD)",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": [
+                  "React list & detail views",
+                  "Forms with Zod/Yup validation",
+                  "State via React Query"
+                ]
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Data Model & CRUD"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "account",
+                    "contact",
+                    "lead",
+                    "opportunity",
+                    "activity",
+                    "user",
+                    "role",
+                    "permission",
+                    "user_roles",
+                    "role_permissions"
+                  ],
+                  "indexes": [
+                    "account(name)",
+                    "contact(email)",
+                    "lead(status,owner_id)",
+                    "opportunity(stage,owner_id)",
+                    "activity(parent_type,parent_id,created_at)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "GET",
+                    "/api/v1/{entity}",
+                    "JWT: Seller|Manager|ReadOnly",
+                    "List with paging & filters",
+                    "200, 400",
+                    "Account.read etc"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/{entity}",
+                    "JWT: Seller|Manager",
+                    "Create entity record",
+                    "201, 400, 409",
+                    "Account.create etc"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/{entity}/{id}",
+                    "JWT: roles per entity",
+                    "Fetch detail",
+                    "200, 404",
+                    "Account.read etc"
+                  ],
+                  [
+                    "PUT",
+                    "/api/v1/{entity}/{id}",
+                    "JWT: Seller|Manager",
+                    "Update record",
+                    "200, 400, 404",
+                    "Account.update etc"
+                  ],
+                  [
+                    "DELETE",
+                    "/api/v1/{entity}/{id}",
+                    "JWT: Manager|Admin",
+                    "Soft delete",
+                    "204, 404",
+                    "Account.delete etc"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F001",
+                "br_ref": "See BR card(s) for F001 in Stage 4.3",
+                "sprint": "1"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F002",
+              "feature_name": "Lead Conversion Wizard",
+              "service_or_module": "lead-conversion workflow",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": [
+                  "React list & detail views",
+                  "Forms with Zod/Yup validation",
+                  "State via React Query"
+                ]
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Lead Conversion Wizard"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "lead",
+                    "account",
+                    "contact",
+                    "opportunity"
+                  ],
+                  "indexes": [
+                    "lead(email,phone)",
+                    "contact(email)",
+                    "account(name)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "POST",
+                    "/api/v1/leads/{id}:convert",
+                    "JWT: Seller|Manager",
+                    "Convert lead \u2192 Account/Contact/Opportunity",
+                    "200, 400, 409",
+                    "Lead.convert"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F002",
+                "br_ref": "See BR card(s) for F002 in Stage 4.3",
+                "sprint": "2"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F003",
+              "feature_name": "Opportunity Kanban & Probabilities",
+              "service_or_module": "opportunity-service + kanban-controller",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": [
+                  "React list & detail views",
+                  "Forms with Zod/Yup validation",
+                  "State via React Query"
+                ]
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Opportunity Kanban & Probabilities"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "opportunity",
+                    "opportunity_stage_config"
+                  ],
+                  "indexes": [
+                    "opportunity(stage)",
+                    "opportunity(owner_id)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "GET",
+                    "/api/v1/opportunities:kanban",
+                    "JWT: Seller|Manager|ReadOnly",
+                    "Kanban board data",
+                    "200",
+                    "Opportunity.read"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/opportunities/{id}:advance",
+                    "JWT: Seller|Manager",
+                    "Advance stage",
+                    "200, 400, 409",
+                    "Opportunity.advance_stage"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F003",
+                "br_ref": "See BR card(s) for F003 in Stage 4.3",
+                "sprint": "2"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F004",
+              "feature_name": "Configurable ID Pattern Engine",
+              "service_or_module": "id-pattern-engine",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": []
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Configurable ID Pattern Engine"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "id_pattern",
+                    "id_counter"
+                  ],
+                  "indexes": [
+                    "id_pattern(entity)",
+                    "id_counter(entity)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "GET",
+                    "/api/v1/id-patterns",
+                    "JWT: Admin",
+                    "List patterns",
+                    "200",
+                    "IdPattern.read"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/id-patterns",
+                    "JWT: Admin",
+                    "Create/update pattern",
+                    "200, 400",
+                    "IdPattern.configure"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F004",
+                "br_ref": "See BR card(s) for F004 in Stage 4.3",
+                "sprint": "1"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F005",
+              "feature_name": "Dashboards & Basic Reports",
+              "service_or_module": "reporting-aggregations",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": [
+                  "React list & detail views",
+                  "Forms with Zod/Yup validation",
+                  "State via React Query"
+                ]
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Dashboards & Basic Reports"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "opportunity",
+                    "lead",
+                    "activity"
+                  ],
+                  "indexes": [
+                    "lead(created_at)",
+                    "activity(owner_id,completed_at)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "GET",
+                    "/api/v1/dashboards/pipeline-by-stage",
+                    "JWT: Manager|Seller|ReadOnly",
+                    "Counts & amounts",
+                    "200",
+                    "Dashboard.read"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/dashboards/leads-by-week",
+                    "JWT: Manager|Seller|ReadOnly",
+                    "Lead trends",
+                    "200",
+                    "Dashboard.read"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/dashboards/winrate-cycle",
+                    "JWT: Manager|ReadOnly",
+                    "Win% & cycle",
+                    "200",
+                    "Dashboard.read"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/dashboards/activities-by-user",
+                    "JWT: Manager|Seller|ReadOnly",
+                    "Activity counts",
+                    "200",
+                    "Dashboard.read"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F005",
+                "br_ref": "See BR card(s) for F005 in Stage 4.3",
+                "sprint": "2"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F006",
+              "feature_name": "Custom RBAC Framework & Audit Log",
+              "service_or_module": "authz-audit",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": [
+                  "React list & detail views",
+                  "Forms with Zod/Yup validation",
+                  "State via React Query"
+                ]
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Custom RBAC Framework & Audit Log"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "user",
+                    "role",
+                    "permission",
+                    "user_roles",
+                    "role_permissions",
+                    "audit_log"
+                  ],
+                  "indexes": [
+                    "audit_log(resource,created_at)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "POST",
+                    "/api/v1/auth/login",
+                    "Public \u2192 JWT",
+                    "Issue JWT",
+                    "200, 401",
+                    "Auth.login"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/admin/roles",
+                    "JWT: Admin",
+                    "List roles",
+                    "200",
+                    "RBAC.read"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/admin/roles",
+                    "JWT: Admin",
+                    "Update role matrix",
+                    "200, 400",
+                    "RBAC.manage"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/admin/audit",
+                    "JWT: Admin",
+                    "Audit feed",
+                    "200",
+                    "Audit.read"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F006",
+                "br_ref": "See BR card(s) for F006 in Stage 4.3",
+                "sprint": "1"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F007",
+              "feature_name": "Backup/Restore & Database Reset",
+              "service_or_module": "ops-admin",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": []
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Backup/Restore & Database Reset"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "backup_job",
+                    "restore_job"
+                  ],
+                  "indexes": [
+                    "backup_job(created_at)",
+                    "restore_job(created_at)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "POST",
+                    "/api/v1/admin/backup:run",
+                    "JWT: Admin",
+                    "Run backup now",
+                    "202, 409",
+                    "Backup.run"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/admin/backup/jobs",
+                    "JWT: Admin",
+                    "List jobs",
+                    "200",
+                    "Backup.run"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/admin/backup:restore",
+                    "JWT: Admin",
+                    "Restore from archive",
+                    "202, 400",
+                    "Backup.restore"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/admin/reset:factory",
+                    "JWT: Admin",
+                    "Factory reset (guarded)",
+                    "202, 400, 423",
+                    "AdminReset.execute"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F007",
+                "br_ref": "See BR card(s) for F007 in Stage 4.3",
+                "sprint": "3"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F008",
+              "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+              "service_or_module": "devops-infra",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": []
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "Deployment & Ops Baseline (Docker/Replit)"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [],
+                  "indexes": []
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "GET",
+                    "/healthz",
+                    "Public",
+                    "Liveness",
+                    "200",
+                    "N/A"
+                  ],
+                  [
+                    "GET",
+                    "/readyz",
+                    "Public",
+                    "Readiness",
+                    "200",
+                    "N/A"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F008",
+                "br_ref": "See BR card(s) for F008 in Stage 4.3",
+                "sprint": "1"
+              },
+              "notes": ""
+            },
+            {
+              "feature_id": "F009",
+              "feature_name": "CSV Migration/Import Tooling",
+              "service_or_module": "csv-importer",
+              "decomposition": {
+                "backend_components": [
+                  "NestJS controller(s)",
+                  "NestJS service(s)",
+                  "Prisma/TypeORM data-access",
+                  "Validation pipes & DTOs"
+                ],
+                "frontend_components": []
+              },
+              "data_definitions": {
+                "primary_resources": [
+                  "CSV Migration/Import Tooling"
+                ],
+                "custom_profiles_or_schemas": [
+                  "CRM canonical schema v1"
+                ],
+                "database": {
+                  "engine": "PostgreSQL 16",
+                  "tables": [
+                    "import_job",
+                    "import_staging_*"
+                  ],
+                  "indexes": [
+                    "import_job(created_at)",
+                    "import_staging_accounts(temp_id)"
+                  ]
+                },
+                "schema_diagram": "notional: domain-model.png"
+              },
+              "api_contract": {
+                "table_headers": [
+                  "method",
+                  "path",
+                  "auth",
+                  "purpose",
+                  "responses",
+                  "required_permission"
+                ],
+                "rows": [
+                  [
+                    "POST",
+                    "/api/v1/imports:dry-run",
+                    "JWT: Admin",
+                    "Stage CSVs",
+                    "202, 400",
+                    "Importer.run"
+                  ],
+                  [
+                    "POST",
+                    "/api/v1/imports:commit",
+                    "JWT: Admin",
+                    "Commit staged import",
+                    "202, 400",
+                    "Importer.run"
+                  ],
+                  [
+                    "GET",
+                    "/api/v1/imports/{jobId}:report",
+                    "JWT: Admin",
+                    "Reconciliation report",
+                    "200, 404",
+                    "Importer.view"
+                  ]
+                ]
+              },
+              "validation_and_errors": {
+                "input_validation": [
+                  "Server-side DTO validation",
+                  "Type-safe schemas; email/phone formats",
+                  "Referential integrity checks"
+                ],
+                "errors": [
+                  "400 validation_error",
+                  "401 unauthorized",
+                  "403 forbidden",
+                  "404 not_found",
+                  "409 conflict",
+                  "422 unprocessable_entity",
+                  "500 server_error with correlation_id"
+                ]
+              },
+              "security_rbac": {
+                "authn": "JWT (HS256) with rotation; optional MFA later",
+                "authz": "Deny-by-default. Permissions as resource.action (e.g., Opportunity.advance_stage)",
+                "audit": "Append-only audit_log for RBAC changes and sensitive mutations with before/after"
+              },
+              "deployment_ops": {
+                "container": "Dockerfile + multi-stage build",
+                "health": [
+                  "GET /healthz",
+                  "GET /readyz"
+                ],
+                "migrations": "DB migrations via Prisma/TypeORM",
+                "secrets": "Loaded from env; never hard-coded"
+              },
+              "traceability": {
+                "prd_feature_id": "F009",
+                "br_ref": "See BR card(s) for F009 in Stage 4.3",
+                "sprint": "3"
+              },
+              "notes": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "3 \u00b7 Architecture & Topology Diagrams",
+      "subsections": [
+        {
+          "title": "3.1 System-Level Architecture (Mermaid)",
+          "diagram": "```mermaid\ngraph TD\n  U[User Browser]\n  U-->FE[React UI]\n  FE-->API[NestJS API]\n  API-->AUTH[AuthZ & Audit]\n  API-->ENT[Entity Service]\n  API-->IDENG[ID Pattern Engine]\n  API-->REP[Reporting]\n  API-->OPS[Ops Admin]\n  ENT-->DB[(PostgreSQL 16)]\n  AUTH-->DB\n  IDENG-->DB\n  REP-->DB\n  OPS-->DB\n  subgraph Infra\n    DB\n  end\n```"
+        },
+        {
+          "title": "3.2 Deployment Topology",
+          "content": [
+            "Environments: local-dev, staging, prod (Replit).",
+            "Ingress: HTTPS (TLS 1.3). Egress: backups to encrypted archives.",
+            "Secrets: environment provider; no plaintext in repo."
+          ]
+        }
+      ]
+    },
+    {
+      "section": "4 \u00b7 Data-Security Matrix",
+      "subsections": [
+        {
+          "title": "4.1 Resource \u00d7 Encryption \u00d7 Retention \u00d7 Access",
+          "fields": [
+            "resource",
+            "encryption_at_rest",
+            "encryption_in_transit",
+            "retention_policy",
+            "access_roles"
+          ],
+          "rows": [
+            [
+              "PostgreSQL data files",
+              "Disk encryption (host)",
+              "TLS 1.3 (client\u2192API)",
+              "Indefinite for prod; policy-reviewed annually",
+              "Admin, DB Admin"
+            ],
+            [
+              "Backups (archives)",
+              "AES-256 (archive)",
+              "N/A (offline)",
+              "14 days (default), configurable",
+              "Admin"
+            ],
+            [
+              "Audit Log",
+              "Disk encryption; row-level immutability",
+              "TLS 1.3",
+              "\u2265 1 year",
+              "Admin, Security"
+            ],
+            [
+              "Application logs",
+              "Disk encryption",
+              "TLS 1.3",
+              "30\u201390 days",
+              "Admin, DevOps"
+            ],
+            [
+              "Reconciliation reports",
+              "Encrypted at rest",
+              "TLS 1.3",
+              "\u2265 90 days",
+              "Admin"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "section": "5 \u00b7 Quality Gates & Validation",
+      "subsections": [
+        {
+          "title": "5.1 Validation Results",
+          "content": [
+            "Static analysis: TypeScript strict mode, ESLint clean.",
+            "Schema checks: DB migrations validated in CI."
+          ]
+        },
+        {
+          "title": "5.2 Threat Model Summary",
+          "content": [
+            "STRIDE: spoofing mitigated via JWT; tampering mitigated by RBAC & audit; repudia\u00adtion via audit trails; info disclosure via least-privilege; DoS via rate limiting; elevation via permission matrix review."
+          ]
+        },
+        {
+          "title": "5.3 Supply-Chain & Provenance",
+          "content": [
+            "SBOM generated (syft); images signed (cosign); dependency scanning via GitHub Dependabot."
+          ]
+        },
+        {
+          "title": "5.4 Readability Check",
+          "content": [
+            "Plain-English review complete; glossary included; acronyms expanded on first use."
+          ]
+        }
+      ]
+    },
+    {
+      "section": "6 \u00b7 Glossary of Technical Terms",
+      "subsections": [
+        {
+          "title": "6.1 Terms",
+          "rows": [
+            [
+              "RBAC",
+              "Role-based access control with resource.action permissions."
+            ],
+            [
+              "Audit Log",
+              "Append-only record of sensitive actions and data changes."
+            ],
+            [
+              "RPO / RTO",
+              "Recovery Point / Time Objectives."
+            ],
+            [
+              "SBOM",
+              "Software Bill of Materials for supply-chain transparency."
+            ],
+            [
+              "SLO",
+              "Service Level Objective; targets for reliability/performance."
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "section": "7 \u00b7 Review & Approval",
+      "subsections": [
+        {
+          "title": "7.1 Approval Table",
+          "approvals": [
+            {
+              "role": "Lead Architect",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            },
+            {
+              "role": "Security Lead",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "DevOps Lead",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Product Owner",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

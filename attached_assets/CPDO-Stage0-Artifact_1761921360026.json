@@ -1,0 +1,123 @@
+{
+  "title": "CPDO Stage 0 — Project Foundation Artifact",
+  "sections": [
+    {
+      "name": "Organization Information",
+      "fields": {
+        "Organization Name": "Health Trixss Inc",
+        "Contact Name": "Jay Baker",
+        "Title": "CEO and Founder",
+        "Email": "jaybaker@healthtrixss.com",
+        "Schedule Link": ""
+      }
+    },
+    {
+      "name": "Project Overview",
+      "fields": {
+        "Project Name": "Lightweight Self Hosted CRM",
+        "Date": "2025-10-31",
+        "Prepared By": "Jay Baker — Product Developer",
+        "Stage 0 Facilitator Role": "Product Discovery Facilitator"
+      }
+    },
+    {
+      "name": "Problem Space",
+      "fields": {
+        "Title": "Replace rising cost Dynamics 365 with a self hosted CRM",
+        "Detailed Description": "Build a lightweight self hosted CRM comparable to a pared down Dynamics or Salesforce. Core capabilities include creating and managing Accounts, Contacts, Opportunities, and Leads; tracking related Tasks and Activities; and providing dashboards, visualizations, and basic reporting for progress and sales performance. Deployment must be containerized for Docker and runnable in Replit production. Each core entity receives an auto assigned unique ID with a user configurable pattern and starting value. Provide full backup and restore of all data, and include an admin console with a database reset. Implement a custom role based access control framework rather than relying on Replit native authentication.",
+        "Why It Matters": "Dynamics 365 cost increases are not sustainable. A focused internal CRM will lower software cost, preserve control of data, remove vendor lock in, and keep the sales team productive with the essentials."
+      }
+    },
+    {
+      "name": "Constraints & Assumptions",
+      "fields": {
+        "Budget": "Reduce monthly CRM spend compared with the current Dynamics 365 plan. Prefer open source components and zero per seat licensing.",
+        "Timeline": "Begin Stage 1 immediately after approval. Target an MVP within four to six weeks using two to three CPDO sprints.",
+        "Technical Constraints": "Must run in Docker and be deployable in Replit production. Use a single Postgres database. Provide configurable ID patterns and starting values for Accounts, Contacts, Opportunities, and Leads. Deliver a built in backup and restore utility and a database reset in the admin console.",
+        "Regulatory Constraints": "Treat all customer and prospect data as PII. Avoid storing PHI. Encrypt data in transit and at rest. Provide audit logging for access and administrative actions.",
+        "Other Assumptions": "Team size is small and prefers a simple monolith with clear module boundaries. No reliance on paid third party SaaS beyond optional email delivery. Future integrations with Outlook or Gmail and calendar can be considered in later stages."
+      }
+    },
+    {
+      "name": "Desired Outcomes & Success Metrics",
+      "fields": {
+        "Outcome Description": "Deliver a reliable internal CRM that replaces Dynamics for core sales processes with owned data, easy deployment, and clear governance.",
+        "Metrics": [
+          "Reduce monthly CRM cost by at least 60 percent versus the current plan.",
+          "Median page response under two seconds for core screens on standard hardware.",
+          "Backup completes and verifies within five minutes for a database up to 2 GB.",
+          "Full restore from the most recent backup completes within fifteen minutes.",
+          "RBAC permission tests pass for all protected routes and screens.",
+          "User adoption of at least five active users within the first month."
+        ]
+      }
+    },
+    {
+      "name": "Early Solution Direction",
+      "fields": {
+        "Initial Concepts": [
+          "One repo monolith with a React front end and a Node.js API using NestJS or Express, TypeScript, and Prisma or TypeORM.",
+          "PostgreSQL as the primary data store with a migration tool and seed data for roles and sample records.",
+          "Configurable ID pattern engine that supports tokens such as prefix, date parts, and zero padded counters per entity.",
+          "Role based access control implemented with a policy layer and route guards. Include an admin console for user, role, and permission management.",
+          "Backup and restore service that produces encrypted archive files and supports scheduled backups."
+        ],
+        "Potential Approaches": [
+          "Start with a server rendered monolith for simplicity and move to modular services only if needed.",
+          "Use Docker Compose for local and Replit based deployments and provide a Makefile or task runner for common operations.",
+          "Add an event log table for auditable actions and for future integrations."
+        ],
+        "Innovations": [
+          "Human friendly ID generator with user set patterns and counters per entity.",
+          "Pluggable chart widgets for dashboards using a common query layer.",
+          "Guarded admin reset that can factory reset the database with multi step confirmation."
+        ]
+      }
+    },
+    {
+      "name": "Stakeholders & Target Users",
+      "fields": {
+        "Stakeholders": [
+          "Jay Baker CEO and Product Developer",
+          "Sales Lead and Account Executives",
+          "Operations and Compliance"
+        ],
+        "Decision Makers": [
+          "Jay Baker"
+        ],
+        "Target Users/Customers": [
+          "Internal sales and account management users for Health Trixss",
+          "Executives who need dashboards and simple reports"
+        ]
+      }
+    },
+    {
+      "name": "Existing Assets",
+      "fields": {
+        "Documentation": [
+          "This Stage 0 artifact",
+          "CPDO Stage packages for later stages"
+        ],
+        "Datasets": [
+          "Dynamics 365 export if available for migration test data"
+        ],
+        "Workflows": [
+          "Lead capture to qualification to opportunity to account with tasks and activities",
+          "Account and contact management with simple reporting"
+        ],
+        "Other Resources": [
+          "Replit account and Docker environment",
+          "GitHub workspace"
+        ]
+      }
+    },
+    {
+      "name": "Validation & Sign-off",
+      "fields": {
+        "Validated By": "Jay Baker",
+        "Date": "2025-10-31",
+        "Approval Notes": "Approved to proceed to Stage 1 Problem Discovery using this foundation."
+      }
+    }
+  ]
+}

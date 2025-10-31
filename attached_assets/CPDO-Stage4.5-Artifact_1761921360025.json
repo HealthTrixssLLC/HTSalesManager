@@ -1,0 +1,597 @@
+{
+  "title": "CPDO Stage 4.5 — Sprint Bundle(s)",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker — Stage 4.5 Sprint-Bundle Author",
+    "role": "Product Developer",
+    "notes": "Self-contained sprint bundles consolidating Stages 4.1–4.4"
+  },
+  "sprint_plan": {
+    "revision": "v1.0",
+    "timestamp": "2025-10-31 09:35:02 CDT",
+    "sprints": [
+      {
+        "sprint_id": "Sprint 1",
+        "title": "Foundation & Security",
+        "objectives": [
+          "Stand up CRUD core with deterministic ID issuance",
+          "Establish deny-by-default RBAC and audit baseline",
+          "Deliver one-command Docker/Replit bootstrap"
+        ],
+        "scope_features": [
+          {
+            "feature_id": "F001",
+            "name": "Data Model & CRUD"
+          },
+          {
+            "feature_id": "F004",
+            "name": "Configurable ID Pattern Engine"
+          },
+          {
+            "feature_id": "F006",
+            "name": "Custom RBAC Framework & Audit Log (baseline)"
+          },
+          {
+            "feature_id": "F008",
+            "name": "Deployment & Ops Baseline (Docker/Replit)"
+          }
+        ],
+        "user_stories": [
+          {
+            "id": "US-001",
+            "title": "CRUD for Accounts/Contacts/Leads/Opportunities/Activities"
+          },
+          {
+            "id": "US-004",
+            "title": "List views with paging/sorting/filtering at scale"
+          },
+          {
+            "id": "US-007",
+            "title": "Configure and issue human-readable IDs"
+          },
+          {
+            "id": "US-011",
+            "title": "Audit logging for data mutations"
+          }
+        ],
+        "acceptance_criteria": [
+          "Given valid entity data, when a user saves a record, then the record persists and an AuditLog entry is written with before/after diffs.",
+          "Given a 10k-row dataset, when a user loads a list, then server-side paging/sorting returns in ≤1s p95.",
+          "Given an ID pattern {PREFIX}-{YYYY}-{SEQ:5}, when preview is requested, then the next value matches counter state; when 50 parallel creates occur, IDs are unique and ordered.",
+          "Given a protected route, when a user lacking permission accesses it, then the action is denied and the UI hides or disables unauthorized controls."
+        ],
+        "kpis": [
+          {
+            "kpi": "Median page response",
+            "target": "≤ 2s"
+          },
+          {
+            "kpi": "P95 API latency (simple reads)",
+            "target": "≤ 500ms"
+          },
+          {
+            "kpi": "Protected route coverage",
+            "target": "100%"
+          },
+          {
+            "kpi": "ID collisions",
+            "target": "0"
+          }
+        ]
+      },
+      {
+        "sprint_id": "Sprint 2",
+        "title": "Sales Workflow & Forecasting",
+        "objectives": [
+          "Accelerate lead→pipeline conversion",
+          "Provide Kanban for opportunity progression",
+          "Deliver first analytics widgets"
+        ],
+        "scope_features": [
+          {
+            "feature_id": "F001",
+            "name": "Data Model & CRUD (enhancements)"
+          },
+          {
+            "feature_id": "F002",
+            "name": "Lead Conversion Wizard"
+          },
+          {
+            "feature_id": "F003",
+            "name": "Opportunity Kanban & Probabilities"
+          },
+          {
+            "feature_id": "F005",
+            "name": "Dashboards & Basic Reports (initial)"
+          }
+        ],
+        "user_stories": [
+          {
+            "id": "US-002",
+            "title": "Convert qualified lead to Account/Contact/Opportunity atomically"
+          },
+          {
+            "id": "US-003",
+            "title": "Update opportunity stages via Kanban with validation"
+          },
+          {
+            "id": "US-005",
+            "title": "View pipeline by stage widget with drill-down"
+          },
+          {
+            "id": "US-006",
+            "title": "View lead volume and win-rate/cycle metrics"
+          },
+          {
+            "id": "US-011",
+            "title": "Audit for stage movements and conversions"
+          }
+        ],
+        "acceptance_criteria": [
+          "Given a qualified Lead, when the wizard runs, then Account, Contact, and Opportunity are created atomically or linked to existing with dedupe hints and a single audit event.",
+          "Given a Kanban drag of a deal to a disallowed stage, when dropped, then the system blocks the transition with a clear message and no data change.",
+          "Given dashboard widgets, when loaded, then p95 load time is ≤ 2s and totals reconcile to source lists within ±1%.",
+          "Given weekly data, when computing Lead→Pipeline time and Conversion rate, then metrics match unit-tested definitions."
+        ],
+        "kpis": [
+          {
+            "kpi": "Lead→Pipeline time (median)",
+            "target": "≤ 30s"
+          },
+          {
+            "kpi": "Conversion success rate",
+            "target": "≥ 98%"
+          },
+          {
+            "kpi": "Stage update latency",
+            "target": "≤ 1s avg"
+          },
+          {
+            "kpi": "Dashboard load time (p95)",
+            "target": "≤ 2s"
+          }
+        ]
+      },
+      {
+        "sprint_id": "Sprint 3",
+        "title": "Ops, Data Migration & Hardening",
+        "objectives": [
+          "Enable encrypted backups and verified restore",
+          "Finalize dashboards and RBAC hardening",
+          "Provide CSV cutover tooling with reconciliation"
+        ],
+        "scope_features": [
+          {
+            "feature_id": "F007",
+            "name": "Backup/Restore & Database Reset"
+          },
+          {
+            "feature_id": "F006",
+            "name": "Custom RBAC Framework & Audit Log (hardening)"
+          },
+          {
+            "feature_id": "F005",
+            "name": "Dashboards & Basic Reports (final)"
+          },
+          {
+            "feature_id": "F009",
+            "name": "CSV Migration/Import Tooling"
+          }
+        ],
+        "user_stories": [
+          {
+            "id": "US-008",
+            "title": "Run on-demand and scheduled encrypted backups with checksum"
+          },
+          {
+            "id": "US-09",
+            "title": "Restore from archive with verification logs"
+          },
+          {
+            "id": "US-010",
+            "title": "Factory reset with multi-step confirmation and re-authentication"
+          }
+        ],
+        "acceptance_criteria": [
+          "Given ≤2GB of data, when a backup runs, then an encrypted archive with checksum and metadata is produced within 5 minutes.",
+          "Given a valid archive, when restored side-by-side, then verification logs persist and the system is ready within 15 minutes.",
+          "Given a factory reset request, when confirmations and re-auth succeed, then data is cleared and an audit entry is written; without confirmations, reset is blocked.",
+          "Given staged CSVs, when dry-run executes, then reconciliation report shows counts and errors; on commit, relationships are preserved and new IDs issued per patterns."
+        ],
+        "kpis": [
+          {
+            "kpi": "Backup duration (≤2GB)",
+            "target": "≤ 5 min"
+          },
+          {
+            "kpi": "Restore-to-ready (≤2GB)",
+            "target": "≤ 15 min"
+          },
+          {
+            "kpi": "Initial import success",
+            "target": "≥ 99%"
+          },
+          {
+            "kpi": "Rejected rows resolvable",
+            "target": "100%"
+          }
+        ]
+      }
+    ]
+  },
+  "normalized_requirement_index": [
+    {
+      "feature_id": "F001",
+      "feature_name": "Data Model & CRUD",
+      "user_story_ids": [
+        "US-001",
+        "US-004",
+        "US-011"
+      ],
+      "business_requirements": [
+        "BR-001-001",
+        "BR-001-002",
+        "BR-001-003"
+      ],
+      "technical_refs": [
+        "entity-service CRUD controllers/services",
+        "DTO validation",
+        "React lists/forms"
+      ]
+    },
+    {
+      "feature_id": "F004",
+      "feature_name": "Configurable ID Pattern Engine",
+      "user_story_ids": [
+        "US-007"
+      ],
+      "business_requirements": [
+        "BR-004-001",
+        "BR-004-002"
+      ],
+      "technical_refs": [
+        "id-pattern api",
+        "id_counter tables",
+        "race-safe increments"
+      ]
+    },
+    {
+      "feature_id": "F006",
+      "feature_name": "Custom RBAC Framework & Audit Log",
+      "user_story_ids": [],
+      "business_requirements": [
+        "BR-006-001",
+        "BR-006-002",
+        "BR-006-003"
+      ],
+      "technical_refs": [
+        "JWT auth",
+        "resource.action perms",
+        "audit_log append-only"
+      ]
+    },
+    {
+      "feature_id": "F008",
+      "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+      "user_story_ids": [],
+      "business_requirements": [
+        "BR-008-001",
+        "BR-008-002"
+      ],
+      "technical_refs": [
+        "/healthz, /readyz",
+        "Docker multi-stage",
+        "persistent storage"
+      ]
+    },
+    {
+      "feature_id": "F002",
+      "feature_name": "Lead Conversion Wizard",
+      "user_story_ids": [
+        "US-002"
+      ],
+      "business_requirements": [
+        "BR-002-001",
+        "BR-002-002"
+      ],
+      "technical_refs": [
+        "/api/v1/leads/{id}:convert",
+        "dedupe/linking flow"
+      ]
+    },
+    {
+      "feature_id": "F003",
+      "feature_name": "Opportunity Kanban & Probabilities",
+      "user_story_ids": [
+        "US-003"
+      ],
+      "business_requirements": [
+        "BR-003-001",
+        "BR-003-002"
+      ],
+      "technical_refs": [
+        "/api/v1/opportunities:kanban",
+        "advance_stage endpoint"
+      ]
+    },
+    {
+      "feature_id": "F005",
+      "feature_name": "Dashboards & Basic Reports",
+      "user_story_ids": [
+        "US-005",
+        "US-006",
+        "US-011"
+      ],
+      "business_requirements": [
+        "BR-005-001",
+        "BR-005-002"
+      ],
+      "technical_refs": [
+        "pipeline-by-stage",
+        "leads-by-week",
+        "winrate-cycle",
+        "activities-by-user endpoints"
+      ]
+    },
+    {
+      "feature_id": "F007",
+      "feature_name": "Backup/Restore & Database Reset",
+      "user_story_ids": [
+        "US-008",
+        "US-09",
+        "US-010"
+      ],
+      "business_requirements": [
+        "BR-007-001",
+        "BR-007-002",
+        "BR-007-003"
+      ],
+      "technical_refs": [
+        "backup:run",
+        "backup:restore",
+        "reset:factory endpoints"
+      ]
+    },
+    {
+      "feature_id": "F009",
+      "feature_name": "CSV Migration/Import Tooling",
+      "user_story_ids": [],
+      "business_requirements": [
+        "BR-009-001",
+        "BR-009-002"
+      ],
+      "technical_refs": [
+        "imports:dry-run",
+        "imports:commit",
+        "reconciliation report"
+      ]
+    }
+  ],
+  "bundle_documents": [
+    {
+      "sprint": "Sprint 1",
+      "version": "v1.0",
+      "timestamp": "2025-10-31 09:35:02 CDT",
+      "user_stories": [
+        {
+          "id": "US-001",
+          "context": "As a seller, I need to create and update CRM records quickly and reliably.",
+          "acceptance_criteria": [
+            "Create, read, update, delete succeed for core entities; invalid input returns 400 with field errors.",
+            "AuditLog contains actor, timestamp, and before/after values for updates and deletes."
+          ]
+        },
+        {
+          "id": "US-004",
+          "context": "As a manager, I need fast lists with filters.",
+          "acceptance_criteria": [
+            "Lists support paging, sort, and owner/status filters; p95 ≤ 1s on 10k rows.",
+            "Export of filtered lists produces matching counts."
+          ]
+        },
+        {
+          "id": "US-007",
+          "context": "As an admin, I want to configure human-readable IDs.",
+          "acceptance_criteria": [
+            "Pattern editor validates tokens {PREFIX},{YYYY},{YY},{MM},{SEQ:n}.",
+            "50 concurrent creates yield unique sequential IDs; next-value preview is accurate."
+          ]
+        },
+        {
+          "id": "US-011",
+          "context": "As a compliance lead, I need full audit coverage.",
+          "acceptance_criteria": [
+            "100% protected routes require permissions; unauthorized actions are blocked and logged.",
+            "Role changes and sensitive field updates generate audit events."
+          ]
+        }
+      ],
+      "feature_requirements": [
+        {
+          "feature_id": "F001",
+          "summary": "CRUD UIs/APIs with relational sub-grids; list ops under 1s p95 for 10k rows; audit coverage."
+        },
+        {
+          "feature_id": "F004",
+          "summary": "Admin-configurable ID patterns with race-safe issuance."
+        },
+        {
+          "feature_id": "F006",
+          "summary": "Deny-by-default RBAC; hide/disable unauthorized UI actions; audit RBAC changes."
+        },
+        {
+          "feature_id": "F008",
+          "summary": "One-command bootstrap; Replit deploy with persistent storage; health endpoints."
+        }
+      ],
+      "technical_requirements": [
+        "NestJS + React + PostgreSQL 16; DTO validation; React Query; server-rendered monolith",
+        "JWT (HS256) with rotation; resource.action permissions; audit_log append-only",
+        "Docker multi-stage build; /healthz and /readyz; persistent Postgres volume; structured logs"
+      ],
+      "business_requirements": [
+        "Reduce CRM cost ≥ 60% vs Dynamics; performance medians and p95 targets; deny-by-default security"
+      ]
+    },
+    {
+      "sprint": "Sprint 2",
+      "version": "v1.0",
+      "timestamp": "2025-10-31 09:35:02 CDT",
+      "user_stories": [
+        {
+          "id": "US-002",
+          "context": "As a seller, I want a guided lead conversion.",
+          "acceptance_criteria": [
+            "Wizard creates/links Account, Contact, Opportunity atomically with dedupe hints.",
+            "Conversion success rate ≥ 98%; audit event includes created/linked IDs."
+          ]
+        },
+        {
+          "id": "US-003",
+          "context": "As a seller, I need to move deals via Kanban within rules.",
+          "acceptance_criteria": [
+            "Drag-drop writes audit entry and recalculates probability; invalid transitions are blocked with message.",
+            "Stage update latency ≤ 1s avg."
+          ]
+        },
+        {
+          "id": "US-005",
+          "context": "As a manager, I need pipeline by stage widget.",
+          "acceptance_criteria": [
+            "Widget loads in ≤ 2s p95; totals reconcile to list within ±1%.",
+            "Click-through opens filtered list view."
+          ]
+        },
+        {
+          "id": "US-006",
+          "context": "As a manager, I need lead and win-rate metrics.",
+          "acceptance_criteria": [
+            "Weekly trend graphs render with correct definitions; drill-down reveals underlying records.",
+            "Definitions documented with unit tests passing."
+          ]
+        },
+        {
+          "id": "US-011",
+          "context": "As a compliance lead, I need audit for conversions and stage changes.",
+          "acceptance_criteria": [
+            "Audit events exist for conversions and stage transitions, with actor and before/after."
+          ]
+        }
+      ],
+      "feature_requirements": [
+        {
+          "feature_id": "F002",
+          "summary": "Lead conversion wizard with link-vs-create choice."
+        },
+        {
+          "feature_id": "F003",
+          "summary": "Kanban with allowed transition rules and errors."
+        },
+        {
+          "feature_id": "F005",
+          "summary": "Initial widgets: Pipeline by Stage; Leads by Week; Win Rate & Avg Sales Cycle; Activities by User."
+        }
+      ],
+      "technical_requirements": [
+        "Endpoints: /api/v1/leads/{id}:convert; /api/v1/opportunities:kanban; /api/v1/dashboards/*",
+        "Validation, referential integrity checks; optimistic UI with server reconciliation"
+      ],
+      "business_requirements": [
+        "Accelerate funnel progression; improve forecast accuracy; minimize PII exposure in analytics"
+      ]
+    },
+    {
+      "sprint": "Sprint 3",
+      "version": "v1.0",
+      "timestamp": "2025-10-31 09:35:02 CDT",
+      "user_stories": [
+        {
+          "id": "US-008",
+          "context": "As an admin, I want encrypted backups with checksum.",
+          "acceptance_criteria": [
+            "On-demand and scheduled backups produce encrypted archives with checksum and metadata within 5 minutes."
+          ]
+        },
+        {
+          "id": "US-09",
+          "context": "As an admin, I want side-by-side restore with verification.",
+          "acceptance_criteria": [
+            "Restore logs persisted; system ready within 15 minutes for ≤2GB."
+          ]
+        },
+        {
+          "id": "US-010",
+          "context": "As an admin, I need safe factory reset.",
+          "acceptance_criteria": [
+            "Requires multi-step confirm and re-auth; audit entry exists; blocked without confirmations."
+          ]
+        }
+      ],
+      "feature_requirements": [
+        {
+          "feature_id": "F007",
+          "summary": "Encrypted backup/restore and guarded factory reset."
+        },
+        {
+          "feature_id": "F006",
+          "summary": "RBAC hardening and admin audit events."
+        },
+        {
+          "feature_id": "F005",
+          "summary": "Finalize widgets and drill-downs; performance targets met."
+        },
+        {
+          "feature_id": "F009",
+          "summary": "CSV import dry-run and commit with reconciliation report; preserve relationships and issue new IDs."
+        }
+      ],
+      "technical_requirements": [
+        "Endpoints: /api/v1/admin/backup:run, /api/v1/admin/backup:restore, /api/v1/admin/reset:factory, /api/v1/imports:*",
+        "Jobs and logs retained; checksum verified; reconciliation report stored"
+      ],
+      "business_requirements": [
+        "Operational durability via verified backups/restores; controlled cutover from Dynamics"
+      ]
+    }
+  ],
+  "qa_results": {
+    "checks": [
+      "All four requirement categories present for each sprint",
+      "2–4 acceptance criteria per story",
+      "Traceability included (Feature ↔ Stories ↔ BR ↔ Tech)",
+      "No TBD placeholders; plain-English phrasing",
+      "Sprint ID, Version, Timestamp included"
+    ],
+    "status": "PASS",
+    "timestamp": "2025-10-31 09:35:02 CDT",
+    "notes": "Derived from approved Stage 4.1–4.4 artifacts; aligned to Stage 2 sprint mapping"
+  },
+  "approvals": [
+    {
+      "role": "Product Developer",
+      "name": "Jay Baker",
+      "date": "2025-10-31",
+      "signature": "Approved"
+    },
+    {
+      "role": "Lead Architect",
+      "name": "Jay Baker",
+      "date": "2025-10-31",
+      "signature": "Approved"
+    },
+    {
+      "role": "KPI/Finance Owner",
+      "name": "Jay Baker",
+      "date": "2025-10-31",
+      "signature": "Approved"
+    },
+    {
+      "role": "Compliance Lead",
+      "name": "Jay Baker",
+      "date": "2025-10-31",
+      "signature": "Approved"
+    }
+  ],
+  "export_notes": "Attach this artifact to Sprint/Epic in your delivery workspace. Keep IDs stable and reference in Stage 5 build tasks."
+}

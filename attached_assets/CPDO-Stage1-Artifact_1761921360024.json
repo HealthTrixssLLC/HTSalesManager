@@ -1,0 +1,757 @@
+{
+  "title": "CPDO Stage 1 \u2014 Problem Discovery & Scope Package",
+  "metadata": {
+    "organization": "Health Trixss Inc",
+    "project_name": "Lightweight Self Hosted CRM",
+    "prepared_by": "Jay Baker \u2014 Product Developer",
+    "stage": "Stage 1",
+    "generated_on": "2025-10-31",
+    "source_trace": {
+      "stage0_path": "/mnt/data/CPDO-Stage0-Artifact.json",
+      "stage0_sha256": "2c6c7d267365d8daf8f6634fab278f01ab9d5c721d07f5d6bd3206c5e9cb0fa0",
+      "stage0_date": "2025-10-31"
+    }
+  },
+  "sections": [
+    {
+      "name": "Problem Statement & Goals",
+      "fields": {
+        "Problem Statement": "Build a lightweight self hosted CRM comparable to a pared down Dynamics or Salesforce. Core capabilities include creating and managing Accounts, Contacts, Opportunities, and Leads; tracking related Tasks and Activities; and providing dashboards, visualizations, and basic reporting for progress and sales performance. Deployment must be containerized for Docker and runnable in Replit production. Each core entity receives an auto assigned unique ID with a user configurable pattern and starting value. Provide full backup and restore of all data, and include an admin console with a database reset. Implement a custom role based access control framework rather than relying on Replit native authentication.",
+        "Why It Matters": "Dynamics 365 cost increases are not sustainable. A focused internal CRM will lower software cost, preserve control of data, remove vendor lock in, and keep the sales team productive with the essentials.",
+        "Stage 1 Goals": [
+          "Validate scope and core use cases for Accounts, Contacts, Leads, Opportunities, Tasks/Activities.",
+          "Lock the MVP scope and acceptance criteria tied to cost reduction and performance targets.",
+          "Define initial data model, RBAC, ID pattern grammar, backup/restore flow, and deployment plan.",
+          "Produce a prioritized backlog with user stories and a draft release plan for Stage 2 build."
+        ],
+        "Success Metrics (from Stage 0)": [
+          "Reduce monthly CRM cost by at least 60 percent versus the current plan.",
+          "Median page response under two seconds for core screens on standard hardware.",
+          "Backup completes and verifies within five minutes for a database up to 2 GB.",
+          "Full restore from the most recent backup completes within fifteen minutes.",
+          "RBAC permission tests pass for all protected routes and screens.",
+          "User adoption of at least five active users within the first month."
+        ]
+      }
+    },
+    {
+      "name": "Stakeholders & Users",
+      "fields": {
+        "Stakeholders": [
+          "Jay Baker CEO and Product Developer",
+          "Sales Lead and Account Executives",
+          "Operations and Compliance"
+        ],
+        "Decision Makers": [
+          "Jay Baker"
+        ],
+        "Target Users": [
+          "Internal sales and account management users for Health Trixss",
+          "Executives who need dashboards and simple reports"
+        ]
+      }
+    },
+    {
+      "name": "Personas",
+      "fields": {
+        "Sales Representative": {
+          "Goals": [
+            "Quickly capture leads, update opportunities, and log activities without friction",
+            "See today\u2019s to\u2011dos and pipeline health at a glance"
+          ],
+          "Frustrations": [
+            "Slow load times",
+            "Too many clicks",
+            "Complicated forms"
+          ],
+          "Key Tasks": [
+            "Create/convert leads",
+            "Update opportunity stage",
+            "Log calls/emails/meetings"
+          ]
+        },
+        "Sales Manager / Executive": {
+          "Goals": [
+            "Forecast accuracy",
+            "Team activity visibility",
+            "Dashboards for pipeline and win rates"
+          ],
+          "Frustrations": [
+            "Dirty data",
+            "Inconsistent IDs",
+            "Hard-to-audit changes"
+          ],
+          "Key Tasks": [
+            "Review dashboards",
+            "Approve configuration",
+            "Assign accounts/opportunities"
+          ]
+        },
+        "System Admin": {
+          "Goals": [
+            "Simple deployment/restore",
+            "Clear RBAC",
+            "Auditability"
+          ],
+          "Frustrations": [
+            "Opaque vendor lock-in",
+            "Non-configurable IDs"
+          ],
+          "Key Tasks": [
+            "Manage users/roles/permissions",
+            "Backups/restore/reset",
+            "Environment config"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Jobs-To-Be-Done",
+      "fields": [
+        {
+          "job": "When I meet a new prospect, help me capture a lead in seconds so that I don\u2019t lose the contact."
+        },
+        {
+          "job": "When a lead qualifies, help me convert it to an account, contact, and opportunity with correct IDs."
+        },
+        {
+          "job": "When I\u2019m selling, help me track activities and next steps so deals keep moving."
+        },
+        {
+          "job": "When I review the pipeline, help me see accurate dashboards, trends, and forecasts."
+        },
+        {
+          "job": "When auditing, help me see who changed what and when, including ID patterns and permissions."
+        },
+        {
+          "job": "When something goes wrong, help me restore from backup quickly and safely."
+        }
+      ]
+    },
+    {
+      "name": "Scope (MVP)",
+      "fields": {
+        "In Scope": [
+          "Accounts, Contacts, Leads, Opportunities CRUD",
+          "Activities/Tasks and simple Activity Timeline on records",
+          "Configurable ID patterns per entity (prefix/date/counter) with starting values",
+          "Dashboards: Pipeline by Stage, Win Rate, New Leads, Activities by User",
+          "Backup/Restore utility and Admin database reset",
+          "Custom RBAC framework, Audit Log",
+          "Docker + Replit deployment"
+        ],
+        "Out of Scope (for MVP)": [
+          "Email/calendar sync",
+          "Complex workflow automation",
+          "Quote/CPQ",
+          "Territory management",
+          "Mobile app",
+          "Third\u2011party billing integrations"
+        ]
+      }
+    },
+    {
+      "name": "Functional Requirements",
+      "fields": {
+        "Entities": {
+          "Account": {
+            "fields": [
+              "id",
+              "name",
+              "type",
+              "owner_id",
+              "industry",
+              "website",
+              "phone",
+              "billing_address",
+              "shipping_address",
+              "created_at",
+              "updated_at"
+            ],
+            "id_pattern_token": "ACCT"
+          },
+          "Contact": {
+            "fields": [
+              "id",
+              "account_id",
+              "first_name",
+              "last_name",
+              "email",
+              "phone",
+              "title",
+              "owner_id",
+              "created_at",
+              "updated_at"
+            ],
+            "id_pattern_token": "CONT"
+          },
+          "Lead": {
+            "fields": [
+              "id",
+              "first_name",
+              "last_name",
+              "company",
+              "email",
+              "phone",
+              "status",
+              "source",
+              "owner_id",
+              "created_at",
+              "updated_at"
+            ],
+            "id_pattern_token": "LEAD"
+          },
+          "Opportunity": {
+            "fields": [
+              "id",
+              "account_id",
+              "name",
+              "stage",
+              "amount",
+              "close_date",
+              "owner_id",
+              "probability",
+              "created_at",
+              "updated_at"
+            ],
+            "id_pattern_token": "OPP"
+          },
+          "Activity": {
+            "fields": [
+              "id",
+              "type",
+              "subject",
+              "due_at",
+              "completed_at",
+              "owner_id",
+              "related_type",
+              "related_id",
+              "notes",
+              "created_at",
+              "updated_at"
+            ],
+            "id_pattern_token": "ACT"
+          },
+          "Role": {
+            "fields": [
+              "id",
+              "name",
+              "description"
+            ]
+          },
+          "Permission": {
+            "fields": [
+              "id",
+              "resource",
+              "action",
+              "description"
+            ]
+          },
+          "RolePermission": {
+            "fields": [
+              "role_id",
+              "permission_id"
+            ]
+          },
+          "User": {
+            "fields": [
+              "id",
+              "email",
+              "name",
+              "status",
+              "password_hash",
+              "created_at",
+              "updated_at"
+            ]
+          },
+          "AuditLog": {
+            "fields": [
+              "id",
+              "actor_id",
+              "action",
+              "resource",
+              "resource_id",
+              "before",
+              "after",
+              "created_at"
+            ]
+          },
+          "IdPattern": {
+            "fields": [
+              "id",
+              "entity",
+              "pattern",
+              "counter",
+              "start_value",
+              "last_issued"
+            ]
+          },
+          "BackupJob": {
+            "fields": [
+              "id",
+              "status",
+              "started_at",
+              "completed_at",
+              "path",
+              "size_bytes",
+              "checksum"
+            ]
+          }
+        },
+        "ID Pattern Grammar": {
+          "tokens": {
+            "{PREFIX}": "Static prefix, e.g., ACCT",
+            "{YYYY}": "4\u2011digit year of issue",
+            "{YY}": "2\u2011digit year of issue",
+            "{MM}": "2\u2011digit month of issue",
+            "{SEQ:n}": "Zero\u2011padded sequence with n digits scoped per entity"
+          },
+          "examples": {
+            "Account": "ACCT-{YYYY}-{SEQ:5}",
+            "Contact": "CONT-{YY}{MM}-{SEQ:5}",
+            "Lead": "LEAD-{SEQ:6}",
+            "Opportunity": "OPP-{YYYY}-{SEQ:6}",
+            "Activity": "ACT-{YY}{MM}-{SEQ:5}"
+          },
+          "rules": [
+            "Counters are independent per entity.",
+            "Starting value configurable per entity; if provided, initialize counter to start_value - 1.",
+            "Issuance must be transactional to avoid duplicates under concurrency."
+          ]
+        },
+        "Backups": {
+          "operations": [
+            "On\u2011demand backup: encrypt to archive with checksum and metadata",
+            "Scheduled backup: cron\u2011like scheduling with retention policy",
+            "Verify: checksum validation and test restore into temp schema"
+          ],
+          "restore": [
+            "Select archive \u2192 verify checksum \u2192 offline restore or side\u2011by\u2011side restore",
+            "Record AuditLog entry for who initiated and outcome"
+          ]
+        },
+        "Admin Console": [
+          "User/Role/Permission management",
+          "ID Pattern configuration per entity with preview and test issuance",
+          "Backup/Restore controls and database reset (factory reset requires multi\u2011step confirmation)",
+          "System health checks and version/build info"
+        ],
+        "Dashboards & Reports": [
+          "Pipeline by Stage (sum amount, count)",
+          "New Leads by Week",
+          "Win Rate and Avg Sales Cycle",
+          "Activities by User (completed vs open)"
+        ]
+      }
+    },
+    {
+      "name": "Non-Functional Requirements",
+      "fields": {
+        "Performance": [
+          "Median page response under 2s for core screens",
+          "P95 API latency under 500ms for simple reads"
+        ],
+        "Security": [
+          "Encrypt in transit (TLS) and at rest (pg crypto/volume encryption)",
+          "Custom RBAC on every protected route; deny by default",
+          "AuditLog for admin actions and data mutations"
+        ],
+        "Reliability": [
+          "Daily scheduled backups; restore tested weekly",
+          "No single point of failure for critical data path in production deployment"
+        ],
+        "Compliance": [
+          "Treat all CRM data as PII; avoid PHI",
+          "Least privilege access; periodic permission reviews"
+        ],
+        "Operability": [
+          "Dockerized services; one\u2011command bootstrap for local and Replit deploys",
+          "Structured logs with request IDs; health endpoints"
+        ]
+      }
+    },
+    {
+      "name": "RBAC Model (Draft)",
+      "fields": {
+        "roles": [
+          "Admin",
+          "SalesManager",
+          "SalesRep",
+          "ReadOnly"
+        ],
+        "permissions": {
+          "Account": [
+            "create",
+            "read",
+            "update",
+            "delete"
+          ],
+          "Contact": [
+            "create",
+            "read",
+            "update",
+            "delete"
+          ],
+          "Lead": [
+            "create",
+            "read",
+            "update",
+            "delete",
+            "convert"
+          ],
+          "Opportunity": [
+            "create",
+            "read",
+            "update",
+            "delete",
+            "advance_stage"
+          ],
+          "Activity": [
+            "create",
+            "read",
+            "update",
+            "delete",
+            "complete"
+          ],
+          "Dashboard": [
+            "read"
+          ],
+          "User": [
+            "read"
+          ],
+          "RBAC": [
+            "read",
+            "manage"
+          ],
+          "Backup": [
+            "run",
+            "restore",
+            "configure"
+          ],
+          "IdPattern": [
+            "read",
+            "configure"
+          ],
+          "AdminReset": [
+            "execute"
+          ]
+        },
+        "role_permission_matrix": {
+          "Admin": [
+            "*"
+          ],
+          "SalesManager": [
+            "Account.*",
+            "Contact.*",
+            "Lead.*",
+            "Opportunity.*",
+            "Activity.*",
+            "Dashboard.read",
+            "User.read",
+            "IdPattern.read",
+            "RBAC.read",
+            "Backup.run"
+          ],
+          "SalesRep": [
+            "Account.read",
+            "Contact.*",
+            "Lead.create",
+            "Lead.read",
+            "Lead.update",
+            "Lead.convert",
+            "Opportunity.create",
+            "Opportunity.read",
+            "Opportunity.update",
+            "Opportunity.advance_stage",
+            "Activity.*",
+            "Dashboard.read"
+          ],
+          "ReadOnly": [
+            "Account.read",
+            "Contact.read",
+            "Lead.read",
+            "Opportunity.read",
+            "Activity.read",
+            "Dashboard.read"
+          ]
+        },
+        "guarding_principles": [
+          "Deny by default; grant explicit capabilities via role \u2192 permission mapping.",
+          "All API routes declare required permission; middleware enforces mapping.",
+          "AuditLog every RBAC change and AdminReset initiation."
+        ]
+      }
+    },
+    {
+      "name": "API Surface (Draft)",
+      "fields": [
+        {
+          "method": "GET",
+          "path": "/api/v1/accounts",
+          "auth": "Account.read"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/accounts",
+          "auth": "Account.create"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/accounts/{id}",
+          "auth": "Account.read"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/v1/accounts/{id}",
+          "auth": "Account.update"
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/accounts/{id}",
+          "auth": "Account.delete"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/leads/{id}/convert",
+          "auth": "Lead.convert"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/opportunities/{id}/advance",
+          "auth": "Opportunity.advance_stage"
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/idpatterns",
+          "auth": "IdPattern.read"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/idpatterns",
+          "auth": "IdPattern.configure"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/backup/run",
+          "auth": "Backup.run"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/backup/restore",
+          "auth": "Backup.restore"
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/admin/reset",
+          "auth": "AdminReset.execute"
+        }
+      ]
+    },
+    {
+      "name": "Information Architecture / Screens",
+      "fields": [
+        "Login \u2192 Home Dashboard",
+        "Accounts List & Detail (with Related Contacts, Opportunities, Activities)",
+        "Contacts List & Detail",
+        "Leads List & Detail (Convert)",
+        "Opportunities Kanban & Detail (Stage progression)",
+        "Activities (My Tasks, Team Tasks)",
+        "Admin Console (Users/Roles/Permissions, ID Patterns, Backups/Restore, Factory Reset)"
+      ]
+    },
+    {
+      "name": "Migration Plan (Outline)",
+      "fields": [
+        "Export Dynamics 365 entities to CSV (Accounts, Contacts, Leads, Opportunities, Activities).",
+        "Map columns to target schema; cleanse and validate emails/phones.",
+        "Generate new IDs via configured patterns where needed; preserve legacy IDs in a custom field.",
+        "Dry-run import into staging; validate counts and relationships; sign-off; import to production."
+      ]
+    },
+    {
+      "name": "Risks & Mitigations",
+      "fields": [
+        {
+          "risk": "Scope creep beyond MVP (email sync, automations)",
+          "mitigation": "Freeze MVP; defer to Stage 2 roadmap."
+        },
+        {
+          "risk": "Data model mismatch with Dynamics export",
+          "mitigation": "Staging import with reconciliation reports before prod."
+        },
+        {
+          "risk": "Security gaps in custom RBAC",
+          "mitigation": "Unit/integration tests; deny-by-default; audit every change."
+        },
+        {
+          "risk": "Backup not restorable",
+          "mitigation": "Weekly restore tests into sandbox; checksum verification."
+        }
+      ]
+    },
+    {
+      "name": "Acceptance Criteria (Stage 1 Sign-off)",
+      "fields": [
+        "Approved MVP scope and out-of-scope list",
+        "Approved data model and ID pattern grammar",
+        "Approved RBAC model and permission matrix",
+        "Approved dashboards/KPIs list",
+        "Approved API surface draft",
+        "Approved migration and backup/restore approach",
+        "Backlog of user stories prioritized for Stage 2"
+      ]
+    },
+    {
+      "name": "Backlog (MVP User Stories)",
+      "fields": [
+        {
+          "id": "US-001",
+          "as_a": "SalesRep",
+          "i_want": "create a lead quickly",
+          "so_that": "I capture prospects without losing details",
+          "acceptance_criteria": [
+            "Lead requires first/last, email or phone",
+            "ID issued via pattern",
+            "Default owner is creator"
+          ]
+        },
+        {
+          "id": "US-002",
+          "as_a": "SalesRep",
+          "i_want": "convert a qualified lead",
+          "so_that": "I get an account, contact, and opportunity created in one step",
+          "acceptance_criteria": [
+            "Conversion wizard maps fields",
+            "New IDs issued",
+            "Lead marked Converted and linked"
+          ]
+        },
+        {
+          "id": "US-003",
+          "as_a": "SalesRep",
+          "i_want": "advance an opportunity stage",
+          "so_that": "my pipeline reflects progress",
+          "acceptance_criteria": [
+            "Stages configurable",
+            "AuditLog records change",
+            "Probability updates by stage"
+          ]
+        },
+        {
+          "id": "US-004",
+          "as_a": "SalesRep",
+          "i_want": "log an activity to a record",
+          "so_that": "follow-ups are tracked",
+          "acceptance_criteria": [
+            "Activity must reference related record",
+            "Due date optional",
+            "Complete sets completed_at"
+          ]
+        },
+        {
+          "id": "US-005",
+          "as_a": "SalesManager",
+          "i_want": "see pipeline by stage",
+          "so_that": "I can forecast revenue",
+          "acceptance_criteria": [
+            "Chart aggregates count and amount by stage",
+            "Filters by owner and date"
+          ]
+        },
+        {
+          "id": "US-006",
+          "as_a": "SalesManager",
+          "i_want": "view team activities",
+          "so_that": "I can coach and ensure follow-up",
+          "acceptance_criteria": [
+            "Report by user of open vs completed",
+            "Drill to details"
+          ]
+        },
+        {
+          "id": "US-007",
+          "as_a": "Admin",
+          "i_want": "configure ID patterns per entity",
+          "so_that": "IDs follow our business rules",
+          "acceptance_criteria": [
+            "Preview next value",
+            "Set start value",
+            "Block save if pattern invalid"
+          ]
+        },
+        {
+          "id": "US-008",
+          "as_a": "Admin",
+          "i_want": "run and verify a backup",
+          "so_that": "we can recover from failure",
+          "acceptance_criteria": [
+            "Archive produced with checksum",
+            "Verification report stored",
+            "AuditLog entry created"
+          ]
+        },
+        {
+          "id": "US-09",
+          "as_a": "Admin",
+          "i_want": "restore from backup",
+          "so_that": "we can recover data",
+          "acceptance_criteria": [
+            "Checksum validated",
+            "Restore log persisted",
+            "Option for side-by-side restore"
+          ]
+        },
+        {
+          "id": "US-010",
+          "as_a": "Admin",
+          "i_want": "reset database with safeguards",
+          "so_that": "I can factory reset safely",
+          "acceptance_criteria": [
+            "Multi-step confirmation",
+            "Requires Admin role",
+            "AuditLog written"
+          ]
+        },
+        {
+          "id": "US-011",
+          "as_a": "ReadOnly",
+          "i_want": "view dashboards and records",
+          "so_that": "I stay informed without editing",
+          "acceptance_criteria": [
+            "No write actions allowed",
+            "All list and detail views readable"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Technical Direction Alignment",
+      "fields": {
+        "proposed_stack": [
+          "One repo monolith with a React front end and a Node.js API using NestJS or Express, TypeScript, and Prisma or TypeORM.",
+          "PostgreSQL as the primary data store with a migration tool and seed data for roles and sample records.",
+          "Configurable ID pattern engine that supports tokens such as prefix, date parts, and zero padded counters per entity.",
+          "Role based access control implemented with a policy layer and route guards. Include an admin console for user, role, and permission management.",
+          "Backup and restore service that produces encrypted archive files and supports scheduled backups."
+        ],
+        "approaches": [
+          "Start with a server rendered monolith for simplicity and move to modular services only if needed.",
+          "Use Docker Compose for local and Replit based deployments and provide a Makefile or task runner for common operations.",
+          "Add an event log table for auditable actions and for future integrations."
+        ],
+        "innovations": [
+          "Human friendly ID generator with user set patterns and counters per entity.",
+          "Pluggable chart widgets for dashboards using a common query layer.",
+          "Guarded admin reset that can factory reset the database with multi step confirmation."
+        ],
+        "constraints": {
+          "Budget": "Reduce monthly CRM spend compared with the current Dynamics 365 plan. Prefer open source components and zero per seat licensing.",
+          "Timeline": "Begin Stage 1 immediately after approval. Target an MVP within four to six weeks using two to three CPDO sprints.",
+          "Technical Constraints": "Must run in Docker and be deployable in Replit production. Use a single Postgres database. Provide configurable ID patterns and starting values for Accounts, Contacts, Opportunities, and Leads. Deliver a built in backup and restore utility and a database reset in the admin console.",
+          "Regulatory Constraints": "Treat all customer and prospect data as PII. Avoid storing PHI. Encrypt data in transit and at rest. Provide audit logging for access and administrative actions.",
+          "Other Assumptions": "Team size is small and prefers a simple monolith with clear module boundaries. No reliance on paid third party SaaS beyond optional email delivery. Future integrations with Outlook or Gmail and calendar can be considered in later stages."
+        }
+      }
+    }
+  ]
+}

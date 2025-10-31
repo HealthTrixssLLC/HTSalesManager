@@ -1,0 +1,762 @@
+{
+  "title": "CPDO Stage 4.1 \u2014 Detailed Feature Requirements (PRD)",
+  "project_summary": {
+    "project_name": "Lightweight Self Hosted CRM",
+    "date": "2025-10-31",
+    "prepared_by": "Jay Baker \u2014 Product Specification Lead",
+    "role": "Product Specification Lead",
+    "link_to_stage_2_artifact": "CPDO-Stage2-Artifact.json",
+    "included_workflow_diagrams": [
+      "design/workflows/main-flow.png"
+    ],
+    "included_data_models": [
+      "design/data-models/domain-model.png"
+    ],
+    "included_security_profiles": [
+      "security/profile.md"
+    ],
+    "included_additional_documents": [
+      "notes/stakeholder-comments.pdf"
+    ],
+    "prd_title": "Feature PRD \u2014 Lightweight Self\u2011Hosted CRM MVP",
+    "prd_details": "Converts the Stage 2 roadmap into testable feature PRDs for the MVP: CRUD on core entities, ID Pattern Engine, RBAC & Audit, Lead Conversion, Opportunity Kanban, Dashboards, Backup/Restore, Deployment & Ops, and CSV Migration. Each card defines scope, I/O contracts, RBAC, compliance, acceptance criteria, and sprint assignment."
+  },
+  "sections": [
+    {
+      "section": "1 \u00b7 Feature Inventory",
+      "subsections": [
+        {
+          "title": "1.1 Feature Inventory Table",
+          "fields": [
+            "feature_id",
+            "feature_name",
+            "linked_epic",
+            "status",
+            "owner",
+            "sprint_number",
+            "rbac_level"
+          ],
+          "rows": [
+            {
+              "feature_id": "F001",
+              "feature_name": "Data Model & CRUD",
+              "linked_epic": "EPIC-1 \u2014 Data Model & CRUD",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "1\u20132",
+              "rbac_level": "Seller, Manager, ReadOnly"
+            },
+            {
+              "feature_id": "F002",
+              "feature_name": "Lead Conversion Wizard",
+              "linked_epic": "EPIC-3 \u2014 Sales Workflow",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "2",
+              "rbac_level": "Seller, Manager"
+            },
+            {
+              "feature_id": "F003",
+              "feature_name": "Opportunity Kanban & Probabilities",
+              "linked_epic": "EPIC-3 \u2014 Sales Workflow",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "2",
+              "rbac_level": "Seller, Manager"
+            },
+            {
+              "feature_id": "F004",
+              "feature_name": "Configurable ID Pattern Engine",
+              "linked_epic": "EPIC-1 \u2014 Data Model & CRUD",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "1",
+              "rbac_level": "Admin"
+            },
+            {
+              "feature_id": "F005",
+              "feature_name": "Dashboards & Basic Reports",
+              "linked_epic": "EPIC-4 \u2014 Analytics & Reporting",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "2\u20133",
+              "rbac_level": "Manager, ReadOnly"
+            },
+            {
+              "feature_id": "F006",
+              "feature_name": "Custom RBAC Framework & Audit Log",
+              "linked_epic": "EPIC-2 \u2014 Identity & Security",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "1,3",
+              "rbac_level": "Admin"
+            },
+            {
+              "feature_id": "F007",
+              "feature_name": "Backup/Restore & Database Reset",
+              "linked_epic": "EPIC-5 \u2014 Ops & Admin",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "3",
+              "rbac_level": "Admin"
+            },
+            {
+              "feature_id": "F008",
+              "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+              "linked_epic": "EPIC-5 \u2014 Ops & Admin",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "1",
+              "rbac_level": "Admin"
+            },
+            {
+              "feature_id": "F009",
+              "feature_name": "CSV Migration/Import Tooling",
+              "linked_epic": "EPIC-6 \u2014 Data Migration",
+              "status": "Planned",
+              "owner": "Jay Baker",
+              "sprint_number": "3",
+              "rbac_level": "Admin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "2 \u00b7 Feature Requirement Cards",
+      "subsections": [
+        {
+          "title": "2.1 Cards",
+          "cards": [
+            {
+              "feature_id": "F001",
+              "feature_name": "Data Model & CRUD",
+              "user_story": "As a seller, I want to create and maintain Accounts, Contacts, Leads, Opportunities, and Activities so that my daily selling workflow is fully supported.",
+              "business_rationale": "Foundation of the CRM. Without reliable CRUD and relationships, no downstream workflows or analytics work.",
+              "workflow_description": "Lists, detail pages, and forms for all core entities with relational sub\u2011grids (e.g., Account \u2192 Contacts, Opportunities, Activities). Activity timeline on each parent.",
+              "inputs_outputs": {
+                "input": "Entity form payloads with validation; query params for lists and filters.",
+                "output": "Persisted records; paginated list results; detail resources."
+              },
+              "security_requirements": {
+                "authentication": "JWT session; deny by default on protected routes.",
+                "audit_logging": "Log create/update/delete with actor, timestamp, and field deltas.",
+                "access_roles": "Seller, Manager, ReadOnly; Admin has full.",
+                "data_classification": "PII for contacts; encrypt at rest and in transit."
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "Treat as PII; avoid PHI",
+                "soc2_category": "Security/Availability",
+                "hitrust_controls": "Access control, audit logging"
+              },
+              "dependencies_constraints": "PostgreSQL schema finalized by end of Sprint 1; external email/calendar integrations out of scope.",
+              "acceptance_criteria": "Given valid form data, When I save, Then the record persists, an ID is issued, and the timeline reflects changes.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 28,
+                "sprint": "1\u20132"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Account.read, Contact.read, Lead.read, Opportunity.read, Activity.read",
+                "edit_permissions": "Entity\u2011specific create/update/delete per role",
+                "ui_components": "Lists, detail views, forms, sub\u2011grids, activity timeline"
+              }
+            },
+            {
+              "feature_id": "F002",
+              "feature_name": "Lead Conversion Wizard",
+              "user_story": "As a seller, I want to convert a qualified Lead so that an Account, Contact, and Opportunity are created and linked in one step.",
+              "business_rationale": "Speeds qualification\u2011to\u2011pipeline flow; reduces errors and duplicate data entry.",
+              "workflow_description": "From Lead detail, launch wizard: pre\u2011check duplicates \u2192 field mapping preview \u2192 create Account/Contact/Opportunity \u2192 close Lead as Converted.",
+              "inputs_outputs": {
+                "input": "Lead record; dedupe hints (email/phone/company).",
+                "output": "New Account/Contact/Opportunity IDs; Lead status updated; linkage verified."
+              },
+              "security_requirements": {
+                "authentication": "JWT",
+                "audit_logging": "Audit conversion with created IDs and mapping summary.",
+                "access_roles": "Seller, Manager",
+                "data_classification": "PII; no PHI"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "PII handling; least privilege",
+                "soc2_category": "Change Management / Security",
+                "hitrust_controls": "Access control; audit trails"
+              },
+              "dependencies_constraints": "Depends on F001 schema and F004 ID engine; dedupe is hint\u2011only in MVP.",
+              "acceptance_criteria": "Given a qualified Lead, When I run Convert, Then the wizard creates related records, links them, marks the Lead Converted, and writes an audit log.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 10,
+                "sprint": "2"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Lead.read",
+                "edit_permissions": "Lead.convert",
+                "ui_components": "Conversion wizard modal, dedupe panel, mapping preview"
+              }
+            },
+            {
+              "feature_id": "F003",
+              "feature_name": "Opportunity Kanban & Probabilities",
+              "user_story": "As a seller, I want to move Opportunities across stages on a Kanban so that I can manage my pipeline visually.",
+              "business_rationale": "Improves pipeline hygiene and forecasting via clear stage transitions and probability mapping.",
+              "workflow_description": "Kanban board grouped by stage with drag\u2011and\u2011drop; stage change updates probability and triggers calc of pipeline totals.",
+              "inputs_outputs": {
+                "input": "Drag events with Opportunity ID and target stage.",
+                "output": "Updated Opportunity; recalculated pipeline aggregates; activity note."
+              },
+              "security_requirements": {
+                "authentication": "JWT",
+                "audit_logging": "Record stage change with before/after and actor.",
+                "access_roles": "Seller, Manager",
+                "data_classification": "Business data + PII for related contacts"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "PII care; avoid PHI",
+                "soc2_category": "Security/Processing Integrity",
+                "hitrust_controls": "Auditability"
+              },
+              "dependencies_constraints": "F001 CRUD; probability table configurable (admin).",
+              "acceptance_criteria": "Given an Opportunity, When I drag it to a new stage, Then the stage and probability update, totals refresh, and an audit entry is written.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 14,
+                "sprint": "2"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Opportunity.read",
+                "edit_permissions": "Opportunity.update, Opportunity.advance_stage",
+                "ui_components": "Kanban board, stage settings"
+              }
+            },
+            {
+              "feature_id": "F004",
+              "feature_name": "Configurable ID Pattern Engine",
+              "user_story": "As an admin, I want to configure per\u2011entity ID patterns and starting values so that IDs follow our business rules.",
+              "business_rationale": "Deterministic, human\u2011readable IDs simplify support, migration, and audits.",
+              "workflow_description": "Admin screen to set pattern tokens and preview next values; issuance is transactional and per\u2011entity counter\u2011scoped.",
+              "inputs_outputs": {
+                "input": "Entity, pattern string (e.g., ACCT-{YYYY}-{SEQ:5}), start value.",
+                "output": "Saved pattern; next-value preview; issued IDs during CRUD/conversion."
+              },
+              "security_requirements": {
+                "authentication": "JWT + Admin role",
+                "audit_logging": "Audit pattern changes and issuance failures.",
+                "access_roles": "Admin",
+                "data_classification": "Configuration data"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "PII indirect impact",
+                "soc2_category": "Change Management",
+                "hitrust_controls": "Configuration management"
+              },
+              "dependencies_constraints": "Atomic sequence increments; race\u2011safe issuance; per\u2011entity counters.",
+              "acceptance_criteria": "Given a valid pattern, When I save, Then the system validates tokens, stores it, and shows the next issued value; invalid patterns are blocked with error details.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 8,
+                "sprint": "1"
+              },
+              "rbac_mapping": {
+                "view_permissions": "IdPattern.read",
+                "edit_permissions": "IdPattern.configure",
+                "ui_components": "Admin pattern editor, preview widget"
+              }
+            },
+            {
+              "feature_id": "F005",
+              "feature_name": "Dashboards & Basic Reports",
+              "user_story": "As a manager, I want pipeline and activity dashboards so that I can forecast and coach effectively.",
+              "business_rationale": "Enables leadership visibility into pipeline health and team execution.",
+              "workflow_description": "Dashboard with widgets: Pipeline by Stage (count/amount), New Leads by Week, Win Rate & Avg Sales Cycle, Activities by User.",
+              "inputs_outputs": {
+                "input": "Filters (owner, date range).",
+                "output": "Aggregations and charts; drill\u2011down links to lists."
+              },
+              "security_requirements": {
+                "authentication": "JWT",
+                "audit_logging": "View events optional; changes to dashboard config logged.",
+                "access_roles": "Manager, ReadOnly; Sellers can view relevant widgets.",
+                "data_classification": "Aggregated business metrics"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "PII minimized in aggregates",
+                "soc2_category": "Availability/Confidentiality",
+                "hitrust_controls": "Access controls"
+              },
+              "dependencies_constraints": "Requires efficient queries and optional caching; depends on F001 data quality.",
+              "acceptance_criteria": "Given chosen filters, When I load the dashboard, Then charts render within 2s with correct totals and support drill\u2011down.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 18,
+                "sprint": "2\u20133"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Dashboard.read",
+                "edit_permissions": "Admin only for widget config",
+                "ui_components": "Dashboard page, chart widgets, filters"
+              }
+            },
+            {
+              "feature_id": "F006",
+              "feature_name": "Custom RBAC Framework & Audit Log",
+              "user_story": "As an admin, I want role\u2011based permissions enforced on every route so that access is least\u2011privilege and auditable.",
+              "business_rationale": "Security and compliance baseline; enables safe multi\u2011user operation.",
+              "workflow_description": "Roles map to permissions (resource.action). Middleware guards API routes; UI hides unauthorized actions. AuditLog captures admin changes and data mutations.",
+              "inputs_outputs": {
+                "input": "User credentials; role/permission assignments.",
+                "output": "JWT with scopes; authorization decisions; audit records."
+              },
+              "security_requirements": {
+                "authentication": "JWT with rotating secrets; MFA option later",
+                "audit_logging": "100% coverage of RBAC changes and sensitive mutations",
+                "access_roles": "Admin to manage; all roles enforced",
+                "data_classification": "Credentials/PII protected"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "Access control (\u00a7164.312)",
+                "soc2_category": "Security/Confidentiality",
+                "hitrust_controls": "RBAC, audit trail"
+              },
+              "dependencies_constraints": "Integrates with all features; deny\u2011by\u2011default policy.",
+              "acceptance_criteria": "Given an unauthorized user, When they call a protected route, Then the request is denied and logged; authorized users can proceed.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 20,
+                "sprint": "1,3"
+              },
+              "rbac_mapping": {
+                "view_permissions": "RBAC.read, User.read",
+                "edit_permissions": "RBAC.manage",
+                "ui_components": "Login, user/role admin screens, permission matrix, audit viewer"
+              }
+            },
+            {
+              "feature_id": "F007",
+              "feature_name": "Backup/Restore & Database Reset",
+              "user_story": "As an admin, I want encrypted backups, fast restores, and a guarded factory reset so that I can recover or re\u2011seed environments safely.",
+              "business_rationale": "Operational durability and governance; protects against data loss or corruption.",
+              "workflow_description": "On\u2011demand and scheduled backups with checksum; restore from archive with verification; reset requires multi\u2011step confirmation and audit.",
+              "inputs_outputs": {
+                "input": "Backup schedule/config; archive selection for restore.",
+                "output": "Backup files with metadata; restore logs; reset audit entry."
+              },
+              "security_requirements": {
+                "authentication": "Admin only",
+                "audit_logging": "Backup/restore/reset actions fully logged with outcomes",
+                "access_roles": "Admin",
+                "data_classification": "Sensitive data; encrypt at rest and in transit"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "Retention and integrity practices",
+                "soc2_category": "Availability",
+                "hitrust_controls": "Backup/restore procedures"
+              },
+              "dependencies_constraints": "Requires storage path and encryption keys; safe offline/side\u2011by\u2011side restore flow.",
+              "acceptance_criteria": "Given a scheduled backup, When it runs, Then an encrypted archive with checksum is produced and verification passes; When restoring, Then checksum validates and logs persist; Reset requires multi\u2011step confirmation.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 12,
+                "sprint": "3"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Backup.run (status)",
+                "edit_permissions": "Backup.configure, Backup.restore, AdminReset.execute",
+                "ui_components": "Admin backup/restore UI, reset dialog"
+              }
+            },
+            {
+              "feature_id": "F008",
+              "feature_name": "Deployment & Ops Baseline (Docker/Replit)",
+              "user_story": "As a product developer, I want a containerized app with health checks so that I can deploy locally and to Replit production quickly.",
+              "business_rationale": "Executable MVP requirement; reduces friction and supports reproducibility.",
+              "workflow_description": "Dockerfiles and compose; health endpoints; environment configuration and secrets; startup scripts.",
+              "inputs_outputs": {
+                "input": "Docker build context; env vars/secrets.",
+                "output": "Running containers; health status; logs."
+              },
+              "security_requirements": {
+                "authentication": "N/A (infra)",
+                "audit_logging": "Build and deploy logs retained",
+                "access_roles": "Admin/DevOps",
+                "data_classification": "Config secrets protected"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "Secure config handling",
+                "soc2_category": "Change Management",
+                "hitrust_controls": "Secure deployment practices"
+              },
+              "dependencies_constraints": "Postgres instance available; Replit volume or external DB; CI pipeline for builds.",
+              "acceptance_criteria": "Given a clean environment, When I run the one\u2011command bootstrap, Then containers start, health checks pass, and the app is reachable; Replit deploy runs with persistent storage.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 14,
+                "sprint": "1"
+              },
+              "rbac_mapping": {
+                "view_permissions": "N/A",
+                "edit_permissions": "N/A",
+                "ui_components": "Health endpoint, status page"
+              }
+            },
+            {
+              "feature_id": "F009",
+              "feature_name": "CSV Migration/Import Tooling",
+              "user_story": "As an admin, I want to import Dynamics CSVs with a reconciliation report so that I can switch CRMs without losing data.",
+              "business_rationale": "Accelerates cutover from Dynamics; ensures data integrity.",
+              "workflow_description": "Import wizard maps columns to schema; validates data; dry\u2011run staging; produces reconciliation report; final import with links intact.",
+              "inputs_outputs": {
+                "input": "CSV files (Accounts, Contacts, Leads, Opportunities, Activities).",
+                "output": "Staged import results; reconciliation report; final imported records."
+              },
+              "security_requirements": {
+                "authentication": "Admin",
+                "audit_logging": "Import actions, counts, and failures logged",
+                "access_roles": "Admin",
+                "data_classification": "PII sensitive"
+              },
+              "regulatory_tags": {
+                "hipaa_sections": "PII protection",
+                "soc2_category": "Processing Integrity",
+                "hitrust_controls": "Change and data integrity"
+              },
+              "dependencies_constraints": "Depends on finalized schema (F001) and ID engine (F004); preserves legacy IDs in custom fields.",
+              "acceptance_criteria": "Given valid CSVs, When I run a dry\u2011run, Then the system reports row counts and errors; When I confirm, Then records import with relationships and an audit entry is created.",
+              "effort_estimate_sprint_assignment": {
+                "story_points": 8,
+                "sprint": "3"
+              },
+              "rbac_mapping": {
+                "view_permissions": "Importer.view",
+                "edit_permissions": "Importer.run",
+                "ui_components": "Import wizard, mapping screen, results viewer"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "3 \u00b7 UX & Workflow Alignment",
+      "subsections": [
+        {
+          "title": "3.1 Linked Workflows",
+          "entries": [
+            {
+              "feature_id": "F001",
+              "workflow_name": "Lead Capture / CRUD Forms",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F002",
+              "workflow_name": "Lead Conversion",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F003",
+              "workflow_name": "Opportunity Progression (Kanban)",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F004",
+              "workflow_name": "ID Pattern Configuration & Issuance",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F005",
+              "workflow_name": "Reporting/Dashboard Views",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F006",
+              "workflow_name": "RBAC & Audit Administration",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F007",
+              "workflow_name": "Admin Backup/Restore & Reset",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F008",
+              "workflow_name": "Deployment & Health",
+              "diagram_ref": "design/workflows/main-flow.png"
+            },
+            {
+              "feature_id": "F009",
+              "workflow_name": "Data Migration Import",
+              "diagram_ref": "design/workflows/main-flow.png"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "4 \u00b7 Compliance Checklist Summary",
+      "subsections": [
+        {
+          "title": "4.1 Checklist",
+          "fields": [
+            "feature_id",
+            "hipaa_reviewed",
+            "soc2_reviewed",
+            "rbac_defined",
+            "notes"
+          ],
+          "rows": [
+            {
+              "feature_id": "F001",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Treat as PII; encrypt at rest."
+            },
+            {
+              "feature_id": "F002",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Dedupe is hint\u2011only."
+            },
+            {
+              "feature_id": "F003",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Audit stage transitions."
+            },
+            {
+              "feature_id": "F004",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Admin\u2011only configuration."
+            },
+            {
+              "feature_id": "F005",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Aggregates; minimize PII exposure."
+            },
+            {
+              "feature_id": "F006",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Deny\u2011by\u2011default."
+            },
+            {
+              "feature_id": "F007",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Encrypted backups; verify restores."
+            },
+            {
+              "feature_id": "F008",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Secure secrets handling."
+            },
+            {
+              "feature_id": "F009",
+              "hipaa_reviewed": true,
+              "soc2_reviewed": true,
+              "rbac_defined": true,
+              "notes": "Reconciliation report retained."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "5 \u00b7 Review & Approval",
+      "subsections": [
+        {
+          "title": "5.1 Approval Grid",
+          "approvals": [
+            {
+              "role": "Product Developer",
+              "name": "Jay Baker",
+              "date": "2025-10-31",
+              "signature": "Approved"
+            },
+            {
+              "role": "Domain SME",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Security Lead",
+              "name": "",
+              "date": "",
+              "signature": ""
+            },
+            {
+              "role": "Leadership Reviewer",
+              "name": "",
+              "date": "",
+              "signature": ""
+            }
+          ]
+        },
+        {
+          "title": "5.2 Assumptions & Constraints Log",
+          "items": [
+            {
+              "assumption_or_constraint": "Single Postgres database; server\u2011rendered monolith for MVP.",
+              "impact": "Simplifies ops; may need refactor later.",
+              "mitigation_or_note": "Modularize by domain within monolith."
+            },
+            {
+              "assumption_or_constraint": "No email/calendar sync in MVP.",
+              "impact": "Manual follow\u2011ups required.",
+              "mitigation_or_note": "Defer to post\u2011MVP."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "6 \u00b7 Traceability Map",
+      "subsections": [
+        {
+          "title": "6.1 Feature \u2192 EPIC \u2192 Sprint \u2192 Workflow",
+          "fields": [
+            "feature_id",
+            "epic",
+            "sprint",
+            "workflows",
+            "integration_points"
+          ],
+          "rows": [
+            {
+              "feature_id": "F001",
+              "epic": "EPIC-1",
+              "sprint": "1\u20132",
+              "workflows": [
+                "Lead Capture",
+                "Lead Conversion",
+                "Opportunity Progression",
+                "Activity Logging"
+              ],
+              "integration_points": [
+                "Entity service",
+                "Audit service"
+              ]
+            },
+            {
+              "feature_id": "F004",
+              "epic": "EPIC-1",
+              "sprint": "1",
+              "workflows": [
+                "Lead Capture",
+                "Lead Conversion"
+              ],
+              "integration_points": [
+                "ID issuance service"
+              ]
+            },
+            {
+              "feature_id": "F006",
+              "epic": "EPIC-2",
+              "sprint": "1,3",
+              "workflows": [
+                "All"
+              ],
+              "integration_points": [
+                "JWT middleware",
+                "Audit store"
+              ]
+            },
+            {
+              "feature_id": "F003",
+              "epic": "EPIC-3",
+              "sprint": "2",
+              "workflows": [
+                "Opportunity Progression"
+              ],
+              "integration_points": [
+                "Opportunity service"
+              ]
+            },
+            {
+              "feature_id": "F005",
+              "epic": "EPIC-4",
+              "sprint": "2\u20133",
+              "workflows": [
+                "Reporting"
+              ],
+              "integration_points": [
+                "Reporting service"
+              ]
+            },
+            {
+              "feature_id": "F007",
+              "epic": "EPIC-5",
+              "sprint": "3",
+              "workflows": [
+                "Admin Backup/Restore"
+              ],
+              "integration_points": [
+                "Backup job",
+                "Storage"
+              ]
+            },
+            {
+              "feature_id": "F009",
+              "epic": "EPIC-6",
+              "sprint": "3",
+              "workflows": [
+                "Data Migration"
+              ],
+              "integration_points": [
+                "Importer",
+                "Validator"
+              ]
+            },
+            {
+              "feature_id": "F008",
+              "epic": "EPIC-5",
+              "sprint": "1",
+              "workflows": [
+                "Deployment"
+              ],
+              "integration_points": [
+                "Docker/Compose",
+                "Health endpoint"
+              ]
+            },
+            {
+              "feature_id": "F002",
+              "epic": "EPIC-3",
+              "sprint": "2",
+              "workflows": [
+                "Lead Conversion"
+              ],
+              "integration_points": [
+                "Account/Contact/Opportunity services"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "section": "7 \u00b7 Versioning & Export",
+      "subsections": [
+        {
+          "title": "7.1 Revision History",
+          "rows": [
+            {
+              "version": "v1.0",
+              "date": "2025-10-31",
+              "author": "Jay Baker \u2014 Product Specification Lead",
+              "description_of_change": "Initial Stage 4.1 draft based on Stage 2 roadmap"
+            }
+          ]
+        },
+        {
+          "title": "7.2 Export Notes",
+          "content": "Export feature cards to the backlog and tag with feature IDs and sprints. Keep IDs stable and attach this artifact to each EPIC."
+        }
+      ]
+    }
+  ]
+}
