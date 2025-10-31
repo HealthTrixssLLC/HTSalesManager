@@ -2,11 +2,11 @@
 node_modules/
 npm-debug.log*
 
-# Build outputs
+# Build outputs (will be built fresh in container)
 dist/
 .vite/
 
-# Environment files
+# Environment files (use docker-compose or runtime env vars instead)
 .env
 .env.local
 .env.*.local
@@ -32,10 +32,20 @@ logs/
 # Test
 coverage/
 .nyc_output/
+playwright-report/
+test-results/
 
-# Misc
+# Replit-specific files (not needed in Docker)
 .replit
 replit.nix
 .config/
+
+# User-generated content (should be in volumes, not image)
 attached_assets/
+
+# Requirements folder (documentation, not needed in image)
 Requirements-CPDO/
+
+# Development database files
+*.db
+*.sqlite

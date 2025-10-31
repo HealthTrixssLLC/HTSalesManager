@@ -91,7 +91,10 @@ See `.env.example` for all required environment variables. Critical production s
 
 ### Post-Deployment Steps
 
-1. Register first user (automatically gets Admin role)
+1. **Register first user** (automatically gets Admin role **if no other Admin users exist in database**)
+   - For fresh deployments: First user registered becomes Admin
+   - For databases with existing users: Check if Admin users exist before registering
+   - Use Admin Console → Users to assign Admin role manually if needed
 2. Configure ID patterns in Admin Console
 3. Create additional users and assign roles
 4. Import data via CSV Import page (if migrating from Dynamics 365)

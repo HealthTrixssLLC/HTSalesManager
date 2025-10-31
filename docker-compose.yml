@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: healthtrixss_crm
       POSTGRES_USER: healthtrixss
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-healthtrixss_dev_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-healthtrixss_dev_password_CHANGE_IN_PRODUCTION}
     ports:
       - "5432:5432"
     volumes:
@@ -20,6 +20,7 @@ services:
       retries: 5
     networks:
       - healthtrixss-network
+    restart: unless-stopped
 
   # Health Trixss CRM application
   app:
@@ -30,11 +31,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      DATABASE_URL: postgresql://healthtrixss:${DB_PASSWORD:-healthtrixss_dev_password}@postgres:5432/healthtrixss_crm
-      SESSION_SECRET: ${SESSION_SECRET:-change_this_in_production}
-      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-dev_encryption_key_change_in_production}
+      DATABASE_URL: postgresql://healthtrixss:${DB_PASSWORD:-healthtrixss_dev_password_CHANGE_IN_PRODUCTION}@postgres:5432/healthtrixss_crm
+      SESSION_SECRET: ${SESSION_SECRET:-CHANGE_THIS_generate_with_openssl_rand_base64_32}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-CHANGE_THIS_generate_with_openssl_rand_base64_32}
     ports:
       - "5000:5000"
+    volumes:
+      # Persist backup files
+      - app_backups:/app/backups
+      # Persist uploaded attachments
+      - app_uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,6 +50,10 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  app_backups:
+    driver: local
+  app_uploads:
     driver: local
 
 networks:
