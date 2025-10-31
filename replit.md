@@ -1,273 +1,97 @@
 # Health Trixss CRM
 
-A comprehensive, self-hosted CRM platform built for healthcare professionals. This lightweight Salesforce alternative provides powerful sales pipeline management, automation, and insights.
+## Overview
 
-## Project Overview
+Health Trixss CRM is a comprehensive, self-hosted CRM platform designed for healthcare professionals. It serves as a lightweight alternative to larger CRM solutions, providing robust sales pipeline management, automation, and insightful analytics tailored for the healthcare industry. The platform aims to streamline operations for sales teams, manage customer relationships effectively, and provide actionable business intelligence.
 
-**Stack**: Full-stack JavaScript (Node.js + Express + PostgreSQL + React + Vite)
-**Design System**: Linear-inspired enterprise SaaS with Health Trixss teal branding
-**Authentication**: Custom auth system (independent from Replit Auth)
-**Database**: PostgreSQL with Drizzle ORM
+## User Preferences
 
-## Key Features (MVP)
+I want iterative development. Ask before making major changes. I prefer detailed explanations. Do not make changes to the folder `Requirements-CPDO`. Do not make changes to the file `design_guidelines.md`.
 
-### Core CRM Entities
-- **Accounts** - Customer organizations and companies
-- **Contacts** - Individual business contacts
-- **Leads** - Potential customers with conversion workflow
-- **Opportunities** - Sales deals with Kanban board visualization
-- **Activities** - Calls, emails, meetings, tasks, and notes
+## System Architecture
 
-### Advanced Features
-- **Lead Conversion Wizard** - Multi-step wizard with duplicate detection
-- **Opportunity Kanban Board** - Drag-and-drop pipeline management
-- **Configurable ID Patterns** - Custom ID generation with tokens ({PREFIX}, {YYYY}, {SEQ:n}) and custom starting values
-- **Custom RBAC Framework** - Role-based access control (Admin, SalesManager, SalesRep, ReadOnly)
-- **Audit Logging** - Complete audit trail with before/after diffs
-- **Sales Waterfall Dashboard** - Annual sales target tracking with opportunity-level waterfall visualization by year
-- **Dashboard** - Pipeline insights, win rate, activities by user
-- **Admin Console** - User/role management, ID pattern config, backup/restore, database reset
-- **Backup & Restore** - Export/import database snapshots with encryption
-- **CSV Import/Export** - Complete data migration toolkit with template downloads and validation
-- **Help & Migration Guide** - Comprehensive documentation with Dynamics 365 migration instructions
+The system is built on a full-stack JavaScript architecture using Node.js with Express for the backend, PostgreSQL with Drizzle ORM for the database, and React with Vite for the frontend.
 
-## Project Structure
+**UI/UX Decisions:**
+The design system is inspired by Linear, focusing on a clean, professional enterprise SaaS aesthetic suitable for healthcare. It features consistent spacing, Inter font typography, subtle interactions, and a balanced information density. The primary branding color is Health Trixss Teal (`hsl(186, 78%, 32%)`), complemented by a light teal accent (`hsl(186, 45%, 95%)`) and a multi-color palette for data visualization in charts.
 
-```
-/
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   │   ├── ui/         # Shadcn components
-│   │   │   ├── app-sidebar.tsx
-│   │   │   └── lead-conversion-wizard.tsx
-│   │   ├── hooks/          # Custom React hooks
-│   │   │   └── use-auth.tsx
-│   │   ├── lib/            # Utilities
-│   │   │   ├── protected-route.tsx
-│   │   │   └── queryClient.ts
-│   │   ├── pages/          # Page components
-│   │   │   ├── auth-page.tsx
-│   │   │   ├── dashboard.tsx
-│   │   │   ├── accounts-page.tsx
-│   │   │   ├── contacts-page.tsx
-│   │   │   ├── leads-page.tsx
-│   │   │   ├── opportunities-page.tsx
-│   │   │   ├── activities-page.tsx
-│   │   │   ├── admin-console.tsx
-│   │   │   ├── audit-log-page.tsx
-│   │   │   ├── help-page.tsx
-│   │   │   └── import-page.tsx
-│   │   ├── App.tsx         # Main app with routing
-│   │   └── index.css       # Global styles & design tokens
-│   └── index.html
-├── server/                 # Express backend (TO BE IMPLEMENTED)
-│   ├── routes.ts           # API routes
-│   ├── storage.ts          # Storage interface
-│   ├── db.ts              # Database connection
-│   └── index.ts           # Server entry point
-├── shared/                 # Shared types and schemas
-│   └── schema.ts           # Drizzle schema & Zod types
-├── Requirements-CPDO/      # CPDO requirement documents
-└── design_guidelines.md    # Design system documentation
-```
+**Technical Implementations & Feature Specifications:**
 
-## Database Schema
+*   **Core CRM Entities**: Accounts, Contacts, Leads, Opportunities, and Activities form the foundation, each with dedicated CRUD pages.
+*   **Authentication**: A custom authentication system independent of Replit Auth, utilizing JWT and bcrypt for password hashing (10 rounds).
+*   **Authorization**: A custom Role-Based Access Control (RBAC) framework with roles (Admin, SalesManager, SalesRep, ReadOnly) and deny-by-default permissions.
+*   **Lead Management**: Features a multi-step Lead Conversion Wizard with duplicate detection.
+*   **Opportunity Management**: Includes a Kanban board for drag-and-drop pipeline management and a Sales Waterfall Dashboard for tracking annual sales targets by year, visualizing pipeline stages, and identifying gaps to target.
+*   **Configurable ID Patterns**: A custom ID generation engine supports patterns like `{PREFIX}`, `{YYYY}`, `{SEQ:n}`, and configurable starting values per entity.
+*   **Audit Logging**: Comprehensive audit trail for all data mutations, including before/after JSON diffs.
+*   **Data Management**:
+    *   **Backup & Restore**: Encrypted database snapshots (AES-256-GCM) with checksum verification, allowing import/export via the Admin Console.
+    *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports.
+*   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
+*   **Help & Migration Guide**: Comprehensive documentation including a guide for migrating data from Dynamics 365.
+*   **Dashboard**: Provides key insights such as pipeline status, win rates, and user activity summaries.
+*   **Performance Optimization**: Includes over 20 database indexes on frequently queried columns and optimized dashboard aggregation queries.
 
-### Auth & RBAC Tables
-- `users` - User accounts with custom authentication
-- `roles` - Role definitions (Admin, SalesManager, SalesRep, ReadOnly)
-- `permissions` - Permission definitions (resource.action pattern)
-- `user_roles` - Junction table for user-role assignments
-- `role_permissions` - Junction table for role-permission assignments
+**System Design Choices:**
 
-### CRM Entity Tables
-- `accounts` - Customer accounts with configurable IDs
-- `contacts` - Business contacts linked to accounts
-- `leads` - Lead capture with conversion tracking
-- `opportunities` - Sales opportunities with stages and pipeline
-- `activities` - Activity timeline (calls, emails, meetings, tasks, notes)
+*   **Database Schema**: Comprises 13+ tables covering authentication, RBAC, CRM entities, and system configurations (e.g., `audit_logs`, `id_patterns`).
+*   **Development Workflow**: Utilizes `npm run dev` for development, `npm run db:push` for migrations, and supports Docker, Replit Production, and manual VPS/Cloud deployments.
+*   **Security**: Emphasizes strong secrets for `SESSION_SECRET` and `BACKUP_ENCRYPTION_KEY`, production environment checks, and regular security audits.
 
-### System Tables
-- `audit_logs` - Complete audit trail with before/after JSON diffs
-- `id_patterns` - Configurable ID generation patterns per entity
-- `backup_jobs` - Backup/restore job tracking with status
+## External Dependencies
 
-## Color Scheme (Health Trixss Branding)
+*   **Database**: PostgreSQL 16+
+*   **Backend Framework**: Node.js 20+ with Express
+*   **ORM**: Drizzle ORM
+*   **Frontend Framework**: React with Vite
+*   **UI Components**: Shadcn components
+*   **Authentication Hashing**: bcrypt
+*   **JWT Handling**: jsonwebtoken
+*   **CSV Parsing**: csv-parse
+*   **File Uploads**: Multer
+*   **Data Validation**: Zod
+*   **Encryption**: OpenSSL (for generating secrets and AES-256-GCM for backups)
+*   **Deployment**: Docker, Replit (via `.replit` and `replit.nix` configurations)
 
-- **Primary**: Teal `hsl(186, 78%, 32%)` - Medical trust and professionalism
-- **Accent**: Light teal `hsl(186, 45%, 95%)` - Clean healthcare aesthetic
-- **Charts**: Multi-color palette for data visualization
+## Production Deployment
 
-## Current Progress
+The application is production-ready with multiple deployment options:
 
-### ✅ Task 1: Schema & Frontend (COMPLETED)
-- [x] Complete database schema with 13+ tables
-- [x] Health Trixss teal color branding applied
-- [x] Custom authentication components (login/register)
-- [x] Protected route wrapper
-- [x] useAuth hook for authentication state
-- [x] Sidebar navigation with app shell
-- [x] Dashboard with stat cards and charts
-- [x] All CRUD pages (Accounts, Contacts, Leads, Opportunities, Activities)
-- [x] Lead Conversion Wizard (multi-step with duplicate detection)
-- [x] Opportunity Kanban board with stage management
-- [x] Admin Console (Users, Roles, ID Patterns, Backup/Restore, Database Reset)
-- [x] Audit Log viewer with expandable diffs
-- [x] Beautiful loading states, empty states, error handling
+### Deployment Methods
 
-### ✅ Task 2: Backend (COMPLETED)
-- [x] PostgreSQL database migration with 13+ tables
-- [x] Custom authentication with JWT and password hashing (bcrypt 10 rounds)
-- [x] Custom RBAC middleware with deny-by-default permissions
-- [x] ID Pattern Engine with atomic counters and pattern tokens
-- [x] All API endpoints for CRUD operations with validation
-- [x] Lead conversion workflow with duplicate detection
-- [x] Dashboard aggregation queries for stats and charts
-- [x] Audit logging for all mutations with before/after diffs
-- [x] Backup/restore service with AES-256-GCM encryption and checksum verification
-- [x] Database reset functionality preserving system configuration
+1. **Docker (Self-Hosted)**: Use `docker-compose up -d` with the provided `docker-compose.yml` configuration. Includes PostgreSQL 16, health checks, and automatic restarts.
 
-### ✅ Task 3: Help & Migration Tools (COMPLETED)
-- [x] Help page with comprehensive documentation
-- [x] Dynamics 365 migration guide with field mapping tables
-- [x] CSV export functionality (backend + frontend)
-- [x] Export buttons on all entity pages
-- [x] CSV import backend endpoints with validation
-- [x] CSV import frontend UI with file upload
-- [x] CSV template generation and download
-- [x] Type coercion for numeric/date fields in imports
+2. **Replit Production**: Click "Deploy" in Replit UI. Environment variables (`SESSION_SECRET`, `BACKUP_ENCRYPTION_KEY`) are managed via Replit Secrets.
 
-### 📋 Task 4: Final Polish & Production Deployment
-- [x] Frontend and backend fully integrated and functional
-- [ ] Comprehensive testing of all features
-- [ ] Docker configuration fixes (add BACKUP_ENCRYPTION_KEY)
-- [ ] Replit deployment configuration
-- [ ] Performance optimization
-- [ ] Production security review
+3. **Manual VPS/Cloud**: Deploy to AWS, GCP, Azure, or DigitalOcean. Run `npm install && npm run db:push && npm run dev` with environment variables set.
 
-## Design Philosophy
+### Environment Variables
 
-This CRM follows a **Linear-inspired enterprise SaaS design system** with:
-- Clean, professional aesthetic suitable for healthcare
-- Consistent spacing and typography (Inter font throughout)
-- Subtle interactions with hover/active states
-- Information density balanced with readability
-- Teal color scheme for medical trust and professionalism
+See `.env.example` for all required environment variables. Critical production secrets:
+- `SESSION_SECRET`: JWT signing key (generate with `openssl rand -base64 32`)
+- `BACKUP_ENCRYPTION_KEY`: AES-256-GCM encryption key for backups (generate with `openssl rand -base64 32`)
+- `DATABASE_URL`: PostgreSQL connection string
+- `NODE_ENV=production`
 
-## Deployment
+### Post-Deployment Steps
 
-### Docker (Local/Self-Hosted)
-```bash
-docker-compose up
-```
+1. Register first user (automatically gets Admin role)
+2. Configure ID patterns in Admin Console
+3. Create additional users and assign roles
+4. Import data via CSV Import page (if migrating from Dynamics 365)
+5. Set annual sales targets in Dashboard
 
-### Replit Production
-Configured via `.replit` and `replit.nix` files.
+### Performance & Security
 
-## Development
+- **Database Indexes**: 20+ indexes on foreign keys, search fields, and frequently queried columns across all major tables
+- **Encryption**: AES-256-GCM for backup files with SHA-256 checksum verification
+- **Authentication**: JWT-based with bcrypt password hashing (10 rounds)
+- **RBAC**: Deny-by-default permissions with resource.action pattern
+- **Audit Logging**: Complete trail of all data mutations with before/after JSON diffs
 
-```bash
-# Install dependencies
-npm install
+### Monitoring & Backups
 
-# Run database migrations
-npm run db:push
-
-# Start development server
-npm run dev
-```
-
-## User Roles & Permissions
-
-- **Admin**: Full system access including user/role management, ID patterns, backups
-- **SalesManager**: Manage all CRM entities, view reports, assign leads
-- **SalesRep**: Create/edit own records, convert leads, manage pipeline
-- **ReadOnly**: View-only access to CRM data
-
-## ID Pattern Examples
-
-- Accounts: `ACCT-2025-00001`
-- Contacts: `CONT-2501-00001`
-- Leads: `LEAD-000001`
-- Opportunities: `OPP-2025-000001`
-- Activities: `ACT-2501-00001`
-
-All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{YYYY}`, `{YY}`, `{MM}`, `{SEQ:n}`.
-
-## Recent Changes
-
-- **2025-10-31**: CSV Import Implementation
-  - Created comprehensive CSV import page at /import route (accessible from sidebar)
-  - Implemented 5 import endpoints: POST /api/import/:entity for all CRM entities
-  - **Backend Features**:
-    - Multer file upload handling with memory storage
-    - CSV parsing with csv-parse library
-    - Zod schema validation with type coercion for numeric/date fields
-    - Auto-generation of IDs when not provided (uses existing ID pattern engine)
-    - RBAC enforcement with requirePermission middleware on all endpoints
-    - Audit logging for all imported records
-    - Detailed import summary with success/failed counts and row-level error reporting
-  - **Frontend Features**:
-    - Drag-and-drop file upload with preview
-    - Entity type selector (accounts, contacts, leads, opportunities, activities)
-    - CSV template downloads with proper headers for each entity type
-    - First 5 rows preview before import
-    - Import results display with success/failed counts
-    - Error details table showing validation errors with row numbers
-    - Import guidelines and documentation
-  - **Type Coercion**: Fixed critical bug by coercing CSV string values to proper types before Zod validation (amount→string, probability→number, dates→ISO strings)
-  - **Security**: All import endpoints enforce RBAC permissions with proper middleware
-  - **Testing**: E2E test confirms all UI elements functional, template downloads working, entity selection operational
-- **2025-10-31**: Help & Documentation with Dynamics 365 Migration Guide
-  - Created comprehensive Help page accessible from sidebar (/help route)
-  - Added 5 tabs: Getting Started, Features Guide, Dynamics Migration, Examples, FAQ
-  - Documented Dynamics 365 export process and field mapping tables
-  - Created migration workflow guide (export → prepare → import order)
-  - Added CSV template download section (placeholders for future implementation)
-  - Included example workflows for common CRM tasks
-  - Documented all features with clear descriptions and usage instructions
-- **2025-10-31**: CSV Export Functionality
-  - Added CSV export endpoints for all entities (GET /api/export/:entity)
-  - Implemented proper CSV formatting with quote escaping and comma handling
-  - Added "Export to CSV" buttons to all entity pages (Accounts, Contacts, Leads, Opportunities, Activities)
-  - Export includes account names in Contacts and Opportunities for better reference
-  - Enforced RBAC permissions on all export endpoints
-  - Files download with timestamp in filename (e.g., accounts-1698765432.csv)
-- **2025-10-31**: Sales Waterfall Chart Implementation (Stacked Bar by Stage)
-  - Replaced "Pipeline by Stage" chart with true waterfall chart using stacked bars
-  - **Waterfall Logic**: Each bar starts where the previous bar ended (floating bars)
-  - **Stage-Based Visualization**: Bars represent sales pipeline stages, not individual opportunities
-  - **Stage Aggregation**: Multiple opportunities in same stage are summed together
-  - **All Stages Shown**: Displays all 6 pipeline stages even if zero opportunities ($0 value)
-  - **First Bar**: "Gap to Target" (red) shows how much pipeline is needed to reach goal
-  - **Stage Bars**: Each stage (Prospecting, Qualification, Proposal, Negotiation, Closed Won, Closed Lost) stacks on top with unique color
-  - **Color Palette**: Each stage gets distinct color from Health Trixss brand catalog
-  - **Visual Structure**: Uses transparent base bars + stacked value bars to create floating effect
-  - Added ability to set and save annual sales targets per year (stored in localStorage)
-  - Created year selector to view waterfalls for different calendar years
-  - Implemented `/api/dashboard/sales-waterfall/:year` endpoint to fetch opportunities by year
-  - Reference line (red dashed) shows annual sales target
-  - Displays Target, Actual Pipeline, and Gap to Close summary statistics
-  - Bar labels show value on top in short format ($XXk)
-- **2025-10-31**: ID Pattern Enhancement - Custom Starting Values
-  - Added `startValue` field to ID patterns (already in schema, now editable in UI)
-  - Enhanced ID generation to calculate: `startValue + (counter - 1)`
-  - Updated Admin Console dialog to allow setting starting value (e.g., 1000 for ACCT-2025-01000)
-  - Pattern cards now display: Counter, Start Value, and Last Issued ID
-- **2025-10-31**: Completed Backup & Restore implementation with security fixes
-  - Built BackupService with AES-256-GCM encryption and gzip compression
-  - Embedded SHA-256 checksum in backup files for integrity verification
-  - Created restore service with transaction-wrapped atomic restoration
-  - Full table truncation (including users/roles/permissions) to avoid FK constraint violations
-  - **SECURITY FIX**: Removed hard-coded default encryption key fallback
-  - Added `BACKUP_ENCRYPTION_KEY` environment variable requirement (set to dev key by default)
-  - Implemented proper error handling and backup job status updates (failed/completed/in_progress)
-  - Implemented database reset preserving system configuration
-  - Added file download/upload UI in Admin Console
-  - Fixed LSP errors and schema field name mismatches
-- **2025-01-XX**: Initial project setup with complete frontend and schema
-  - Created comprehensive database schema with 13+ tables
-  - Implemented all frontend pages with Health Trixss branding
-  - Built Lead Conversion Wizard and Opportunity Kanban board
-  - Created Admin Console with system management features
+- Health check endpoint: `GET /api/user` (requires authentication)
+- Automated backups via Admin Console with encrypted `.htcrm` files
+- Audit logs accessible in Admin Console for security review
+- Database performance optimized with indexed queries
