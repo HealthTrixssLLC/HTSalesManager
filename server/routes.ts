@@ -23,6 +23,7 @@ import {
   users,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
+import * as analyticsService from "./analytics-service";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 
@@ -1756,6 +1757,110 @@ export function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Unsubscribe error:", error);
       return res.status(500).json({ error: "Failed to unsubscribe", details: error.message });
+    }
+  });
+
+  // ========== ANALYTICS & FORECASTING ROUTES ==========
+
+  // Get comprehensive forecast
+  app.get("/api/analytics/forecast", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const targetDate = req.query.targetDate 
+        ? new Date(req.query.targetDate as string)
+        : undefined;
+
+      const forecast = await analyticsService.calculateForecasts(targetDate);
+      return res.json(forecast);
+    } catch (error: any) {
+      console.error("Forecast error:", error);
+      return res.status(500).json({ error: "Failed to calculate forecast", details: error.message });
+    }
+  });
+
+  // Get historical performance metrics
+  app.get("/api/analytics/historical", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const daysBack = parseInt(req.query.days as string) || 90;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+
+      const metrics = await analyticsService.getHistoricalMetrics({ start, end });
+      return res.json(metrics);
+    } catch (error: any) {
+      console.error("Historical metrics error:", error);
+      return res.status(500).json({ error: "Failed to get historical metrics", details: error.message });
+    }
+  });
+
+  // Get pipeline velocity metrics
+  app.get("/api/analytics/velocity", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const daysBack = parseInt(req.query.days as string) || 90;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+
+      const velocity = await analyticsService.getPipelineVelocity({ start, end });
+      return res.json(velocity);
+    } catch (error: any) {
+      console.error("Velocity error:", error);
+      return res.status(500).json({ error: "Failed to calculate velocity", details: error.message });
+    }
+  });
+
+  // Get stage conversion rates
+  app.get("/api/analytics/conversions", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const daysBack = parseInt(req.query.days as string) || 90;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+
+      const conversions = await analyticsService.getStageConversionRates({ start, end });
+      return res.json(conversions);
+    } catch (error: any) {
+      console.error("Conversions error:", error);
+      return res.status(500).json({ error: "Failed to calculate conversions", details: error.message });
+    }
+  });
+
+  // Get deal closing predictions
+  app.get("/api/analytics/predictions", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const daysAhead = parseInt(req.query.days as string) || 30;
+      const predictions = await analyticsService.predictDealClosing(daysAhead);
+      return res.json(predictions);
+    } catch (error: any) {
+      console.error("Predictions error:", error);
+      return res.status(500).json({ error: "Failed to predict deal closing", details: error.message });
+    }
+  });
+
+  // Get rep performance metrics
+  app.get("/api/analytics/rep-performance", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const daysBack = parseInt(req.query.days as string) || 90;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+
+      const performance = await analyticsService.getRepPerformance({ start, end });
+      return res.json(performance);
+    } catch (error: any) {
+      console.error("Rep performance error:", error);
+      return res.status(500).json({ error: "Failed to get rep performance", details: error.message });
+    }
+  });
+
+  // Get pipeline health score
+  app.get("/api/analytics/pipeline-health", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const health = await analyticsService.calculatePipelineHealth();
+      return res.json(health);
+    } catch (error: any) {
+      console.error("Pipeline health error:", error);
+      return res.status(500).json({ error: "Failed to calculate pipeline health", details: error.message });
     }
   });
 }
