@@ -17,7 +17,15 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 
 **Technical Implementations & Feature Specifications:**
 
-*   **Core CRM Entities**: Accounts, Contacts, Leads, Opportunities, and Activities form the foundation, each with dedicated CRUD pages.
+*   **Core CRM Entities**: Accounts, Contacts, Leads, Opportunities, and Activities form the foundation, each with dedicated CRUD pages and comprehensive detail views.
+    *   **Entity Detail Pages**: All entities feature dedicated detail pages (e.g., `/accounts/:id`) with:
+        *   Full entity information display with formatted fields
+        *   Related entities sections showing connections (e.g., Account → Contacts, Opportunities, Activities)
+        *   Integrated comments system for collaboration
+        *   Back navigation to list pages
+        *   Edit/delete action buttons (handlers pending implementation)
+        *   Consistent UI using shared DetailPageLayout and RelatedEntitiesSection components
+        *   Clickable navigation from all list pages to detail pages
 *   **Authentication**: A custom authentication system independent of Replit Auth, utilizing JWT and bcrypt for password hashing (10 rounds).
 *   **Authorization**: A custom Role-Based Access Control (RBAC) framework with roles (Admin, SalesManager, SalesRep, ReadOnly) and deny-by-default permissions.
 *   **Lead Management**: Features a multi-step Lead Conversion Wizard with duplicate detection.
