@@ -30,11 +30,19 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
 *   **Help & Migration Guide**: Comprehensive documentation including a guide for migrating data from Dynamics 365.
 *   **Dashboard**: Provides key insights such as pipeline status, win rates, and user activity summaries.
+*   **Comments System**: Full-featured commenting on Accounts, Contacts, Leads, and Opportunities with:
+    *   Threaded comments (max depth 2) with reply functionality
+    *   Emoji reactions (👍❤️🎉👀🚀) with user tracking
+    *   Pin/Resolve status for important or completed discussions
+    *   Edit (15-minute window) and delete (owner-only) capabilities
+    *   Thread subscriptions for notifications (schema ready, MVP)
+    *   Batch-loaded queries to prevent N+1 performance issues
+    *   RBAC-enforced permissions: Admin (all), SalesManager (all), SalesRep (read/create/update/react), ReadOnly (read)
 *   **Performance Optimization**: Includes over 20 database indexes on frequently queried columns and optimized dashboard aggregation queries.
 
 **System Design Choices:**
 
-*   **Database Schema**: Comprises 13+ tables covering authentication, RBAC, CRM entities, and system configurations (e.g., `audit_logs`, `id_patterns`).
+*   **Database Schema**: Comprises 17+ tables covering authentication, RBAC, CRM entities, comments, and system configurations (e.g., `audit_logs`, `id_patterns`, `comments`, `comment_reactions`, `comment_attachments`, `comment_subscriptions`).
 *   **Development Workflow**: Utilizes `npm run dev` for development, `npm run db:push` for migrations, and supports Docker, Replit Production, and manual VPS/Cloud deployments.
 *   **Security**: Emphasizes strong secrets for `SESSION_SECRET` and `BACKUP_ENCRYPTION_KEY`, production environment checks, and regular security audits.
 
@@ -80,6 +88,15 @@ See `.env.example` for all required environment variables. Critical production s
 3. Create additional users and assign roles
 4. Import data via CSV Import page (if migrating from Dynamics 365)
 5. Set annual sales targets in Dashboard
+
+### Test Credentials (Development Only)
+
+For testing purposes, a test admin user exists in development:
+- **Email**: testadmin@healthtrixss.com
+- **Password**: testpass123
+- **Role**: Admin
+
+**IMPORTANT**: Remove this user in production deployments.
 
 ### Performance & Security
 
