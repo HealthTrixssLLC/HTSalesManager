@@ -111,16 +111,17 @@ A comprehensive, self-hosted CRM platform built for healthcare professionals. Th
 - [x] Audit Log viewer with expandable diffs
 - [x] Beautiful loading states, empty states, error handling
 
-### 🚧 Task 2: Backend (IN PROGRESS)
-- [ ] PostgreSQL database migration
-- [ ] Custom authentication with JWT and password hashing
-- [ ] Custom RBAC middleware with deny-by-default
-- [ ] ID Pattern Engine with atomic counters
-- [ ] All API endpoints for CRUD operations
-- [ ] Lead conversion workflow implementation
-- [ ] Dashboard aggregation queries
-- [ ] Audit logging for all mutations
-- [ ] Backup/restore service
+### ✅ Task 2: Backend (COMPLETED)
+- [x] PostgreSQL database migration with 13+ tables
+- [x] Custom authentication with JWT and password hashing (bcrypt 10 rounds)
+- [x] Custom RBAC middleware with deny-by-default permissions
+- [x] ID Pattern Engine with atomic counters and pattern tokens
+- [x] All API endpoints for CRUD operations with validation
+- [x] Lead conversion workflow with duplicate detection
+- [x] Dashboard aggregation queries for stats and charts
+- [x] Audit logging for all mutations with before/after diffs
+- [x] Backup/restore service with AES-256-GCM encryption and checksum verification
+- [x] Database reset functionality preserving system configuration
 
 ### 📋 Task 3: Integration, Polish & Testing
 - [ ] Connect frontend to backend APIs
@@ -180,8 +181,15 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
+- **2025-10-31**: Completed Backup & Restore implementation
+  - Built BackupService with AES-256-GCM encryption and gzip compression
+  - Embedded SHA-256 checksum in backup files for integrity verification
+  - Created restore service with data validation and dependency-order restoration
+  - Implemented database reset preserving system configuration
+  - Added file download/upload UI in Admin Console
+  - Fixed LSP errors and schema field name mismatches
 - **2025-01-XX**: Initial project setup with complete frontend and schema
-- Created comprehensive database schema with 13+ tables
-- Implemented all frontend pages with Health Trixss branding
-- Built Lead Conversion Wizard and Opportunity Kanban board
-- Created Admin Console with system management features
+  - Created comprehensive database schema with 13+ tables
+  - Implemented all frontend pages with Health Trixss branding
+  - Built Lead Conversion Wizard and Opportunity Kanban board
+  - Created Admin Console with system management features

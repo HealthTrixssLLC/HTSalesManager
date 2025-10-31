@@ -80,6 +80,9 @@ export interface IStorage {
   createBackupJob(job: InsertBackupJob): Promise<BackupJob>;
   updateBackupJob(id: string, job: Partial<BackupJob>): Promise<BackupJob>;
   
+  // ========== ADMIN OPERATIONS ==========
+  resetDatabase(): Promise<void>;
+  
   // ========== DASHBOARD & STATS ==========
   getDashboardStats(): Promise<{
     totalAccounts: number;

@@ -14,6 +14,7 @@ import {
   insertOpportunitySchema,
   insertActivitySchema,
 } from "@shared/schema";
+import { backupService } from "./backup-service";
 
 // Audit logging helper
 async function createAudit(req: AuthRequest, action: string, resource: string, resourceId: string | null, before: any, after: any) {
@@ -57,30 +58,46 @@ export function registerRoutes(app: Express) {
       });
       
       // Assign role: If no admin users exist, make this user an admin
+      let userRole: string | undefined;
       try {
         const roles = await storage.getAllRoles();
         const adminRole = roles.find(r => r.name === "Admin");
+        
+        console.log(`[Registration] Available roles: ${roles.map(r => r.name).join(", ")}`);
+        console.log(`[Registration] Admin role found: ${!!adminRole}`);
         
         // Check if there are any admin users
         const allUsers = await storage.getAllUsers();
         let hasAdmin = false;
         
+        console.log(`[Registration] Total users before new user: ${allUsers.length - 1}`); // -1 because new user is included
+        
         for (const u of allUsers) {
+          if (u.id === user.id) continue; // Skip the newly created user
           const userRoles = await storage.getUserRoles(u.id);
           if (userRoles.some(r => r.name === "Admin")) {
             hasAdmin = true;
+            console.log(`[Registration] Found existing admin: ${u.email}`);
             break;
           }
         }
         
         // If no admin exists, make this user an admin
         if (!hasAdmin && adminRole) {
+          console.log(`[Registration] Assigning Admin role to first user: ${user.email}`);
           await storage.assignRoleToUser(user.id, adminRole.id);
+          userRole = "Admin";
+          
+          // Verify assignment
+          const verifyRoles = await storage.getUserRoles(user.id);
+          console.log(`[Registration] Verification - User roles after assignment: ${verifyRoles.map(r => r.name).join(", ")}`);
         } else {
           // Otherwise, assign default role (SalesRep)
+          console.log(`[Registration] Assigning ${DEFAULT_ROLE} role to user: ${user.email}`);
           const defaultRole = roles.find(r => r.name === DEFAULT_ROLE);
           if (defaultRole) {
             await storage.assignRoleToUser(user.id, defaultRole.id);
+            userRole = DEFAULT_ROLE;
           }
         }
       } catch (error) {
@@ -370,7 +387,7 @@ export function registerRoutes(app: Express) {
         convertedContactId: contactId,
         convertedOpportunityId: opportunityId,
         convertedAt: new Date(),
-      });
+      } as any);
       
       await createAudit(req, "convert", "Lead", leadId, lead, updatedLead);
       
@@ -525,28 +542,107 @@ export function registerRoutes(app: Express) {
   app.post("/api/admin/backup", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
       const job = await storage.createBackupJob({
-        status: "pending",
+        status: "in_progress",
         initiatedBy: req.user?.id || null,
       });
       
-      // TODO: Implement actual backup logic (export to file, compress, etc.)
-      
-      await createAudit(req, "create", "BackupJob", job.id, null, job);
-      
-      return res.json(job);
+      try {
+        // Create encrypted backup - encryption key is required
+        const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
+        if (!encryptionKey) {
+          await storage.updateBackupJob(job.id, { 
+            status: "failed",
+            errorMessage: "BACKUP_ENCRYPTION_KEY environment variable not set",
+          });
+          return res.status(500).json({ error: "Server configuration error: encryption key not configured" });
+        }
+        
+        const { data, checksum, size } = await backupService.createBackup(encryptionKey);
+        
+        // Update job status
+        await storage.updateBackupJob(job.id, {
+          status: "completed",
+          checksum,
+          sizeBytes: size,
+          completedAt: new Date(),
+        });
+        
+        await createAudit(req, "create", "BackupJob", job.id, null, { ...job, status: "completed", checksum, size });
+        
+        // Send backup file as download
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="healthtrixss-backup-${Date.now()}.htb"`);
+        res.setHeader("X-Backup-Checksum", checksum);
+        return res.send(data);
+      } catch (backupError) {
+        // Update job as failed with error message
+        const errorMessage = backupError instanceof Error ? backupError.message : "Unknown error";
+        await storage.updateBackupJob(job.id, { 
+          status: "failed",
+          errorMessage,
+        });
+        throw backupError;
+      }
     } catch (error) {
+      console.error("Backup error:", error);
       return res.status(500).json({ error: "Failed to create backup" });
+    }
+  });
+  
+  app.post("/api/admin/restore", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      // Expect raw binary data in request body
+      const backupBuffer = req.body as Buffer;
+      
+      if (!backupBuffer) {
+        return res.status(400).json({ error: "Missing backup data" });
+      }
+      
+      // Encryption key is required
+      const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
+      if (!encryptionKey) {
+        return res.status(500).json({ error: "Server configuration error: encryption key not configured" });
+      }
+      
+      const result = await backupService.restoreBackup(backupBuffer, encryptionKey);
+      
+      if (result.success) {
+        await createAudit(req, "restore", "Database", null, null, { 
+          recordsRestored: result.recordsRestored,
+          warnings: result.errors,
+        });
+        
+        return res.json({
+          success: true,
+          recordsRestored: result.recordsRestored,
+          warnings: result.errors,
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: "Restore failed",
+          details: result.errors,
+        });
+      }
+    } catch (error) {
+      console.error("Restore error:", error);
+      return res.status(500).json({ error: "Failed to restore backup" });
     }
   });
   
   app.post("/api/admin/reset-database", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
-      // TODO: Implement database reset logic (truncate all tables)
+      // Delete CRM entity data (in reverse dependency order)
+      await storage.resetDatabase();
       
-      await createAudit(req, "reset", "Database", null, null, { message: "Database reset" });
+      await createAudit(req, "reset", "Database", null, null, { 
+        message: "Database reset - all CRM data cleared",
+        timestamp: new Date().toISOString(),
+      });
       
-      return res.json({ success: true });
+      return res.json({ success: true, message: "Database reset successfully" });
     } catch (error) {
+      console.error("Database reset error:", error);
       return res.status(500).json({ error: "Failed to reset database" });
     }
   });

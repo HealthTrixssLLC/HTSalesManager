@@ -4,6 +4,12 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
 
+// Set default BACKUP_ENCRYPTION_KEY for development if not already set
+if (!process.env.BACKUP_ENCRYPTION_KEY) {
+  process.env.BACKUP_ENCRYPTION_KEY = "dev-backup-key-2025-healthtrixss-crm-secure";
+  console.log("Using default BACKUP_ENCRYPTION_KEY for development");
+}
+
 const app = express();
 
 // Trust proxy for accurate IP addresses (needed for Replit)

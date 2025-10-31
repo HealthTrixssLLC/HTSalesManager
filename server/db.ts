@@ -429,6 +429,26 @@ export class PostgresStorage implements IStorage {
       })),
     };
   }
+  
+  // ========== ADMIN OPERATIONS ==========
+  
+  async resetDatabase(): Promise<void> {
+    // Delete all CRM entity data in reverse dependency order
+    // This preserves system configuration (roles, permissions, id_patterns)
+    await db.delete(schema.activities);
+    await db.delete(schema.leads);
+    await db.delete(schema.opportunities);
+    await db.delete(schema.contacts);
+    await db.delete(schema.accounts);
+    
+    // Reset ID pattern counters to their starting values
+    const patterns = await db.select().from(schema.idPatterns);
+    for (const pattern of patterns) {
+      await db.update(schema.idPatterns)
+        .set({ counter: pattern.startValue || 1 })
+        .where(eq(schema.idPatterns.id, pattern.id));
+    }
+  }
 }
 
 export const storage = new PostgresStorage();

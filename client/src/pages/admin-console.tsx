@@ -1,7 +1,7 @@
 // Admin Console with user/role management, ID patterns, and system operations
 // Based on design_guidelines.md enterprise SaaS patterns
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle } from "lucide-react";
 import { User, Role, IdPattern } from "@shared/schema";
@@ -22,6 +22,7 @@ export default function AdminConsole() {
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<IdPattern | null>(null);
   const [patternPreview, setPatternPreview] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
@@ -41,11 +42,78 @@ export default function AdminConsole() {
 
   const createBackupMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/backup", {});
-      return await res.json();
+      const res = await fetch("/api/admin/backup", {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      if (!res.ok) {
+        throw new Error("Failed to create backup");
+      }
+      
+      // Get the file data and checksum
+      const blob = await res.blob();
+      const checksum = res.headers.get("X-Backup-Checksum");
+      
+      // Trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `healthtrixss-backup-${Date.now()}.htb`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      return { checksum };
     },
     onSuccess: () => {
-      toast({ title: "Backup created successfully" });
+      toast({ title: "Backup downloaded successfully" });
+    },
+    onError: () => {
+      toast({ 
+        title: "Backup failed", 
+        description: "Failed to create backup file",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const restoreBackupMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      
+      // Checksum is embedded in the file, no need to send separately
+      const res = await fetch("/api/admin/restore", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/octet-stream",
+        },
+        body: buffer,
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Restore failed");
+      }
+      
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Restore completed successfully",
+        description: `Restored ${data.recordsRestored} records`,
+      });
+      queryClient.invalidateQueries();
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Restore failed", 
+        description: error.message,
+        variant: "destructive" 
+      });
     },
   });
 
@@ -60,6 +128,13 @@ export default function AdminConsole() {
       setConfirmResetOpen(false);
     },
   });
+  
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      restoreBackupMutation.mutate(file);
+    }
+  };
 
   const generatePreview = (pattern: string) => {
     const now = new Date();
@@ -266,9 +341,22 @@ export default function AdminConsole() {
                 <CardDescription>Import database from backup file</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="outline" data-testid="button-restore-backup">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".htb"
+                  onChange={handleFileSelect}
+                  style={{ display: "none" }}
+                  data-testid="input-restore-file"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={restoreBackupMutation.isPending}
+                  data-testid="button-restore-backup"
+                >
                   <Upload className="h-4 w-4 mr-2" />
-                  Restore from Backup
+                  {restoreBackupMutation.isPending ? "Restoring..." : "Restore from Backup"}
                 </Button>
               </CardContent>
             </Card>
