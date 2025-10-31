@@ -182,11 +182,15 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
-- **2025-10-31**: Sales Waterfall Chart Implementation (Stacked Bar Visualization)
+- **2025-10-31**: Sales Waterfall Chart Implementation (Stacked Bar by Stage)
   - Replaced "Pipeline by Stage" chart with true waterfall chart using stacked bars
   - **Waterfall Logic**: Each bar starts where the previous bar ended (floating bars)
+  - **Stage-Based Visualization**: Bars represent sales pipeline stages, not individual opportunities
+  - **Stage Aggregation**: Multiple opportunities in same stage are summed together
+  - **All Stages Shown**: Displays all 6 pipeline stages even if zero opportunities ($0 value)
   - **First Bar**: "Gap to Target" (red) shows how much pipeline is needed to reach goal
-  - **Opportunity Bars**: Each opportunity (teal) stacks on top, showing incremental contribution
+  - **Stage Bars**: Each stage (Prospecting, Qualification, Proposal, Negotiation, Closed Won, Closed Lost) stacks on top with unique color
+  - **Color Palette**: Each stage gets distinct color from Health Trixss brand catalog
   - **Visual Structure**: Uses transparent base bars + stacked value bars to create floating effect
   - Added ability to set and save annual sales targets per year (stored in localStorage)
   - Created year selector to view waterfalls for different calendar years

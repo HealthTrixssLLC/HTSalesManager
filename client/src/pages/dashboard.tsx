@@ -35,7 +35,27 @@ type WaterfallDataPoint = {
   base?: number;
   isTotal?: boolean;
   isTarget?: boolean;
+  stageIndex?: number;
 };
+
+// Sales pipeline stages in order
+const PIPELINE_STAGES = [
+  { key: "prospecting", label: "Prospecting" },
+  { key: "qualification", label: "Qualification" },
+  { key: "proposal", label: "Proposal" },
+  { key: "negotiation", label: "Negotiation" },
+  { key: "closed_won", label: "Closed Won" },
+  { key: "closed_lost", label: "Closed Lost" },
+];
+
+const STAGE_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(186, 78%, 32%)", // Health Trixss primary teal
+];
 
 const COLORS = [
   "hsl(var(--chart-1))",
@@ -75,9 +95,16 @@ export default function Dashboard() {
     localStorage.setItem(`salesTarget_${selectedYear}`, newTarget.toString());
   };
 
-  // Build waterfall data with stacked bars (each starts where previous ended)
+  // Build waterfall data by stage (each stage starts where previous ended)
   const waterfallData: WaterfallDataPoint[] = [];
   if (opportunities) {
+    // Aggregate opportunities by stage
+    const stageValues = new Map<string, number>();
+    opportunities.forEach(opp => {
+      const current = stageValues.get(opp.stage) || 0;
+      stageValues.set(opp.stage, current + opp.amount);
+    });
+
     const totalActual = opportunities.reduce((sum, opp) => sum + opp.amount, 0);
     const gap = Math.max(0, salesTarget - totalActual);
     let cumulative = 0;
@@ -89,18 +116,21 @@ export default function Dashboard() {
         value: gap,
         cumulative: gap,
         isTotal: true,
+        stageIndex: -1,
       });
       cumulative = gap;
     }
     
-    // Add each opportunity (stacked on top)
-    opportunities.forEach((opp) => {
+    // Add each stage in order (even if zero)
+    PIPELINE_STAGES.forEach((stage, index) => {
+      const value = stageValues.get(stage.key) || 0;
       waterfallData.push({
-        name: opp.name.length > 15 ? opp.name.substring(0, 15) + "..." : opp.name,
-        value: opp.amount,
-        cumulative: cumulative + opp.amount,
+        name: stage.label,
+        value: value,
+        cumulative: cumulative + value,
+        stageIndex: index,
       });
-      cumulative += opp.amount;
+      cumulative += value;
     });
   }
 
@@ -260,7 +290,11 @@ export default function Dashboard() {
                   {waterfallData.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={entry.isTotal ? "hsl(var(--destructive))" : "hsl(var(--primary))"}
+                      fill={
+                        entry.isTotal 
+                          ? "hsl(var(--destructive))" 
+                          : STAGE_COLORS[entry.stageIndex! % STAGE_COLORS.length]
+                      }
                     />
                   ))}
                 </Bar>
