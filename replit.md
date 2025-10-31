@@ -21,9 +21,10 @@ A comprehensive, self-hosted CRM platform built for healthcare professionals. Th
 ### Advanced Features
 - **Lead Conversion Wizard** - Multi-step wizard with duplicate detection
 - **Opportunity Kanban Board** - Drag-and-drop pipeline management
-- **Configurable ID Patterns** - Custom ID generation with tokens ({PREFIX}, {YYYY}, {SEQ:n})
+- **Configurable ID Patterns** - Custom ID generation with tokens ({PREFIX}, {YYYY}, {SEQ:n}) and custom starting values
 - **Custom RBAC Framework** - Role-based access control (Admin, SalesManager, SalesRep, ReadOnly)
 - **Audit Logging** - Complete audit trail with before/after diffs
+- **Sales Waterfall Dashboard** - Annual sales target tracking with opportunity-level waterfall visualization by year
 - **Dashboard** - Pipeline insights, win rate, activities by user
 - **Admin Console** - User/role management, ID pattern config, backup/restore, database reset
 - **Backup & Restore** - Export/import database snapshots with encryption
@@ -181,6 +182,20 @@ All patterns are configurable via Admin Console using tokens like `{PREFIX}`, `{
 
 ## Recent Changes
 
+- **2025-10-31**: Sales Waterfall Chart Implementation
+  - Replaced "Pipeline by Stage" chart with interactive Sales Waterfall chart
+  - Added ability to set and save annual sales targets per year (stored in localStorage)
+  - Created year selector to view waterfalls for different calendar years
+  - Implemented `/api/dashboard/sales-waterfall/:year` endpoint to fetch opportunities by year
+  - Waterfall visualization shows: Target → Each Opportunity → Gap/Surplus
+  - Displays Target, Actual, and Gap summary statistics
+  - Uses ComposedChart with bars (opportunity values) and line (cumulative progress)
+  - Reference line shows target threshold
+- **2025-10-31**: ID Pattern Enhancement - Custom Starting Values
+  - Added `startValue` field to ID patterns (already in schema, now editable in UI)
+  - Enhanced ID generation to calculate: `startValue + (counter - 1)`
+  - Updated Admin Console dialog to allow setting starting value (e.g., 1000 for ACCT-2025-01000)
+  - Pattern cards now display: Counter, Start Value, and Last Issued ID
 - **2025-10-31**: Completed Backup & Restore implementation with security fixes
   - Built BackupService with AES-256-GCM encryption and gzip compression
   - Embedded SHA-256 checksum in backup files for integrity verification

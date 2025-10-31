@@ -486,6 +486,21 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.get("/api/dashboard/sales-waterfall/:year", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const year = parseInt(req.params.year);
+      if (isNaN(year) || year < 2000 || year > 2100) {
+        return res.status(400).json({ error: "Invalid year" });
+      }
+      
+      const waterfallData = await storage.getSalesWaterfallData(year);
+      return res.json(waterfallData);
+    } catch (error) {
+      console.error("Sales waterfall error:", error);
+      return res.status(500).json({ error: "Failed to fetch sales waterfall data" });
+    }
+  });
+  
   // ========== AUDIT LOG ROUTES ==========
   
   app.get("/api/audit-logs", authenticate, requirePermission("AuditLog", "read"), async (req: AuthRequest, res) => {

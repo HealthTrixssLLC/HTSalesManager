@@ -435,6 +435,39 @@ export class PostgresStorage implements IStorage {
     };
   }
   
+  async getSalesWaterfallData(year: number): Promise<{
+    name: string;
+    amount: number;
+    stage: string;
+    closeDate: string | null;
+  }[]> {
+    // Get all opportunities for the specified year (based on close date or created date)
+    const startOfYear = new Date(year, 0, 1);
+    const endOfYear = new Date(year, 11, 31, 23, 59, 59);
+    
+    const opps = await db
+      .select({
+        id: schema.opportunities.id,
+        name: schema.opportunities.name,
+        amount: schema.opportunities.amount,
+        stage: schema.opportunities.stage,
+        closeDate: schema.opportunities.closeDate,
+      })
+      .from(schema.opportunities)
+      .where(
+        sql`(${schema.opportunities.closeDate} >= ${startOfYear} AND ${schema.opportunities.closeDate} <= ${endOfYear})
+            OR (${schema.opportunities.closeDate} IS NULL AND ${schema.opportunities.createdAt} >= ${startOfYear})`
+      )
+      .orderBy(schema.opportunities.createdAt);
+    
+    return opps.map(opp => ({
+      name: opp.name,
+      amount: parseFloat(opp.amount || "0"),
+      stage: opp.stage,
+      closeDate: opp.closeDate?.toISOString() || null,
+    }));
+  }
+  
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {
