@@ -26,7 +26,7 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Audit Logging**: Comprehensive audit trail for all data mutations, including before/after JSON diffs.
 *   **Data Management**:
     *   **Backup & Restore**: Encrypted database snapshots (AES-256-GCM) with checksum verification, allowing import/export via the Admin Console.
-    *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports.
+    *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports. **Custom ID Preservation**: During CSV import, existing record IDs from external systems (e.g., Dynamics 365) are preserved exactly as provided, ensuring downstream systems and integrations continue to work without modifications. Leave ID column empty for auto-generation.
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
 *   **Help & Migration Guide**: Comprehensive documentation including a guide for migrating data from Dynamics 365.
 *   **Dashboard**: Provides key insights such as pipeline status, win rates, and user activity summaries.
