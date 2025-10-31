@@ -21,6 +21,7 @@ import OpportunitiesPage from "@/pages/opportunities-page";
 import ActivitiesPage from "@/pages/activities-page";
 import AdminConsole from "@/pages/admin-console";
 import AuditLogPage from "@/pages/audit-log-page";
+import HelpPage from "@/pages/help-page";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -63,6 +64,7 @@ function Router() {
       <ProtectedRoute path="/leads" component={LeadsPage} />
       <ProtectedRoute path="/opportunities" component={OpportunitiesPage} />
       <ProtectedRoute path="/activities" component={ActivitiesPage} />
+      <ProtectedRoute path="/help" component={HelpPage} />
       <ProtectedRoute path="/admin" component={AdminConsole} />
       <ProtectedRoute path="/audit-log" component={AuditLogPage} />
       
