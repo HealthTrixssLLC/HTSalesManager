@@ -1,0 +1,10 @@
+# Ensure shell scripts always use LF line endings (Unix), never CRLF (Windows)
+*.sh text eol=lf
+
+# Docker files should also use LF
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Default behavior: convert to native line endings on checkout, but preserve on commit
+* text=auto
