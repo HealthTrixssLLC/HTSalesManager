@@ -1057,7 +1057,11 @@ export function registerRoutes(app: Express) {
     try {
       const accounts = await storage.getAllAccounts();
       
-      const headers = ["id", "name", "email", "phone", "address", "website", "industry", "annualRevenue", "ownerId", "createdAt"];
+      const headers = [
+        "id", "name", "accountNumber", "type", "category", "industry", "website", "phone",
+        "primaryContactName", "primaryContactEmail", "billingAddress", "shippingAddress",
+        "externalId", "sourceSystem", "sourceRecordId", "importStatus", "importNotes"
+      ];
       const csv = arrayToCSV(accounts, headers);
       
       res.setHeader("Content-Type", "text/csv");
@@ -1184,12 +1188,21 @@ export function registerRoutes(app: Express) {
           const accountData: any = {
             id: row.id || "", // Will be auto-generated if empty
             name: row.name,
+            accountNumber: row.accountNumber || null,
             type: row.type || null,
+            category: row.category || null,
             industry: row.industry || null,
             website: row.website || null,
             phone: row.phone || null,
+            primaryContactName: row.primaryContactName || null,
+            primaryContactEmail: row.primaryContactEmail || null,
             billingAddress: row.billingAddress || null,
             shippingAddress: row.shippingAddress || null,
+            externalId: row.externalId || null,
+            sourceSystem: row.sourceSystem || null,
+            sourceRecordId: row.sourceRecordId || null,
+            importStatus: row.importStatus || null,
+            importNotes: row.importNotes || null,
             ownerId: req.user!.id,
           };
           
