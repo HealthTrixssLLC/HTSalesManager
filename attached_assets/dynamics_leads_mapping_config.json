@@ -54,10 +54,13 @@
     "importStatus": "imported",
     "source": "dynamics"
   },
-  "validation": {
+  "validation_rules": {
     "required_fields": ["firstName", "lastName"],
-    "email_format": true,
-    "phone_format": true
+    "email_fields": ["email"],
+    "phone_fields": ["phone"],
+    "url_fields": [],
+    "state_fields": [],
+    "postal_fields": []
   },
   "deduplication": {
     "enabled": false,
