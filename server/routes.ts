@@ -1184,25 +1184,25 @@ export function registerRoutes(app: Express) {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
-          // Prepare account data
+          // Prepare account data (use empty strings for optional fields to match schema validation)
           const accountData: any = {
             id: row.id || "", // Will be auto-generated if empty
             name: row.name,
-            accountNumber: row.accountNumber || null,
+            accountNumber: row.accountNumber || "",
             type: row.type || null,
-            category: row.category || null,
-            industry: row.industry || null,
-            website: row.website || null,
-            phone: row.phone || null,
-            primaryContactName: row.primaryContactName || null,
-            primaryContactEmail: row.primaryContactEmail || null,
-            billingAddress: row.billingAddress || null,
-            shippingAddress: row.shippingAddress || null,
-            externalId: row.externalId || null,
-            sourceSystem: row.sourceSystem || null,
-            sourceRecordId: row.sourceRecordId || null,
-            importStatus: row.importStatus || null,
-            importNotes: row.importNotes || null,
+            category: row.category || "",
+            industry: row.industry || "",
+            website: row.website || "",
+            phone: row.phone || "",
+            primaryContactName: row.primaryContactName || "",
+            primaryContactEmail: row.primaryContactEmail || "",
+            billingAddress: row.billingAddress || "",
+            shippingAddress: row.shippingAddress || "",
+            externalId: row.externalId || "",
+            sourceSystem: row.sourceSystem || "",
+            sourceRecordId: row.sourceRecordId || "",
+            importStatus: row.importStatus || "",
+            importNotes: row.importNotes || "",
             ownerId: req.user!.id,
           };
           
