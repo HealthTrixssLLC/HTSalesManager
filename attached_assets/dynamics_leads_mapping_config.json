@@ -1,52 +1,24 @@
 {
   "entity_type": "leads",
   "sheet_name": "All Leads",
-  "id_pattern": "LEAD-{{SEQ:6}}",
+  "target_template": "leads-template.csv",
+  "column_mapping": {
+    "(Do Not Modify) Lead": "externalId",
+    "First Name": "firstName",
+    "Last Name": "lastName",
+    "Company Name": "company",
+    "Email": "email",
+    "Business Phone": "phone",
+    "Topic": "topic",
+    "Status Reason": "status",
+    "Lead Source": "source"
+  },
   "id_rules": {
     "internal_id_field": "id",
-    "internal_id_pattern": "LEAD-{{SEQ:6}}",
+    "internal_id_pattern": "LEAD-{{000001}}",
     "external_id_fields": [
       "externalId"
     ]
-  },
-  "column_mapping": {
-    "(Do Not Modify) Lead": {
-      "target": "externalId",
-      "type": "string"
-    },
-    "First Name": {
-      "target": "firstName",
-      "type": "string",
-      "required": true
-    },
-    "Last Name": {
-      "target": "lastName",
-      "type": "string",
-      "required": true
-    },
-    "Email": {
-      "target": "email",
-      "type": "email"
-    },
-    "Business Phone": {
-      "target": "phone",
-      "type": "phone"
-    },
-    "Topic": {
-      "target": "topic",
-      "type": "string"
-    },
-    "Status Reason": {
-      "target": "status",
-      "type": "enum",
-      "mapping": {
-        "New": "new",
-        "Contacted": "contacted",
-        "Qualified": "qualified",
-        "Unqualified": "unqualified"
-      },
-      "default": "new"
-    }
   },
   "governance_fields": {
     "sourceSystem": "Dynamics 365",
