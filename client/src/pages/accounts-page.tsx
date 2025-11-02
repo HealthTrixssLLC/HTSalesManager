@@ -53,11 +53,15 @@ export default function AccountsPage() {
     defaultValues: {
       id: "",
       name: "",
+      accountNumber: "",
+      category: "",
       type: "customer",
       ownerId: user?.id || "",
       industry: "",
       website: "",
       phone: "",
+      primaryContactName: "",
+      primaryContactEmail: "",
       billingAddress: "",
       shippingAddress: "",
     },
@@ -153,6 +157,34 @@ export default function AccountsPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="accountNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Account Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ACC-12345" {...field} value={field.value || ""} data-testid="input-account-number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Provider, Payer, etc." {...field} value={field.value || ""} data-testid="input-account-category" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="type"
@@ -218,6 +250,34 @@ export default function AccountsPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="primaryContactName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Contact Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} value={field.value || ""} data-testid="input-primary-contact-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="primaryContactEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Contact Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="john.doe@example.com" {...field} value={field.value || ""} data-testid="input-primary-contact-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <FormField
                   control={form.control}
                   name="billingAddress"
@@ -273,6 +333,8 @@ export default function AccountsPage() {
                 <TableRow>
                   <TableHead>Account ID</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Account Number</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Industry</TableHead>
                   <TableHead>Phone</TableHead>
@@ -289,6 +351,8 @@ export default function AccountsPage() {
                   >
                     <TableCell className="font-mono text-sm">{account.id}</TableCell>
                     <TableCell className="font-medium">{account.name}</TableCell>
+                    <TableCell>{account.accountNumber || "-"}</TableCell>
+                    <TableCell>{account.category || "-"}</TableCell>
                     <TableCell className="capitalize">{account.type || "-"}</TableCell>
                     <TableCell>{account.industry || "-"}</TableCell>
                     <TableCell>{account.phone || "-"}</TableCell>

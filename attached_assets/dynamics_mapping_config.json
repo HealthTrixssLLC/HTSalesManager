@@ -17,7 +17,8 @@
     "internal_id_field": "id",
     "internal_id_pattern": "ACC-{{YYYY}}{{MM}}-{{00001}}",
     "external_id_fields": [
-      "HT Account Number"
+      "accountNumber",
+      "externalId"
     ]
   },
   "validation_rules": {

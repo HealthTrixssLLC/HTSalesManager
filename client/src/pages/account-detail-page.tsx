@@ -41,7 +41,7 @@ export default function AccountDetailPage() {
     );
   }
 
-  const getStatusVariant = (type?: string) => {
+  const getStatusVariant = (type?: string | null) => {
     if (!type) return "default";
     if (type.toLowerCase() === "customer") return "default";
     if (type.toLowerCase() === "prospect") return "secondary";
@@ -68,34 +68,40 @@ export default function AccountDetailPage() {
           <DetailSection title="Account Information">
             <DetailField label="Account Name" value={account.name} />
             <DetailField label="Account ID" value={account.id} />
+            <DetailField label="Account Number" value={account.accountNumber} />
+            <DetailField label="Category" value={account.category} />
             <DetailField label="Type" value={account.type} />
             <DetailField label="Industry" value={account.industry} />
             <DetailField label="Website" value={account.website} type="url" />
             <DetailField label="Phone" value={account.phone} type="phone" />
           </DetailSection>
 
-          <DetailSection title="Address Information">
-            <DetailField label="Billing Street" value={account.billingStreet} />
-            <DetailField label="Billing City" value={account.billingCity} />
-            <DetailField label="Billing State" value={account.billingState} />
-            <DetailField label="Billing Postal Code" value={account.billingPostalCode} />
-            <DetailField label="Billing Country" value={account.billingCountry} />
-            <DetailField label="Shipping Street" value={account.shippingStreet} />
-            <DetailField label="Shipping City" value={account.shippingCity} />
-            <DetailField label="Shipping State" value={account.shippingState} />
-            <DetailField label="Shipping Postal Code" value={account.shippingPostalCode} />
-            <DetailField label="Shipping Country" value={account.shippingCountry} />
+          <DetailSection title="Primary Contact Information">
+            <DetailField label="Primary Contact Name" value={account.primaryContactName} />
+            <DetailField label="Primary Contact Email" value={account.primaryContactEmail} type="email" />
           </DetailSection>
 
-          {account.description && (
-            <DetailSection title="Description">
-              <div className="col-span-full">
-                <p className="text-sm whitespace-pre-wrap">{account.description}</p>
-              </div>
+          <DetailSection title="Address Information">
+            <DetailField label="Billing Address" value={account.billingAddress} />
+            <DetailField label="Shipping Address" value={account.shippingAddress} />
+          </DetailSection>
+
+          {(account.externalId || account.sourceSystem || account.sourceRecordId || account.importStatus || account.importNotes) && (
+            <DetailSection title="Import Information">
+              <DetailField label="External ID" value={account.externalId} />
+              <DetailField label="Source System" value={account.sourceSystem} />
+              <DetailField label="Source Record ID" value={account.sourceRecordId} />
+              <DetailField label="Import Status" value={account.importStatus} />
+              {account.importNotes && (
+                <div className="col-span-full">
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Import Notes</p>
+                  <p className="text-sm whitespace-pre-wrap">{account.importNotes}</p>
+                </div>
+              )}
             </DetailSection>
           )}
 
-          <CommentSystem entityType="Account" entityId={account.id} />
+          <CommentSystem entity="accounts" entityId={account.id} />
         </div>
 
         <div className="space-y-6">

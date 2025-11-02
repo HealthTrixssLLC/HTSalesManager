@@ -357,7 +357,12 @@ export type InsertPermission = z.infer<typeof insertPermissionSchema>;
 export type Permission = typeof permissions.$inferSelect;
 
 // Accounts
-export const insertAccountSchema = createInsertSchema(accounts).omit({ createdAt: true, updatedAt: true });
+export const insertAccountSchema = createInsertSchema(accounts).omit({ createdAt: true, updatedAt: true }).extend({
+  accountNumber: z.string().optional(),
+  category: z.string().optional(),
+  primaryContactName: z.string().optional(),
+  primaryContactEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
+});
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accounts.$inferSelect;
 
