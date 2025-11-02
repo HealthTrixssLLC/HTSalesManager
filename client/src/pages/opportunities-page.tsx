@@ -281,7 +281,14 @@ export default function OpportunitiesPage() {
                     onClick={() => setLocation(`/opportunities/${opp.id}`)}
                   >
                     <div className="space-y-2">
-                      <h4 className="font-medium text-sm">{opp.name}</h4>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-medium text-sm">{opp.name}</h4>
+                        {opp.rating && (
+                          <Badge variant="outline" className="text-xs h-5">
+                            {opp.rating}
+                          </Badge>
+                        )}
+                      </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <DollarSign className="h-3 w-3" />
@@ -289,6 +296,11 @@ export default function OpportunitiesPage() {
                         </span>
                         <span>{opp.probability}%</span>
                       </div>
+                      {opp.status && (
+                        <div className="text-xs text-muted-foreground">
+                          Status: {opp.status}
+                        </div>
+                      )}
                       {opp.closeDate && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Calendar className="h-3 w-3" />

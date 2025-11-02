@@ -70,13 +70,33 @@ export default function OpportunityDetailPage() {
             <DetailField label="Opportunity Name" value={opportunity.name} />
             <DetailField label="Opportunity ID" value={opportunity.id} />
             <DetailField label="Stage" value={opportunity.stage} />
+            <DetailField label="Status" value={opportunity.status} />
+            <DetailField label="Rating" value={opportunity.rating} />
             <DetailField label="Amount" value={opportunity.amount} type="currency" />
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
-            <DetailField label="Type" value={opportunity.type} />
-            <DetailField label="Lead Source" value={opportunity.leadSource} />
-            <DetailField label="Next Step" value={opportunity.nextStep} />
           </DetailSection>
+
+          <DetailSection title="Revenue & Dates">
+            <DetailField label="Actual Revenue" value={opportunity.actualRevenue} type="currency" />
+            <DetailField label="Actual Close Date" value={opportunity.actualCloseDate} type="date" />
+            <DetailField label="Est. Revenue" value={opportunity.estRevenue} type="currency" />
+            <DetailField label="Est. Close Date" value={opportunity.estCloseDate} type="date" />
+          </DetailSection>
+
+          {(opportunity.externalId || opportunity.sourceSystem) && (
+            <DetailSection title="Import Information">
+              <DetailField label="External ID" value={opportunity.externalId} />
+              <DetailField label="Source System" value={opportunity.sourceSystem} />
+              <DetailField label="Source Record ID" value={opportunity.sourceRecordId} />
+              <DetailField label="Import Status" value={opportunity.importStatus} />
+              {opportunity.importNotes && (
+                <div className="col-span-full">
+                  <p className="text-sm text-muted-foreground">{opportunity.importNotes}</p>
+                </div>
+              )}
+            </DetailSection>
+          )}
 
           {opportunity.description && (
             <DetailSection title="Description">
