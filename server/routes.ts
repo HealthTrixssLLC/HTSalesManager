@@ -1442,6 +1442,14 @@ export function registerRoutes(app: Express) {
             ownerId: req.user!.id,
           };
           
+          // Validate accountId exists if provided
+          if (contactData.accountId) {
+            const account = await storage.getAccountById(contactData.accountId);
+            if (!account) {
+              throw new Error(`Account ID '${contactData.accountId}' does not exist. Please import accounts first or use a valid Account ID.`);
+            }
+          }
+          
           const validated = insertContactSchema.parse(contactData);
           await storage.createContact(validated);
           await createAudit(req, "import", "Contact", validated.id, null, validated);
