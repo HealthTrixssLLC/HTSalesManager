@@ -35,7 +35,8 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Data Management**:
     *   **Backup & Restore**: Encrypted database snapshots (AES-256-GCM) with checksum verification, allowing import/export via the Admin Console.
     *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports. **Custom ID Preservation**: During CSV import, existing record IDs from external systems (e.g., Dynamics 365) are preserved exactly as provided, ensuring downstream systems and integrations continue to work without modifications. Leave ID column empty for auto-generation.
-    *   **Dynamics 365 Account Import**: Specialized transformation tool in Admin Console for migrating Dynamics 365 account data with 17 enriched account fields:
+    *   **Dynamics 365 Migration Tools**: Specialized transformation tools in Admin Console for migrating Dynamics 365 data (accounts, contacts, leads):
+        *   **Account Import**: Transform Dynamics 365 account data with 17 enriched account fields:
         *   **Structured Address Fields**: billingStreet/City/State/PostalCode, shippingStreet/City/State/PostalCode for proper address handling
         *   **Account Metadata**: accountNumber (external system ID), category, industry classification
         *   **Primary Contact Integration**: primaryContactName, primaryContactEmail for key stakeholder tracking
@@ -48,8 +49,10 @@ The design system is inspired by Linear, focusing on a clean, professional enter
         *   Deduplication based on Account Name + Account Number with configurable fuzzy matching (default 90% threshold)
         *   Governance metadata injection preserves Dynamics GUID as sourceRecordId for downstream integrations
         *   Template-aligned CSV output for seamless import into CRM
+        *   **Contact Import**: Transform Dynamics 365 contact data with automatic account linking via fuzzy name matching and support for external IDs, governance metadata tracking
+        *   **Lead Import**: Transform Dynamics 365 lead data with topic field mapping, status reason conversion, and complete import governance tracking (externalId, sourceSystem, sourceRecordId, importStatus, importNotes)
         *   Complete user guide: `DYNAMICS_IMPORT_GUIDE.md`
-        *   Files: `server/dynamics-mapper.ts`, API endpoint `/api/admin/dynamics/transform-accounts`, config: `attached_assets/dynamics_mapping_config.json`
+        *   Files: `server/dynamics-mapper.ts`, API endpoints (`/api/admin/dynamics/transform-accounts`, `/transform-contacts`, `/transform-leads`), config files in `attached_assets/`
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
     *   **User Management**: Inline editing of user attributes (name, email, role) with role dropdown selector
     *   **Role Assignment**: Admins can view and modify user roles directly from the Users tab
