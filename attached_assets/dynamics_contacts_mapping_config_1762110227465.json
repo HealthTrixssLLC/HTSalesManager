@@ -28,8 +28,7 @@
     ],
     "phone_fields": [
       "phone"
-    ],
-    "url_fields": []
+    ]
   },
   "dedupe_rules": {
     "primary_key": [

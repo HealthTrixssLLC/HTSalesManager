@@ -27,6 +27,13 @@ export interface DynamicsMappingConfig {
   };
   governance_fields?: Record<string, string>;
   type_mapping?: Record<string, string>;
+  account_lookup?: {
+    enabled: boolean;
+    source_column: string;
+    target_field: string;
+    lookup_strategy: string;
+    fallback: string;
+  };
 }
 
 export interface AccountRow {
