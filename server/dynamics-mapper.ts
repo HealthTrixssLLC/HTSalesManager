@@ -117,13 +117,6 @@ export class DynamicsMapper {
         }
       }
       
-      // Copy unmapped columns as-is
-      for (const [key, value] of Object.entries(row)) {
-        if (!this.config.column_mapping[key]) {
-          mapped[key] = value;
-        }
-      }
-      
       return mapped;
     });
   }
@@ -320,7 +313,12 @@ export class DynamicsMapper {
       row['importStatus'] = importStatus;
     }
 
-    // Set Source Record ID from first available external ID
+    // Set Source Record ID from externalId (Dynamics GUID) if available
+    if (!row['sourceRecordId'] && row['externalId'] && row['externalId'].trim()) {
+      row['sourceRecordId'] = row['externalId'];
+    }
+
+    // If still no sourceRecordId, try external ID fields
     if (!row['sourceRecordId']) {
       for (const field of this.config.id_rules.external_id_fields) {
         if (row[field] && row[field].trim()) {
