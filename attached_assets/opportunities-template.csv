@@ -1,2 +1,2 @@
-id,name,accountId,amount,stage,probability,closeDate,ownerId,externalId,sourceSystem,sourceRecordId,importStatus,importNotes
-OPP-2025-000001,Sample Opportunity Name,ACC-2025-000001,50000.00,qualification,60,2025-12-31,user_id_here,dynamics-guid-here,Dynamics 365,dynamics-guid-here,imported,
+id,name,accountId,amount,stage,probability,closeDate,ownerId,status,actualCloseDate,actualRevenue,estCloseDate,estRevenue,rating,externalId,sourceSystem,sourceRecordId,importStatus,importNotes
+OPP-2025-000001,Sample Opportunity Name,ACC-2025-000001,50000.00,qualification,60,2025-12-31,user_id_here,Open,2025-12-15,60000.00,2025-12-31,50000.00,Hot,dynamics-guid-here,Dynamics 365,dynamics-guid-here,imported,
