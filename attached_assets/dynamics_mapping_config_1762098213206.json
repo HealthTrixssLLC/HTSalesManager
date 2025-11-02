@@ -1,0 +1,57 @@
+{
+  "source_file": "Active Accounts 11-2-2025 9-04-12 AM.xlsx",
+  "sheet_name": "Active Accounts",
+  "target_template": "accounts-template.dynamics.csv",
+  "column_mapping": {
+    "Modified On": "Modified On",
+    "Account Name": "Account Name",
+    "Main Phone": "Phone",
+    "Primary Contact": "Primary Contact",
+    "Email": "Email"
+  },
+  "id_rules": {
+    "internal_id_field": "Record ID",
+    "internal_id_pattern": "ACC-{{YYYY}}{{MM}}-{{00001}}",
+    "external_id_fields": [
+      "External Account ID",
+      "Account Number"
+    ]
+  },
+  "validation_rules": {
+    "required_fields": [
+      "Account Name"
+    ],
+    "email_fields": [
+      "Email"
+    ],
+    "phone_fields": [
+      "Phone",
+      "Fax"
+    ],
+    "url_fields": [
+      "Website"
+    ],
+    "state_fields": [
+      "Billing State/Province",
+      "Shipping State/Province"
+    ],
+    "postal_fields": [
+      "Billing Postal Code",
+      "Shipping Postal Code"
+    ]
+  },
+  "dedupe_rules": {
+    "primary_key": [
+      "Account Name",
+      "Billing City",
+      "Billing State/Province"
+    ],
+    "fuzzy_match_threshold": 90
+  },
+  "governance_fields": [
+    "Source System",
+    "Source Record ID",
+    "Import Status",
+    "Import Notes"
+  ]
+}
