@@ -1,0 +1,60 @@
+{
+  "entity_type": "leads",
+  "sheet_name": "All Leads",
+  "id_pattern": "LEAD-{{SEQ:6}}",
+  "column_mapping": {
+    "(Do Not Modify) Lead": {
+      "target": "externalId",
+      "type": "string"
+    },
+    "First Name": {
+      "target": "firstName",
+      "type": "string",
+      "required": true
+    },
+    "Last Name": {
+      "target": "lastName",
+      "type": "string",
+      "required": true
+    },
+    "Email": {
+      "target": "email",
+      "type": "email"
+    },
+    "Business Phone": {
+      "target": "phone",
+      "type": "phone"
+    },
+    "Topic": {
+      "target": "topic",
+      "type": "string"
+    },
+    "Status Reason": {
+      "target": "status",
+      "type": "enum",
+      "mapping": {
+        "New": "new",
+        "Contacted": "contacted",
+        "Qualified": "qualified",
+        "Unqualified": "unqualified"
+      },
+      "default": "new"
+    }
+  },
+  "governance": {
+    "sourceSystem": "Dynamics 365",
+    "sourceRecordId_from": "externalId",
+    "importStatus": "imported",
+    "source": "dynamics"
+  },
+  "validation": {
+    "required_fields": ["firstName", "lastName"],
+    "email_format": true,
+    "phone_format": true
+  },
+  "deduplication": {
+    "enabled": false,
+    "fields": ["email"],
+    "fuzzy_threshold": 0.9
+  }
+}

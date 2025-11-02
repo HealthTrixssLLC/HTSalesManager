@@ -115,6 +115,7 @@ export const leads = pgTable("leads", {
   company: text("company"),
   email: text("email"),
   phone: text("phone"),
+  topic: text("topic"), // Lead subject/description
   status: leadStatusEnum("status").notNull().default("new"),
   source: leadSourceEnum("source"),
   ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
@@ -122,12 +123,19 @@ export const leads = pgTable("leads", {
   convertedContactId: varchar("converted_contact_id", { length: 100 }).references(() => contacts.id),
   convertedOpportunityId: varchar("converted_opportunity_id", { length: 100 }).references(() => opportunities.id),
   convertedAt: timestamp("converted_at"),
+  // Import governance fields for Dynamics 365 migration
+  externalId: text("external_id"), // Original Dynamics 365 GUID
+  sourceSystem: text("source_system"), // E.g., "Dynamics 365"
+  sourceRecordId: text("source_record_id"), // External system record ID
+  importStatus: text("import_status"), // Import tracking status
+  importNotes: text("import_notes"), // Notes from import process
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   ownerIdIdx: index("leads_owner_id_idx").on(table.ownerId),
   statusIdx: index("leads_status_idx").on(table.status),
   emailIdx: index("leads_email_idx").on(table.email),
+  externalIdIdx: index("leads_external_id_idx").on(table.externalId),
 }));
 
 export const opportunities = pgTable("opportunities", {
