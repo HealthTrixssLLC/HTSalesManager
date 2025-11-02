@@ -23,6 +23,7 @@ type UserWithRoles = User & { roles: Role[] };
 export default function AdminConsole() {
   const { toast } = useToast();
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [confirmClearAccountsOpen, setConfirmClearAccountsOpen] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<IdPattern | null>(null);
   const [patternPreview, setPatternPreview] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -189,6 +190,18 @@ export default function AdminConsole() {
       toast({ title: "Database reset successfully" });
       queryClient.invalidateQueries();
       setConfirmResetOpen(false);
+    },
+  });
+
+  const clearAccountsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/clear-accounts", {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "All accounts cleared successfully" });
+      queryClient.invalidateQueries();
+      setConfirmClearAccountsOpen(false);
     },
   });
   
@@ -711,6 +724,21 @@ export default function AdminConsole() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label>Clear All Accounts</Label>
+                <p className="text-sm text-muted-foreground">
+                  Delete all accounts and related data (contacts, opportunities, activities, comments). Useful for re-importing fresh data from Dynamics 365.
+                </p>
+                <Button
+                  variant="destructive"
+                  onClick={() => setConfirmClearAccountsOpen(true)}
+                  data-testid="button-clear-accounts"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear All Accounts
+                </Button>
+              </div>
+              
+              <div className="border-t pt-4 space-y-2">
                 <Label>Reset Database</Label>
                 <p className="text-sm text-muted-foreground">
                   Delete all data and reset the database to initial state. This action cannot be undone.
@@ -789,6 +817,29 @@ export default function AdminConsole() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Confirm Clear Accounts Dialog */}
+      <AlertDialog open={confirmClearAccountsOpen} onOpenChange={setConfirmClearAccountsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all accounts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete all accounts and related data including contacts, opportunities, activities, and account comments.
+              This is useful when you want to re-import fresh data from Dynamics 365. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-clear-accounts">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => clearAccountsMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-clear-accounts"
+            >
+              Yes, clear all accounts
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirm Reset Dialog */}
       <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>

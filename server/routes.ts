@@ -968,6 +968,36 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to reset database" });
     }
   });
+
+  app.post("/api/admin/clear-accounts", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      // Delete all accounts and related data (in reverse dependency order)
+      // Delete comments related to accounts
+      await db.execute(sql`DELETE FROM comments WHERE entity_type = 'Account'`);
+      
+      // Delete activities linked to accounts
+      await db.execute(sql`DELETE FROM activities WHERE account_id IS NOT NULL`);
+      
+      // Delete opportunities (they reference accounts)
+      await db.execute(sql`DELETE FROM opportunities`);
+      
+      // Delete contacts (they reference accounts)
+      await db.execute(sql`DELETE FROM contacts`);
+      
+      // Finally delete accounts
+      await db.execute(sql`DELETE FROM accounts`);
+      
+      await createAudit(req, "delete", "Account", null, null, { 
+        message: "All accounts cleared",
+        timestamp: new Date().toISOString(),
+      });
+      
+      return res.json({ success: true, message: "All accounts cleared successfully" });
+    } catch (error) {
+      console.error("Clear accounts error:", error);
+      return res.status(500).json({ error: "Failed to clear accounts" });
+    }
+  });
   
   // ========== DYNAMICS 365 IMPORT ROUTES ==========
   
