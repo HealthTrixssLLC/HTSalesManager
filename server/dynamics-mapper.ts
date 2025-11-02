@@ -12,6 +12,7 @@ export interface DynamicsMappingConfig {
     internal_id_field: string;
     internal_id_pattern: string;
     external_id_fields: string[];
+    preserve_external_format?: boolean;
   };
   validation_rules: {
     required_fields: string[];
@@ -20,6 +21,8 @@ export interface DynamicsMappingConfig {
     url_fields: string[];
     state_fields?: string[];
     postal_fields?: string[];
+    decimal_fields?: string[];
+    date_fields?: string[];
   };
   dedupe_rules: {
     primary_key: string[];
@@ -27,6 +30,7 @@ export interface DynamicsMappingConfig {
   };
   governance_fields?: Record<string, string>;
   type_mapping?: Record<string, Record<string, string>>; // field -> { sourceValue -> targetValue }
+  computed_fields?: Record<string, any>; // field -> computation rules
   account_lookup?: {
     enabled: boolean;
     source_column: string;
@@ -136,7 +140,11 @@ export class DynamicsMapper {
     for (const field of this.config.id_rules.external_id_fields) {
       const externalId = row[field];
       if (externalId && externalId.trim()) {
-        // Normalize: remove non-alphanumeric characters
+        // If preserve_external_format is true, keep the ID as-is
+        if (this.config.id_rules.preserve_external_format) {
+          return externalId.trim();
+        }
+        // Otherwise normalize: remove non-alphanumeric characters
         return externalId.replace(/\W+/g, '');
       }
     }
@@ -368,6 +376,68 @@ export class DynamicsMapper {
   }
 
   /**
+   * Apply computed fields logic (coalesce, conditional, etc.)
+   */
+  applyComputedFields(row: AccountRow): AccountRow {
+    if (!this.config.computed_fields) return row;
+
+    for (const [fieldName, computation] of Object.entries(this.config.computed_fields)) {
+      const logic = computation.logic;
+
+      if (logic === 'coalesce') {
+        // Take first non-empty value from sources
+        const sources = computation.sources || [];
+        let value = computation.default || '';
+        
+        for (const source of sources) {
+          const sourceValue = row[source];
+          if (sourceValue !== undefined && sourceValue !== null && sourceValue !== '') {
+            // Handle Excel date serial numbers
+            if (computation.is_date && !isNaN(Number(sourceValue))) {
+              value = this.excelDateToISO(Number(sourceValue));
+            } else {
+              value = sourceValue;
+            }
+            break;
+          }
+        }
+        
+        row[fieldName] = value;
+      }
+      else if (logic === 'conditional') {
+        // Apply if-then rules
+        const rules = computation.rules || [];
+        let value = computation.default || '';
+        
+        for (const rule of rules) {
+          const condition = rule.if;
+          
+          // Parse simple conditions like "status == 'Won'" or "rating == 'Hot'"
+          const match = condition.match(/(\w+)\s*==\s*['"](.+)['"]/);
+          if (match) {
+            const [, condField, condValue] = match;
+            if (row[condField] === condValue) {
+              value = rule.then;
+              break;
+            }
+          }
+        }
+        
+        row[fieldName] = value.toString();
+      }
+      else if (logic === 'use_status_mapping') {
+        // Use type_mapping for status -> stage conversion
+        if (this.config.type_mapping && this.config.type_mapping['status']) {
+          const statusValue = row['status'];
+          row[fieldName] = this.config.type_mapping['status'][statusValue] || computation.default || '';
+        }
+      }
+    }
+
+    return row;
+  }
+
+  /**
    * Perform account lookup by name
    */
   lookupAccountByName(companyName: string, existingAccounts: any[]): string | null {
@@ -433,6 +503,9 @@ export class DynamicsMapper {
 
     // Step 3: Apply type mapping (e.g., "Customer" -> "customer")
     data = data.map(row => this.applyTypeMapping(row));
+
+    // Step 3.5: Apply computed fields (coalesce, conditional, etc.)
+    data = data.map(row => this.applyComputedFields(row));
 
     // Step 4: Get template columns
     const templateColumns = this.getTemplateColumns(templateCsv);

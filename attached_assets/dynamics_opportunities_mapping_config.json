@@ -32,12 +32,13 @@
     "amount": {
       "logic": "coalesce",
       "sources": ["actualRevenue", "estRevenue"],
-      "default": 0
+      "default": "0"
     },
     "closeDate": {
       "logic": "coalesce",
       "sources": ["actualCloseDate", "estCloseDate"],
-      "default": null
+      "is_date": true,
+      "default": ""
     },
     "probability": {
       "logic": "conditional",
