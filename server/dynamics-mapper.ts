@@ -26,7 +26,7 @@ export interface DynamicsMappingConfig {
     fuzzy_match_threshold: number;
   };
   governance_fields?: Record<string, string>;
-  type_mapping?: Record<string, string>;
+  type_mapping?: Record<string, Record<string, string>>; // field -> { sourceValue -> targetValue }
   account_lookup?: {
     enabled: boolean;
     source_column: string;
@@ -351,15 +351,16 @@ export class DynamicsMapper {
 
   /**
    * Apply type mapping to convert source values to target enum values
+   * Supports per-field mappings: { "status": { "New": "new", "Contacted": "contacted" } }
    */
   applyTypeMapping(row: AccountRow): AccountRow {
     if (!this.config.type_mapping) return row;
 
-    // Apply type mapping if configured
-    for (const [sourceValue, targetValue] of Object.entries(this.config.type_mapping)) {
-      if (row.type === sourceValue) {
-        row.type = targetValue;
-        break;
+    // Apply type mapping for each configured field
+    for (const [fieldName, mappings] of Object.entries(this.config.type_mapping)) {
+      const sourceValue = row[fieldName];
+      if (sourceValue && mappings[sourceValue]) {
+        row[fieldName] = mappings[sourceValue];
       }
     }
 

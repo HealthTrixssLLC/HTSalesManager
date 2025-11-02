@@ -13,6 +13,24 @@
     "Status Reason": "status",
     "Lead Source": "source"
   },
+  "type_mapping": {
+    "status": {
+      "New": "new",
+      "Contacted": "contacted",
+      "Qualified": "qualified",
+      "Unqualified": "unqualified",
+      "Converted": "converted"
+    },
+    "source": {
+      "Web Site": "website",
+      "Referral": "referral",
+      "Phone Call": "phone",
+      "Email": "email",
+      "Event": "event",
+      "Partner": "partner",
+      "Other": "other"
+    }
+  },
   "id_rules": {
     "internal_id_field": "id",
     "internal_id_pattern": "LEAD-{{000001}}",
