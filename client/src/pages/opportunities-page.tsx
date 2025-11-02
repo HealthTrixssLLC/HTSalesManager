@@ -81,6 +81,12 @@ export default function OpportunitiesPage() {
       probability: 0,
       ownerId: user?.id || "",
       closeDate: null,
+      status: null,
+      actualCloseDate: null,
+      actualRevenue: null,
+      estCloseDate: null,
+      estRevenue: null,
+      rating: null,
     },
   });
 
@@ -244,6 +250,34 @@ export default function OpportunitiesPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Open, Won, Lost" {...field} value={field.value || ""} data-testid="input-opportunity-status" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="rating"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Rating</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Hot, Warm, Cold" {...field} value={field.value || ""} data-testid="input-opportunity-rating" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
