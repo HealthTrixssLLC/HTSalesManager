@@ -21,6 +21,7 @@ import type {
   Permission, InsertPermission,
   AuditLog, InsertAuditLog,
   IdPattern, InsertIdPattern,
+  AccountCategory, InsertAccountCategory,
   BackupJob, InsertBackupJob,
 } from "@shared/schema";
 
@@ -380,6 +381,34 @@ export class PostgresStorage implements IStorage {
       .where(eq(schema.idPatterns.id, pattern.id));
     
     return generatedId;
+  }
+  
+  // ========== ACCOUNT CATEGORIES ==========
+  
+  async getAllAccountCategories(): Promise<AccountCategory[]> {
+    return await db.select().from(schema.accountCategories).orderBy(asc(schema.accountCategories.name));
+  }
+  
+  async getAccountCategory(id: string): Promise<AccountCategory | undefined> {
+    const result = await db.select().from(schema.accountCategories).where(eq(schema.accountCategories.id, id)).limit(1);
+    return result[0];
+  }
+  
+  async createAccountCategory(category: InsertAccountCategory): Promise<AccountCategory> {
+    const result = await db.insert(schema.accountCategories).values(category).returning();
+    return result[0];
+  }
+  
+  async updateAccountCategory(id: string, category: Partial<AccountCategory>): Promise<AccountCategory> {
+    const result = await db.update(schema.accountCategories)
+      .set({ ...category, updatedAt: new Date() })
+      .where(eq(schema.accountCategories.id, id))
+      .returning();
+    return result[0];
+  }
+  
+  async deleteAccountCategory(id: string): Promise<void> {
+    await db.delete(schema.accountCategories).where(eq(schema.accountCategories.id, id));
   }
   
   // ========== BACKUP JOBS ==========

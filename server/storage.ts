@@ -12,6 +12,7 @@ import type {
   Permission, InsertPermission,
   AuditLog, InsertAuditLog,
   IdPattern, InsertIdPattern,
+  AccountCategory, InsertAccountCategory,
   BackupJob, InsertBackupJob,
 } from "@shared/schema";
 
@@ -77,6 +78,13 @@ export interface IStorage {
   getIdPattern(entity: string): Promise<IdPattern | undefined>;
   updateIdPattern(id: string, pattern: Partial<IdPattern>): Promise<IdPattern>;
   generateId(entity: string): Promise<string>;
+  
+  // ========== ACCOUNT CATEGORIES ==========
+  getAllAccountCategories(): Promise<AccountCategory[]>;
+  getAccountCategory(id: string): Promise<AccountCategory | undefined>;
+  createAccountCategory(category: InsertAccountCategory): Promise<AccountCategory>;
+  updateAccountCategory(id: string, category: Partial<AccountCategory>): Promise<AccountCategory>;
+  deleteAccountCategory(id: string): Promise<void>;
   
   // ========== BACKUP JOBS ==========
   getAllBackupJobs(): Promise<BackupJob[]>;

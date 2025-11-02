@@ -861,6 +861,82 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // ========== ACCOUNT CATEGORIES ROUTES ==========
+  
+  app.get("/api/admin/categories", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const categories = await storage.getAllAccountCategories();
+      return res.json(categories);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+  
+  app.post("/api/admin/categories", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { name, description, isActive } = req.body;
+      
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Category name is required" });
+      }
+      
+      const category = await storage.createAccountCategory({
+        name: name.trim(),
+        description: description || null,
+        isActive: isActive !== undefined ? isActive : true,
+      });
+      
+      await createAudit(req, "create", "AccountCategory", category.id, null, category);
+      
+      return res.json(category);
+    } catch (error: any) {
+      if (error?.message?.includes("unique")) {
+        return res.status(400).json({ error: "Category name already exists" });
+      }
+      return res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+  
+  app.patch("/api/admin/categories/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { name, description, isActive } = req.body;
+      const updates: any = {};
+      
+      if (name !== undefined) updates.name = name.trim();
+      if (description !== undefined) updates.description = description;
+      if (isActive !== undefined) updates.isActive = isActive;
+      
+      const before = await storage.getAccountCategory(req.params.id);
+      const updatedCategory = await storage.updateAccountCategory(req.params.id, updates);
+      
+      await createAudit(req, "update", "AccountCategory", req.params.id, before, updatedCategory);
+      
+      return res.json(updatedCategory);
+    } catch (error: any) {
+      if (error?.message?.includes("unique")) {
+        return res.status(400).json({ error: "Category name already exists" });
+      }
+      return res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+  
+  app.delete("/api/admin/categories/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const category = await storage.getAccountCategory(req.params.id);
+      if (!category) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+      
+      await storage.deleteAccountCategory(req.params.id);
+      
+      await createAudit(req, "delete", "AccountCategory", req.params.id, category, null);
+      
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+  
   app.post("/api/admin/backup", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
       const job = await storage.createBackupJob({
