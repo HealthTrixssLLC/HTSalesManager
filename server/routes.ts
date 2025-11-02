@@ -779,6 +779,9 @@ export function registerRoutes(app: Express) {
       // Assign role
       await storage.assignRoleToUser(newUser.id, roleId);
       
+      // Create audit log
+      await createAudit(req, "create", "User", newUser.id, null, { ...newUser, roleId });
+      
       return res.json(newUser);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -790,6 +793,12 @@ export function registerRoutes(app: Express) {
     try {
       const { id } = req.params;
       const { name, email, status, roleId } = req.body;
+      
+      // Get the before state
+      const before = await storage.getUserById(id);
+      if (!before) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       // Update user attributes
       const updateData: any = {};
@@ -803,6 +812,9 @@ export function registerRoutes(app: Express) {
       if (roleId !== undefined) {
         await storage.updateUserRole(id, roleId);
       }
+      
+      // Create audit log
+      await createAudit(req, "update", "User", id, before, { ...updatedUser, roleId });
       
       return res.json(updatedUser);
     } catch (error) {

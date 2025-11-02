@@ -1,0 +1,110 @@
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 34, done.
+remote: Counting objects: 100% (34/34), done.
+remote: Compressing objects: 100% (1/1), done.
+remote: Total 23 (delta 22), reused 23 (delta 22), pack-reused 0 (from 0)
+Unpacking objects: 100% (23/23), 5.47 KiB | 193.00 KiB/s, done.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   a38fdda..41d296b  main       -> origin/main
+Updating a38fdda..41d296b
+Fast-forward
+ .replit                            |   8 +-
+ client/src/pages/admin-console.tsx | 291 ++++++++++++++++++++++++++++++++++---
+ replit.md                          |   2 +
+ server/db.ts                       |  23 +++
+ server/routes.ts                   |  70 ++++++++-
+ server/storage.ts                  |   3 +
+ 6 files changed, 370 insertions(+), 27 deletions(-)
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+time="2025-11-02T09:34:45-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Building 20.9s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.5s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 143.02kB                                                                                           0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.2s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            7.7s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             5.8s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.4s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.2s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.4s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:f1186fdfb71b201aa60c5c248cc5252dbf3a3af4cfb8349debe14ce1b731a4f6                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+time="2025-11-02T09:35:08-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Running 2/2
+ ✔ Container healthtrixss-crm  Started                                                                                         11.0s
+ ✔ Container healthtrixss-db   Healthy                                                                                         10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+time="2025-11-02T09:35:22-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm  | PostgreSQL is ready!
+healthtrixss-crm  | Running database migrations...
+healthtrixss-crm  |
+healthtrixss-crm  | > rest-express@1.0.0 db:push
+healthtrixss-crm  | > drizzle-kit push
+healthtrixss-crm  |
+healthtrixss-crm  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm  | Using 'pg' driver for database querying
+healthtrixss-crm  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm  | [i] No changes detected
+healthtrixss-crm  | Database initialized successfully!
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Starting Health Trixss CRM...
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Using standard PostgreSQL driver
+healthtrixss-crm  | Roles already initialized
+healthtrixss-crm  | 3:35:21 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm  | 3:35:24 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:35:25 PM [express] GET /api/user 200 in 6ms :: {"id":"419b35aa-508b-4342-8633-f1519259bcfd","email…
+healthtrixss-crm  | 3:35:25 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 15ms :: []
+healthtrixss-crm  | 3:35:25 PM [express] GET /api/dashboard/stats 304 in 19ms :: {"totalAccounts":"0","totalContacts":"0…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/forecast 200 in 12ms :: {"targetDate":"2025-11-30T00:00:00.0…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/historical 200 in 6ms :: {"wonCount":0,"lostCount":0,"totalC…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/pipeline-health 200 in 6ms :: {"score":0,"components":{"pipe…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/conversions 200 in 8ms :: {"conversions":{"prospecting_to_qu…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/velocity 200 in 26ms :: {"totalValue":0,"days":90,"velocityP…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/predictions 200 in 21ms :: {"predictions":[],"summary":{"tot…
+healthtrixss-crm  | 3:35:27 PM [express] GET /api/analytics/rep-performance 200 in 21ms :: [{"rep":{"id":"419b35aa-508b-…
+healthtrixss-crm  | 3:35:30 PM [express] GET /api/admin/id-patterns 304 in 5ms :: []
+healthtrixss-crm  | 3:35:30 PM [express] GET /api/admin/roles 304 in 6ms :: [{"id":"6b78cf9c-6878-4fa2-ab5b-8a81f8743164…
+healthtrixss-crm  | 3:35:30 PM [express] GET /api/admin/users 200 in 10ms :: [{"id":"419b35aa-508b-4342-8633-f1519259bcf…
+healthtrixss-crm  | 3:35:54 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:35:57 PM [express] POST /api/admin/users 200 in 78ms :: {"id":"ede92247-8d1a-49d6-b3aa-149d9d43423…
+healthtrixss-crm  | 3:35:57 PM [express] GET /api/admin/users 200 in 12ms :: [{"id":"419b35aa-508b-4342-8633-f1519259bcf…
+healthtrixss-crm  | 3:36:02 PM [express] POST /api/logout 200 in 1ms :: {"success":true}
+healthtrixss-crm  | 3:36:11 PM [express] POST /api/login 200 in 63ms :: {"id":"ede92247-8d1a-49d6-b3aa-149d9d43423c","em…
+healthtrixss-crm  | 3:36:15 PM [express] POST /api/logout 200 in 0ms :: {"success":true}
+healthtrixss-crm  | 3:36:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:36:25 PM [express] POST /api/login 200 in 61ms :: {"id":"419b35aa-508b-4342-8633-f1519259bcfd","em…
+healthtrixss-crm  | 3:36:34 PM [express] GET /api/audit-logs 304 in 9ms :: []
