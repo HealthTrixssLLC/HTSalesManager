@@ -147,6 +147,17 @@ export const opportunities = pgTable("opportunities", {
   closeDate: timestamp("close_date"),
   ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
   probability: integer("probability").default(0), // 0-100
+  status: text("status"), // Dynamics status field (Won, Lost, Open, etc.)
+  actualCloseDate: timestamp("actual_close_date"), // Actual close date from Dynamics
+  actualRevenue: decimal("actual_revenue", { precision: 15, scale: 2 }), // Actual revenue from Dynamics
+  estCloseDate: timestamp("est_close_date"), // Estimated close date from Dynamics
+  estRevenue: decimal("est_revenue", { precision: 15, scale: 2 }), // Estimated revenue from Dynamics
+  rating: text("rating"), // Dynamics rating field (Hot, Warm, Cold)
+  externalId: text("external_id"), // External system ID (e.g., Dynamics GUID)
+  sourceSystem: text("source_system"), // Origin system (e.g., "Dynamics 365")
+  sourceRecordId: text("source_record_id"), // Original record ID in source system
+  importStatus: text("import_status"), // Import status
+  importNotes: text("import_notes"), // Import notes
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -154,6 +165,7 @@ export const opportunities = pgTable("opportunities", {
   ownerIdIdx: index("opportunities_owner_id_idx").on(table.ownerId),
   stageIdx: index("opportunities_stage_idx").on(table.stage),
   closeDateIdx: index("opportunities_close_date_idx").on(table.closeDate),
+  externalIdIdx: index("opportunities_external_id_idx").on(table.externalId),
 }));
 
 export const activities = pgTable("activities", {
