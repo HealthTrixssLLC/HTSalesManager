@@ -46,11 +46,10 @@
     "importStatus": "Imported"
   },
   "account_lookup": {
-    "enabled": false,
+    "enabled": true,
     "source_column": "Company Name",
     "target_field": "accountId",
     "lookup_strategy": "name_match",
-    "fallback": "create_note",
-    "note": "Account lookup not yet implemented. Contacts will import without account links. Manually link contacts to accounts after import."
+    "fallback": "create_note"
   }
 }
