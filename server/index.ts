@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
+import { storage } from "./db";
 
 // Set default BACKUP_ENCRYPTION_KEY for development if not already set
 if (!process.env.BACKUP_ENCRYPTION_KEY) {
@@ -61,6 +62,10 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize default roles and permissions
   await initializeDefaultRolesAndPermissions();
+  
+  // Initialize default ID patterns
+  await storage.initializeIdPatterns();
+  console.log("ID patterns initialized");
   
   // Register API routes
   registerRoutes(app);

@@ -307,6 +307,29 @@ export class PostgresStorage implements IStorage {
   
   // ========== ID PATTERNS ==========
   
+  async initializeIdPatterns(): Promise<void> {
+    // Pre-populate default ID patterns for all core entities
+    const defaultPatterns = [
+      { entity: "Account", pattern: "ACCT-{YYYY}-{SEQ:5}" },
+      { entity: "Contact", pattern: "CONT-{YY}{MM}-{SEQ:5}" },
+      { entity: "Lead", pattern: "LEAD-{SEQ:6}" },
+      { entity: "Opportunity", pattern: "OPP-{YYYY}-{SEQ:6}" },
+      { entity: "Activity", pattern: "ACT-{YY}{MM}-{SEQ:5}" },
+    ];
+
+    for (const { entity, pattern } of defaultPatterns) {
+      const existing = await this.getIdPattern(entity);
+      if (!existing) {
+        await db.insert(schema.idPatterns).values({
+          entity,
+          pattern,
+          counter: 0,
+          startValue: 1,
+        });
+      }
+    }
+  }
+  
   async getAllIdPatterns(): Promise<IdPattern[]> {
     return await db.select().from(schema.idPatterns);
   }
