@@ -34,7 +34,7 @@ export default function AdminConsole() {
     name: "", email: "", password: "", roleId: ""
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts">("accounts");
+  const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts" | "leads">("accounts");
   const [dynamicsExcelFile, setDynamicsExcelFile] = useState<File | null>(null);
   const [dynamicsMapping, setDynamicsMapping] = useState<File | null>(null);
   const [dynamicsTemplate, setDynamicsTemplate] = useState<File | null>(null);
@@ -380,6 +380,8 @@ export default function AdminConsole() {
 
       const endpoint = dynamicsEntityType === "contacts" 
         ? '/api/admin/dynamics/transform-contacts'
+        : dynamicsEntityType === "leads"
+        ? '/api/admin/dynamics/transform-leads'
         : '/api/admin/dynamics/transform-accounts';
 
       const response = await fetch(endpoint, {
@@ -850,7 +852,7 @@ export default function AdminConsole() {
                   <Label htmlFor="dynamics-entity-type">Entity Type</Label>
                   <Select
                     value={dynamicsEntityType}
-                    onValueChange={(value: "accounts" | "contacts") => {
+                    onValueChange={(value: "accounts" | "contacts" | "leads") => {
                       setDynamicsEntityType(value);
                       setDynamicsExcelFile(null);
                       setDynamicsMapping(null);
@@ -863,11 +865,14 @@ export default function AdminConsole() {
                     <SelectContent>
                       <SelectItem value="accounts">Accounts</SelectItem>
                       <SelectItem value="contacts">Contacts</SelectItem>
+                      <SelectItem value="leads">Leads</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
                     {dynamicsEntityType === "contacts" 
                       ? "Transform Dynamics 365 contacts with automatic account linking"
+                      : dynamicsEntityType === "leads"
+                      ? "Transform Dynamics 365 leads with topic and status mapping"
                       : "Transform Dynamics 365 accounts with enriched fields"}
                   </p>
                 </div>

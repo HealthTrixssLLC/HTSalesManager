@@ -128,7 +128,7 @@ export default function ImportPage() {
         headers = "id,firstName,lastName,email,phone,title,accountId";
         break;
       case "leads":
-        headers = "id,firstName,lastName,company,email,phone,status,source";
+        headers = "id,firstName,lastName,company,email,phone,topic,status,source,externalId,sourceSystem,sourceRecordId,importStatus,importNotes";
         break;
       case "opportunities":
         headers = "id,name,accountId,amount,stage,probability,closeDate";

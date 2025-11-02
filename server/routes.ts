@@ -22,6 +22,7 @@ import {
   commentSubscriptions,
   users,
   accounts,
+  leads,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
@@ -1199,6 +1200,61 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.post("/api/admin/dynamics/transform-leads", authenticate, requireRole("Admin"), upload.fields([
+    { name: 'excelFile', maxCount: 1 },
+    { name: 'mappingConfig', maxCount: 1 },
+    { name: 'templateCsv', maxCount: 1 }
+  ]), async (req: AuthRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.excelFile || !files.mappingConfig || !files.templateCsv) {
+        return res.status(400).json({ 
+          error: "Missing required files. Please provide excelFile, mappingConfig, and templateCsv" 
+        });
+      }
+
+      // Parse mapping config
+      const configBuffer = files.mappingConfig[0].buffer;
+      const config: DynamicsMappingConfig = JSON.parse(configBuffer.toString('utf-8'));
+
+      // Get template CSV content
+      const templateCsv = files.templateCsv[0].buffer.toString('utf-8');
+
+      // Get Excel buffer
+      const excelBuffer = files.excelFile[0].buffer;
+
+      // Leads don't need account lookup (no account relationships)
+      const existingAccounts: any[] = [];
+
+      // Create mapper and transform
+      const mapper = new DynamicsMapper(config);
+      const result = mapper.transform(excelBuffer, templateCsv, existingAccounts);
+
+      // Convert to CSV
+      const csvContent = mapper.toCSV(result.data);
+
+      // Create audit log
+      await createAudit(req, "transform", "DynamicsImport", null, null, {
+        sourceFile: files.excelFile[0].originalname,
+        entity: "leads",
+        stats: result.stats,
+      });
+
+      // Return CSV file
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="leads_aligned.csv"');
+      
+      return res.send(csvContent);
+    } catch (error: any) {
+      console.error("Dynamics leads transform error:", error);
+      return res.status(500).json({ 
+        error: "Failed to transform leads", 
+        details: error.message 
+      });
+    }
+  });
+  
   // ========== CSV EXPORT ROUTES ==========
   
   // Helper function to convert array of objects to CSV
@@ -1280,7 +1336,7 @@ export function registerRoutes(app: Express) {
     try {
       const leads = await storage.getAllLeads();
       
-      const headers = ["id", "company", "firstName", "lastName", "email", "phone", "title", "status", "source", "ownerId", "convertedAccountId", "convertedDate", "createdAt"];
+      const headers = ["id", "firstName", "lastName", "company", "email", "phone", "topic", "status", "source", "externalId", "sourceSystem", "sourceRecordId", "importStatus", "importNotes", "ownerId", "convertedAccountId", "convertedContactId", "convertedOpportunityId", "convertedAt", "createdAt"];
       const csv = arrayToCSV(leads, headers);
       
       res.setHeader("Content-Type", "text/csv");
@@ -1502,9 +1558,15 @@ export function registerRoutes(app: Express) {
             company: row.company || null,
             email: row.email || null,
             phone: row.phone || null,
+            topic: row.topic || null,
             status: row.status || "new",
             source: row.source || "other",
             ownerId: req.user!.id,
+            externalId: row.externalId || null,
+            sourceSystem: row.sourceSystem || null,
+            sourceRecordId: row.sourceRecordId || null,
+            importStatus: row.importStatus || null,
+            importNotes: row.importNotes || null,
           };
           
           const validated = insertLeadSchema.parse(leadData);
