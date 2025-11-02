@@ -1,8 +1,18 @@
-# Dynamics 365 Account Import Guide
+# Dynamics 365 Import Guide
 
 ## Overview
 
-The Health Trixss CRM now supports direct import of account data from Dynamics 365 exports. This guide explains how to prepare and import your Dynamics 365 account data.
+Health Trixss CRM supports direct import of **Accounts** and **Contacts** from Dynamics 365 exports. This guide explains how to prepare and import your data with automatic account linking for contacts.
+
+## ⚠️ CRITICAL: Import Order
+
+**You MUST import in this exact order:**
+
+1. **Import Accounts FIRST**
+2. **THEN Transform Contacts** (account lookup uses current database)
+3. **Import Transformed Contacts**
+
+If you transform contacts before importing accounts, the account lookup will fail and contacts won't link properly.
 
 ## Prerequisites
 
@@ -185,6 +195,165 @@ After import, you can view your accounts:
 3. Click any account to see full details including:
    - Primary Contact information
    - Import metadata (External ID, Source System, Import Status)
+
+## Contacts Import with Account Lookup
+
+### Overview
+
+Contacts import supports **automatic account linking** by looking up company names in your existing accounts. This eliminates manual data entry.
+
+### Prerequisites
+
+**CRITICAL:** You MUST import accounts BEFORE transforming contacts! The account lookup queries your current database.
+
+### Workflow
+
+```
+1. Import Accounts (see previous section)
+2. Transform Contacts (with account lookup enabled)
+3. Import Contacts
+```
+
+### Step 1: Export Contacts from Dynamics 365
+
+Export contacts with these columns:
+- Full Name (or First Name + Last Name)
+- Company Name (CRITICAL for account lookup)
+- Email Address
+- Business Phone
+- Job Title
+
+### Step 2: Create Contacts Mapping Config
+
+**File:** `dynamics_contacts_mapping_config.json`
+
+```json
+{
+  "source_file": "contacts_export.xlsx",
+  "sheet_name": "Contacts",
+  "target_template": "contacts-template.csv",
+  "column_mapping": {
+    "First Name": "firstName",
+    "Last Name": "lastName",
+    "Company Name": "companyName",
+    "Email Address": "email",
+    "Business Phone": "phone",
+    "Job Title": "title"
+  },
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
+    "external_id_fields": []
+  },
+  "validation_rules": {
+    "required_fields": ["firstName", "lastName"],
+    "email_fields": ["email"],
+    "phone_fields": ["phone"],
+    "url_fields": []
+  },
+  "dedupe_rules": {
+    "primary_key": ["firstName", "lastName", "email"],
+    "fuzzy_match_threshold": 90
+  },
+  "governance_fields": {
+    "sourceSystem": "Dynamics 365 Contacts Export",
+    "importStatus": "Imported"
+  },
+  "account_lookup": {
+    "enabled": true,
+    "source_column": "Company Name",
+    "target_field": "accountId",
+    "lookup_strategy": "name_match",
+    "fallback": "create_note"
+  }
+}
+```
+
+**Key Fields:**
+- `account_lookup.enabled`: Set to `true` to enable automatic linking
+- `source_column`: The column containing company names ("Company Name")
+- `target_field`: Set to "accountId" (the foreign key field)
+- `lookup_strategy`: "name_match" (exact + fuzzy matching)
+- `fallback`: "create_note" (adds company name to importNotes if no match)
+
+### Step 3: Transform Contacts with Account Lookup
+
+1. Navigate to **Admin Console** → **Dynamics Import**
+2. **Select "Contacts"** from the Entity Type dropdown
+3. Upload files:
+   - Excel: Your Dynamics contacts export
+   - Mapping: `dynamics_contacts_mapping_config.json`
+   - Template: `contacts-template.csv`
+4. Click **Transform & Download Aligned CSV**
+
+**What Happens:**
+- System queries your current database for all accounts
+- For each contact's "Company Name":
+  - **Exact match** (case-insensitive): "Acme Corp" = "acme corp" ✓
+  - **Fuzzy match** (contains): "Acme" matches "Acme Corporation" ✓
+- If match found: Sets `accountId` to the account's ID
+- If no match: Adds "Company: XYZ Corp" to `importNotes` for manual linking
+
+### Step 4: Import Contacts
+
+1. Navigate to **CSV Import** page
+2. Select **Contacts** as entity type
+3. Upload the transformed CSV
+4. Click **Import**
+5. Review results:
+   - **Success:** Contacts with matching accounts linked automatically
+   - **Failed:** Check for validation errors (missing required fields, etc.)
+
+### Account Lookup Matching Rules
+
+**Exact Match (Highest Priority):**
+```
+Contact Company: "Microsoft Corporation"
+Account Name:    "Microsoft Corporation"
+→ MATCH ✓
+```
+
+**Fuzzy Match (Fallback):**
+```
+Contact Company: "Microsoft"
+Account Name:    "Microsoft Corporation"
+→ MATCH ✓ (contains)
+```
+
+**No Match:**
+```
+Contact Company: "Unknown Company LLC"
+(No account with similar name exists)
+→ Sets accountId = null
+→ Adds "Company: Unknown Company LLC" to importNotes
+```
+
+### Troubleshooting Contacts Import
+
+**Problem:** 51 out of 69 contacts failed to import
+
+**Causes:**
+1. ❌ **Transformed contacts BEFORE importing accounts**
+   - Solution: Import accounts first, THEN transform contacts
+   
+2. ❌ **Database was reset after transformation**
+   - Solution: Re-transform contacts after importing accounts
+   
+3. ❌ **Account names don't match between systems**
+   - Solution: Review importNotes for company names that didn't match
+   - Manually link contacts after import, or update account names for better matching
+
+**Problem:** All contacts have null accountId
+
+**Causes:**
+1. ❌ `account_lookup.enabled` is `false` in mapping config
+   - Solution: Set to `true`
+   
+2. ❌ No accounts in database
+   - Solution: Import accounts first
+   
+3. ❌ Company name column mapping is wrong
+   - Solution: Verify `source_column` matches your Excel column name exactly
 
 ## Troubleshooting
 

@@ -34,6 +34,7 @@ export default function AdminConsole() {
     name: "", email: "", password: "", roleId: ""
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts">("accounts");
   const [dynamicsExcelFile, setDynamicsExcelFile] = useState<File | null>(null);
   const [dynamicsMapping, setDynamicsMapping] = useState<File | null>(null);
   const [dynamicsTemplate, setDynamicsTemplate] = useState<File | null>(null);
@@ -377,7 +378,11 @@ export default function AdminConsole() {
       formData.append('mappingConfig', dynamicsMapping);
       formData.append('templateCsv', dynamicsTemplate);
 
-      const response = await fetch('/api/admin/dynamics/transform-accounts', {
+      const endpoint = dynamicsEntityType === "contacts" 
+        ? '/api/admin/dynamics/transform-contacts'
+        : '/api/admin/dynamics/transform-accounts';
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
         body: formData,
@@ -393,7 +398,7 @@ export default function AdminConsole() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'accounts_aligned.csv';
+      a.download = `${dynamicsEntityType}_aligned.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -834,13 +839,39 @@ export default function AdminConsole() {
         <TabsContent value="dynamics" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Dynamics 365 Account Import</CardTitle>
+              <CardTitle>Dynamics 365 Import</CardTitle>
               <CardDescription>
                 Transform Dynamics 365 Excel exports into Health Trixss CRM-aligned CSV format
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dynamics-entity-type">Entity Type</Label>
+                  <Select
+                    value={dynamicsEntityType}
+                    onValueChange={(value: "accounts" | "contacts") => {
+                      setDynamicsEntityType(value);
+                      setDynamicsExcelFile(null);
+                      setDynamicsMapping(null);
+                      setDynamicsTemplate(null);
+                    }}
+                  >
+                    <SelectTrigger id="dynamics-entity-type" data-testid="select-dynamics-entity-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="accounts">Accounts</SelectItem>
+                      <SelectItem value="contacts">Contacts</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-sm text-muted-foreground">
+                    {dynamicsEntityType === "contacts" 
+                      ? "Transform Dynamics 365 contacts with automatic account linking"
+                      : "Transform Dynamics 365 accounts with enriched fields"}
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="dynamics-excel">Excel File</Label>
                   <p className="text-sm text-muted-foreground">
@@ -924,6 +955,9 @@ export default function AdminConsole() {
                     <li>Generates or preserves Record IDs</li>
                     <li>Validates emails, phones, URLs, states, and postal codes</li>
                     <li>Removes duplicate entries</li>
+                    {dynamicsEntityType === "contacts" && (
+                      <li>Automatically links contacts to existing accounts by company name</li>
+                    )}
                     <li>Adds governance metadata (Source System, Import Status)</li>
                     <li>Outputs CSV aligned with Health Trixss CRM template</li>
                   </ul>
