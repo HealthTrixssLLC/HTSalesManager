@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Loader2, Building2, Download, MessageSquare } from "lucide-react";
-import { Account, InsertAccount, insertAccountSchema } from "@shared/schema";
+import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,10 @@ export default function AccountsPage() {
 
   const { data: accounts, isLoading } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
+  });
+
+  const { data: categories } = useQuery<AccountCategory[]>({
+    queryKey: ["/api/admin/categories"],
   });
 
   const createMutation = useMutation({
@@ -241,9 +245,20 @@ export default function AccountsPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Category</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Provider, Payer, etc." {...field} value={field.value || ""} data-testid="input-account-category" />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-account-category">
+                              <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categories?.filter(c => c.isActive).map((category) => (
+                              <SelectItem key={category.id} value={category.name}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -434,9 +449,20 @@ export default function AccountsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enterprise" {...field} value={field.value || ""} data-testid="input-edit-category" />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {categories?.filter(c => c.isActive).map((category) => (
+                            <SelectItem key={category.id} value={category.name}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
