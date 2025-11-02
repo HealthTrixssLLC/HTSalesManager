@@ -21,6 +21,7 @@ import {
   commentAttachments,
   commentSubscriptions,
   users,
+  accounts,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
