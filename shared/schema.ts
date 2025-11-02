@@ -66,18 +66,29 @@ export const rolePermissions = pgTable("role_permissions", {
 export const accounts = pgTable("accounts", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACCT-2025-00001
   name: text("name").notNull(),
+  accountNumber: text("account_number"), // External account number (e.g., from Dynamics)
   type: accountTypeEnum("type"),
+  category: text("category"), // Business category (e.g., Provider, Payer, Vendor)
   ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
   industry: text("industry"),
   website: text("website"),
   phone: text("phone"),
+  primaryContactName: text("primary_contact_name"), // Name of primary contact
+  primaryContactEmail: text("primary_contact_email"), // Email of primary contact
   billingAddress: text("billing_address"),
   shippingAddress: text("shipping_address"),
+  externalId: text("external_id"), // External system ID (e.g., Dynamics GUID)
+  sourceSystem: text("source_system"), // Origin system (e.g., "Dynamics 365")
+  sourceRecordId: text("source_record_id"), // Original record ID in source system
+  importStatus: text("import_status"), // Import status (e.g., "Success", "Warning", "Error")
+  importNotes: text("import_notes"), // Notes from import process
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   ownerIdIdx: index("accounts_owner_id_idx").on(table.ownerId),
   nameIdx: index("accounts_name_idx").on(table.name),
+  accountNumberIdx: index("accounts_account_number_idx").on(table.accountNumber),
+  externalIdIdx: index("accounts_external_id_idx").on(table.externalId),
 }));
 
 export const contacts = pgTable("contacts", {
