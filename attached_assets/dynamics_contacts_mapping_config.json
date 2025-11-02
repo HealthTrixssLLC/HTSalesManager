@@ -8,7 +8,6 @@
     "Email": "email",
     "Business Phone": "phone",
     "Job Title": "title",
-    "Company Name": "accountId",
     "(Do Not Modify) Contact": "externalId"
   },
   "id_rules": {
@@ -43,14 +42,15 @@
     "fuzzy_match_threshold": 90
   },
   "governance_fields": {
-    "sourceSystem": "Dynamics 365 Export",
+    "sourceSystem": "Dynamics 365 Contacts Export",
     "importStatus": "Imported"
   },
   "account_lookup": {
-    "enabled": true,
+    "enabled": false,
     "source_column": "Company Name",
     "target_field": "accountId",
     "lookup_strategy": "name_match",
-    "fallback": "create_note"
+    "fallback": "create_note",
+    "note": "Account lookup not yet implemented. Contacts will import without account links. Manually link contacts to accounts after import."
   }
 }
