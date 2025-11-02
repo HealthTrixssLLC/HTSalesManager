@@ -104,6 +104,9 @@ The application is production-ready with multiple deployment options:
 ### Deployment Methods
 
 1. **Docker (Self-Hosted)**: Use `docker-compose up -d` with the provided `docker-compose.yml` configuration. Includes PostgreSQL 16, health checks, and automatic restarts.
+   - **Container Names**: Uses unique names (`healthtrixss-crm-postgres`, `healthtrixss-crm-app`) to prevent conflicts with other Docker applications
+   - **Port Configuration**: Default ports are 5432 (PostgreSQL) and 5000 (app). If you have port conflicts, modify the `ports` section in docker-compose.yml
+   - **Clean Restart**: Use `docker-compose down && docker-compose up -d` to cleanly restart containers
    - **Windows Users**: The Dockerfile creates the entrypoint script internally during build, eliminating any line ending (CRLF/LF) issues. No manual file conversion needed.
 
 2. **Replit Production**: Click "Deploy" in Replit UI. Environment variables (`SESSION_SECRET`, `BACKUP_ENCRYPTION_KEY`) are managed via Replit Secrets.
