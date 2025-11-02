@@ -122,12 +122,15 @@ export async function initializeDefaultRolesAndPermissions() {
     
     console.log("Initializing default roles and permissions...");
     
-    // This would typically be handled by database seeding
-    // For now, we'll just log that initialization is needed
-    console.log("NOTE: Default roles and permissions should be seeded in the database");
-    console.log("Required roles: Admin, SalesManager, SalesRep, ReadOnly");
+    // Import and run the seed script
+    const { seedRolesAndPermissions } = await import("./seed");
+    await seedRolesAndPermissions();
+    
+    console.log("✓ Default roles and permissions initialized successfully");
     
   } catch (error) {
     console.error("Error initializing roles and permissions:", error);
+    // Don't throw - allow the app to start even if seeding fails
+    // Users can manually run the seed script if needed
   }
 }

@@ -1,8 +1,11 @@
 // Database connection and storage implementation
 // PostgreSQL with Drizzle ORM
+// Auto-detects Neon serverless vs standard PostgreSQL
 
-import { drizzle } from "drizzle-orm/neon-serverless";
-import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle as pgDrizzle } from "drizzle-orm/node-postgres";
+import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
+import { Pool as PgPool } from "pg";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import { eq, sql, and, gte, asc, desc, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
@@ -21,15 +24,33 @@ import type {
   BackupJob, InsertBackupJob,
 } from "@shared/schema";
 
-// Configure neon for WebSocket support
-neonConfig.webSocketConstructor = ws;
-
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
+// Auto-detect database type and use appropriate driver
+// Use Neon serverless for Replit/Neon, standard pg for Docker/local PostgreSQL
+const isNeonDatabase = process.env.DATABASE_URL.includes('neon.tech') || 
+                       process.env.DATABASE_URL.includes('pooler') ||
+                       process.env.DATABASE_URL.includes('neon.ai');
+
+// Initialize database connection based on environment
+let db: any;
+
+if (isNeonDatabase) {
+  // Use Neon serverless driver (WebSocket-based) for Replit
+  console.log('Using Neon serverless database driver');
+  neonConfig.webSocketConstructor = ws;
+  const pool = new NeonPool({ connectionString: process.env.DATABASE_URL });
+  db = neonDrizzle(pool, { schema });
+} else {
+  // Use standard pg driver for Docker/local PostgreSQL
+  console.log('Using standard PostgreSQL driver');
+  const pool = new PgPool({ connectionString: process.env.DATABASE_URL });
+  db = pgDrizzle(pool, { schema });
+}
+
+export { db };
 
 export class PostgresStorage implements IStorage {
   // ========== AUTH & USER MANAGEMENT ==========
