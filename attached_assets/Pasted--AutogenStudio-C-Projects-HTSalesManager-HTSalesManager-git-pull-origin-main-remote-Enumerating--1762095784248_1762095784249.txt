@@ -1,0 +1,137 @@
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 20, done.
+remote: Counting objects: 100% (20/20), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 14 (delta 11), reused 14 (delta 11), pack-reused 0 (from 0)
+Unpacking objects: 100% (14/14), 4.81 KiB | 328.00 KiB/s, done.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   3428530..b989f71  main       -> origin/main
+Updating 3428530..b989f71
+Fast-forward
+ .dockerignore                                      |  3 +
+ .replit                                            |  4 --
+ Dockerfile                                         | 39 +++++++++++-
+ ...rom-https-githu-1762095421051_1762095421051.txt | 58 ++++++++++++++++++
+ ...mote-Enumeratin-1761947814975_1761947814975.txt | 70 ++++++++++++++++++++++
+ replit.md                                          |  1 +
+ 6 files changed, 168 insertions(+), 7 deletions(-)
+ create mode 100644 attached_assets/Pasted--AutogenStudio-C-Projects-HTSalesManager-HTSalesManager-git-pull-origin-main-From-https-githu-1762095421051_1762095421051.txt
+ create mode 100644 attached_assets/Pasted--AutogenStudio-C-Projects-HTSalesManager-HTSalesManager-git-pull-origin-main-remote-Enumeratin-1761947814975_1761947814975.txt
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+time="2025-11-02T09:00:44-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Building 20.8s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.4s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 21.20kB                                                                                            0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 7.9s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            7.5s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             5.8s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.5s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.2s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.4s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:12871860f386591048650a48ea320cd3a7a7c603f17b7c41005ff1505c29dae0                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+time="2025-11-02T09:01:07-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Running 2/2
+ ✔ Container healthtrixss-crm  Started                                                                                         10.9s
+ ✔ Container healthtrixss-db   Healthy                                                                                         10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+time="2025-11-02T09:01:21-06:00" level=warning msg="C:\\Projects\\HTSalesManager\\HTSalesManager\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm  | PostgreSQL is ready!
+healthtrixss-crm  | Running database migrations...
+healthtrixss-crm  |
+healthtrixss-crm  | > rest-express@1.0.0 db:push
+healthtrixss-crm  | > drizzle-kit push
+healthtrixss-crm  |
+healthtrixss-crm  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm  | Using 'pg' driver for database querying
+healthtrixss-crm  | [⣷] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm  | [✓] Changes applied
+healthtrixss-crm  | Database initialized successfully!
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Starting Health Trixss CRM...
+healthtrixss-crm  | ========================================
+healthtrixss-crm  | Error initializing roles and permissions: ErrorEvent {
+healthtrixss-crm  |   [Symbol(kTarget)]: WebSocket {
+healthtrixss-crm  |     _events: [Object: null prototype] {
+healthtrixss-crm  |       error: [Function],
+healthtrixss-crm  |       message: [Function],
+healthtrixss-crm  |       close: [Function],
+healthtrixss-crm  |       open: [Function]
+healthtrixss-crm  |     },
+healthtrixss-crm  |     _eventsCount: 4,
+healthtrixss-crm  |     _maxListeners: undefined,
+healthtrixss-crm  |     _binaryType: 'arraybuffer',
+healthtrixss-crm  |     _closeCode: 1006,
+healthtrixss-crm  |     _closeFrameReceived: false,
+healthtrixss-crm  |     _closeFrameSent: false,
+healthtrixss-crm  |     _closeMessage: <Buffer >,
+healthtrixss-crm  |     _closeTimer: null,
+healthtrixss-crm  |     _errorEmitted: true,
+healthtrixss-crm  |     _extensions: {},
+healthtrixss-crm  |     _paused: false,
+healthtrixss-crm  |     _protocol: '',
+healthtrixss-crm  |     _readyState: 3,
+healthtrixss-crm  |     _receiver: null,
+healthtrixss-crm  |     _sender: null,
+healthtrixss-crm  |     _socket: null,
+healthtrixss-crm  |     _bufferedAmount: 0,
+healthtrixss-crm  |     _isServer: false,
+healthtrixss-crm  |     _redirects: 0,
+healthtrixss-crm  |     _autoPong: true,
+healthtrixss-crm  |     _url: 'wss://postgres/v2',
+healthtrixss-crm  |     _req: null,
+healthtrixss-crm  |     [Symbol(shapeMode)]: false,
+healthtrixss-crm  |     [Symbol(kCapture)]: false
+healthtrixss-crm  |   },
+healthtrixss-crm  |   [Symbol(kType)]: 'error',
+healthtrixss-crm  |   [Symbol(kError)]: Error: connect ECONNREFUSED 172.22.0.2:443
+healthtrixss-crm  |       at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16) {
+healthtrixss-crm  |     errno: -111,
+healthtrixss-crm  |     code: 'ECONNREFUSED',
+healthtrixss-crm  |     syscall: 'connect',
+healthtrixss-crm  |     address: '172.22.0.2',
+healthtrixss-crm  |     port: 443
+healthtrixss-crm  |   },
+healthtrixss-crm  |   [Symbol(kMessage)]: 'connect ECONNREFUSED 172.22.0.2:443'
+healthtrixss-crm  | }
+healthtrixss-crm  | 3:01:19 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm  | 3:01:23 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:01:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:01:53 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:01:57 PM [express] POST /api/register 500 in 5ms :: {"error":"Failed to register user"}
+healthtrixss-crm  | 3:02:13 PM [express] POST /api/register 500 in 2ms :: {"error":"Failed to register user"}
+healthtrixss-crm  | 3:02:21 PM [express] POST /api/register 500 in 2ms :: {"error":"Failed to register user"}
+healthtrixss-crm  | 3:02:23 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm  | 3:02:53 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
