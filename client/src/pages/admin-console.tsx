@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check } from "lucide-react";
-import { User, Role, IdPattern } from "@shared/schema";
+import { User, Role, IdPattern, AccountCategory, InsertAccountCategory } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -37,10 +38,18 @@ export default function AdminConsole() {
   const [dynamicsMapping, setDynamicsMapping] = useState<File | null>(null);
   const [dynamicsTemplate, setDynamicsTemplate] = useState<File | null>(null);
   const [transforming, setTransforming] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editCategoryData, setEditCategoryData] = useState<{name: string; description: string; isActive: boolean}>({name: "", description: "", isActive: true});
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
+  const [newCategoryData, setNewCategoryData] = useState<{name: string; description: string; isActive: boolean}>({
+    name: "", description: "", isActive: true
+  });
+  const [categoryToDelete, setCategoryToDelete] = useState<AccountCategory | null>(null);
 
   const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
+  const { data: categories } = useQuery<AccountCategory[]>({ queryKey: ["/api/admin/categories"] });
 
   const createUserMutation = useMutation({
     mutationFn: async (data: { name: string; email: string; password: string; roleId: string }) => {
@@ -204,6 +213,66 @@ export default function AdminConsole() {
       setConfirmClearAccountsOpen(false);
     },
   });
+
+  const createCategoryMutation = useMutation({
+    mutationFn: async (data: InsertAccountCategory) => {
+      const res = await apiRequest("POST", "/api/admin/categories", data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      toast({ title: "Category created successfully" });
+      setCreateCategoryOpen(false);
+      setNewCategoryData({ name: "", description: "", isActive: true });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to create category",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: async (data: { id: string; name: string; description?: string; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/admin/categories/${data.id}`, {
+        name: data.name,
+        description: data.description,
+        isActive: data.isActive
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      toast({ title: "Category updated successfully" });
+      setEditingCategoryId(null);
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to update category", 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/categories/${id}`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/categories"] });
+      toast({ title: "Category deleted successfully" });
+      setCategoryToDelete(null);
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to delete category", 
+        variant: "destructive" 
+      });
+    },
+  });
   
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -255,6 +324,40 @@ export default function AdminConsole() {
       return;
     }
     createUserMutation.mutate(newUserData);
+  };
+
+  const startEditingCategory = (category: AccountCategory) => {
+    setEditingCategoryId(category.id);
+    setEditCategoryData({
+      name: category.name,
+      description: category.description || "",
+      isActive: category.isActive
+    });
+  };
+
+  const cancelEditingCategory = () => {
+    setEditingCategoryId(null);
+    setEditCategoryData({name: "", description: "", isActive: true});
+  };
+
+  const saveCategoryChanges = () => {
+    if (!editingCategoryId) return;
+    updateCategoryMutation.mutate({
+      id: editingCategoryId,
+      ...editCategoryData
+    });
+  };
+
+  const handleCreateCategory = () => {
+    if (!newCategoryData.name) {
+      toast({
+        title: "Missing required field",
+        description: "Please enter a category name",
+        variant: "destructive"
+      });
+      return;
+    }
+    createCategoryMutation.mutate(newCategoryData);
   };
 
   const handleDynamicsTransform = async () => {
@@ -328,6 +431,7 @@ export default function AdminConsole() {
           <TabsTrigger value="users" data-testid="tab-users">Users</TabsTrigger>
           <TabsTrigger value="roles" data-testid="tab-roles">Roles</TabsTrigger>
           <TabsTrigger value="id-patterns" data-testid="tab-id-patterns">ID Patterns</TabsTrigger>
+          <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
@@ -551,6 +655,123 @@ export default function AdminConsole() {
                   <div><code className="bg-background px-1.5 py-0.5 rounded">{"{SEQ:n}"}</code> - n-digit sequence (starts from custom value)</div>
                 </div>
               </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Categories Tab */}
+        <TabsContent value="categories" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Category Management</CardTitle>
+                  <CardDescription>Manage account categories for organization</CardDescription>
+                </div>
+                <Button onClick={() => setCreateCategoryOpen(true)} data-testid="button-create-category">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Category
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Active</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories?.map((category) => {
+                    const isEditing = editingCategoryId === category.id;
+                    return (
+                      <TableRow key={category.id} data-testid={`row-category-${category.id}`}>
+                        <TableCell className="font-medium">
+                          {isEditing ? (
+                            <Input 
+                              value={editCategoryData.name}
+                              onChange={(e) => setEditCategoryData({...editCategoryData, name: e.target.value})}
+                              data-testid={`input-edit-category-name-${category.id}`}
+                            />
+                          ) : (
+                            category.name
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Input 
+                              value={editCategoryData.description}
+                              onChange={(e) => setEditCategoryData({...editCategoryData, description: e.target.value})}
+                              data-testid={`input-edit-category-description-${category.id}`}
+                            />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">{category.description || "-"}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Switch
+                              checked={editCategoryData.isActive}
+                              onCheckedChange={(checked) => setEditCategoryData({...editCategoryData, isActive: checked})}
+                              data-testid={`switch-edit-category-active-${category.id}`}
+                            />
+                          ) : (
+                            <Badge variant={category.isActive ? "default" : "secondary"}>
+                              {category.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex gap-2">
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={saveCategoryChanges}
+                                disabled={updateCategoryMutation.isPending}
+                                data-testid={`button-save-category-${category.id}`}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={cancelEditingCategory}
+                                disabled={updateCategoryMutation.isPending}
+                                data-testid={`button-cancel-edit-category-${category.id}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={() => startEditingCategory(category)}
+                                data-testid={`button-edit-category-${category.id}`}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={() => setCategoryToDelete(category)}
+                                data-testid={`button-delete-category-${category.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -944,6 +1165,89 @@ export default function AdminConsole() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Create Category Dialog */}
+      <Dialog open={createCategoryOpen} onOpenChange={setCreateCategoryOpen}>
+        <DialogContent data-testid="dialog-create-category">
+          <DialogHeader>
+            <DialogTitle>Create New Category</DialogTitle>
+            <DialogDescription>
+              Add a new account category for organization
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-category-name">Name *</Label>
+              <Input
+                id="new-category-name"
+                value={newCategoryData.name}
+                onChange={(e) => setNewCategoryData({...newCategoryData, name: e.target.value})}
+                placeholder="Provider"
+                data-testid="input-category-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-category-description">Description</Label>
+              <Input
+                id="new-category-description"
+                value={newCategoryData.description}
+                onChange={(e) => setNewCategoryData({...newCategoryData, description: e.target.value})}
+                placeholder="Healthcare provider organizations"
+                data-testid="input-category-description"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="new-category-active"
+                checked={newCategoryData.isActive}
+                onCheckedChange={(checked) => setNewCategoryData({...newCategoryData, isActive: checked})}
+                data-testid="switch-category-active"
+              />
+              <Label htmlFor="new-category-active">Active</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateCategoryOpen(false)}
+              disabled={createCategoryMutation.isPending}
+              data-testid="button-cancel-create-category"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateCategory}
+              disabled={createCategoryMutation.isPending}
+              data-testid="button-save-category"
+            >
+              {createCategoryMutation.isPending ? "Creating..." : "Create Category"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Category Confirmation Dialog */}
+      <AlertDialog open={!!categoryToDelete} onOpenChange={() => setCategoryToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the category "{categoryToDelete?.name}"? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-category">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => categoryToDelete && deleteCategoryMutation.mutate(categoryToDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-category"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
