@@ -53,6 +53,7 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
     *   **User Management**: Inline editing of user attributes (name, email, role) with role dropdown selector
     *   **Role Assignment**: Admins can view and modify user roles directly from the Users tab
+    *   **Account Categories**: Admin-configurable categories for account classification with CRUD operations via `/api/admin/categories` endpoints. Categories feature name, description, color, isActive flag, and displayOrder. Account create/edit forms use dropdown populated from active categories instead of free-text input
 *   **Help & Migration Guide**: Comprehensive documentation including a guide for migrating data from Dynamics 365.
 *   **Dashboard**: Provides key insights such as pipeline status, win rates, and user activity summaries.
 *   **Analytics & Forecasting System**: OKR-driven analytics platform measuring outcomes and drivers, not activities:
