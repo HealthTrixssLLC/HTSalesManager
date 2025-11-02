@@ -1255,6 +1255,67 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.post("/api/admin/dynamics/transform-opportunities", authenticate, requireRole("Admin"), upload.fields([
+    { name: 'excelFile', maxCount: 1 },
+    { name: 'mappingConfig', maxCount: 1 },
+    { name: 'templateCsv', maxCount: 1 }
+  ]), async (req: AuthRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.excelFile || !files.mappingConfig || !files.templateCsv) {
+        return res.status(400).json({ 
+          error: "Missing required files. Please provide excelFile, mappingConfig, and templateCsv" 
+        });
+      }
+
+      // Parse mapping config
+      const configBuffer = files.mappingConfig[0].buffer;
+      const config: DynamicsMappingConfig = JSON.parse(configBuffer.toString('utf-8'));
+
+      // Get template CSV content
+      const templateCsv = files.templateCsv[0].buffer.toString('utf-8');
+
+      // Get Excel buffer
+      const excelBuffer = files.excelFile[0].buffer;
+
+      // Fetch existing accounts for accountId lookup
+      const existingAccounts = await storage.getAllAccounts();
+
+      // Create mapper and transform
+      const mapper = new DynamicsMapper(config);
+      const result = mapper.transform(excelBuffer, templateCsv, existingAccounts);
+
+      // Set ownerId to the current user for all opportunities
+      result.data = result.data.map(row => ({
+        ...row,
+        ownerId: req.user!.id
+      }));
+
+      // Convert to CSV
+      const csvContent = mapper.toCSV(result.data);
+
+      // Create audit log
+      await createAudit(req, "transform", "DynamicsImport", null, null, {
+        sourceFile: files.excelFile[0].originalname,
+        entity: "opportunities",
+        stats: result.stats,
+      });
+
+      // Return CSV file
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="opportunities_aligned.csv"');
+      
+      return res.send(csvContent);
+    } catch (error: any) {
+      console.error("Dynamics opportunities transform error:", error);
+      return res.status(500).json({ 
+        error: "Failed to transform opportunities", 
+        details: error.message 
+      });
+    }
+  });
+  
   // ========== CSV EXPORT ROUTES ==========
   
   // Helper function to convert array of objects to CSV
