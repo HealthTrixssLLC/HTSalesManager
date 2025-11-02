@@ -32,6 +32,10 @@ export default function AdminConsole() {
     name: "", email: "", password: "", roleId: ""
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dynamicsExcelFile, setDynamicsExcelFile] = useState<File | null>(null);
+  const [dynamicsMapping, setDynamicsMapping] = useState<File | null>(null);
+  const [dynamicsTemplate, setDynamicsTemplate] = useState<File | null>(null);
+  const [transforming, setTransforming] = useState(false);
 
   const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
@@ -240,6 +244,65 @@ export default function AdminConsole() {
     createUserMutation.mutate(newUserData);
   };
 
+  const handleDynamicsTransform = async () => {
+    if (!dynamicsExcelFile || !dynamicsMapping || !dynamicsTemplate) {
+      toast({
+        title: "Missing files",
+        description: "Please upload all three required files",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setTransforming(true);
+    try {
+      const formData = new FormData();
+      formData.append('excelFile', dynamicsExcelFile);
+      formData.append('mappingConfig', dynamicsMapping);
+      formData.append('templateCsv', dynamicsTemplate);
+
+      const response = await fetch('/api/admin/dynamics/transform-accounts', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.details || error.error || 'Transform failed');
+      }
+
+      // Download the resulting CSV
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'accounts_aligned.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Transform successful",
+        description: "Aligned CSV file downloaded successfully"
+      });
+
+      // Reset files
+      setDynamicsExcelFile(null);
+      setDynamicsMapping(null);
+      setDynamicsTemplate(null);
+    } catch (error: any) {
+      toast({
+        title: "Transform failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setTransforming(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -253,6 +316,7 @@ export default function AdminConsole() {
           <TabsTrigger value="roles" data-testid="tab-roles">Roles</TabsTrigger>
           <TabsTrigger value="id-patterns" data-testid="tab-id-patterns">ID Patterns</TabsTrigger>
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
+          <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
         </TabsList>
 
@@ -530,6 +594,109 @@ export default function AdminConsole() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Dynamics Import Tab */}
+        <TabsContent value="dynamics" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dynamics 365 Account Import</CardTitle>
+              <CardDescription>
+                Transform Dynamics 365 Excel exports into Health Trixss CRM-aligned CSV format
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dynamics-excel">Excel File</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Upload the Dynamics 365 export Excel file (e.g., Active Accounts.xlsx)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="dynamics-excel"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => setDynamicsExcelFile(e.target.files?.[0] || null)}
+                      data-testid="input-dynamics-excel"
+                    />
+                    {dynamicsExcelFile && (
+                      <Badge variant="secondary" data-testid="badge-excel-uploaded">
+                        {dynamicsExcelFile.name}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dynamics-mapping">Mapping Configuration (JSON)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Upload the mapping config file (e.g., dynamics_mapping_config.json)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="dynamics-mapping"
+                      type="file"
+                      accept=".json"
+                      onChange={(e) => setDynamicsMapping(e.target.files?.[0] || null)}
+                      data-testid="input-dynamics-mapping"
+                    />
+                    {dynamicsMapping && (
+                      <Badge variant="secondary" data-testid="badge-mapping-uploaded">
+                        {dynamicsMapping.name}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dynamics-template">Template CSV</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Upload the target template CSV file (e.g., accounts-template.dynamics.csv)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="dynamics-template"
+                      type="file"
+                      accept=".csv"
+                      onChange={(e) => setDynamicsTemplate(e.target.files?.[0] || null)}
+                      data-testid="input-dynamics-template"
+                    />
+                    {dynamicsTemplate && (
+                      <Badge variant="secondary" data-testid="badge-template-uploaded">
+                        {dynamicsTemplate.name}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <Button
+                    onClick={handleDynamicsTransform}
+                    disabled={!dynamicsExcelFile || !dynamicsMapping || !dynamicsTemplate || transforming}
+                    className="w-full"
+                    data-testid="button-transform-accounts"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    {transforming ? "Transforming..." : "Transform & Download Aligned CSV"}
+                  </Button>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium mb-2">What this does:</h3>
+                  <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                    <li>Reads your Dynamics 365 Excel export</li>
+                    <li>Maps columns according to the configuration</li>
+                    <li>Generates or preserves Record IDs</li>
+                    <li>Validates emails, phones, URLs, states, and postal codes</li>
+                    <li>Removes duplicate entries</li>
+                    <li>Adds governance metadata (Source System, Import Status)</li>
+                    <li>Outputs CSV aligned with Health Trixss CRM template</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* System Tab */}

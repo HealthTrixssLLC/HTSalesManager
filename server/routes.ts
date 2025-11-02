@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
+import { DynamicsMapper, type DynamicsMappingConfig } from "./dynamics-mapper";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 
@@ -965,6 +966,59 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Database reset error:", error);
       return res.status(500).json({ error: "Failed to reset database" });
+    }
+  });
+  
+  // ========== DYNAMICS 365 IMPORT ROUTES ==========
+  
+  app.post("/api/admin/dynamics/transform-accounts", authenticate, requireRole("Admin"), upload.fields([
+    { name: 'excelFile', maxCount: 1 },
+    { name: 'mappingConfig', maxCount: 1 },
+    { name: 'templateCsv', maxCount: 1 }
+  ]), async (req: AuthRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.excelFile || !files.mappingConfig || !files.templateCsv) {
+        return res.status(400).json({ 
+          error: "Missing required files. Please provide excelFile, mappingConfig, and templateCsv" 
+        });
+      }
+
+      // Parse mapping config
+      const configBuffer = files.mappingConfig[0].buffer;
+      const config: DynamicsMappingConfig = JSON.parse(configBuffer.toString('utf-8'));
+
+      // Get template CSV content
+      const templateCsv = files.templateCsv[0].buffer.toString('utf-8');
+
+      // Get Excel buffer
+      const excelBuffer = files.excelFile[0].buffer;
+
+      // Create mapper and transform
+      const mapper = new DynamicsMapper(config);
+      const result = mapper.transform(excelBuffer, templateCsv);
+
+      // Convert to CSV
+      const csvContent = mapper.toCSV(result.data);
+
+      // Create audit log
+      await createAudit(req, "transform", "DynamicsImport", null, null, {
+        sourceFile: files.excelFile[0].originalname,
+        stats: result.stats,
+      });
+
+      // Return CSV file
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="accounts_aligned.csv"');
+      
+      return res.send(csvContent);
+    } catch (error: any) {
+      console.error("Dynamics transform error:", error);
+      return res.status(500).json({ 
+        error: "Failed to transform accounts", 
+        details: error.message 
+      });
     }
   });
   
