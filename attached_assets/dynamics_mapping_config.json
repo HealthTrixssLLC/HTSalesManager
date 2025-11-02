@@ -1,0 +1,54 @@
+{
+  "source_file": "Active Accounts 11-2-2025 10-03-45 AM.xlsx",
+  "sheet_name": "Active Accounts",
+  "target_template": "accounts-template.csv",
+  "column_mapping": {
+    "(Do Not Modify) Modified On": "Modified On",
+    "Account Name": "name",
+    "HT Account Number": "accountNumber",
+    "Main Phone": "phone",
+    "Business Type": "type",
+    "Category": "category",
+    "Primary Contact": "primaryContactName",
+    "Email (Primary Contact) (Contact)": "primaryContactEmail",
+    "(Do Not Modify) Account": "externalId"
+  },
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "ACC-{{YYYY}}{{MM}}-{{00001}}",
+    "external_id_fields": [
+      "HT Account Number"
+    ]
+  },
+  "validation_rules": {
+    "required_fields": [
+      "name"
+    ],
+    "email_fields": [
+      "primaryContactEmail"
+    ],
+    "phone_fields": [
+      "phone"
+    ],
+    "url_fields": [
+      "website"
+    ]
+  },
+  "dedupe_rules": {
+    "primary_key": [
+      "name",
+      "accountNumber"
+    ],
+    "fuzzy_match_threshold": 90
+  },
+  "governance_fields": {
+    "sourceSystem": "Dynamics 365 Export",
+    "importStatus": "Imported"
+  },
+  "type_mapping": {
+    "Customer": "customer",
+    "Prospect": "prospect",
+    "Partner": "partner",
+    "Vendor": "customer"
+  }
+}

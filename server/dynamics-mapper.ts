@@ -18,14 +18,15 @@ export interface DynamicsMappingConfig {
     email_fields: string[];
     phone_fields: string[];
     url_fields: string[];
-    state_fields: string[];
-    postal_fields: string[];
+    state_fields?: string[];
+    postal_fields?: string[];
   };
   dedupe_rules: {
     primary_key: string[];
     fuzzy_match_threshold: number;
   };
-  governance_fields: string[];
+  governance_fields?: Record<string, string>;
+  type_mapping?: Record<string, string>;
 }
 
 export interface AccountRow {
@@ -252,16 +253,20 @@ export class DynamicsMapper {
     }
 
     // Validate state fields
-    for (const field of this.config.validation_rules.state_fields) {
-      if (row[field] && !this.validateState(row[field])) {
-        errors.push(`Invalid state/province in ${field}: ${row[field]} (must be 2-letter code)`);
+    if (this.config.validation_rules.state_fields) {
+      for (const field of this.config.validation_rules.state_fields) {
+        if (row[field] && !this.validateState(row[field])) {
+          errors.push(`Invalid state/province in ${field}: ${row[field]} (must be 2-letter code)`);
+        }
       }
     }
 
     // Validate postal fields
-    for (const field of this.config.validation_rules.postal_fields) {
-      if (row[field] && !this.validatePostalCode(row[field])) {
-        errors.push(`Invalid postal code format in ${field}: ${row[field]}`);
+    if (this.config.validation_rules.postal_fields) {
+      for (const field of this.config.validation_rules.postal_fields) {
+        if (row[field] && !this.validatePostalCode(row[field])) {
+          errors.push(`Invalid postal code format in ${field}: ${row[field]}`);
+        }
       }
     }
 
@@ -306,31 +311,51 @@ export class DynamicsMapper {
    * Add governance fields to each row
    */
   addGovernanceFields(row: AccountRow, index: number): AccountRow {
-    // Initialize governance fields if not present
-    for (const field of this.config.governance_fields) {
-      if (!row[field]) {
-        row[field] = '';
-      }
-    }
-
-    // Set Source System
-    if (!row['Source System']) {
-      row['Source System'] = 'Dynamics Export';
+    // Set governance fields from config
+    if (this.config.governance_fields) {
+      const sourceSystem = this.config.governance_fields.sourceSystem || 'Dynamics 365 Export';
+      const importStatus = this.config.governance_fields.importStatus || 'Imported';
+      
+      row['sourceSystem'] = sourceSystem;
+      row['importStatus'] = importStatus;
     }
 
     // Set Source Record ID from first available external ID
-    if (!row['Source Record ID']) {
+    if (!row['sourceRecordId']) {
       for (const field of this.config.id_rules.external_id_fields) {
         if (row[field] && row[field].trim()) {
-          row['Source Record ID'] = row[field];
+          row['sourceRecordId'] = row[field];
           break;
         }
       }
     }
 
-    // Set Import Status (will be overwritten if there are errors)
-    if (!row['Import Status']) {
-      row['Import Status'] = 'OK';
+    return row;
+  }
+
+  /**
+   * Convert Excel date serial number to ISO date string
+   */
+  excelDateToISO(serial: number): string {
+    // Excel date serial: days since 1900-01-01 (with leap year bug)
+    const utc_days = Math.floor(serial - 25569);
+    const utc_value = utc_days * 86400;
+    const date = new Date(utc_value * 1000);
+    return date.toISOString().split('T')[0];
+  }
+
+  /**
+   * Apply type mapping to convert source values to target enum values
+   */
+  applyTypeMapping(row: AccountRow): AccountRow {
+    if (!this.config.type_mapping) return row;
+
+    // Apply type mapping if configured
+    for (const [sourceValue, targetValue] of Object.entries(this.config.type_mapping)) {
+      if (row.type === sourceValue) {
+        row.type = targetValue;
+        break;
+      }
     }
 
     return row;
@@ -347,10 +372,13 @@ export class DynamicsMapper {
     // Step 2: Apply column mapping
     data = this.applyColumnMapping(data);
 
-    // Step 3: Get template columns
+    // Step 3: Apply type mapping (e.g., "Customer" -> "customer")
+    data = data.map(row => this.applyTypeMapping(row));
+
+    // Step 4: Get template columns
     const templateColumns = this.getTemplateColumns(templateCsv);
 
-    // Step 4: Ensure all template columns exist
+    // Step 5: Ensure all template columns exist
     data = data.map(row => {
       const complete: AccountRow = {};
       for (const col of templateColumns) {
@@ -359,31 +387,31 @@ export class DynamicsMapper {
       return complete;
     });
 
-    // Step 5: Generate Record IDs
+    // Step 6: Generate Record IDs
     data = data.map((row, index) => {
       row[this.config.id_rules.internal_id_field] = this.generateRecordId(row, index);
       return row;
     });
 
-    // Step 6: Add governance fields
+    // Step 7: Add governance fields
     data = data.map((row, index) => this.addGovernanceFields(row, index));
 
-    // Step 7: Validate each row
+    // Step 8: Validate each row
     data = data.map(row => {
       const errors = this.validateRow(row);
       if (errors.length > 0) {
-        row['Import Status'] = 'Error';
-        row['Import Notes'] = errors.join('; ');
+        row['importStatus'] = 'Error';
+        row['importNotes'] = errors.join('; ');
       }
       return row;
     });
 
-    // Step 8: Deduplicate
+    // Step 9: Deduplicate
     const beforeDedupe = data.length;
     const deduplicated = this.deduplicateRows(data);
     const duplicateCount = beforeDedupe - deduplicated.length;
 
-    // Step 9: Reorder columns to match template
+    // Step 10: Reorder columns to match template
     const aligned = deduplicated.map(row => {
       const ordered: AccountRow = {};
       for (const col of templateColumns) {
@@ -393,8 +421,8 @@ export class DynamicsMapper {
     });
 
     // Calculate stats
-    const errorRows = aligned.filter(row => row['Import Status'] === 'Error').length;
-    const validRows = aligned.filter(row => row['Import Status'] === 'OK').length;
+    const errorRows = aligned.filter(row => row['importStatus'] === 'Error').length;
+    const validRows = aligned.filter(row => row['importStatus'] !== 'Error').length;
 
     return {
       data: aligned,
