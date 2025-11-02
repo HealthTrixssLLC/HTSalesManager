@@ -1,0 +1,55 @@
+{
+  "source_file": "All Contacts 11-2-2025 12-13-36 PM.xlsx",
+  "sheet_name": "All Contacts",
+  "target_template": "contacts-template.csv",
+  "column_mapping": {
+    "First Name": "firstName",
+    "Last Name": "lastName",
+    "Email": "email",
+    "Business Phone": "phone",
+    "Job Title": "title",
+    "Company Name": "accountId",
+    "(Do Not Modify) Contact": "externalId"
+  },
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
+    "external_id_fields": [
+      "externalId"
+    ]
+  },
+  "validation_rules": {
+    "required_fields": [
+      "firstName",
+      "lastName"
+    ],
+    "email_fields": [
+      "email"
+    ],
+    "phone_fields": [
+      "phone"
+    ]
+  },
+  "dedupe_rules": {
+    "primary_key": [
+      "email"
+    ],
+    "secondary_key": [
+      "firstName",
+      "lastName",
+      "accountId"
+    ],
+    "fuzzy_match_threshold": 90
+  },
+  "governance_fields": {
+    "sourceSystem": "Dynamics 365 Export",
+    "importStatus": "Imported"
+  },
+  "account_lookup": {
+    "enabled": true,
+    "source_column": "Company Name",
+    "target_field": "accountId",
+    "lookup_strategy": "name_match",
+    "fallback": "create_note"
+  }
+}
