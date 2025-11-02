@@ -48,11 +48,9 @@
       "default": "new"
     }
   },
-  "governance": {
+  "governance_fields": {
     "sourceSystem": "Dynamics 365",
-    "sourceRecordId_from": "externalId",
-    "importStatus": "imported",
-    "source": "dynamics"
+    "importStatus": "imported"
   },
   "validation_rules": {
     "required_fields": ["firstName", "lastName"],
@@ -62,9 +60,8 @@
     "state_fields": [],
     "postal_fields": []
   },
-  "deduplication": {
-    "enabled": false,
-    "fields": ["email"],
-    "fuzzy_threshold": 0.9
+  "dedupe_rules": {
+    "primary_key": ["email"],
+    "fuzzy_match_threshold": 90
   }
 }
