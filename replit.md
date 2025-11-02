@@ -35,6 +35,16 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Data Management**:
     *   **Backup & Restore**: Encrypted database snapshots (AES-256-GCM) with checksum verification, allowing import/export via the Admin Console.
     *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports. **Custom ID Preservation**: During CSV import, existing record IDs from external systems (e.g., Dynamics 365) are preserved exactly as provided, ensuring downstream systems and integrations continue to work without modifications. Leave ID column empty for auto-generation.
+    *   **Dynamics 365 Account Import**: Specialized transformation tool in Admin Console for migrating Dynamics 365 account data:
+        *   Excel file upload with configurable sheet name
+        *   JSON-based column mapping configuration
+        *   Record ID generation supporting patterns like `ACC-{{YYYY}}{{MM}}-{{00001}}`
+        *   External ID preservation from Dynamics fields
+        *   Comprehensive validation (email, phone, URL, state codes, postal codes)
+        *   Deduplication based on Account Name + City + State with configurable fuzzy matching
+        *   Governance metadata injection (Source System, Source Record ID, Import Status, Import Notes)
+        *   Template-aligned CSV output for seamless import
+        *   Files: `server/dynamics-mapper.ts`, API endpoint `/api/admin/dynamics/transform-accounts`
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
     *   **User Management**: Inline editing of user attributes (name, email, role) with role dropdown selector
     *   **Role Assignment**: Admins can view and modify user roles directly from the Users tab
@@ -75,6 +85,7 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Authentication Hashing**: bcrypt
 *   **JWT Handling**: jsonwebtoken
 *   **CSV Parsing**: csv-parse
+*   **Excel File Processing**: xlsx
 *   **File Uploads**: Multer
 *   **Data Validation**: Zod
 *   **Encryption**: OpenSSL (for generating secrets and AES-256-GCM for backups)
