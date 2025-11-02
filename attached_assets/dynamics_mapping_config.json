@@ -47,9 +47,11 @@
     "importStatus": "Imported"
   },
   "type_mapping": {
-    "Customer": "customer",
-    "Prospect": "prospect",
-    "Partner": "partner",
-    "Vendor": "customer"
+    "type": {
+      "Customer": "customer",
+      "Prospect": "prospect",
+      "Partner": "partner",
+      "Vendor": "customer"
+    }
   }
 }
