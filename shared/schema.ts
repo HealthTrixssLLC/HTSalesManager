@@ -196,6 +196,15 @@ export const idPatterns = pgTable("id_patterns", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const accountCategories = pgTable("account_categories", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const backupJobs = pgTable("backup_jobs", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
   status: backupStatusEnum("status").notNull().default("pending"),
@@ -402,6 +411,11 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export const insertIdPatternSchema = createInsertSchema(idPatterns).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertIdPattern = z.infer<typeof insertIdPatternSchema>;
 export type IdPattern = typeof idPatterns.$inferSelect;
+
+// AccountCategories
+export const insertAccountCategorySchema = createInsertSchema(accountCategories).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAccountCategory = z.infer<typeof insertAccountCategorySchema>;
+export type AccountCategory = typeof accountCategories.$inferSelect;
 
 // BackupJobs
 export const insertBackupJobSchema = createInsertSchema(backupJobs).omit({ id: true, createdAt: true });
