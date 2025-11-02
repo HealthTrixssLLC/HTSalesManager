@@ -34,9 +34,7 @@
   "id_rules": {
     "internal_id_field": "id",
     "internal_id_pattern": "LEAD-{{000001}}",
-    "external_id_fields": [
-      "externalId"
-    ]
+    "external_id_fields": []
   },
   "governance_fields": {
     "sourceSystem": "Dynamics 365",
