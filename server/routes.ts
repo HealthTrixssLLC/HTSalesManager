@@ -750,6 +750,42 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.post("/api/admin/users", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { name, email, password, roleId } = req.body;
+      
+      // Validate required fields
+      if (!name || !email || !password || !roleId) {
+        return res.status(400).json({ error: "Name, email, password, and role are required" });
+      }
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "User with this email already exists" });
+      }
+      
+      // Hash password using the auth helper
+      const hashedPassword = await hashPassword(password);
+      
+      // Create user
+      const newUser = await storage.createUser({
+        name,
+        email,
+        password: hashedPassword,
+        status: "active"
+      });
+      
+      // Assign role
+      await storage.assignRoleToUser(newUser.id, roleId);
+      
+      return res.json(newUser);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      return res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+  
   app.patch("/api/admin/users/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;

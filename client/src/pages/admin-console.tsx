@@ -27,12 +27,41 @@ export default function AdminConsole() {
   const [patternPreview, setPatternPreview] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserData, setEditUserData] = useState<{name: string; email: string; roleId: string}>({name: "", email: "", roleId: ""});
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [newUserData, setNewUserData] = useState<{name: string; email: string; password: string; roleId: string}>({
+    name: "", email: "", password: "", roleId: ""
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { name: string; email: string; password: string; roleId: string }) => {
+      const res = await apiRequest("POST", "/api/admin/users", {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        roleId: data.roleId
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "User created successfully" });
+      setCreateUserOpen(false);
+      setNewUserData({ name: "", email: "", password: "", roleId: "" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to create user",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+  
   const updateUserMutation = useMutation({
     mutationFn: async (data: { id: string; name: string; email: string; roleId: string }) => {
       const res = await apiRequest("PATCH", `/api/admin/users/${data.id}`, {
@@ -198,6 +227,18 @@ export default function AdminConsole() {
       ...editUserData
     });
   };
+  
+  const handleCreateUser = () => {
+    if (!newUserData.name || !newUserData.email || !newUserData.password || !newUserData.roleId) {
+      toast({
+        title: "Missing required fields",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+    createUserMutation.mutate(newUserData);
+  };
 
   return (
     <div className="space-y-6">
@@ -224,7 +265,7 @@ export default function AdminConsole() {
                   <CardTitle>User Management</CardTitle>
                   <CardDescription>Manage user accounts and access</CardDescription>
                 </div>
-                <Button data-testid="button-create-user">
+                <Button onClick={() => setCreateUserOpen(true)} data-testid="button-create-user">
                   <Plus className="h-4 w-4 mr-2" />
                   Add User
                 </Button>
@@ -604,6 +645,87 @@ export default function AdminConsole() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Create User Dialog */}
+      <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
+        <DialogContent data-testid="dialog-create-user">
+          <DialogHeader>
+            <DialogTitle>Create New User</DialogTitle>
+            <DialogDescription>
+              Add a new user to the system and assign a role
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-user-name">Full Name</Label>
+              <Input
+                id="new-user-name"
+                value={newUserData.name}
+                onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
+                placeholder="John Doe"
+                data-testid="input-new-user-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-email">Email</Label>
+              <Input
+                id="new-user-email"
+                type="email"
+                value={newUserData.email}
+                onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
+                placeholder="john.doe@example.com"
+                data-testid="input-new-user-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-password">Password</Label>
+              <Input
+                id="new-user-password"
+                type="password"
+                value={newUserData.password}
+                onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
+                placeholder="••••••••"
+                data-testid="input-new-user-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-role">Role</Label>
+              <Select
+                value={newUserData.roleId}
+                onValueChange={(value) => setNewUserData({...newUserData, roleId: value})}
+              >
+                <SelectTrigger id="new-user-role" data-testid="select-new-user-role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles?.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateUserOpen(false)}
+              disabled={createUserMutation.isPending}
+              data-testid="button-cancel-create-user"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateUser}
+              disabled={createUserMutation.isPending}
+              data-testid="button-save-new-user"
+            >
+              {createUserMutation.isPending ? "Creating..." : "Create User"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
