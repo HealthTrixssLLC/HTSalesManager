@@ -2,6 +2,13 @@
   "entity_type": "leads",
   "sheet_name": "All Leads",
   "id_pattern": "LEAD-{{SEQ:6}}",
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "LEAD-{{SEQ:6}}",
+    "external_id_fields": [
+      "externalId"
+    ]
+  },
   "column_mapping": {
     "(Do Not Modify) Lead": {
       "target": "externalId",
