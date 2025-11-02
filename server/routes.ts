@@ -1101,9 +1101,18 @@ export function registerRoutes(app: Express) {
       // Get Excel buffer
       const excelBuffer = files.excelFile[0].buffer;
 
+      // Fetch existing accounts for lookup (if enabled)
+      let existingAccounts: any[] = [];
+      if (config.account_lookup?.enabled) {
+        existingAccounts = await db.select({
+          id: accounts.id,
+          name: accounts.name
+        }).from(accounts);
+      }
+
       // Create mapper and transform
       const mapper = new DynamicsMapper(config);
-      const result = mapper.transform(excelBuffer, templateCsv);
+      const result = mapper.transform(excelBuffer, templateCsv, existingAccounts);
 
       // Convert to CSV
       const csvContent = mapper.toCSV(result.data);

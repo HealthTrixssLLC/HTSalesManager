@@ -367,15 +367,68 @@ export class DynamicsMapper {
   }
 
   /**
+   * Perform account lookup by name
+   */
+  lookupAccountByName(companyName: string, existingAccounts: any[]): string | null {
+    if (!companyName || !companyName.trim()) return null;
+    
+    const normalizedName = companyName.trim().toLowerCase();
+    
+    // First try exact match
+    const exactMatch = existingAccounts.find(
+      acc => acc.name.toLowerCase() === normalizedName
+    );
+    if (exactMatch) return exactMatch.id;
+    
+    // Try fuzzy match (contains)
+    const fuzzyMatch = existingAccounts.find(
+      acc => acc.name.toLowerCase().includes(normalizedName) ||
+             normalizedName.includes(acc.name.toLowerCase())
+    );
+    if (fuzzyMatch) return fuzzyMatch.id;
+    
+    return null;
+  }
+
+  /**
+   * Apply account lookup to map company names to account IDs
+   */
+  applyAccountLookup(data: AccountRow[], sourceData: AccountRow[], existingAccounts: any[]): AccountRow[] {
+    if (!this.config.account_lookup?.enabled) return data;
+    
+    const { source_column, target_field, fallback } = this.config.account_lookup;
+    
+    return data.map((row, index) => {
+      const sourceRow = sourceData[index];
+      const companyName = sourceRow?.[source_column];
+      
+      if (companyName && companyName.trim()) {
+        const accountId = this.lookupAccountByName(companyName, existingAccounts);
+        
+        if (accountId) {
+          row[target_field] = accountId;
+        } else if (fallback === 'create_note') {
+          const note = `Company: ${companyName}`;
+          row['importNotes'] = row['importNotes'] 
+            ? `${row['importNotes']}; ${note}` 
+            : note;
+        }
+      }
+      
+      return row;
+    });
+  }
+
+  /**
    * Transform Excel data to aligned CSV format
    */
-  transform(excelBuffer: Buffer, templateCsv: string): TransformResult {
+  transform(excelBuffer: Buffer, templateCsv: string, existingAccounts: any[] = []): TransformResult {
     // Step 1: Read Excel
-    let data = this.readExcelFile(excelBuffer);
-    const totalRows = data.length;
+    const sourceData = this.readExcelFile(excelBuffer);
+    const totalRows = sourceData.length;
 
     // Step 2: Apply column mapping
-    data = this.applyColumnMapping(data);
+    let data = this.applyColumnMapping(sourceData);
 
     // Step 3: Apply type mapping (e.g., "Customer" -> "customer")
     data = data.map(row => this.applyTypeMapping(row));
@@ -391,6 +444,9 @@ export class DynamicsMapper {
       }
       return complete;
     });
+
+    // Step 5.5: Apply account lookup (if enabled)
+    data = this.applyAccountLookup(data, sourceData, existingAccounts);
 
     // Step 6: Generate Record IDs
     data = data.map((row, index) => {
