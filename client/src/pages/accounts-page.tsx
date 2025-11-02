@@ -26,6 +26,8 @@ export default function AccountsPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [commentsAccountId, setCommentsAccountId] = useState<string | null>(null);
   const [commentsAccountName, setCommentsAccountName] = useState<string | null>(null);
 
@@ -42,9 +44,27 @@ export default function AccountsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       toast({ title: "Account created successfully" });
       setIsCreateDialogOpen(false);
+      form.reset();
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create account", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertAccount & { id: string }) => {
+      const res = await apiRequest("PATCH", `/api/accounts/${data.id}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+      toast({ title: "Account updated successfully" });
+      setIsEditDialogOpen(false);
+      setEditingAccount(null);
+      form.reset();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update account", description: error.message, variant: "destructive" });
     },
   });
 
@@ -68,7 +88,51 @@ export default function AccountsPage() {
   });
 
   const onSubmit = (data: InsertAccount) => {
-    createMutation.mutate(data);
+    if (editingAccount) {
+      updateMutation.mutate({ ...data, id: editingAccount.id });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const handleEdit = (account: Account) => {
+    setEditingAccount(account);
+    form.reset({
+      id: account.id,
+      name: account.name,
+      accountNumber: account.accountNumber || "",
+      category: account.category || "",
+      type: account.type,
+      ownerId: account.ownerId,
+      industry: account.industry || "",
+      website: account.website || "",
+      phone: account.phone || "",
+      primaryContactName: account.primaryContactName || "",
+      primaryContactEmail: account.primaryContactEmail || "",
+      billingAddress: account.billingAddress || "",
+      shippingAddress: account.shippingAddress || "",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleCreateNew = () => {
+    setEditingAccount(null);
+    form.reset({
+      id: "",
+      name: "",
+      accountNumber: "",
+      category: "",
+      type: "customer",
+      ownerId: user?.id || "",
+      industry: "",
+      website: "",
+      phone: "",
+      primaryContactName: "",
+      primaryContactEmail: "",
+      billingAddress: "",
+      shippingAddress: "",
+    });
+    setIsCreateDialogOpen(true);
   };
 
   const handleExport = async () => {
@@ -119,7 +183,7 @@ export default function AccountsPage() {
           </Button>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-create-account">
+              <Button onClick={handleCreateNew} data-testid="button-create-account">
                 <Plus className="h-4 w-4 mr-2" />
                 New Account
               </Button>
@@ -316,6 +380,195 @@ export default function AccountsPage() {
             </Form>
           </DialogContent>
           </Dialog>
+
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Account</DialogTitle>
+              <DialogDescription>Update account information</DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account ID</FormLabel>
+                      <FormControl>
+                        <Input {...field} disabled data-testid="input-edit-account-id" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Acme Corporation" {...field} data-testid="input-edit-account-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="accountNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ACC-001" {...field} value={field.value || ""} data-testid="input-edit-account-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enterprise" {...field} value={field.value || ""} data-testid="input-edit-category" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Type *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-account-type">
+                            <SelectValue placeholder="Select account type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="customer">Customer</SelectItem>
+                          <SelectItem value="partner">Partner</SelectItem>
+                          <SelectItem value="prospect">Prospect</SelectItem>
+                          <SelectItem value="vendor">Vendor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="industry"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Industry</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Healthcare" {...field} value={field.value || ""} data-testid="input-edit-industry" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="website"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Website</FormLabel>
+                      <FormControl>
+                        <Input placeholder="https://example.com" {...field} value={field.value || ""} data-testid="input-edit-website" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+1 (555) 123-4567" {...field} value={field.value || ""} data-testid="input-edit-phone" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="primaryContactName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Contact Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} value={field.value || ""} data-testid="input-edit-primary-contact-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="primaryContactEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Primary Contact Email</FormLabel>
+                        <FormControl>
+                          <Input placeholder="john.doe@example.com" {...field} value={field.value || ""} data-testid="input-edit-primary-contact-email" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="billingAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Billing Address</FormLabel>
+                      <FormControl>
+                        <Input placeholder="123 Main St, City, State, ZIP" {...field} value={field.value || ""} data-testid="input-edit-billing" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingAddress"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Shipping Address</FormLabel>
+                      <FormControl>
+                        <Input placeholder="123 Main St, City, State, ZIP" {...field} value={field.value || ""} data-testid="input-edit-shipping" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-account">
+                    {updateMutation.isPending ? "Updating..." : "Update Account"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -369,7 +622,12 @@ export default function AccountsPage() {
                         >
                           <MessageSquare className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" data-testid={`button-edit-${account.id}`}>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={() => handleEdit(account)}
+                          data-testid={`button-edit-${account.id}`}
+                        >
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button size="icon" variant="ghost" data-testid={`button-delete-${account.id}`}>
