@@ -49,3 +49,6 @@ Requirements-CPDO/
 # Development database files
 *.db
 *.sqlite
+
+# Docker entrypoint (created inside container, not copied from host - prevents line ending issues)
+docker-entrypoint.sh

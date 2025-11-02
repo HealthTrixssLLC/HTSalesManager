@@ -37,9 +37,42 @@ COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 # Install drizzle-kit for migrations (needed at runtime for db:push)
 RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps
 
-# Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Create entrypoint script directly in the container (eliminates Windows line ending issues)
+RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh && \
+    echo 'set -e' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "========================================"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Health Trixss CRM - Docker Entrypoint"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "========================================"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '# Wait for PostgreSQL to be ready' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Waiting for PostgreSQL to be ready..."' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'until node -e "' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'const { Client } = require('"'"'pg'"'"');' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'const client = new Client({ connectionString: process.env.DATABASE_URL });' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'client.connect()' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  .then(() => { client.end(); process.exit(0); })' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  .catch(() => process.exit(1));' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '" 2>/dev/null; do' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  echo "PostgreSQL is unavailable - sleeping"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  sleep 2' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'done' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "PostgreSQL is ready!"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '# Run database migrations' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Running database migrations..."' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'npm run db:push' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Database initialized successfully!"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "========================================"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Starting Health Trixss CRM..."' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "========================================"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '# Execute the CMD (node dist/index.js)' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'exec "$@"' >> /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Set environment variables
 ENV NODE_ENV=production
