@@ -1696,6 +1696,11 @@ export function registerRoutes(app: Express) {
             probability: row.probability ? Number(row.probability) : 0,
             closeDate: row.closeDate ? (row.closeDate.trim() === "" ? null : row.closeDate) : null,
             ownerId: req.user!.id,
+            externalId: row.externalId || null,
+            sourceSystem: row.sourceSystem || null,
+            sourceRecordId: row.sourceRecordId || null,
+            importStatus: row.importStatus || null,
+            importNotes: row.importNotes || null,
           };
           
           const validated = insertOpportunitySchema.parse(oppData);
