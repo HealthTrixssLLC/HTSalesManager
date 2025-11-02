@@ -1551,6 +1551,18 @@ export function registerRoutes(app: Express) {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
+          // Validate enum values before parsing
+          const validStatuses = ["new", "contacted", "qualified", "unqualified", "converted"];
+          const validSources = ["website", "referral", "phone", "email", "event", "partner", "other"];
+          
+          if (row.status && !validStatuses.includes(row.status.toLowerCase())) {
+            throw new Error(`Invalid status: "${row.status}". Expected one of: ${validStatuses.join(", ")}. Note: values must be lowercase.`);
+          }
+          
+          if (row.source && !validSources.includes(row.source.toLowerCase())) {
+            throw new Error(`Invalid source: "${row.source}". Expected one of: ${validSources.join(", ")}. Note: values must be lowercase.`);
+          }
+          
           const leadData: any = {
             id: row.id || "",
             firstName: row.firstName,
@@ -1559,8 +1571,8 @@ export function registerRoutes(app: Express) {
             email: row.email || null,
             phone: row.phone || null,
             topic: row.topic || null,
-            status: row.status || "new",
-            source: row.source || "other",
+            status: row.status?.toLowerCase() || "new",
+            source: row.source?.toLowerCase() || "other",
             ownerId: req.user!.id,
             externalId: row.externalId || null,
             sourceSystem: row.sourceSystem || null,
