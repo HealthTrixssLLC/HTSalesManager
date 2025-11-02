@@ -35,16 +35,21 @@ The design system is inspired by Linear, focusing on a clean, professional enter
 *   **Data Management**:
     *   **Backup & Restore**: Encrypted database snapshots (AES-256-GCM) with checksum verification, allowing import/export via the Admin Console.
     *   **CSV Import/Export**: Complete data migration toolkit with template downloads, validation, and type coercion for imports. **Custom ID Preservation**: During CSV import, existing record IDs from external systems (e.g., Dynamics 365) are preserved exactly as provided, ensuring downstream systems and integrations continue to work without modifications. Leave ID column empty for auto-generation.
-    *   **Dynamics 365 Account Import**: Specialized transformation tool in Admin Console for migrating Dynamics 365 account data:
+    *   **Dynamics 365 Account Import**: Specialized transformation tool in Admin Console for migrating Dynamics 365 account data with 17 enriched account fields:
+        *   **Structured Address Fields**: billingStreet/City/State/PostalCode, shippingStreet/City/State/PostalCode for proper address handling
+        *   **Account Metadata**: accountNumber (external system ID), category, industry classification
+        *   **Primary Contact Integration**: primaryContactName, primaryContactEmail for key stakeholder tracking
+        *   **Governance & Traceability**: externalId (Dynamics GUID), sourceSystem, sourceRecordId, importStatus, importNotes for audit trail
         *   Excel file upload with configurable sheet name
-        *   JSON-based column mapping configuration
-        *   Record ID generation supporting patterns like `ACC-{{YYYY}}{{MM}}-{{00001}}`
-        *   External ID preservation from Dynamics fields
-        *   Comprehensive validation (email, phone, URL, state codes, postal codes)
-        *   Deduplication based on Account Name + City + State with configurable fuzzy matching
-        *   Governance metadata injection (Source System, Source Record ID, Import Status, Import Notes)
-        *   Template-aligned CSV output for seamless import
-        *   Files: `server/dynamics-mapper.ts`, API endpoint `/api/admin/dynamics/transform-accounts`
+        *   JSON-based column mapping configuration (maps Dynamics columns like "(Do Not Modify) Account", "HT Account Number", "Business Type", "Category")
+        *   Smart ID generation: preserves existing Account Numbers or generates new IDs using patterns like `ACC-{{YYYY}}{{MM}}-{{00001}}`
+        *   Type mapping (e.g., "Customer" → "customer" for enum compatibility)
+        *   Comprehensive validation (email, phone, URL formats)
+        *   Deduplication based on Account Name + Account Number with configurable fuzzy matching (default 90% threshold)
+        *   Governance metadata injection preserves Dynamics GUID as sourceRecordId for downstream integrations
+        *   Template-aligned CSV output for seamless import into CRM
+        *   Complete user guide: `DYNAMICS_IMPORT_GUIDE.md`
+        *   Files: `server/dynamics-mapper.ts`, API endpoint `/api/admin/dynamics/transform-accounts`, config: `attached_assets/dynamics_mapping_config.json`
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, and database reset functionality.
     *   **User Management**: Inline editing of user attributes (name, email, role) with role dropdown selector
     *   **Role Assignment**: Admins can view and modify user roles directly from the Users tab
