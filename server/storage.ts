@@ -20,6 +20,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<(User & { password: string }) | undefined>;
   getUserById(id: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User>;
   getAllUsers(): Promise<User[]>;
   
   // ========== ROLES & PERMISSIONS ==========
@@ -28,6 +29,8 @@ export interface IStorage {
   getRolePermissions(roleId: string): Promise<Permission[]>;
   getUserRoles(userId: string): Promise<Role[]>;
   assignRoleToUser(userId: string, roleId: string): Promise<void>;
+  removeRoleFromUser(userId: string, roleId: string): Promise<void>;
+  updateUserRole(userId: string, newRoleId: string): Promise<void>;
   assignPermissionToRole(roleId: string, permissionId: string): Promise<void>;
   
   // ========== ACCOUNTS ==========

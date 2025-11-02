@@ -737,9 +737,41 @@ export function registerRoutes(app: Express) {
   app.get("/api/admin/users", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
       const users = await storage.getAllUsers();
-      return res.json(users);
+      // Fetch roles for each user
+      const usersWithRoles = await Promise.all(
+        users.map(async (user) => {
+          const roles = await storage.getUserRoles(user.id);
+          return { ...user, roles };
+        })
+      );
+      return res.json(usersWithRoles);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+  
+  app.patch("/api/admin/users/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { id } = req.params;
+      const { name, email, status, roleId } = req.body;
+      
+      // Update user attributes
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (email !== undefined) updateData.email = email;
+      if (status !== undefined) updateData.status = status;
+      
+      const updatedUser = await storage.updateUser(id, updateData);
+      
+      // Update role if provided
+      if (roleId !== undefined) {
+        await storage.updateUserRole(id, roleId);
+      }
+      
+      return res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      return res.status(500).json({ error: "Failed to update user" });
     }
   });
   

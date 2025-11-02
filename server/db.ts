@@ -73,6 +73,15 @@ export class PostgresStorage implements IStorage {
     return user as User;
   }
   
+  async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User> {
+    const result = await db.update(schema.users)
+      .set(updateData)
+      .where(eq(schema.users.id, id))
+      .returning();
+    const { password, ...user } = result[0];
+    return user as User;
+  }
+  
   async getAllUsers(): Promise<User[]> {
     const result = await db.select().from(schema.users);
     return result.map(({ password, ...user }) => user as User);
@@ -108,6 +117,20 @@ export class PostgresStorage implements IStorage {
   
   async assignRoleToUser(userId: string, roleId: string): Promise<void> {
     await db.insert(schema.userRoles).values({ userId, roleId });
+  }
+  
+  async removeRoleFromUser(userId: string, roleId: string): Promise<void> {
+    await db.delete(schema.userRoles)
+      .where(and(
+        eq(schema.userRoles.userId, userId),
+        eq(schema.userRoles.roleId, roleId)
+      ));
+  }
+  
+  async updateUserRole(userId: string, newRoleId: string): Promise<void> {
+    // Remove all existing roles and assign the new one
+    await db.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
+    await db.insert(schema.userRoles).values({ userId, roleId: newRoleId });
   }
   
   async assignPermissionToRole(roleId: string, permissionId: string): Promise<void> {

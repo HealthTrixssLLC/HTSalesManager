@@ -3,7 +3,7 @@
 
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check } from "lucide-react";
 import { User, Role, IdPattern } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,22 +12,49 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+
+type UserWithRoles = User & { roles: Role[] };
 
 export default function AdminConsole() {
   const { toast } = useToast();
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<IdPattern | null>(null);
   const [patternPreview, setPatternPreview] = useState("");
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserData, setEditUserData] = useState<{name: string; email: string; roleId: string}>({name: "", email: "", roleId: ""});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: users } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
+  const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
 
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: { id: string; name: string; email: string; roleId: string }) => {
+      const res = await apiRequest("PATCH", `/api/admin/users/${data.id}`, {
+        name: data.name,
+        email: data.email,
+        roleId: data.roleId
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "User updated successfully" });
+      setEditingUserId(null);
+    },
+    onError: () => {
+      toast({ 
+        title: "Failed to update user", 
+        variant: "destructive" 
+      });
+    },
+  });
+  
   const updatePatternMutation = useMutation({
     mutationFn: async (data: { id: string; pattern: string; startValue?: number }) => {
       const res = await apiRequest("PATCH", `/api/admin/id-patterns/${data.id}`, { 
@@ -149,6 +176,28 @@ export default function AdminConsole() {
       .replace(/{SEQ:(\d+)}/g, (_, len) => "1".padStart(parseInt(len), "0"));
     return preview;
   };
+  
+  const startEditingUser = (user: UserWithRoles) => {
+    setEditingUserId(user.id);
+    setEditUserData({
+      name: user.name,
+      email: user.email,
+      roleId: user.roles[0]?.id || ""
+    });
+  };
+  
+  const cancelEditingUser = () => {
+    setEditingUserId(null);
+    setEditUserData({name: "", email: "", roleId: ""});
+  };
+  
+  const saveUserChanges = () => {
+    if (!editingUserId) return;
+    updateUserMutation.mutate({
+      id: editingUserId,
+      ...editUserData
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -187,31 +236,107 @@ export default function AdminConsole() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users?.map((user) => (
-                    <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.status === "active" ? "default" : "secondary"}>
-                          {user.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Button size="icon" variant="ghost">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {users?.map((user) => {
+                    const isEditing = editingUserId === user.id;
+                    return (
+                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                        <TableCell className="font-medium">
+                          {isEditing ? (
+                            <Input 
+                              value={editUserData.name}
+                              onChange={(e) => setEditUserData({...editUserData, name: e.target.value})}
+                              data-testid={`input-edit-name-${user.id}`}
+                            />
+                          ) : (
+                            user.name
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Input 
+                              type="email"
+                              value={editUserData.email}
+                              onChange={(e) => setEditUserData({...editUserData, email: e.target.value})}
+                              data-testid={`input-edit-email-${user.id}`}
+                            />
+                          ) : (
+                            user.email
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Select 
+                              value={editUserData.roleId}
+                              onValueChange={(value) => setEditUserData({...editUserData, roleId: value})}
+                            >
+                              <SelectTrigger data-testid={`select-edit-role-${user.id}`}>
+                                <SelectValue placeholder="Select role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {roles?.map((role) => (
+                                  <SelectItem key={role.id} value={role.id}>
+                                    {role.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="secondary">
+                              {user.roles[0]?.name || "No role"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={user.status === "active" ? "default" : "secondary"}>
+                            {user.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(user.createdAt).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <div className="flex gap-2">
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={saveUserChanges}
+                                disabled={updateUserMutation.isPending}
+                                data-testid={`button-save-user-${user.id}`}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost"
+                                onClick={cancelEditingUser}
+                                disabled={updateUserMutation.isPending}
+                                data-testid={`button-cancel-edit-${user.id}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <Button 
+                              size="icon" 
+                              variant="ghost"
+                              onClick={() => startEditingUser(user)}
+                              data-testid={`button-edit-user-${user.id}`}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
