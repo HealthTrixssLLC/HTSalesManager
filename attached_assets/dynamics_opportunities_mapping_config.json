@@ -1,0 +1,83 @@
+{
+  "entity_type": "opportunities",
+  "sheet_name": "All Opportunities",
+  "target_template": "opportunities-template.csv",
+  "column_mapping": {
+    "(Do Not Modify) Opportunity": "externalId",
+    "HT Opportunity Number": "opportunityNumber",
+    "Topic": "name",
+    "HT Account Number (Account) (Account)": "accountId",
+    "Status": "status",
+    "Actual Close Date": "actualCloseDate",
+    "Actual Revenue": "actualRevenue",
+    "Est. close date": "estCloseDate",
+    "Est. revenue": "estRevenue",
+    "Rating": "rating"
+  },
+  "type_mapping": {
+    "status": {
+      "Won": "closed_won",
+      "Lost": "closed_lost",
+      "Open": "prospecting",
+      "In Progress": "qualification",
+      "Proposal": "proposal",
+      "Negotiation": "negotiation"
+    }
+  },
+  "computed_fields": {
+    "stage": {
+      "logic": "use_status_mapping",
+      "default": "prospecting"
+    },
+    "amount": {
+      "logic": "coalesce",
+      "sources": ["actualRevenue", "estRevenue"],
+      "default": 0
+    },
+    "closeDate": {
+      "logic": "coalesce",
+      "sources": ["actualCloseDate", "estCloseDate"],
+      "default": null
+    },
+    "probability": {
+      "logic": "conditional",
+      "rules": [
+        { "if": "status == 'Won'", "then": 100 },
+        { "if": "status == 'Lost'", "then": 0 },
+        { "if": "rating == 'Hot'", "then": 75 },
+        { "if": "rating == 'Warm'", "then": 50 },
+        { "if": "rating == 'Cold'", "then": 25 }
+      ],
+      "default": 50
+    }
+  },
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "OPP-{{YYYY}}-{{000001}}",
+    "external_id_fields": ["opportunityNumber"],
+    "preserve_external_format": true
+  },
+  "governance_fields": {
+    "sourceSystem": "Dynamics 365",
+    "importStatus": "imported"
+  },
+  "validation_rules": {
+    "required_fields": ["name", "accountId"],
+    "email_fields": [],
+    "phone_fields": [],
+    "url_fields": [],
+    "decimal_fields": ["actualRevenue", "estRevenue"],
+    "date_fields": ["actualCloseDate", "estCloseDate"]
+  },
+  "dedupe_rules": {
+    "primary_key": ["name", "accountId"],
+    "fuzzy_match_threshold": 90
+  },
+  "notes": {
+    "ownerId": "Will be set to the importing user's ID during transformation",
+    "accountId": "Must match an existing account ID in the CRM",
+    "closeDate": "Excel serial dates will be converted to ISO format",
+    "amount": "Uses Actual Revenue if available, otherwise Est. Revenue",
+    "probability": "Calculated based on Status and Rating fields"
+  }
+}
