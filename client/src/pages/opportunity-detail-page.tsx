@@ -74,18 +74,34 @@ export default function OpportunityDetailPage() {
   });
 
   const onSubmit = (data: InsertOpportunity) => {
+    console.log('Form submitted!', data);
     if (opportunity) {
       // Convert date string to Date object if needed
       const submitData = { ...data, id: opportunity.id };
       if (submitData.closeDate && typeof submitData.closeDate === 'string') {
         submitData.closeDate = new Date(submitData.closeDate) as any;
       }
+      console.log('Calling mutation with:', submitData);
       updateMutation.mutate(submitData);
     }
   };
 
   const handleEdit = () => {
     if (opportunity) {
+      // Convert Date objects to YYYY-MM-DD strings for date inputs
+      const formatDate = (date: Date | null) => {
+        if (!date) return null;
+        try {
+          const d = date instanceof Date ? date : new Date(date);
+          if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+          }
+        } catch (e) {
+          // Invalid date
+        }
+        return null;
+      };
+
       form.reset({
         id: opportunity.id,
         name: opportunity.name,
@@ -94,11 +110,11 @@ export default function OpportunityDetailPage() {
         amount: opportunity.amount || "0",
         probability: opportunity.probability || 0,
         ownerId: opportunity.ownerId,
-        closeDate: opportunity.closeDate || null,
+        closeDate: formatDate(opportunity.closeDate) as any,
         status: opportunity.status || null,
-        actualCloseDate: opportunity.actualCloseDate || null,
+        actualCloseDate: formatDate(opportunity.actualCloseDate) as any,
         actualRevenue: opportunity.actualRevenue || null,
-        estCloseDate: opportunity.estCloseDate || null,
+        estCloseDate: formatDate(opportunity.estCloseDate) as any,
         estRevenue: opportunity.estRevenue || null,
         rating: opportunity.rating || null,
       });
