@@ -22,7 +22,9 @@ import {
   commentSubscriptions,
   users,
   accounts,
+  contacts,
   leads,
+  opportunities,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";

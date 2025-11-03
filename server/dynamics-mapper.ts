@@ -490,10 +490,10 @@ export class DynamicsMapper {
     
     const { type_column, source_column, target_id_field, target_type_field, fallback } = this.config.related_entity_lookup;
     
-    return data.map((row, index) => {
-      const sourceRow = sourceData[index];
-      const entityType = sourceRow?.[type_column]?.trim();
-      const entityIdentifier = sourceRow?.[source_column]?.trim();
+    return data.map((row) => {
+      // Read from mapped data (row) instead of sourceData
+      const entityType = row[type_column];
+      const entityIdentifier = row[source_column];
       
       if (!entityType || !entityIdentifier) {
         return row;
@@ -502,45 +502,52 @@ export class DynamicsMapper {
       let foundId: string | null = null;
       
       // Normalize entity type to match our schema
-      const normalizedType = entityType.toLowerCase();
+      const normalizedType = entityType.toLowerCase().trim();
+      const normalizedIdentifier = entityIdentifier.trim();
       
       if (normalizedType.includes('account')) {
-        // Look up account by externalId, accountNumber, or name
-        const account = existingEntities.accounts?.find((a: any) => 
-          a.externalId === entityIdentifier || 
-          a.accountNumber === entityIdentifier ||
-          a.name === entityIdentifier
-        );
+        // Look up account by externalId, accountNumber, or name (case-insensitive, trimmed)
+        const account = existingEntities.accounts?.find((a: any) => {
+          const externalIdMatch = a.externalId && a.externalId.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const accountNumberMatch = a.accountNumber && a.accountNumber.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const nameMatch = a.name && a.name.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          return externalIdMatch || accountNumberMatch || nameMatch;
+        });
         if (account) {
           foundId = account.id;
           row[target_type_field] = 'Account';
         }
       } else if (normalizedType.includes('contact')) {
-        // Look up contact by email or full name
-        const contact = existingEntities.contacts?.find((c: any) => 
-          c.email === entityIdentifier ||
-          `${c.firstName} ${c.lastName}` === entityIdentifier
-        );
+        // Look up contact by email or full name (case-insensitive, trimmed)
+        const contact = existingEntities.contacts?.find((c: any) => {
+          const emailMatch = c.email && c.email.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+          const nameMatch = fullName.toLowerCase() === normalizedIdentifier.toLowerCase();
+          return emailMatch || nameMatch;
+        });
         if (contact) {
           foundId = contact.id;
           row[target_type_field] = 'Contact';
         }
       } else if (normalizedType.includes('lead')) {
-        // Look up lead by email or full name
-        const lead = existingEntities.leads?.find((l: any) => 
-          l.email === entityIdentifier ||
-          `${l.firstName} ${l.lastName}` === entityIdentifier
-        );
+        // Look up lead by email or full name (case-insensitive, trimmed)
+        const lead = existingEntities.leads?.find((l: any) => {
+          const emailMatch = l.email && l.email.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const fullName = `${l.firstName || ''} ${l.lastName || ''}`.trim();
+          const nameMatch = fullName.toLowerCase() === normalizedIdentifier.toLowerCase();
+          return emailMatch || nameMatch;
+        });
         if (lead) {
           foundId = lead.id;
           row[target_type_field] = 'Lead';
         }
       } else if (normalizedType.includes('opportunit')) {
-        // Look up opportunity by externalId or name
-        const opportunity = existingEntities.opportunities?.find((o: any) => 
-          o.externalId === entityIdentifier ||
-          o.name === entityIdentifier
-        );
+        // Look up opportunity by externalId or name (case-insensitive, trimmed)
+        const opportunity = existingEntities.opportunities?.find((o: any) => {
+          const externalIdMatch = o.externalId && o.externalId.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const nameMatch = o.name && o.name.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          return externalIdMatch || nameMatch;
+        });
         if (opportunity) {
           foundId = opportunity.id;
           row[target_type_field] = 'Opportunity';
