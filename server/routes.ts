@@ -1016,14 +1016,20 @@ export function registerRoutes(app: Express) {
   app.post("/api/admin/restore", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
       // Body should be a Buffer from express.raw() middleware
-      const backupBuffer = req.body;
+      let backupBuffer = req.body;
       
-      if (!backupBuffer || !Buffer.isBuffer(backupBuffer)) {
+      // Check if we received binary data (can be Buffer or Uint8Array)
+      if (!backupBuffer || (!Buffer.isBuffer(backupBuffer) && !(backupBuffer instanceof Uint8Array))) {
         return res.status(400).json({ 
           success: false,
-          error: "Restore failed: subarray is not a function.",
-          details: ["Invalid backup file format. Expected binary data."]
+          error: "Invalid backup file format",
+          details: ["Expected binary data. Received: " + typeof backupBuffer]
         });
+      }
+      
+      // Convert Uint8Array to Buffer if needed
+      if (backupBuffer instanceof Uint8Array && !Buffer.isBuffer(backupBuffer)) {
+        backupBuffer = Buffer.from(backupBuffer);
       }
       
       // Encryption key is required
