@@ -590,25 +590,45 @@ export function registerRoutes(app: Express) {
       // Convert date strings to Date objects
       const updateData = { ...req.body };
       
+      console.log('Received update data:', {
+        closeDate: updateData.closeDate,
+        actualCloseDate: updateData.actualCloseDate,
+        estCloseDate: updateData.estCloseDate,
+      });
+      
       const parseDate = (dateValue: any): Date | null => {
+        console.log('parseDate input:', dateValue, 'type:', typeof dateValue);
         if (!dateValue) return null;
-        if (dateValue instanceof Date) return dateValue;
+        if (dateValue instanceof Date) {
+          console.log('Already a Date object');
+          return dateValue;
+        }
         if (typeof dateValue === 'string' && dateValue.trim() !== '') {
           const parsed = new Date(dateValue);
+          console.log('Parsed date:', parsed, 'has toISOString:', typeof parsed.toISOString);
           return isNaN(parsed.getTime()) ? null : parsed;
         }
         return null;
       };
       
       if (updateData.closeDate !== undefined) {
+        console.log('Processing closeDate');
         updateData.closeDate = parseDate(updateData.closeDate);
       }
       if (updateData.actualCloseDate !== undefined) {
+        console.log('Processing actualCloseDate');
         updateData.actualCloseDate = parseDate(updateData.actualCloseDate);
       }
       if (updateData.estCloseDate !== undefined) {
+        console.log('Processing estCloseDate');
         updateData.estCloseDate = parseDate(updateData.estCloseDate);
       }
+      
+      console.log('Final update data:', {
+        closeDate: updateData.closeDate,
+        actualCloseDate: updateData.actualCloseDate,
+        estCloseDate: updateData.estCloseDate,
+      });
       
       const opportunity = await storage.updateOpportunity(req.params.id, updateData);
       
