@@ -593,6 +593,7 @@ export function registerRoutes(app: Express) {
       
       return res.json(opportunity);
     } catch (error) {
+      console.error("Update opportunity error:", error);
       return res.status(500).json({ error: "Failed to update opportunity" });
     }
   });
