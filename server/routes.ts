@@ -1687,6 +1687,12 @@ export function registerRoutes(app: Express) {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
+          const parseDate = (dateStr: string | null | undefined): Date | null => {
+            if (!dateStr || dateStr.trim() === "") return null;
+            const parsed = new Date(dateStr);
+            return isNaN(parsed.getTime()) ? null : parsed;
+          };
+          
           const oppData: any = {
             id: row.id || "",
             name: row.name,
@@ -1694,12 +1700,12 @@ export function registerRoutes(app: Express) {
             stage: row.stage || "prospecting",
             amount: row.amount ? String(row.amount) : "0",
             probability: row.probability ? Number(row.probability) : 0,
-            closeDate: row.closeDate ? (row.closeDate.trim() === "" ? null : row.closeDate) : null,
+            closeDate: parseDate(row.closeDate),
             ownerId: req.user!.id,
             status: row.status || null,
-            actualCloseDate: row.actualCloseDate ? (row.actualCloseDate.trim() === "" ? null : row.actualCloseDate) : null,
+            actualCloseDate: parseDate(row.actualCloseDate),
             actualRevenue: row.actualRevenue ? String(row.actualRevenue) : null,
-            estCloseDate: row.estCloseDate ? (row.estCloseDate.trim() === "" ? null : row.estCloseDate) : null,
+            estCloseDate: parseDate(row.estCloseDate),
             estRevenue: row.estRevenue ? String(row.estRevenue) : null,
             rating: row.rating || null,
             externalId: row.externalId || null,
