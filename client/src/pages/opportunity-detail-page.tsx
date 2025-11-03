@@ -83,17 +83,20 @@ export default function OpportunityDetailPage() {
 
   const onSubmit = (data: InsertOpportunity) => {
     if (opportunity) {
-      // Convert date strings to Date objects if needed
-      const submitData = { ...data, id: opportunity.id };
+      // Convert date strings to Date objects for the API
+      const submitData: any = { ...data, id: opportunity.id };
+      
+      // Convert all date fields from strings to Date objects
       if (submitData.closeDate && typeof submitData.closeDate === 'string') {
-        submitData.closeDate = new Date(submitData.closeDate) as any;
+        submitData.closeDate = new Date(submitData.closeDate);
       }
       if (submitData.actualCloseDate && typeof submitData.actualCloseDate === 'string') {
-        submitData.actualCloseDate = new Date(submitData.actualCloseDate) as any;
+        submitData.actualCloseDate = new Date(submitData.actualCloseDate);
       }
       if (submitData.estCloseDate && typeof submitData.estCloseDate === 'string') {
-        submitData.estCloseDate = new Date(submitData.estCloseDate) as any;
+        submitData.estCloseDate = new Date(submitData.estCloseDate);
       }
+      
       updateMutation.mutate(submitData);
     }
   };
