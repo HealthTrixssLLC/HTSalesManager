@@ -112,11 +112,6 @@ export default function OpportunityDetailPage() {
         }
       }
       
-      // Convert empty string rating to null
-      if (submitData.rating === '') {
-        submitData.rating = null;
-      }
-      
       updateMutation.mutate(submitData);
     }
   };
@@ -369,14 +364,18 @@ export default function OpportunityDetailPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Rating</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-edit-opportunity-rating">
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                      value={field.value || "none"} 
+                      data-testid="select-edit-opportunity-rating"
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select rating" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None</SelectItem>
                         <SelectItem value="hot">Hot</SelectItem>
                         <SelectItem value="warm">Warm</SelectItem>
                         <SelectItem value="cold">Cold</SelectItem>

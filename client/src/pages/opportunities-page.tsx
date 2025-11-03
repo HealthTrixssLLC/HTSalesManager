@@ -105,12 +105,7 @@ export default function OpportunitiesPage() {
   });
 
   const onSubmit = (data: InsertOpportunity) => {
-    // Convert empty string rating to null
-    const submitData = { ...data };
-    if (submitData.rating === '') {
-      submitData.rating = null;
-    }
-    createMutation.mutate(submitData);
+    createMutation.mutate(data);
   };
 
   const handleExport = async () => {
@@ -387,14 +382,17 @@ export default function OpportunitiesPage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Rating</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                          value={field.value || "none"}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-opportunity-rating">
                               <SelectValue placeholder="Select rating" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
                             <SelectItem value="hot">Hot</SelectItem>
                             <SelectItem value="warm">Warm</SelectItem>
                             <SelectItem value="cold">Cold</SelectItem>
