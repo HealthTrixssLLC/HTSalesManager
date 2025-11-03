@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Opportunity, Account, Contact, Activity, InsertOpportunity } from "@shared/schema";
 import { insertOpportunitySchema } from "@shared/schema";
+import { z } from "zod";
 
 export default function OpportunityDetailPage() {
   const [, params] = useRoute("/opportunities/:id");
@@ -53,8 +54,15 @@ export default function OpportunityDetailPage() {
     },
   });
 
+  // Extend schema to accept date strings from inputs
+  const formSchema = insertOpportunitySchema.extend({
+    closeDate: insertOpportunitySchema.shape.closeDate.nullable().or(
+      z.string().nullable()
+    ),
+  });
+
   const form = useForm<InsertOpportunity>({
-    resolver: zodResolver(insertOpportunitySchema),
+    resolver: zodResolver(formSchema),
     defaultValues: {
       id: "",
       name: "",
@@ -353,14 +361,9 @@ export default function OpportunityDetailPage() {
                           type="date"
                           value={dateString}
                           onChange={(e) => {
+                            // Keep as string - will be converted to Date in onSubmit
                             const dateValue = e.target.value;
-                            if (dateValue) {
-                              // Create date at noon UTC to avoid timezone issues
-                              const date = new Date(dateValue + 'T12:00:00.000Z');
-                              field.onChange(date);
-                            } else {
-                              field.onChange(null);
-                            }
+                            field.onChange(dateValue || null);
                           }}
                           data-testid="input-edit-opportunity-closedate"
                         />
