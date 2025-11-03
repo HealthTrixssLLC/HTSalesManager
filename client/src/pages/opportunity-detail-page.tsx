@@ -112,6 +112,11 @@ export default function OpportunityDetailPage() {
         }
       }
       
+      // Convert empty string rating to null
+      if (submitData.rating === '') {
+        submitData.rating = null;
+      }
+      
       updateMutation.mutate(submitData);
     }
   };
@@ -352,6 +357,29 @@ export default function OpportunityDetailPage() {
                         <SelectItem value="negotiation">Negotiation</SelectItem>
                         <SelectItem value="closed_won">Closed Won</SelectItem>
                         <SelectItem value="closed_lost">Closed Lost</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="rating"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Rating</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-edit-opportunity-rating">
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select rating" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="hot">Hot</SelectItem>
+                        <SelectItem value="warm">Warm</SelectItem>
+                        <SelectItem value="cold">Cold</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
