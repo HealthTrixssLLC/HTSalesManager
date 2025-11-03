@@ -170,7 +170,11 @@ export default function AdminConsole() {
       
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Restore failed");
+        // Include detailed error information
+        const errorMessage = error.details 
+          ? `${error.error}: ${Array.isArray(error.details) ? error.details.join(', ') : error.details}`
+          : error.error || "Restore failed";
+        throw new Error(errorMessage);
       }
       
       return await res.json();
