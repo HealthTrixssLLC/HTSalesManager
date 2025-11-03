@@ -83,6 +83,7 @@ export default function OpportunityDetailPage() {
 
   const onSubmit = (data: InsertOpportunity) => {
     console.log('Form submitted!', data);
+    console.log('Form errors:', form.formState.errors);
     if (opportunity) {
       // Convert date string to Date object if needed
       const submitData = { ...data, id: opportunity.id };
@@ -93,6 +94,10 @@ export default function OpportunityDetailPage() {
       updateMutation.mutate(submitData);
     }
   };
+
+  // Log form errors on every render (for debugging)
+  console.log('Form validation errors:', form.formState.errors);
+  console.log('Form is valid:', form.formState.isValid);
 
   const handleEdit = () => {
     if (opportunity) {
