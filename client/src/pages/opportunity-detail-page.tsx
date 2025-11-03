@@ -1,14 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
-import type { Opportunity, Account, Contact, Activity } from "@shared/schema";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Opportunity, Account, Contact, Activity, InsertOpportunity } from "@shared/schema";
+import { insertOpportunitySchema } from "@shared/schema";
 
 export default function OpportunityDetailPage() {
   const [, params] = useRoute("/opportunities/:id");
   const opportunityId = params?.id;
+  const { toast } = useToast();
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
@@ -23,6 +36,81 @@ export default function OpportunityDetailPage() {
     queryKey: ["/api/opportunities", opportunityId, "related"],
     enabled: !!opportunityId,
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertOpportunity & { id: string }) => {
+      const res = await apiRequest("PATCH", `/api/opportunities/${data.id}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
+      toast({ title: "Opportunity updated successfully" });
+      setIsEditDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update opportunity", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Extended schema to handle date string conversion
+  const extendedSchema = insertOpportunitySchema.extend({
+    closeDate: insertOpportunitySchema.shape.closeDate.nullable().transform((val) => {
+      if (!val) return null;
+      if (val instanceof Date) return val;
+      // Handle string dates from form inputs
+      const date = new Date(val);
+      return isNaN(date.getTime()) ? null : date;
+    }),
+  });
+
+  const form = useForm<InsertOpportunity>({
+    resolver: zodResolver(extendedSchema),
+    defaultValues: {
+      id: "",
+      name: "",
+      accountId: "",
+      stage: "prospecting",
+      amount: "0",
+      probability: 0,
+      ownerId: "",
+      closeDate: null,
+      status: null,
+      actualCloseDate: null,
+      actualRevenue: null,
+      estCloseDate: null,
+      estRevenue: null,
+      rating: null,
+    },
+  });
+
+  const onSubmit = (data: InsertOpportunity) => {
+    if (opportunity) {
+      updateMutation.mutate({ ...data, id: opportunity.id });
+    }
+  };
+
+  const handleEdit = () => {
+    if (opportunity) {
+      form.reset({
+        id: opportunity.id,
+        name: opportunity.name,
+        accountId: opportunity.accountId,
+        stage: opportunity.stage,
+        amount: opportunity.amount || "0",
+        probability: opportunity.probability || 0,
+        ownerId: opportunity.ownerId,
+        closeDate: opportunity.closeDate || null,
+        status: opportunity.status || null,
+        actualCloseDate: opportunity.actualCloseDate || null,
+        actualRevenue: opportunity.actualRevenue || null,
+        estCloseDate: opportunity.estCloseDate || null,
+        estRevenue: opportunity.estRevenue || null,
+        rating: opportunity.rating || null,
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
 
   if (oppLoading || relatedLoading) {
     return (
@@ -57,9 +145,7 @@ export default function OpportunityDetailPage() {
       backLabel="Opportunities"
       status={opportunity.stage}
       statusVariant={getStageVariant(opportunity.stage)}
-      onEdit={() => {
-        // TODO: Open edit dialog
-      }}
+      onEdit={handleEdit}
       onDelete={() => {
         // TODO: Show delete confirmation
       }}
@@ -134,6 +220,158 @@ export default function OpportunityDetailPage() {
           />
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Opportunity</DialogTitle>
+            <DialogDescription>Update opportunity details</DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Opportunity Name *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Q1 Healthcare Software License" {...field} data-testid="input-edit-opportunity-name" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="accountId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Account ID *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="ACT-1002" {...field} data-testid="input-edit-opportunity-account" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Amount</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="50000" {...field} value={field.value || ""} data-testid="input-edit-opportunity-amount" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="probability"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Probability (%)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          placeholder="50"
+                          {...field}
+                          value={field.value || 0}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                          data-testid="input-edit-opportunity-probability"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="stage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stage *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} data-testid="select-edit-opportunity-stage">
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select stage" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="prospecting">Prospecting</SelectItem>
+                        <SelectItem value="qualification">Qualification</SelectItem>
+                        <SelectItem value="proposal">Proposal</SelectItem>
+                        <SelectItem value="negotiation">Negotiation</SelectItem>
+                        <SelectItem value="closed_won">Closed Won</SelectItem>
+                        <SelectItem value="closed_lost">Closed Lost</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="closeDate"
+                render={({ field }) => {
+                  // Safely convert field value to date string for input
+                  let dateString = "";
+                  if (field.value) {
+                    try {
+                      const date = field.value instanceof Date ? field.value : new Date(field.value);
+                      if (!isNaN(date.getTime())) {
+                        dateString = date.toISOString().split('T')[0];
+                      }
+                    } catch (e) {
+                      // Invalid date, use empty string
+                    }
+                  }
+                  
+                  return (
+                    <FormItem>
+                      <FormLabel>Close Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          value={dateString}
+                          onChange={(e) => {
+                            const dateValue = e.target.value;
+                            if (dateValue) {
+                              // Create date at noon UTC to avoid timezone issues
+                              const date = new Date(dateValue + 'T12:00:00.000Z');
+                              field.onChange(date);
+                            } else {
+                              field.onChange(null);
+                            }
+                          }}
+                          data-testid="input-edit-opportunity-closedate"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-edit">
+                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </DetailPageLayout>
   );
 }
