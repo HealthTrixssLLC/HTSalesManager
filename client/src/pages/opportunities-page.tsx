@@ -36,6 +36,9 @@ export default function OpportunitiesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [commentsOpportunityId, setCommentsOpportunityId] = useState<string | null>(null);
   const [commentsOpportunityName, setCommentsOpportunityName] = useState<string | null>(null);
+  const [draggedOpportunity, setDraggedOpportunity] = useState<Opportunity | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const { data: opportunities, isLoading } = useQuery<Opportunity[]>({
     queryKey: ["/api/opportunities"],
@@ -118,6 +121,48 @@ export default function OpportunitiesPage() {
     } catch (error) {
       toast({ title: "Failed to export Opportunities", variant: "destructive" });
     }
+  };
+
+  const handleDragStart = (e: React.DragEvent, opp: Opportunity) => {
+    setDraggedOpportunity(opp);
+    setIsDragging(true);
+    e.dataTransfer.effectAllowed = "move";
+    e.currentTarget.classList.add("opacity-50");
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.currentTarget.classList.remove("opacity-50");
+    setDraggedOpportunity(null);
+    setDragOverStage(null);
+    setTimeout(() => setIsDragging(false), 100);
+  };
+
+  const handleDragOver = (e: React.DragEvent, stageId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStage(stageId);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!e.currentTarget.contains(relatedTarget)) {
+      setDragOverStage(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetStage: string) => {
+    e.preventDefault();
+    setDragOverStage(null);
+    
+    if (!draggedOpportunity || draggedOpportunity.stage === targetStage) {
+      return;
+    }
+    
+    updateStageMutation.mutate({ 
+      id: draggedOpportunity.id, 
+      stage: targetStage 
+    });
+    setDraggedOpportunity(null);
   };
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
@@ -306,13 +351,27 @@ export default function OpportunitiesPage() {
                   </CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 min-h-[400px]">
+              <CardContent 
+                className={`space-y-3 min-h-[400px] transition-colors ${
+                  dragOverStage === stage.id ? "bg-accent/20 border-2 border-dashed border-primary" : ""
+                }`}
+                onDragOver={(e) => handleDragOver(e, stage.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, stage.id)}
+              >
                 {groupedOpportunities[stage.id].map((opp) => (
                   <Card 
                     key={opp.id} 
-                    className="p-4 hover-elevate cursor-pointer" 
+                    className="p-4 hover-elevate cursor-move" 
                     data-testid={`card-opportunity-${opp.id}`}
-                    onClick={() => setLocation(`/opportunities/${opp.id}`)}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, opp)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => {
+                      if (!isDragging) {
+                        setLocation(`/opportunities/${opp.id}`);
+                      }
+                    }}
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
