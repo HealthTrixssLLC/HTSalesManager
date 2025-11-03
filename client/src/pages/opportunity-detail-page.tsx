@@ -56,9 +56,11 @@ export default function OpportunityDetailPage() {
 
   // Extend schema to accept date strings from inputs
   const formSchema = insertOpportunitySchema.extend({
-    closeDate: insertOpportunitySchema.shape.closeDate.nullable().or(
-      z.string().nullable()
-    ),
+    closeDate: z.union([
+      z.date(),
+      z.string(),
+      z.null(),
+    ]).optional(),
   });
 
   const form = useForm<InsertOpportunity>({
@@ -82,22 +84,15 @@ export default function OpportunityDetailPage() {
   });
 
   const onSubmit = (data: InsertOpportunity) => {
-    console.log('Form submitted!', data);
-    console.log('Form errors:', form.formState.errors);
     if (opportunity) {
       // Convert date string to Date object if needed
       const submitData = { ...data, id: opportunity.id };
       if (submitData.closeDate && typeof submitData.closeDate === 'string') {
         submitData.closeDate = new Date(submitData.closeDate) as any;
       }
-      console.log('Calling mutation with:', submitData);
       updateMutation.mutate(submitData);
     }
   };
-
-  // Log form errors on every render (for debugging)
-  console.log('Form validation errors:', form.formState.errors);
-  console.log('Form is valid:', form.formState.isValid);
 
   const handleEdit = () => {
     if (opportunity) {
