@@ -547,8 +547,36 @@ export function registerRoutes(app: Express) {
   
   app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
     try {
-      const opportunities = await storage.getAllOpportunities();
-      return res.json(opportunities);
+      // Fetch opportunities with account information
+      const opportunitiesWithAccounts = await db
+        .select({
+          id: opportunities.id,
+          accountId: opportunities.accountId,
+          name: opportunities.name,
+          stage: opportunities.stage,
+          amount: opportunities.amount,
+          closeDate: opportunities.closeDate,
+          ownerId: opportunities.ownerId,
+          probability: opportunities.probability,
+          status: opportunities.status,
+          actualCloseDate: opportunities.actualCloseDate,
+          actualRevenue: opportunities.actualRevenue,
+          estCloseDate: opportunities.estCloseDate,
+          estRevenue: opportunities.estRevenue,
+          rating: opportunities.rating,
+          externalId: opportunities.externalId,
+          sourceSystem: opportunities.sourceSystem,
+          sourceRecordId: opportunities.sourceRecordId,
+          importStatus: opportunities.importStatus,
+          importNotes: opportunities.importNotes,
+          createdAt: opportunities.createdAt,
+          updatedAt: opportunities.updatedAt,
+          accountName: accounts.name,
+        })
+        .from(opportunities)
+        .leftJoin(accounts, eq(opportunities.accountId, accounts.id));
+      
+      return res.json(opportunitiesWithAccounts);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunities" });
     }

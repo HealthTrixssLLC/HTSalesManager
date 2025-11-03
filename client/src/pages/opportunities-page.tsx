@@ -1,11 +1,13 @@
 // Opportunities Kanban board with drag-and-drop
 // Based on design_guidelines.md enterprise SaaS patterns
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
+
+type OpportunityWithAccount = Opportunity & { accountName: string | null };
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,11 +38,20 @@ export default function OpportunitiesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [commentsOpportunityId, setCommentsOpportunityId] = useState<string | null>(null);
   const [commentsOpportunityName, setCommentsOpportunityName] = useState<string | null>(null);
-  const [draggedOpportunity, setDraggedOpportunity] = useState<Opportunity | null>(null);
+  const [draggedOpportunity, setDraggedOpportunity] = useState<OpportunityWithAccount | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Filter states
+  const [filterAccount, setFilterAccount] = useState<string>("");
+  const [filterCloseDateFrom, setFilterCloseDateFrom] = useState<string>("");
+  const [filterCloseDateTo, setFilterCloseDateTo] = useState<string>("");
+  const [filterProbabilityMin, setFilterProbabilityMin] = useState<string>("");
+  const [filterProbabilityMax, setFilterProbabilityMax] = useState<string>("");
+  const [filterRating, setFilterRating] = useState<string>("");
 
-  const { data: opportunities, isLoading } = useQuery<Opportunity[]>({
+  const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
     queryKey: ["/api/opportunities"],
   });
 
@@ -123,7 +134,7 @@ export default function OpportunitiesPage() {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, opp: Opportunity) => {
+  const handleDragStart = (e: React.DragEvent, opp: OpportunityWithAccount) => {
     setDraggedOpportunity(opp);
     setIsDragging(true);
     e.dataTransfer.effectAllowed = "move";
@@ -165,10 +176,62 @@ export default function OpportunitiesPage() {
     setDraggedOpportunity(null);
   };
 
+  // Get unique accounts for filter dropdown
+  const uniqueAccounts = useMemo(() => {
+    if (!opportunities) return [];
+    const accountMap = new Map<string, string>();
+    opportunities.forEach(opp => {
+      if (opp.accountName && opp.accountId) {
+        accountMap.set(opp.accountId, opp.accountName);
+      }
+    });
+    return Array.from(accountMap.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [opportunities]);
+
+  // Apply filters
+  const filteredOpportunities = useMemo(() => {
+    if (!opportunities) return [];
+    
+    return opportunities.filter(opp => {
+      // Account filter
+      if (filterAccount && opp.accountId !== filterAccount) return false;
+      
+      // Close date range filter - exclude items without dates when filter is active
+      if (filterCloseDateFrom || filterCloseDateTo) {
+        if (!opp.closeDate) return false; // Exclude if no close date when filter is active
+        
+        const closeDate = new Date(opp.closeDate);
+        
+        if (filterCloseDateFrom) {
+          const fromDate = new Date(filterCloseDateFrom);
+          if (closeDate < fromDate) return false;
+        }
+        
+        if (filterCloseDateTo) {
+          const toDate = new Date(filterCloseDateTo);
+          if (closeDate > toDate) return false;
+        }
+      }
+      
+      // Probability range filter
+      if (filterProbabilityMin && opp.probability !== null && opp.probability !== undefined) {
+        if (opp.probability < parseInt(filterProbabilityMin)) return false;
+      }
+      if (filterProbabilityMax && opp.probability !== null && opp.probability !== undefined) {
+        if (opp.probability > parseInt(filterProbabilityMax)) return false;
+      }
+      
+      // Rating filter
+      if (filterRating && opp.rating !== filterRating) return false;
+      
+      return true;
+    });
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating]);
+
   const groupedOpportunities = stages.reduce((acc, stage) => {
-    acc[stage.id] = opportunities?.filter((opp) => opp.stage === stage.id) || [];
+    acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
     return acc;
-  }, {} as Record<string, Opportunity[]>);
+  }, {} as Record<string, OpportunityWithAccount[]>);
 
   if (isLoading) {
     return (
@@ -186,6 +249,10 @@ export default function OpportunitiesPage() {
           <p className="text-muted-foreground">Visual pipeline to track deals and close them faster</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowFilters(!showFilters)} data-testid="button-toggle-filters">
+            <Filter className="h-4 w-4 mr-2" />
+            {showFilters ? "Hide Filters" : "Show Filters"}
+          </Button>
           <Button variant="outline" onClick={handleExport} data-testid="button-export-opportunities">
             <Download className="h-4 w-4 mr-2" />
             Export to CSV
@@ -338,6 +405,119 @@ export default function OpportunitiesPage() {
         </div>
       </div>
 
+      {/* Filters */}
+      {showFilters && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Account</label>
+                <Select value={filterAccount} onValueChange={setFilterAccount}>
+                  <SelectTrigger data-testid="select-filter-account">
+                    <SelectValue placeholder="All accounts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All accounts</SelectItem>
+                    {uniqueAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Close Date From</label>
+                <Input 
+                  type="date" 
+                  value={filterCloseDateFrom}
+                  onChange={(e) => setFilterCloseDateFrom(e.target.value)}
+                  data-testid="input-filter-close-date-from"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Close Date To</label>
+                <Input 
+                  type="date" 
+                  value={filterCloseDateTo}
+                  onChange={(e) => setFilterCloseDateTo(e.target.value)}
+                  data-testid="input-filter-close-date-to"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Probability Min %</label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  max="100" 
+                  value={filterProbabilityMin}
+                  onChange={(e) => setFilterProbabilityMin(e.target.value)}
+                  placeholder="0"
+                  data-testid="input-filter-probability-min"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Probability Max %</label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  max="100" 
+                  value={filterProbabilityMax}
+                  onChange={(e) => setFilterProbabilityMax(e.target.value)}
+                  placeholder="100"
+                  data-testid="input-filter-probability-max"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Rating</label>
+                <Select value={filterRating} onValueChange={setFilterRating}>
+                  <SelectTrigger data-testid="select-filter-rating">
+                    <SelectValue placeholder="All ratings" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All ratings</SelectItem>
+                    <SelectItem value="Hot">Hot</SelectItem>
+                    <SelectItem value="Warm">Warm</SelectItem>
+                    <SelectItem value="Cold">Cold</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating) && (
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setFilterAccount("");
+                    setFilterCloseDateFrom("");
+                    setFilterCloseDateTo("");
+                    setFilterProbabilityMin("");
+                    setFilterProbabilityMax("");
+                    setFilterRating("");
+                  }}
+                  data-testid="button-clear-filters"
+                >
+                  Clear All Filters
+                </Button>
+                <Badge variant="secondary">
+                  {filteredOpportunities.length} of {opportunities?.length || 0} opportunities
+                </Badge>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Kanban Board */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map((stage) => (
@@ -382,6 +562,12 @@ export default function OpportunitiesPage() {
                           </Badge>
                         )}
                       </div>
+                      {opp.accountName && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Building2 className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate" data-testid={`text-account-${opp.id}`}>{opp.accountName}</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <DollarSign className="h-3 w-3" />
