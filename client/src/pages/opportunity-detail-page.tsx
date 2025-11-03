@@ -53,19 +53,8 @@ export default function OpportunityDetailPage() {
     },
   });
 
-  // Extended schema to handle date string conversion
-  const extendedSchema = insertOpportunitySchema.extend({
-    closeDate: insertOpportunitySchema.shape.closeDate.nullable().transform((val) => {
-      if (!val) return null;
-      if (val instanceof Date) return val;
-      // Handle string dates from form inputs
-      const date = new Date(val);
-      return isNaN(date.getTime()) ? null : date;
-    }),
-  });
-
   const form = useForm<InsertOpportunity>({
-    resolver: zodResolver(extendedSchema),
+    resolver: zodResolver(insertOpportunitySchema),
     defaultValues: {
       id: "",
       name: "",
@@ -86,7 +75,12 @@ export default function OpportunityDetailPage() {
 
   const onSubmit = (data: InsertOpportunity) => {
     if (opportunity) {
-      updateMutation.mutate({ ...data, id: opportunity.id });
+      // Convert date string to Date object if needed
+      const submitData = { ...data, id: opportunity.id };
+      if (submitData.closeDate && typeof submitData.closeDate === 'string') {
+        submitData.closeDate = new Date(submitData.closeDate) as any;
+      }
+      updateMutation.mutate(submitData);
     }
   };
 
