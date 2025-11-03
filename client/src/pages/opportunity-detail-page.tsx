@@ -86,16 +86,43 @@ export default function OpportunityDetailPage() {
       // Convert date strings to Date objects for the API
       const submitData: any = { ...data, id: opportunity.id };
       
+      console.log('Data before conversion:', {
+        closeDate: submitData.closeDate,
+        actualCloseDate: submitData.actualCloseDate,
+        estCloseDate: submitData.estCloseDate,
+      });
+      
       // Convert all date fields from strings to Date objects
-      if (submitData.closeDate && typeof submitData.closeDate === 'string') {
-        submitData.closeDate = new Date(submitData.closeDate);
+      // Also handle empty strings by converting them to null
+      if (submitData.closeDate) {
+        if (typeof submitData.closeDate === 'string' && submitData.closeDate !== '') {
+          submitData.closeDate = new Date(submitData.closeDate);
+        } else if (submitData.closeDate === '') {
+          submitData.closeDate = null;
+        }
       }
-      if (submitData.actualCloseDate && typeof submitData.actualCloseDate === 'string') {
-        submitData.actualCloseDate = new Date(submitData.actualCloseDate);
+      
+      if (submitData.actualCloseDate) {
+        if (typeof submitData.actualCloseDate === 'string' && submitData.actualCloseDate !== '') {
+          submitData.actualCloseDate = new Date(submitData.actualCloseDate);
+        } else if (submitData.actualCloseDate === '') {
+          submitData.actualCloseDate = null;
+        }
       }
-      if (submitData.estCloseDate && typeof submitData.estCloseDate === 'string') {
-        submitData.estCloseDate = new Date(submitData.estCloseDate);
+      
+      if (submitData.estCloseDate) {
+        if (typeof submitData.estCloseDate === 'string' && submitData.estCloseDate !== '') {
+          submitData.estCloseDate = new Date(submitData.estCloseDate);
+        } else if (submitData.estCloseDate === '') {
+          submitData.estCloseDate = null;
+        }
       }
+      
+      console.log('Data after conversion:', {
+        closeDate: submitData.closeDate,
+        actualCloseDate: submitData.actualCloseDate,
+        estCloseDate: submitData.estCloseDate,
+      });
       
       updateMutation.mutate(submitData);
     }
