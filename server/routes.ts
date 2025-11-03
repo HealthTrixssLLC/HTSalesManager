@@ -1359,6 +1359,91 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.post("/api/admin/dynamics/transform-activities", authenticate, requireRole("Admin"), upload.fields([
+    { name: 'excelFile', maxCount: 1 },
+    { name: 'mappingConfig', maxCount: 1 },
+    { name: 'templateCsv', maxCount: 1 }
+  ]), async (req: AuthRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.excelFile || !files.mappingConfig || !files.templateCsv) {
+        return res.status(400).json({ 
+          error: "Missing required files. Please provide excelFile, mappingConfig, and templateCsv" 
+        });
+      }
+
+      // Parse mapping config
+      const configBuffer = files.mappingConfig[0].buffer;
+      const config: DynamicsMappingConfig = JSON.parse(configBuffer.toString('utf-8'));
+
+      // Get template CSV content
+      const templateCsv = files.templateCsv[0].buffer.toString('utf-8');
+
+      // Get Excel buffer
+      const excelBuffer = files.excelFile[0].buffer;
+
+      // Fetch all entities for related entity lookup
+      const existingEntities = {
+        accounts: await db.select({
+          id: accounts.id,
+          externalId: accounts.externalId,
+          accountNumber: accounts.accountNumber,
+          name: accounts.name
+        }).from(accounts),
+        contacts: await db.select({
+          id: contacts.id,
+          email: contacts.email,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName
+        }).from(contacts),
+        leads: await db.select({
+          id: leads.id,
+          email: leads.email,
+          firstName: leads.firstName,
+          lastName: leads.lastName
+        }).from(leads),
+        opportunities: await db.select({
+          id: opportunities.id,
+          externalId: opportunities.externalId,
+          name: opportunities.name
+        }).from(opportunities)
+      };
+
+      // Create mapper and transform
+      const mapper = new DynamicsMapper(config);
+      const result = mapper.transform(excelBuffer, templateCsv, [], existingEntities);
+
+      // Set ownerId to the current user for all activities
+      result.data = result.data.map(row => ({
+        ...row,
+        ownerId: req.user!.id
+      }));
+
+      // Convert to CSV
+      const csvContent = mapper.toCSV(result.data);
+
+      // Create audit log
+      await createAudit(req, "transform", "DynamicsImport", null, null, {
+        sourceFile: files.excelFile[0].originalname,
+        entity: "activities",
+        stats: result.stats,
+      });
+
+      // Return CSV file
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="activities_aligned.csv"');
+      
+      return res.send(csvContent);
+    } catch (error: any) {
+      console.error("Dynamics activities transform error:", error);
+      return res.status(500).json({ 
+        error: "Failed to transform activities", 
+        details: error.message 
+      });
+    }
+  });
+  
   // ========== CSV EXPORT ROUTES ==========
   
   // Helper function to convert array of objects to CSV

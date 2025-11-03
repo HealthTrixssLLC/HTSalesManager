@@ -1,0 +1,64 @@
+{
+  "source_file": "All Activities 11-3-2025 2-29-06 PM.xlsx",
+  "sheet_name": "All Activities",
+  "target_template": "activities-template.csv",
+  "column_mapping": {
+    "Subject": "subject",
+    "Activity Type": "type",
+    "Due Date": "dueAt",
+    "Actual End": "completedAt",
+    "Description": "notes",
+    "(Do Not Modify) Activity": "externalId",
+    "Regarding (Object Type)": "regardingType",
+    "Regarding": "regardingIdentifier"
+  },
+  "id_rules": {
+    "internal_id_field": "id",
+    "internal_id_pattern": "ACT-{{YYYY}}{{MM}}-{{00001}}",
+    "external_id_fields": [
+      "externalId"
+    ],
+    "preserve_external_format": false
+  },
+  "validation_rules": {
+    "required_fields": [
+      "subject",
+      "type"
+    ],
+    "email_fields": [],
+    "phone_fields": [],
+    "url_fields": [],
+    "date_fields": [
+      "dueAt",
+      "completedAt"
+    ]
+  },
+  "dedupe_rules": {
+    "primary_key": [
+      "externalId"
+    ],
+    "fuzzy_match_threshold": 90
+  },
+  "governance_fields": {
+    "sourceSystem": "Dynamics 365 Activities Export",
+    "importStatus": "Imported"
+  },
+  "type_mapping": {
+    "type": {
+      "Phone Call": "call",
+      "Task": "task",
+      "Email": "email",
+      "Appointment": "meeting",
+      "Letter": "note",
+      "Fax": "note"
+    }
+  },
+  "related_entity_lookup": {
+    "enabled": true,
+    "type_column": "regardingType",
+    "source_column": "regardingIdentifier",
+    "target_id_field": "relatedId",
+    "target_type_field": "relatedType",
+    "fallback": "create_note"
+  }
+}

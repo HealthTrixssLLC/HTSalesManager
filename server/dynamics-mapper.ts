@@ -38,6 +38,14 @@ export interface DynamicsMappingConfig {
     lookup_strategy: string;
     fallback: string;
   };
+  related_entity_lookup?: {
+    enabled: boolean;
+    type_column: string; // Column that specifies entity type (Account, Contact, Lead, Opportunity)
+    source_column: string; // Column with the external ID or name to lookup
+    target_id_field: string; // Target field for the related entity ID
+    target_type_field: string; // Target field for the related entity type
+    fallback: string; // "skip" or "create_note"
+  };
 }
 
 export interface AccountRow {
@@ -475,6 +483,84 @@ export class DynamicsMapper {
   }
 
   /**
+   * Apply related entity lookup for activities (maps "Regarding" to relatedType and relatedId)
+   */
+  applyRelatedEntityLookup(data: AccountRow[], sourceData: AccountRow[], existingEntities?: any): AccountRow[] {
+    if (!this.config.related_entity_lookup?.enabled || !existingEntities) return data;
+    
+    const { type_column, source_column, target_id_field, target_type_field, fallback } = this.config.related_entity_lookup;
+    
+    return data.map((row, index) => {
+      const sourceRow = sourceData[index];
+      const entityType = sourceRow?.[type_column]?.trim();
+      const entityIdentifier = sourceRow?.[source_column]?.trim();
+      
+      if (!entityType || !entityIdentifier) {
+        return row;
+      }
+      
+      let foundId: string | null = null;
+      
+      // Normalize entity type to match our schema
+      const normalizedType = entityType.toLowerCase();
+      
+      if (normalizedType.includes('account')) {
+        // Look up account by externalId, accountNumber, or name
+        const account = existingEntities.accounts?.find((a: any) => 
+          a.externalId === entityIdentifier || 
+          a.accountNumber === entityIdentifier ||
+          a.name === entityIdentifier
+        );
+        if (account) {
+          foundId = account.id;
+          row[target_type_field] = 'Account';
+        }
+      } else if (normalizedType.includes('contact')) {
+        // Look up contact by email or full name
+        const contact = existingEntities.contacts?.find((c: any) => 
+          c.email === entityIdentifier ||
+          `${c.firstName} ${c.lastName}` === entityIdentifier
+        );
+        if (contact) {
+          foundId = contact.id;
+          row[target_type_field] = 'Contact';
+        }
+      } else if (normalizedType.includes('lead')) {
+        // Look up lead by email or full name
+        const lead = existingEntities.leads?.find((l: any) => 
+          l.email === entityIdentifier ||
+          `${l.firstName} ${l.lastName}` === entityIdentifier
+        );
+        if (lead) {
+          foundId = lead.id;
+          row[target_type_field] = 'Lead';
+        }
+      } else if (normalizedType.includes('opportunit')) {
+        // Look up opportunity by externalId or name
+        const opportunity = existingEntities.opportunities?.find((o: any) => 
+          o.externalId === entityIdentifier ||
+          o.name === entityIdentifier
+        );
+        if (opportunity) {
+          foundId = opportunity.id;
+          row[target_type_field] = 'Opportunity';
+        }
+      }
+      
+      if (foundId) {
+        row[target_id_field] = foundId;
+      } else if (fallback === 'create_note') {
+        const note = `Related ${entityType}: ${entityIdentifier} not found`;
+        row['importNotes'] = row['importNotes'] 
+          ? `${row['importNotes']}; ${note}` 
+          : note;
+      }
+      
+      return row;
+    });
+  }
+
+  /**
    * Apply account lookup to map company names to account IDs
    */
   applyAccountLookup(data: AccountRow[], sourceData: AccountRow[], existingAccounts: any[]): AccountRow[] {
@@ -506,7 +592,7 @@ export class DynamicsMapper {
   /**
    * Transform Excel data to aligned CSV format
    */
-  transform(excelBuffer: Buffer, templateCsv: string, existingAccounts: any[] = []): TransformResult {
+  transform(excelBuffer: Buffer, templateCsv: string, existingAccounts: any[] = [], existingEntities?: any): TransformResult {
     // Step 1: Read Excel
     const sourceData = this.readExcelFile(excelBuffer);
     const totalRows = sourceData.length;
@@ -534,6 +620,9 @@ export class DynamicsMapper {
 
     // Step 5.5: Apply account lookup (if enabled)
     data = this.applyAccountLookup(data, sourceData, existingAccounts);
+
+    // Step 5.6: Apply related entity lookup (if enabled, for activities)
+    data = this.applyRelatedEntityLookup(data, sourceData, existingEntities);
 
     // Step 6: Generate Record IDs
     data = data.map((row, index) => {
