@@ -1693,11 +1693,25 @@ export function registerRoutes(app: Express) {
             return isNaN(parsed.getTime()) ? null : parsed;
           };
           
+          // Map Dynamics status to CRM stage
+          // Status and stage are the same concept - Dynamics uses "status", we use "stage"
+          const validStages = ["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"];
+          let stage = "prospecting"; // default
+          
+          // If status is provided and is a valid stage value, use it
+          if (row.status && validStages.includes(row.status.toLowerCase())) {
+            stage = row.status.toLowerCase();
+          }
+          // Otherwise use stage if provided and valid
+          else if (row.stage && validStages.includes(row.stage.toLowerCase())) {
+            stage = row.stage.toLowerCase();
+          }
+          
           const oppData: any = {
             id: row.id || "",
             name: row.name,
             accountId: row.accountId,
-            stage: row.stage || "prospecting",
+            stage: stage,
             amount: row.amount ? String(row.amount) : "0",
             probability: row.probability ? Number(row.probability) : 0,
             closeDate: parseDate(row.closeDate),

@@ -384,7 +384,20 @@ export class DynamicsMapper {
     for (const [fieldName, computation] of Object.entries(this.config.computed_fields)) {
       const logic = computation.logic;
 
-      if (logic === 'coalesce') {
+      if (logic === 'use_status_mapping') {
+        // Map status field to stage using type_mapping
+        // This handles Dynamics status → CRM stage conversion
+        const statusValue = row['status'];
+        const defaultValue = computation.default || 'prospecting';
+        
+        // If we have a status value and it's already been type-mapped, use it
+        if (statusValue && statusValue.trim() !== '') {
+          row[fieldName] = statusValue;
+        } else {
+          row[fieldName] = defaultValue;
+        }
+      }
+      else if (logic === 'coalesce') {
         // Take first non-empty value from sources
         const sources = computation.sources || [];
         let value = computation.default || '';
