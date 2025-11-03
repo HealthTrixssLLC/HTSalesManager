@@ -587,7 +587,30 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
-      const opportunity = await storage.updateOpportunity(req.params.id, req.body);
+      // Convert date strings to Date objects
+      const updateData = { ...req.body };
+      
+      const parseDate = (dateValue: any): Date | null => {
+        if (!dateValue) return null;
+        if (dateValue instanceof Date) return dateValue;
+        if (typeof dateValue === 'string' && dateValue.trim() !== '') {
+          const parsed = new Date(dateValue);
+          return isNaN(parsed.getTime()) ? null : parsed;
+        }
+        return null;
+      };
+      
+      if (updateData.closeDate !== undefined) {
+        updateData.closeDate = parseDate(updateData.closeDate);
+      }
+      if (updateData.actualCloseDate !== undefined) {
+        updateData.actualCloseDate = parseDate(updateData.actualCloseDate);
+      }
+      if (updateData.estCloseDate !== undefined) {
+        updateData.estCloseDate = parseDate(updateData.estCloseDate);
+      }
+      
+      const opportunity = await storage.updateOpportunity(req.params.id, updateData);
       
       await createAudit(req, "update", "Opportunity", opportunity.id, before, opportunity);
       
