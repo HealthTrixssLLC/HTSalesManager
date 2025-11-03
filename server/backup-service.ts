@@ -170,18 +170,39 @@ export class BackupService {
       let recordsRestored = 0;
       
       await db.transaction(async (tx) => {
-        // Clear ALL existing data (in reverse dependency order)
+        // Clear ALL existing data (in reverse dependency order - child tables before parent tables)
+        // Comments reference users, accounts, contacts, leads, opportunities
+        await tx.delete(schema.commentReactions);
+        await tx.delete(schema.commentAttachments);
+        await tx.delete(schema.commentSubscriptions);
+        await tx.delete(schema.comments);
+        // Audit logs reference various entities
         await tx.delete(schema.auditLogs);
+        // Activities reference accounts, contacts, leads, opportunities
         await tx.delete(schema.activities);
+        // Backup jobs are independent
+        await tx.delete(schema.backupJobs);
+        // Leads are independent
         await tx.delete(schema.leads);
+        // Opportunities reference accounts
         await tx.delete(schema.opportunities);
+        // Contacts reference accounts
         await tx.delete(schema.contacts);
+        // Accounts reference accountCategories, so delete accounts BEFORE categories
         await tx.delete(schema.accounts);
+        // Now safe to delete accountCategories
+        await tx.delete(schema.accountCategories);
+        // Role permissions reference roles and permissions
         await tx.delete(schema.rolePermissions);
+        // User roles reference users and roles
         await tx.delete(schema.userRoles);
+        // Permissions are independent
         await tx.delete(schema.permissions);
+        // Roles are independent  
         await tx.delete(schema.roles);
+        // Users are independent
         await tx.delete(schema.users);
+        // ID patterns are independent
         await tx.delete(schema.idPatterns);
 
         // Restore data (in dependency order)

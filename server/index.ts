@@ -21,6 +21,10 @@ declare module 'http' {
     rawBody: unknown
   }
 }
+// Use raw body parser for backup restore endpoint
+app.use("/api/admin/restore", express.raw({ type: "application/octet-stream", limit: "50mb" }));
+
+// Standard JSON and URL-encoded parsers for other routes
 app.use(express.json({
   verify: (req, _res, buf) => {
     req.rawBody = buf;

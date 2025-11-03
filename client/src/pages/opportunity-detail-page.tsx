@@ -86,12 +86,6 @@ export default function OpportunityDetailPage() {
       // Convert date strings to Date objects for the API
       const submitData: any = { ...data, id: opportunity.id };
       
-      console.log('Data before conversion:', {
-        closeDate: submitData.closeDate,
-        actualCloseDate: submitData.actualCloseDate,
-        estCloseDate: submitData.estCloseDate,
-      });
-      
       // Convert all date fields from strings to Date objects
       // Also handle empty strings by converting them to null
       if (submitData.closeDate) {
@@ -117,12 +111,6 @@ export default function OpportunityDetailPage() {
           submitData.estCloseDate = null;
         }
       }
-      
-      console.log('Data after conversion:', {
-        closeDate: submitData.closeDate,
-        actualCloseDate: submitData.actualCloseDate,
-        estCloseDate: submitData.estCloseDate,
-      });
       
       updateMutation.mutate(submitData);
     }

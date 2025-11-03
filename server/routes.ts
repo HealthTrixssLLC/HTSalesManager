@@ -590,45 +590,25 @@ export function registerRoutes(app: Express) {
       // Convert date strings to Date objects
       const updateData = { ...req.body };
       
-      console.log('Received update data:', {
-        closeDate: updateData.closeDate,
-        actualCloseDate: updateData.actualCloseDate,
-        estCloseDate: updateData.estCloseDate,
-      });
-      
       const parseDate = (dateValue: any): Date | null => {
-        console.log('parseDate input:', dateValue, 'type:', typeof dateValue);
         if (!dateValue) return null;
-        if (dateValue instanceof Date) {
-          console.log('Already a Date object');
-          return dateValue;
-        }
+        if (dateValue instanceof Date) return dateValue;
         if (typeof dateValue === 'string' && dateValue.trim() !== '') {
           const parsed = new Date(dateValue);
-          console.log('Parsed date:', parsed, 'has toISOString:', typeof parsed.toISOString);
           return isNaN(parsed.getTime()) ? null : parsed;
         }
         return null;
       };
       
       if (updateData.closeDate !== undefined) {
-        console.log('Processing closeDate');
         updateData.closeDate = parseDate(updateData.closeDate);
       }
       if (updateData.actualCloseDate !== undefined) {
-        console.log('Processing actualCloseDate');
         updateData.actualCloseDate = parseDate(updateData.actualCloseDate);
       }
       if (updateData.estCloseDate !== undefined) {
-        console.log('Processing estCloseDate');
         updateData.estCloseDate = parseDate(updateData.estCloseDate);
       }
-      
-      console.log('Final update data:', {
-        closeDate: updateData.closeDate,
-        actualCloseDate: updateData.actualCloseDate,
-        estCloseDate: updateData.estCloseDate,
-      });
       
       const opportunity = await storage.updateOpportunity(req.params.id, updateData);
       
@@ -1035,17 +1015,25 @@ export function registerRoutes(app: Express) {
   
   app.post("/api/admin/restore", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
-      // Expect raw binary data in request body
-      const backupBuffer = req.body as Buffer;
+      // Body should be a Buffer from express.raw() middleware
+      const backupBuffer = req.body;
       
-      if (!backupBuffer) {
-        return res.status(400).json({ error: "Missing backup data" });
+      if (!backupBuffer || !Buffer.isBuffer(backupBuffer)) {
+        return res.status(400).json({ 
+          success: false,
+          error: "Restore failed: subarray is not a function.",
+          details: ["Invalid backup file format. Expected binary data."]
+        });
       }
       
       // Encryption key is required
       const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
       if (!encryptionKey) {
-        return res.status(500).json({ error: "Server configuration error: encryption key not configured" });
+        return res.status(500).json({ 
+          success: false,
+          error: "Server configuration error: encryption key not configured",
+          details: []
+        });
       }
       
       const result = await backupService.restoreBackup(backupBuffer, encryptionKey);
@@ -1070,7 +1058,12 @@ export function registerRoutes(app: Express) {
       }
     } catch (error) {
       console.error("Restore error:", error);
-      return res.status(500).json({ error: "Failed to restore backup" });
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      return res.status(500).json({ 
+        success: false,
+        error: "Failed to restore backup",
+        details: [errorMessage]
+      });
     }
   });
   
