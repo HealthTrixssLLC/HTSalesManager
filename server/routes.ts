@@ -1153,6 +1153,40 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to clear accounts" });
     }
   });
+
+  app.post("/api/admin/system-reset", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      // Create audit log BEFORE deleting users
+      await createAudit(req, "reset", "System", null, null, { 
+        message: "System reset - all users deleted. Next registration will become Admin.",
+        timestamp: new Date().toISOString(),
+      });
+      
+      // Set all foreign key references to users to NULL before deleting users
+      // This preserves CRM data while removing user ownership
+      await db.execute(sql`UPDATE audit_logs SET actor_id = NULL WHERE actor_id IS NOT NULL`);
+      await db.execute(sql`UPDATE accounts SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE contacts SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE leads SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE opportunities SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE activities SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      
+      // Delete all user-role associations
+      await db.execute(sql`DELETE FROM user_roles`);
+      
+      // Delete all users - this will automatically invalidate all sessions
+      // The next registration will become Admin (first user logic)
+      await db.execute(sql`DELETE FROM users`);
+      
+      return res.json({ 
+        success: true, 
+        message: "System reset successfully. All users deleted. Next registration will become Admin." 
+      });
+    } catch (error) {
+      console.error("System reset error:", error);
+      return res.status(500).json({ error: "Failed to reset system" });
+    }
+  });
   
   // ========== DYNAMICS 365 IMPORT ROUTES ==========
   

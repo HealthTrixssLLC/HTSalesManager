@@ -71,7 +71,7 @@ export const accounts = pgTable("accounts", {
   accountNumber: text("account_number"), // External account number (e.g., from Dynamics)
   type: accountTypeEnum("type"),
   category: text("category"), // Business category (e.g., Provider, Payer, Vendor)
-  ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   industry: text("industry"),
   website: text("website"),
   phone: text("phone"),
@@ -101,7 +101,7 @@ export const contacts = pgTable("contacts", {
   email: text("email"),
   phone: text("phone"),
   title: text("title"),
-  ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -120,7 +120,7 @@ export const leads = pgTable("leads", {
   topic: text("topic"), // Lead subject/description
   status: leadStatusEnum("status").notNull().default("new"),
   source: leadSourceEnum("source"),
-  ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   convertedAccountId: varchar("converted_account_id", { length: 100 }).references(() => accounts.id),
   convertedContactId: varchar("converted_contact_id", { length: 100 }).references(() => contacts.id),
   convertedOpportunityId: varchar("converted_opportunity_id", { length: 100 }).references(() => opportunities.id),
@@ -147,7 +147,7 @@ export const opportunities = pgTable("opportunities", {
   stage: opportunityStageEnum("stage").notNull().default("prospecting"),
   amount: decimal("amount", { precision: 15, scale: 2 }),
   closeDate: timestamp("close_date"),
-  ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   probability: integer("probability").default(0), // 0-100
   status: text("status"), // Dynamics status field (Won, Lost, Open, etc.)
   actualCloseDate: timestamp("actual_close_date"), // Actual close date from Dynamics
@@ -178,7 +178,7 @@ export const activities = pgTable("activities", {
   priority: activityPriorityEnum("priority").notNull().default("medium"),
   dueAt: timestamp("due_at"),
   completedAt: timestamp("completed_at"),
-  ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   relatedType: text("related_type"), // "Account", "Contact", "Lead", "Opportunity"
   relatedId: varchar("related_id", { length: 100 }), // ID of related record
   notes: text("notes"),

@@ -25,6 +25,7 @@ export default function AdminConsole() {
   const { toast } = useToast();
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmClearAccountsOpen, setConfirmClearAccountsOpen] = useState(false);
+  const [confirmSystemResetOpen, setConfirmSystemResetOpen] = useState(false);
   const [selectedPattern, setSelectedPattern] = useState<IdPattern | null>(null);
   const [patternPreview, setPatternPreview] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -216,6 +217,31 @@ export default function AdminConsole() {
       toast({ title: "All accounts cleared successfully" });
       queryClient.invalidateQueries();
       setConfirmClearAccountsOpen(false);
+    },
+  });
+
+  const systemResetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/system-reset", {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ 
+        title: "System reset successfully",
+        description: "All users deleted. Next registration will become Admin." 
+      });
+      setConfirmSystemResetOpen(false);
+      // Redirect to auth page after a short delay since the user will be logged out
+      setTimeout(() => {
+        window.location.href = "/auth";
+      }, 2000);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to reset system",
+        description: error.message,
+        variant: "destructive" 
+      });
     },
   });
 
@@ -1036,6 +1062,21 @@ export default function AdminConsole() {
                   Reset Database
                 </Button>
               </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <Label className="text-destructive">System Reset (Delete All Users)</Label>
+                <p className="text-sm text-muted-foreground">
+                  Delete all user accounts and log everyone out. The next registration will automatically become Admin. Use this to completely reset user access.
+                </p>
+                <Button
+                  variant="destructive"
+                  onClick={() => setConfirmSystemResetOpen(true)}
+                  data-testid="button-system-reset"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  System Reset
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1143,6 +1184,39 @@ export default function AdminConsole() {
               data-testid="button-confirm-reset"
             >
               Yes, reset database
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm System Reset Dialog */}
+      <AlertDialog open={confirmSystemResetOpen} onOpenChange={setConfirmSystemResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              System Reset - Delete All Users?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p className="font-semibold">This will permanently delete ALL user accounts including yours!</p>
+              <p>After this action:</p>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                <li>All users will be logged out immediately</li>
+                <li>All user accounts will be deleted</li>
+                <li>The next registration will become Admin</li>
+                <li>You will need to re-register to access the system</li>
+              </ul>
+              <p className="font-semibold text-destructive">This action cannot be undone!</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-system-reset">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => systemResetMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-system-reset"
+            >
+              Yes, delete all users and reset system
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
