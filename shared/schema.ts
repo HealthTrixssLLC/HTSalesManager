@@ -13,6 +13,8 @@ export const leadStatusEnum = pgEnum("lead_status", ["new", "contacted", "qualif
 export const leadSourceEnum = pgEnum("lead_source", ["website", "referral", "phone", "email", "event", "partner", "other"]);
 export const opportunityStageEnum = pgEnum("opportunity_stage", ["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
 export const activityTypeEnum = pgEnum("activity_type", ["call", "email", "meeting", "task", "note"]);
+export const activityStatusEnum = pgEnum("activity_status", ["pending", "completed", "cancelled"]);
+export const activityPriorityEnum = pgEnum("activity_priority", ["low", "medium", "high"]);
 export const accountTypeEnum = pgEnum("account_type", ["customer", "prospect", "partner", "vendor", "other"]);
 export const backupStatusEnum = pgEnum("backup_status", ["pending", "in_progress", "completed", "failed"]);
 
