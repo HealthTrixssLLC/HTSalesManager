@@ -1460,9 +1460,10 @@ export function registerRoutes(app: Express) {
         stats: result.stats,
       });
 
-      // Return CSV file
+      // Return CSV file with timestamp
+      const timestamp = Date.now();
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename="activities_aligned.csv"');
+      res.setHeader('Content-Disposition', `attachment; filename="activities_aligned_${timestamp}.csv"`);
       
       return res.send(csvContent);
     } catch (error: any) {
