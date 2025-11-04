@@ -486,16 +486,35 @@ export class DynamicsMapper {
    * Apply related entity lookup for activities (maps "Regarding" to relatedType and relatedId)
    */
   applyRelatedEntityLookup(data: AccountRow[], sourceData: AccountRow[], existingEntities?: any): AccountRow[] {
-    if (!this.config.related_entity_lookup?.enabled || !existingEntities) return data;
+    if (!this.config.related_entity_lookup?.enabled || !existingEntities) {
+      console.log('[ENTITY LOOKUP] Skipped - enabled:', this.config.related_entity_lookup?.enabled, 'existingEntities:', !!existingEntities);
+      return data;
+    }
     
     const { type_column, source_column, target_id_field, target_type_field, fallback } = this.config.related_entity_lookup;
     
-    return data.map((row) => {
+    console.log('[ENTITY LOOKUP] Config:', { type_column, source_column, target_id_field, target_type_field, fallback });
+    console.log('[ENTITY LOOKUP] Available entities:', {
+      accounts: existingEntities.accounts?.length || 0,
+      contacts: existingEntities.contacts?.length || 0,
+      leads: existingEntities.leads?.length || 0,
+      opportunities: existingEntities.opportunities?.length || 0
+    });
+    
+    let matchCount = 0;
+    let noMatchCount = 0;
+    
+    const result = data.map((row, index) => {
       // Read from mapped data (row) instead of sourceData
       const entityType = row[type_column];
       const entityIdentifier = row[source_column];
       
+      if (index < 3) {
+        console.log(`[ENTITY LOOKUP] Row ${index}:`, { entityType, entityIdentifier, allKeys: Object.keys(row) });
+      }
+      
       if (!entityType || !entityIdentifier) {
+        noMatchCount++;
         return row;
       }
       
@@ -556,15 +575,22 @@ export class DynamicsMapper {
       
       if (foundId) {
         row[target_id_field] = foundId;
-      } else if (fallback === 'create_note') {
-        const note = `Related ${entityType}: ${entityIdentifier} not found`;
-        row['importNotes'] = row['importNotes'] 
-          ? `${row['importNotes']}; ${note}` 
-          : note;
+        matchCount++;
+      } else {
+        noMatchCount++;
+        if (fallback === 'create_note') {
+          const note = `Related ${entityType}: ${entityIdentifier} not found`;
+          row['importNotes'] = row['importNotes'] 
+            ? `${row['importNotes']}; ${note}` 
+            : note;
+        }
       }
       
       return row;
     });
+    
+    console.log(`[ENTITY LOOKUP] Complete - Matched: ${matchCount}, Not matched: ${noMatchCount}`);
+    return result;
   }
 
   /**
