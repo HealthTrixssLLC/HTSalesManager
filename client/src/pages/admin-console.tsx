@@ -34,7 +34,7 @@ export default function AdminConsole() {
     name: "", email: "", password: "", roleId: ""
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts" | "leads" | "opportunities">("accounts");
+  const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts" | "leads" | "opportunities" | "activities">("accounts");
   const [dynamicsExcelFile, setDynamicsExcelFile] = useState<File | null>(null);
   const [dynamicsMapping, setDynamicsMapping] = useState<File | null>(null);
   const [dynamicsTemplate, setDynamicsTemplate] = useState<File | null>(null);
@@ -388,6 +388,8 @@ export default function AdminConsole() {
         ? '/api/admin/dynamics/transform-leads'
         : dynamicsEntityType === "opportunities"
         ? '/api/admin/dynamics/transform-opportunities'
+        : dynamicsEntityType === "activities"
+        ? '/api/admin/dynamics/transform-activities'
         : '/api/admin/dynamics/transform-accounts';
 
       const response = await fetch(endpoint, {
@@ -858,7 +860,7 @@ export default function AdminConsole() {
                   <Label htmlFor="dynamics-entity-type">Entity Type</Label>
                   <Select
                     value={dynamicsEntityType}
-                    onValueChange={(value: "accounts" | "contacts" | "leads" | "opportunities") => {
+                    onValueChange={(value: "accounts" | "contacts" | "leads" | "opportunities" | "activities") => {
                       setDynamicsEntityType(value);
                       setDynamicsExcelFile(null);
                       setDynamicsMapping(null);
@@ -873,6 +875,7 @@ export default function AdminConsole() {
                       <SelectItem value="contacts">Contacts</SelectItem>
                       <SelectItem value="leads">Leads</SelectItem>
                       <SelectItem value="opportunities">Opportunities</SelectItem>
+                      <SelectItem value="activities">Activities</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-sm text-muted-foreground">
@@ -882,6 +885,8 @@ export default function AdminConsole() {
                       ? "Transform Dynamics 365 leads with topic and status mapping"
                       : dynamicsEntityType === "opportunities"
                       ? "Transform Dynamics 365 opportunities with computed fields and account linking"
+                      : dynamicsEntityType === "activities"
+                      ? "Transform Dynamics 365 activities with entity relationship mapping"
                       : "Transform Dynamics 365 accounts with enriched fields"}
                   </p>
                 </div>
@@ -978,6 +983,9 @@ export default function AdminConsole() {
                         <li>Computes stage, amount, closeDate, and probability from Dynamics fields</li>
                         <li>Preserves Dynamics opportunity numbers or generates new IDs</li>
                       </>
+                    )}
+                    {dynamicsEntityType === "activities" && (
+                      <li>Maps "Regarding" field to multiple entity types (Account, Contact, Lead, Opportunity)</li>
                     )}
                     <li>Adds governance metadata (Source System, Import Status)</li>
                     <li>Outputs CSV aligned with Health Trixss CRM template</li>
