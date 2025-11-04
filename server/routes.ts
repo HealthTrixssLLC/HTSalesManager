@@ -25,6 +25,7 @@ import {
   contacts,
   leads,
   opportunities,
+  activities,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
