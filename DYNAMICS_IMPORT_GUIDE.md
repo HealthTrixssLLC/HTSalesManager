@@ -45,7 +45,7 @@ You need three files:
 {
   "source_file": "Active Accounts 11-2-2025 10-03-45 AM.xlsx",
   "sheet_name": "Active Accounts",
-  "target_template": "accounts-template.csv",
+  "target_template": "dynamics_accounts_template.csv",
   "column_mapping": {
     "(Do Not Modify) Account": "externalId",
     "Account Name": "name",
@@ -85,9 +85,9 @@ You need three files:
 }
 ```
 
-#### Get Template CSV (`accounts-template.csv`)
+#### Get Template CSV (`dynamics_accounts_template.csv`)
 
-This file is available in `attached_assets/accounts-template.csv` and defines the target column structure:
+This file is available in `attached_assets/dynamics_accounts_template.csv` and defines the target column structure:
 
 ```csv
 id,name,accountNumber,type,category,industry,website,phone,primaryContactName,primaryContactEmail,billingAddress,shippingAddress,externalId,sourceSystem,sourceRecordId,importStatus,importNotes
@@ -100,7 +100,7 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
 3. Upload your three files:
    - **Excel File**: Your Dynamics 365 export
    - **Mapping Configuration**: Your `dynamics_accounts_mapping_config.json`
-   - **Template CSV**: The `accounts-template.csv` file
+   - **Template CSV**: The `dynamics_accounts_template.csv` file
 4. Click **"Transform & Download Aligned CSV"**
 5. The system will:
    - Read your Dynamics Excel export
@@ -272,7 +272,7 @@ Export contacts with these columns:
 {
   "source_file": "contacts_export.xlsx",
   "sheet_name": "Contacts",
-  "target_template": "contacts-template.csv",
+  "target_template": "dynamics_contacts_template.csv",
   "column_mapping": {
     "First Name": "firstName",
     "Last Name": "lastName",
@@ -324,7 +324,7 @@ Export contacts with these columns:
 3. Upload files:
    - Excel: Your Dynamics contacts export
    - Mapping: `dynamics_contacts_mapping_config.json`
-   - Template: `contacts-template.csv`
+   - Template: `dynamics_contacts_template.csv`
 4. Click **Transform & Download Aligned CSV**
 
 **What Happens:**
