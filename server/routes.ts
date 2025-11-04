@@ -201,9 +201,130 @@ export function registerRoutes(app: Express) {
   
   // ========== ACCOUNTS ROUTES ==========
   
+  // Get accounts summary statistics
+  app.get("/api/accounts/summary", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+    try {
+      const allAccounts = await storage.getAllAccounts();
+      const allUsers = await storage.getAllUsers();
+      
+      // Total count
+      const totalCount = allAccounts.length;
+      
+      // Breakdown by type
+      const byType = {
+        customer: allAccounts.filter(a => a.type === "customer").length,
+        partner: allAccounts.filter(a => a.type === "partner").length,
+        prospect: allAccounts.filter(a => a.type === "prospect").length,
+        vendor: allAccounts.filter(a => a.type === "vendor").length,
+        other: allAccounts.filter(a => a.type === "other").length,
+      };
+      
+      // Breakdown by category
+      const categoryMap = new Map<string, number>();
+      allAccounts.forEach(a => {
+        if (a.category) {
+          categoryMap.set(a.category, (categoryMap.get(a.category) || 0) + 1);
+        }
+      });
+      const byCategory = Object.fromEntries(categoryMap);
+      
+      // Count by owner
+      const ownerMap = new Map<string, { count: number; ownerName: string }>();
+      allAccounts.forEach(a => {
+        if (a.ownerId) {
+          const owner = allUsers.find(u => u.id === a.ownerId);
+          const ownerName = owner ? owner.name : "Unknown";
+          const current = ownerMap.get(a.ownerId);
+          ownerMap.set(a.ownerId, {
+            count: (current?.count || 0) + 1,
+            ownerName,
+          });
+        }
+      });
+      const byOwner = Object.fromEntries(
+        Array.from(ownerMap.entries()).map(([id, data]) => [id, data])
+      );
+      
+      // Recent additions
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const last7Days = allAccounts.filter(a => new Date(a.createdAt) >= sevenDaysAgo).length;
+      const last30Days = allAccounts.filter(a => new Date(a.createdAt) >= thirtyDaysAgo).length;
+      
+      return res.json({
+        totalCount,
+        byType,
+        byCategory,
+        byOwner,
+        recentAdditions: {
+          last7Days,
+          last30Days,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch accounts summary" });
+    }
+  });
+  
   app.get("/api/accounts", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
     try {
-      const accounts = await storage.getAllAccounts();
+      let accounts = await storage.getAllAccounts();
+      
+      // Apply search filter
+      const search = req.query.search as string | undefined;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        accounts = accounts.filter(a =>
+          a.name?.toLowerCase().includes(searchLower) ||
+          a.accountNumber?.toLowerCase().includes(searchLower) ||
+          a.industry?.toLowerCase().includes(searchLower) ||
+          a.website?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Apply type filter
+      const type = req.query.type as string | undefined;
+      if (type) {
+        accounts = accounts.filter(a => a.type === type);
+      }
+      
+      // Apply category filter
+      const category = req.query.category as string | undefined;
+      if (category) {
+        accounts = accounts.filter(a => a.category === category);
+      }
+      
+      // Apply owner filter
+      const ownerId = req.query.ownerId as string | undefined;
+      if (ownerId) {
+        accounts = accounts.filter(a => a.ownerId === ownerId);
+      }
+      
+      // Apply sorting
+      const sortBy = (req.query.sortBy as string) || "name";
+      const sortOrder = (req.query.sortOrder as string) || "asc";
+      
+      accounts.sort((a, b) => {
+        let aVal: any = a[sortBy as keyof typeof a];
+        let bVal: any = b[sortBy as keyof typeof b];
+        
+        // Handle null/undefined values
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        
+        // Convert to strings for comparison
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+        
+        if (sortOrder === "asc") {
+          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else {
+          return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        }
+      });
+      
       return res.json(accounts);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch accounts" });
@@ -306,9 +427,131 @@ export function registerRoutes(app: Express) {
   
   // ========== CONTACTS ROUTES ==========
   
+  // Get contacts summary statistics
+  app.get("/api/contacts/summary", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+    try {
+      const allContacts = await storage.getAllContacts();
+      const allAccounts = await storage.getAllAccounts();
+      
+      // Total count
+      const totalCount = allContacts.length;
+      
+      // Count contacts with accounts
+      const withAccount = allContacts.filter(c => c.accountId).length;
+      const withoutAccount = allContacts.filter(c => !c.accountId).length;
+      
+      // Count by account (top 5)
+      const accountMap = new Map<string, { count: number; accountName: string }>();
+      allContacts.forEach(c => {
+        if (c.accountId) {
+          const account = allAccounts.find(a => a.id === c.accountId);
+          const accountName = account ? account.name : "Unknown";
+          const current = accountMap.get(c.accountId);
+          accountMap.set(c.accountId, {
+            count: (current?.count || 0) + 1,
+            accountName,
+          });
+        }
+      });
+      
+      const topAccounts = Array.from(accountMap.entries())
+        .sort(([, a], [, b]) => b.count - a.count)
+        .slice(0, 5)
+        .map(([id, data]) => ({ accountId: id, count: data.count, accountName: data.accountName }));
+      
+      // Recent additions
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const last7Days = allContacts.filter(c => new Date(c.createdAt) >= sevenDaysAgo).length;
+      const last30Days = allContacts.filter(c => new Date(c.createdAt) >= thirtyDaysAgo).length;
+      
+      // Email distribution
+      const withEmail = allContacts.filter(c => c.email).length;
+      const withoutEmail = allContacts.filter(c => !c.email).length;
+      
+      return res.json({
+        totalCount,
+        accountDistribution: {
+          withAccount,
+          withoutAccount,
+        },
+        topAccounts,
+        recentAdditions: {
+          last7Days,
+          last30Days,
+        },
+        emailDistribution: {
+          withEmail,
+          withoutEmail,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch contacts summary" });
+    }
+  });
+  
   app.get("/api/contacts", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
     try {
-      const contacts = await storage.getAllContacts();
+      let contacts = await storage.getAllContacts();
+      
+      // Apply search filter
+      const search = req.query.search as string | undefined;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        contacts = contacts.filter(c =>
+          c.firstName?.toLowerCase().includes(searchLower) ||
+          c.lastName?.toLowerCase().includes(searchLower) ||
+          c.email?.toLowerCase().includes(searchLower) ||
+          c.phone?.toLowerCase().includes(searchLower) ||
+          c.title?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Apply account filter
+      const accountId = req.query.accountId as string | undefined;
+      if (accountId) {
+        contacts = contacts.filter(c => c.accountId === accountId);
+      }
+      
+      // Apply owner filter
+      const ownerId = req.query.ownerId as string | undefined;
+      if (ownerId) {
+        contacts = contacts.filter(c => c.ownerId === ownerId);
+      }
+      
+      // Apply "has email" filter
+      const hasEmail = req.query.hasEmail as string | undefined;
+      if (hasEmail === "true") {
+        contacts = contacts.filter(c => c.email && c.email.length > 0);
+      } else if (hasEmail === "false") {
+        contacts = contacts.filter(c => !c.email || c.email.length === 0);
+      }
+      
+      // Apply sorting
+      const sortBy = (req.query.sortBy as string) || "firstName";
+      const sortOrder = (req.query.sortOrder as string) || "asc";
+      
+      contacts.sort((a, b) => {
+        let aVal: any = a[sortBy as keyof typeof a];
+        let bVal: any = b[sortBy as keyof typeof b];
+        
+        // Handle null/undefined values
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        
+        // Convert to strings for comparison
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+        
+        if (sortOrder === "asc") {
+          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else {
+          return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        }
+      });
+      
       return res.json(contacts);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch contacts" });
@@ -374,9 +617,134 @@ export function registerRoutes(app: Express) {
   
   // ========== LEADS ROUTES ==========
   
+  // Get leads summary statistics
+  app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+    try {
+      const allLeads = await storage.getAllLeads();
+      const allUsers = await storage.getAllUsers();
+      
+      // Total count
+      const totalCount = allLeads.length;
+      
+      // Breakdown by status
+      const byStatus = {
+        new: allLeads.filter(l => l.status === "new").length,
+        contacted: allLeads.filter(l => l.status === "contacted").length,
+        qualified: allLeads.filter(l => l.status === "qualified").length,
+        unqualified: allLeads.filter(l => l.status === "unqualified").length,
+        converted: allLeads.filter(l => l.status === "converted").length,
+      };
+      
+      // Breakdown by source
+      const sourceMap = new Map<string, number>();
+      allLeads.forEach(l => {
+        if (l.source) {
+          sourceMap.set(l.source, (sourceMap.get(l.source) || 0) + 1);
+        }
+      });
+      const bySource = Object.fromEntries(sourceMap);
+      
+      // Conversion rate
+      const convertedCount = byStatus.converted;
+      const conversionRate = totalCount > 0 ? ((convertedCount / totalCount) * 100).toFixed(1) : "0.0";
+      
+      // Recent additions
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      const last7Days = allLeads.filter(l => new Date(l.createdAt) >= sevenDaysAgo).length;
+      const last30Days = allLeads.filter(l => new Date(l.createdAt) >= thirtyDaysAgo).length;
+      
+      // Breakdown by rating (stored in topic field for now, or we can add a rating field)
+      // For now, we'll just return placeholder data
+      const byRating = {
+        hot: 0,
+        warm: 0,
+        cold: 0,
+      };
+      
+      return res.json({
+        totalCount,
+        byStatus,
+        bySource,
+        conversionRate,
+        recentAdditions: {
+          last7Days,
+          last30Days,
+        },
+        byRating,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch leads summary" });
+    }
+  });
+  
   app.get("/api/leads", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
     try {
-      const leads = await storage.getAllLeads();
+      let leads = await storage.getAllLeads();
+      
+      // Apply search filter
+      const search = req.query.search as string | undefined;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        leads = leads.filter(l =>
+          l.firstName?.toLowerCase().includes(searchLower) ||
+          l.lastName?.toLowerCase().includes(searchLower) ||
+          l.email?.toLowerCase().includes(searchLower) ||
+          l.phone?.toLowerCase().includes(searchLower) ||
+          l.company?.toLowerCase().includes(searchLower) ||
+          l.topic?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      // Apply status filter
+      const status = req.query.status as string | undefined;
+      if (status) {
+        leads = leads.filter(l => l.status === status);
+      }
+      
+      // Apply source filter
+      const source = req.query.source as string | undefined;
+      if (source) {
+        leads = leads.filter(l => l.source === source);
+      }
+      
+      // Apply owner filter
+      const ownerId = req.query.ownerId as string | undefined;
+      if (ownerId) {
+        leads = leads.filter(l => l.ownerId === ownerId);
+      }
+      
+      // Apply rating filter (placeholder for now)
+      const rating = req.query.rating as string | undefined;
+      if (rating) {
+        // Rating logic would go here when field is added
+      }
+      
+      // Apply sorting
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortOrder = (req.query.sortOrder as string) || "desc";
+      
+      leads.sort((a, b) => {
+        let aVal: any = a[sortBy as keyof typeof a];
+        let bVal: any = b[sortBy as keyof typeof b];
+        
+        // Handle null/undefined values
+        if (aVal === null || aVal === undefined) aVal = "";
+        if (bVal === null || bVal === undefined) bVal = "";
+        
+        // Convert to lowercase for string comparison
+        if (typeof aVal === "string") aVal = aVal.toLowerCase();
+        if (typeof bVal === "string") bVal = bVal.toLowerCase();
+        
+        if (sortOrder === "asc") {
+          return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        } else {
+          return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+        }
+      });
+      
       return res.json(leads);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch leads" });
