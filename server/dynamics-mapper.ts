@@ -616,11 +616,16 @@ export class DynamicsMapper {
     // Step 4: Get template columns
     const templateColumns = this.getTemplateColumns(templateCsv);
 
-    // Step 5: Ensure all template columns exist
+    // Step 5: Ensure all template columns exist (but preserve intermediate columns for lookups)
     data = data.map(row => {
       const complete: AccountRow = {};
+      // First, copy all existing columns (including intermediate ones like regardingType, regardingIdentifier)
+      Object.assign(complete, row);
+      // Then ensure all template columns exist with default empty strings
       for (const col of templateColumns) {
-        complete[col] = row[col] || '';
+        if (!(col in complete)) {
+          complete[col] = '';
+        }
       }
       return complete;
     });
