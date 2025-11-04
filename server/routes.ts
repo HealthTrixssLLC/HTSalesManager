@@ -3,7 +3,7 @@
 
 import type { Express } from "express";
 import { z } from "zod";
-import { storage, db, eq, and, sql, asc, desc, inArray } from "./db";
+import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
 import { requirePermission, requireRole, DEFAULT_ROLE } from "./rbac";
 import {
@@ -1057,6 +1057,30 @@ export function registerRoutes(app: Express) {
       return res.json(activities);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch activities" });
+    }
+  });
+  
+  app.get("/api/activities/upcoming", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const now = new Date();
+      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      
+      const upcomingActivities = await db.select()
+        .from(activities)
+        .where(
+          and(
+            gte(activities.dueAt, now),
+            lte(activities.dueAt, thirtyDaysFromNow),
+            ne(activities.status, 'completed')
+          )
+        )
+        .orderBy(asc(activities.dueAt))
+        .limit(50);
+      
+      return res.json(upcomingActivities);
+    } catch (error) {
+      console.error("Upcoming activities error:", error);
+      return res.status(500).json({ error: "Failed to fetch upcoming activities" });
     }
   });
   

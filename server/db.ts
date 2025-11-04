@@ -7,7 +7,7 @@ import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
 import { Pool as PgPool } from "pg";
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { eq, sql, and, gte, asc, desc, inArray } from "drizzle-orm";
+import { eq, sql, and, gte, lte, ne, asc, desc, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type { IStorage } from "./storage";
 import type {
@@ -586,4 +586,4 @@ export class PostgresStorage implements IStorage {
 }
 
 export const storage = new PostgresStorage();
-export { eq, sql, and, gte, asc, desc, inArray };
+export { eq, sql, and, gte, lte, ne, asc, desc, inArray };

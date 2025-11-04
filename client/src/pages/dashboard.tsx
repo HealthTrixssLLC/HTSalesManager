@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save } from "lucide-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
+import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
 
 type DashboardStats = {
   totalAccounts: number;
@@ -354,6 +355,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Activities */}
+      <UpcomingActivitiesCard />
     </div>
   );
 }
