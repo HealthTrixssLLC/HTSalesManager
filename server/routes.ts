@@ -1112,6 +1112,40 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.patch("/api/activities/:id", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const before = await storage.getActivityById(req.params.id);
+      if (!before) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      const activity = await storage.updateActivity(req.params.id, req.body);
+      
+      await createAudit(req, "update", "Activity", activity.id, before, activity);
+      
+      return res.json(activity);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to update activity" });
+    }
+  });
+  
+  app.delete("/api/activities/:id", authenticate, requirePermission("Activity", "delete"), async (req: AuthRequest, res) => {
+    try {
+      const before = await storage.getActivityById(req.params.id);
+      if (!before) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      await storage.deleteActivity(req.params.id);
+      
+      await createAudit(req, "delete", "Activity", req.params.id, before, null);
+      
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to delete activity" });
+    }
+  });
+  
   // Get related data for an activity (polymorphic parent entity)
   app.get("/api/activities/:id/related", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
     try {
