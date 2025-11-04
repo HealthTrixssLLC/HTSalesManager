@@ -506,25 +506,26 @@ export class DynamicsMapper {
     
     const result = data.map((row, index) => {
       // Read from mapped data (row) instead of sourceData
-      const entityType = row[type_column];
+      const entityType = type_column ? row[type_column] : undefined;
       const entityIdentifier = row[source_column];
       
       if (index < 3) {
         console.log(`[ENTITY LOOKUP] Row ${index}:`, { entityType, entityIdentifier, allKeys: Object.keys(row) });
       }
       
-      if (!entityType || !entityIdentifier) {
+      if (!entityIdentifier || !entityIdentifier.trim()) {
         noMatchCount++;
         return row;
       }
       
       let foundId: string | null = null;
-      
-      // Normalize entity type to match our schema
-      const normalizedType = entityType.toLowerCase().trim();
       const normalizedIdentifier = entityIdentifier.trim();
       
-      if (normalizedType.includes('account')) {
+      // If we have an entity type, use it to narrow the search
+      if (entityType) {
+        const normalizedType = entityType.toLowerCase().trim();
+        
+        if (normalizedType.includes('account')) {
         // Look up account by externalId, accountNumber, or name (case-insensitive, trimmed)
         const account = existingEntities.accounts?.find((a: any) => {
           const externalIdMatch = a.externalId && a.externalId.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
@@ -570,6 +571,63 @@ export class DynamicsMapper {
         if (opportunity) {
           foundId = opportunity.id;
           row[target_type_field] = 'Opportunity';
+        }
+      }
+      } else {
+        // No entity type specified - try matching against all entity types in order
+        // Priority: Contacts/Leads (person names) > Accounts > Opportunities
+        
+        // Try Contact by name or email
+        const contact = existingEntities.contacts?.find((c: any) => {
+          const emailMatch = c.email && c.email.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+          const fullName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+          const nameMatch = fullName.toLowerCase() === normalizedIdentifier.toLowerCase();
+          return emailMatch || nameMatch;
+        });
+        if (contact) {
+          foundId = contact.id;
+          row[target_type_field] = 'Contact';
+        }
+        
+        // Try Lead by name or email
+        if (!foundId) {
+          const lead = existingEntities.leads?.find((l: any) => {
+            const emailMatch = l.email && l.email.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            const fullName = `${l.firstName || ''} ${l.lastName || ''}`.trim();
+            const nameMatch = fullName.toLowerCase() === normalizedIdentifier.toLowerCase();
+            return emailMatch || nameMatch;
+          });
+          if (lead) {
+            foundId = lead.id;
+            row[target_type_field] = 'Lead';
+          }
+        }
+        
+        // Try Account by name, accountNumber, or externalId
+        if (!foundId) {
+          const account = existingEntities.accounts?.find((a: any) => {
+            const externalIdMatch = a.externalId && a.externalId.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            const accountNumberMatch = a.accountNumber && a.accountNumber.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            const nameMatch = a.name && a.name.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            return externalIdMatch || accountNumberMatch || nameMatch;
+          });
+          if (account) {
+            foundId = account.id;
+            row[target_type_field] = 'Account';
+          }
+        }
+        
+        // Try Opportunity by name or externalId
+        if (!foundId) {
+          const opportunity = existingEntities.opportunities?.find((o: any) => {
+            const externalIdMatch = o.externalId && o.externalId.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            const nameMatch = o.name && o.name.trim().toLowerCase() === normalizedIdentifier.toLowerCase();
+            return externalIdMatch || nameMatch;
+          });
+          if (opportunity) {
+            foundId = opportunity.id;
+            row[target_type_field] = 'Opportunity';
+          }
         }
       }
       

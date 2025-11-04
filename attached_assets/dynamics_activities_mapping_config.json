@@ -9,7 +9,6 @@
     "Actual End": "completedAt",
     "Description": "notes",
     "(Do Not Modify) Activity": "externalId",
-    "Regarding (Object Type)": "regardingType",
     "Regarding": "regardingIdentifier"
   },
   "id_rules": {
@@ -55,7 +54,6 @@
   },
   "related_entity_lookup": {
     "enabled": true,
-    "type_column": "regardingType",
     "source_column": "regardingIdentifier",
     "target_id_field": "relatedId",
     "target_type_field": "relatedType",
