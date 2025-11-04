@@ -1941,6 +1941,11 @@ export function registerRoutes(app: Express) {
             relatedType: row.relatedType || null,
             relatedId: row.relatedId || null,
             notes: row.notes || null,
+            externalId: row.externalId || null,
+            sourceSystem: row.sourceSystem || null,
+            sourceRecordId: row.sourceRecordId || null,
+            importStatus: row.importStatus || null,
+            importNotes: row.importNotes || null,
             ownerId: req.user!.id,
           };
           
