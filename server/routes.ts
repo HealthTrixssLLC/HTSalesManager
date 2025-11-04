@@ -2061,12 +2061,16 @@ export function registerRoutes(app: Express) {
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
+          const completedAtDate = parseDynamicsDate(row.completedAt);
+          
           const activityData: any = {
             id: row.id || "",
             type: row.type || "task",
             subject: row.subject,
-            dueAt: parseDynamicsDate(row.dueAt),
-            completedAt: parseDynamicsDate(row.completedAt),
+            status: "completed", // Default to completed for imported activities
+            priority: "medium", // Default priority
+            dueAt: completedAtDate, // Use completedAt as dueAt for imported activities
+            completedAt: completedAtDate,
             relatedType: row.relatedType || null,
             relatedId: row.relatedId || null,
             notes: row.notes || null,
