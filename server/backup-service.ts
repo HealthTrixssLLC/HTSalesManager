@@ -31,7 +31,18 @@ export class BackupService {
   private readonly BACKUP_VERSION = "1.0.0";
 
   /**
+   * Helper function to normalize enum values to lowercase
+   */
+  private normalizeEnumValue(value: any): any {
+    if (typeof value === 'string') {
+      return value.toLowerCase();
+    }
+    return value;
+  }
+
+  /**
    * Helper function to convert ISO date strings back to Date objects
+   * and normalize enum values to lowercase for Postgres strict enum matching
    */
   private convertDates(obj: any): any {
     if (!obj) return obj;
@@ -42,12 +53,26 @@ export class BackupService {
       'convertedAt', 'startedAt'
     ];
     
+    const enumFields = [
+      'status', 'priority', 'type', 'stage', 'rating', 'accountType'
+    ];
+    
     const converted = { ...obj };
+    
+    // Convert date strings to Date objects
     for (const field of dateFields) {
       if (converted[field] && typeof converted[field] === 'string') {
         converted[field] = new Date(converted[field]);
       }
     }
+    
+    // Normalize enum values to lowercase for Postgres
+    for (const field of enumFields) {
+      if (converted[field]) {
+        converted[field] = this.normalizeEnumValue(converted[field]);
+      }
+    }
+    
     return converted;
   }
 

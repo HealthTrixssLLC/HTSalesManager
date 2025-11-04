@@ -1087,19 +1087,22 @@ export function registerRoutes(app: Express) {
           warnings: result.errors,
         });
       } else {
+        console.error("Restore failed with errors:", result.errors);
         return res.status(400).json({
           success: false,
-          error: "Restore failed",
+          error: `Restore failed: ${result.errors[0] || 'Unknown error'}`,
           details: result.errors,
         });
       }
     } catch (error) {
-      console.error("Restore error:", error);
+      console.error("Restore error (full):", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error("Error stack:", errorStack);
       return res.status(500).json({ 
         success: false,
-        error: "Failed to restore backup",
-        details: [errorMessage]
+        error: `Failed to restore backup: ${errorMessage}`,
+        details: [errorMessage, errorStack].filter(Boolean)
       });
     }
   });
