@@ -2028,6 +2028,35 @@ export function registerRoutes(app: Express) {
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
+      // Helper function to parse Dynamics date format (M/D/YY H:MM) to ISO
+      const parseDynamicsDate = (dateStr: string | null | undefined): Date | null => {
+        if (!dateStr || dateStr.trim() === "") return null;
+        
+        try {
+          // Handle format: "8/12/24 11:33" or "1/10/25 16:07"
+          const parts = dateStr.trim().split(" ");
+          if (parts.length !== 2) return null;
+          
+          const [datePart, timePart] = parts;
+          const [month, day, year] = datePart.split("/").map(Number);
+          const [hour, minute] = timePart.split(":").map(Number);
+          
+          // Convert 2-digit year to 4-digit (assuming 20xx)
+          const fullYear = year < 100 ? 2000 + year : year;
+          
+          // Create date object (month is 0-indexed in JS)
+          const date = new Date(fullYear, month - 1, day, hour, minute, 0);
+          
+          // Validate the date is valid
+          if (isNaN(date.getTime())) return null;
+          
+          return date;
+        } catch (error) {
+          console.error("Date parsing error:", error, "for date:", dateStr);
+          return null;
+        }
+      };
+      
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
@@ -2035,8 +2064,8 @@ export function registerRoutes(app: Express) {
             id: row.id || "",
             type: row.type || "task",
             subject: row.subject,
-            dueAt: row.dueAt ? (row.dueAt.trim() === "" ? null : row.dueAt) : null,
-            completedAt: row.completedAt ? (row.completedAt.trim() === "" ? null : row.completedAt) : null,
+            dueAt: parseDynamicsDate(row.dueAt),
+            completedAt: parseDynamicsDate(row.completedAt),
             relatedType: row.relatedType || null,
             relatedId: row.relatedId || null,
             notes: row.notes || null,
