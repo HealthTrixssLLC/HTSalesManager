@@ -428,12 +428,12 @@ export default function OpportunitiesPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Account</label>
-                <Select value={filterAccount} onValueChange={setFilterAccount}>
+                <Select value={filterAccount || "all"} onValueChange={(value) => setFilterAccount(value === "all" ? "" : value)}>
                   <SelectTrigger data-testid="select-filter-account">
                     <SelectValue placeholder="All accounts" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All accounts</SelectItem>
+                    <SelectItem value="all">All accounts</SelectItem>
                     {uniqueAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
                         {account.name}
@@ -491,15 +491,15 @@ export default function OpportunitiesPage() {
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Rating</label>
-                <Select value={filterRating} onValueChange={setFilterRating}>
+                <Select value={filterRating || "all"} onValueChange={(value) => setFilterRating(value === "all" ? "" : value)}>
                   <SelectTrigger data-testid="select-filter-rating">
                     <SelectValue placeholder="All ratings" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All ratings</SelectItem>
-                    <SelectItem value="Hot">Hot</SelectItem>
-                    <SelectItem value="Warm">Warm</SelectItem>
-                    <SelectItem value="Cold">Cold</SelectItem>
+                    <SelectItem value="all">All ratings</SelectItem>
+                    <SelectItem value="hot">Hot</SelectItem>
+                    <SelectItem value="warm">Warm</SelectItem>
+                    <SelectItem value="cold">Cold</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
