@@ -1,0 +1,94 @@
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 21.9s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.5s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 18.22kB                                                                                            0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.6s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            8.6s
+ => [builder 5/8] COPY . .                                                                                                      0.1s
+ => [builder 6/8] RUN npm run build                                                                                             6.1s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.5s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.6s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.2s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.3s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:d7491f6ef3ea89260c3dfcca33e78a0819d31b1b9e01f40ce09da2a2d1ee5da0                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                10.6s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.3s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [i] No changes detected
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 3:04:18 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 3:04:21 PM [express] GET /api/user 304 in 7ms :: {"id":"019af446-84ef-4836-a224-0922d33821ba","email…
+healthtrixss-crm-app  | 3:04:21 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 15ms :: []
+healthtrixss-crm-app  | 3:04:21 PM [express] GET /api/dashboard/stats 304 in 23ms :: {"totalAccounts":"0","totalContacts":"0…
+healthtrixss-crm-app  | 3:04:21 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 3:04:23 PM [express] GET /api/admin/categories 304 in 9ms :: []
+healthtrixss-crm-app  | 3:04:23 PM [express] GET /api/accounts 304 in 13ms :: []
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/forecast 304 in 13ms :: {"targetDate":"2025-11-30T00:00:00.0…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/historical 304 in 9ms :: {"wonCount":0,"lostCount":0,"totalC…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/pipeline-health 304 in 5ms :: {"score":0,"components":{"pipe…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/rep-performance 304 in 10ms :: [{"rep":{"id":"019af446-84ef-…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/velocity 304 in 27ms :: {"totalValue":0,"days":90,"velocityP…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/predictions 304 in 26ms :: {"predictions":[],"summary":{"tot…
+healthtrixss-crm-app  | 3:04:24 PM [express] GET /api/analytics/conversions 200 in 29ms :: {"conversions":{"prospecting_to_q…
+healthtrixss-crm-app  | 3:04:25 PM [express] GET /api/admin/id-patterns 304 in 5ms :: [{"id":"37272cea-a180-43a7-8322-a7c920…
+healthtrixss-crm-app  | 3:04:25 PM [express] GET /api/admin/roles 304 in 5ms :: [{"id":"ffb4b5eb-8b98-4323-a6ea-59f4604aa29a…
+healthtrixss-crm-app  | 3:04:25 PM [express] GET /api/admin/users 304 in 8ms :: [{"id":"019af446-84ef-4836-a224-0922d33821ba…
+healthtrixss-crm-app  | 3:04:30 PM [express] POST /api/admin/restore 400 in 30ms :: {"success":false,"error":"Restore failed…
+healthtrixss-crm-app  | 3:04:37 PM [express] GET /api/audit-logs 200 in 18ms :: [{"id":"2bcc40e7-cf55-4ab0-9521-9bea2cd6c26a…
+healthtrixss-crm-app  | 3:04:51 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 3:05:22 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 3:05:30 PM [express] GET /api/contacts 200 in 9ms :: []
+healthtrixss-crm-app  | 3:05:52 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 3:05:58 PM [express] POST /api/admin/restore 400 in 36ms :: {"success":false,"error":"Restore failed…
