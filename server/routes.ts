@@ -1629,6 +1629,7 @@ export function registerRoutes(app: Express) {
         total: records.length,
         success: 0,
         failed: 0,
+        skipped: 0,
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
@@ -1657,6 +1658,28 @@ export function registerRoutes(app: Express) {
             importNotes: row.importNotes || "",
             ownerId: req.user!.id,
           };
+          
+          // Check for duplicate by externalId
+          if (accountData.externalId && accountData.externalId.trim() !== "") {
+            const [existingByExternalId] = await db.select()
+              .from(accounts)
+              .where(eq(accounts.externalId, accountData.externalId))
+              .limit(1);
+            
+            if (existingByExternalId) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
+          // Also check by ID if provided
+          if (accountData.id && accountData.id.trim() !== "") {
+            const existingById = await storage.getAccountById(accountData.id);
+            if (existingById) {
+              results.skipped++;
+              continue;
+            }
+          }
           
           // Validate with schema
           const validated = insertAccountSchema.parse(accountData);
@@ -1700,6 +1723,7 @@ export function registerRoutes(app: Express) {
         total: records.length,
         success: 0,
         failed: 0,
+        skipped: 0,
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
@@ -1714,8 +1738,35 @@ export function registerRoutes(app: Express) {
             phone: row.phone || null,
             title: row.title || null,
             accountId: row.accountId || null,
+            externalId: row.externalId || null,
+            sourceSystem: row.sourceSystem || null,
+            sourceRecordId: row.sourceRecordId || null,
+            importStatus: row.importStatus || null,
+            importNotes: row.importNotes || null,
             ownerId: req.user!.id,
           };
+          
+          // Check for duplicate by externalId
+          if (contactData.externalId) {
+            const [existingByExternalId] = await db.select()
+              .from(contacts)
+              .where(eq(contacts.externalId, contactData.externalId))
+              .limit(1);
+            
+            if (existingByExternalId) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
+          // Also check by ID if provided
+          if (contactData.id && contactData.id.trim() !== "") {
+            const existingById = await storage.getContactById(contactData.id);
+            if (existingById) {
+              results.skipped++;
+              continue;
+            }
+          }
           
           // Validate accountId exists if provided
           if (contactData.accountId) {
@@ -1764,6 +1815,7 @@ export function registerRoutes(app: Express) {
         total: records.length,
         success: 0,
         failed: 0,
+        skipped: 0,
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
@@ -1799,6 +1851,28 @@ export function registerRoutes(app: Express) {
             importStatus: row.importStatus || null,
             importNotes: row.importNotes || null,
           };
+          
+          // Check for duplicate by externalId
+          if (leadData.externalId) {
+            const [existingByExternalId] = await db.select()
+              .from(leads)
+              .where(eq(leads.externalId, leadData.externalId))
+              .limit(1);
+            
+            if (existingByExternalId) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
+          // Also check by ID if provided
+          if (leadData.id && leadData.id.trim() !== "") {
+            const existingById = await storage.getLeadById(leadData.id);
+            if (existingById) {
+              results.skipped++;
+              continue;
+            }
+          }
           
           const validated = insertLeadSchema.parse(leadData);
           await storage.createLead(validated);
@@ -1839,6 +1913,7 @@ export function registerRoutes(app: Express) {
         total: records.length,
         success: 0,
         failed: 0,
+        skipped: 0,
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
@@ -1887,6 +1962,28 @@ export function registerRoutes(app: Express) {
             importNotes: row.importNotes || null,
           };
           
+          // Check for duplicate by externalId
+          if (oppData.externalId) {
+            const [existingByExternalId] = await db.select()
+              .from(opportunities)
+              .where(eq(opportunities.externalId, oppData.externalId))
+              .limit(1);
+            
+            if (existingByExternalId) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
+          // Also check by ID if provided
+          if (oppData.id && oppData.id.trim() !== "") {
+            const existingById = await storage.getOpportunityById(oppData.id);
+            if (existingById) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
           const validated = insertOpportunitySchema.parse(oppData);
           await storage.createOpportunity(validated);
           await createAudit(req, "import", "Opportunity", validated.id, null, validated);
@@ -1926,6 +2023,7 @@ export function registerRoutes(app: Express) {
         total: records.length,
         success: 0,
         failed: 0,
+        skipped: 0,
         errors: [] as Array<{ row: number; error: string; data: any }>,
       };
       
@@ -1948,6 +2046,28 @@ export function registerRoutes(app: Express) {
             importNotes: row.importNotes || null,
             ownerId: req.user!.id,
           };
+          
+          // Check for duplicate by externalId (for Dynamics imports) or id
+          if (activityData.externalId) {
+            const [existingByExternalId] = await db.select()
+              .from(activities)
+              .where(eq(activities.externalId, activityData.externalId))
+              .limit(1);
+            
+            if (existingByExternalId) {
+              results.skipped++;
+              continue;
+            }
+          }
+          
+          // Also check by ID if provided
+          if (activityData.id) {
+            const existingById = await storage.getActivityById(activityData.id);
+            if (existingById) {
+              results.skipped++;
+              continue;
+            }
+          }
           
           const validated = insertActivitySchema.parse(activityData);
           await storage.createActivity(validated);
