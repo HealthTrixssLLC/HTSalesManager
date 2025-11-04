@@ -15,7 +15,8 @@
     "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
     "external_id_fields": [
       "externalId"
-    ]
+    ],
+    "preserve_external_format": true
   },
   "validation_rules": {
     "required_fields": [
