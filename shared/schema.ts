@@ -171,9 +171,11 @@ export const opportunities = pgTable("opportunities", {
 }));
 
 export const activities = pgTable("activities", {
-  id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACT-2501-00001
+  id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACV-2501-00001
   type: activityTypeEnum("type").notNull(),
   subject: text("subject").notNull(),
+  status: activityStatusEnum("status").notNull().default("pending"),
+  priority: activityPriorityEnum("priority").notNull().default("medium"),
   dueAt: timestamp("due_at"),
   completedAt: timestamp("completed_at"),
   ownerId: varchar("owner_id", { length: 50 }).notNull().references(() => users.id),
@@ -192,6 +194,7 @@ export const activities = pgTable("activities", {
   relatedIdx: index("activities_related_idx").on(table.relatedType, table.relatedId),
   dueAtIdx: index("activities_due_at_idx").on(table.dueAt),
   externalIdIdx: index("activities_external_id_idx").on(table.externalId),
+  statusIdx: index("activities_status_idx").on(table.status),
 }));
 
 // ========== AUDIT & SYSTEM TABLES ==========
