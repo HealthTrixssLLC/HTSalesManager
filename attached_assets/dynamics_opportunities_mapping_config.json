@@ -6,6 +6,7 @@
     "(Do Not Modify) Opportunity": "externalId",
     "HT Opportunity Number": "opportunityNumber",
     "Topic": "name",
+    "Account": "account",
     "HT Account Number (Account) (Account)": "accountId",
     "Status": "status",
     "Actual Close Date": "actualCloseDate",
@@ -51,6 +52,13 @@
       ],
       "default": 50
     }
+  },
+  "account_lookup": {
+    "enabled": true,
+    "source_column": "account",
+    "target_field": "accountId",
+    "lookup_strategy": "fuzzy",
+    "fallback": "create_note"
   },
   "id_rules": {
     "internal_id_field": "id",
