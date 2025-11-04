@@ -5,7 +5,8 @@
   "column_mapping": {
     "Subject": "subject",
     "Activity Type": "type",
-    "Actual End": "dueAt",
+    "Due Date": "dueAt",
+    "Actual End": "completedAt",
     "Description": "notes",
     "(Do Not Modify) Activity": "externalId",
     "Regarding": "regardingIdentifier"
@@ -25,7 +26,8 @@
     "phone_fields": [],
     "url_fields": [],
     "date_fields": [
-      "dueAt"
+      "dueAt",
+      "completedAt"
     ]
   },
   "dedupe_rules": {
