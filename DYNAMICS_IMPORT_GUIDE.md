@@ -39,7 +39,7 @@ You need three files:
    
 ### Step 2: Prepare Configuration Files
 
-#### Create Mapping Configuration (`dynamics_mapping_config.json`)
+#### Create Mapping Configuration (`dynamics_accounts_mapping_config.json`)
 
 ```json
 {
@@ -99,7 +99,7 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
 2. Navigate to **Admin Console** → **Dynamics Import** tab
 3. Upload your three files:
    - **Excel File**: Your Dynamics 365 export
-   - **Mapping Configuration**: Your `dynamics_mapping_config.json`
+   - **Mapping Configuration**: Your `dynamics_accounts_mapping_config.json`
    - **Template CSV**: The `accounts-template.csv` file
 4. Click **"Transform & Download Aligned CSV"**
 5. The system will:
