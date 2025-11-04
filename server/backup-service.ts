@@ -31,6 +31,27 @@ export class BackupService {
   private readonly BACKUP_VERSION = "1.0.0";
 
   /**
+   * Helper function to convert ISO date strings back to Date objects
+   */
+  private convertDates(obj: any): any {
+    if (!obj) return obj;
+    
+    const dateFields = [
+      'createdAt', 'updatedAt', 'assignedAt', 'closeDate', 
+      'actualCloseDate', 'estCloseDate', 'dueAt', 'completedAt',
+      'convertedAt', 'startedAt'
+    ];
+    
+    const converted = { ...obj };
+    for (const field of dateFields) {
+      if (converted[field] && typeof converted[field] === 'string') {
+        converted[field] = new Date(converted[field]);
+      }
+    }
+    return converted;
+  }
+
+  /**
    * Creates a full backup of all CRM data with embedded checksum
    * File format: [checksum (64 bytes hex)][data]
    * @throws Error if encryptionKey is not provided
@@ -208,73 +229,76 @@ export class BackupService {
         // Restore data (in dependency order)
         // Restore auth/RBAC tables
         if (backupData.data.roles.length > 0) {
-          await tx.insert(schema.roles).values(backupData.data.roles);
+          await tx.insert(schema.roles).values(backupData.data.roles.map(r => this.convertDates(r)));
           recordsRestored += backupData.data.roles.length;
         }
 
         if (backupData.data.permissions.length > 0) {
-          await tx.insert(schema.permissions).values(backupData.data.permissions);
+          await tx.insert(schema.permissions).values(backupData.data.permissions.map(p => this.convertDates(p)));
           recordsRestored += backupData.data.permissions.length;
         }
 
         if (backupData.data.users.length > 0) {
-          await tx.insert(schema.users).values(backupData.data.users);
+          await tx.insert(schema.users).values(backupData.data.users.map(u => this.convertDates(u)));
           recordsRestored += backupData.data.users.length;
         }
 
         if (backupData.data.userRoles.length > 0) {
-          await tx.insert(schema.userRoles).values(backupData.data.userRoles);
+          await tx.insert(schema.userRoles).values(backupData.data.userRoles.map(ur => this.convertDates(ur)));
           recordsRestored += backupData.data.userRoles.length;
         }
 
         if (backupData.data.rolePermissions.length > 0) {
           await tx
             .insert(schema.rolePermissions)
-            .values(backupData.data.rolePermissions);
+            .values(backupData.data.rolePermissions.map(rp => this.convertDates(rp)));
           recordsRestored += backupData.data.rolePermissions.length;
         }
 
         // Restore CRM entities
         if (backupData.data.accounts.length > 0) {
-          await tx.insert(schema.accounts).values(backupData.data.accounts);
+          await tx.insert(schema.accounts).values(backupData.data.accounts.map(a => this.convertDates(a)));
           recordsRestored += backupData.data.accounts.length;
         }
 
         if (backupData.data.contacts.length > 0) {
-          await tx.insert(schema.contacts).values(backupData.data.contacts);
+          await tx.insert(schema.contacts).values(backupData.data.contacts.map(c => this.convertDates(c)));
           recordsRestored += backupData.data.contacts.length;
         }
 
         if (backupData.data.leads.length > 0) {
-          await tx.insert(schema.leads).values(backupData.data.leads);
+          await tx.insert(schema.leads).values(backupData.data.leads.map(l => this.convertDates(l)));
           recordsRestored += backupData.data.leads.length;
         }
 
         if (backupData.data.opportunities.length > 0) {
-          await tx.insert(schema.opportunities).values(backupData.data.opportunities);
+          await tx.insert(schema.opportunities).values(backupData.data.opportunities.map(o => this.convertDates(o)));
           recordsRestored += backupData.data.opportunities.length;
         }
 
         if (backupData.data.activities.length > 0) {
-          // Transform activities to ensure status and priority have valid values
-          const activitiesWithDefaults = backupData.data.activities.map((activity: any) => ({
-            ...activity,
-            status: activity.status || "pending",
-            priority: activity.priority || "medium",
-          }));
+          // Transform activities to ensure status, priority, and dates are properly formatted
+          const activitiesWithDefaults = backupData.data.activities.map((activity: any) => {
+            const withDates = this.convertDates(activity);
+            return {
+              ...withDates,
+              status: activity.status || "pending",
+              priority: activity.priority || "medium",
+            };
+          });
           await tx.insert(schema.activities).values(activitiesWithDefaults);
           recordsRestored += backupData.data.activities.length;
         }
 
         // Restore ID patterns
         if (backupData.data.idPatterns.length > 0) {
-          await tx.insert(schema.idPatterns).values(backupData.data.idPatterns);
+          await tx.insert(schema.idPatterns).values(backupData.data.idPatterns.map(p => this.convertDates(p)));
           recordsRestored += backupData.data.idPatterns.length;
         }
 
         // Restore audit logs
         if (backupData.data.auditLogs.length > 0) {
-          await tx.insert(schema.auditLogs).values(backupData.data.auditLogs);
+          await tx.insert(schema.auditLogs).values(backupData.data.auditLogs.map(log => this.convertDates(log)));
           recordsRestored += backupData.data.auditLogs.length;
         }
       });
