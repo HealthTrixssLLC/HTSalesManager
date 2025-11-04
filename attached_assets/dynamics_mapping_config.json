@@ -19,7 +19,8 @@
     "external_id_fields": [
       "accountNumber",
       "externalId"
-    ]
+    ],
+    "preserve_external_format": true
   },
   "validation_rules": {
     "required_fields": [
