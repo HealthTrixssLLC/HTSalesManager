@@ -256,7 +256,13 @@ export class BackupService {
         }
 
         if (backupData.data.activities.length > 0) {
-          await tx.insert(schema.activities).values(backupData.data.activities);
+          // Transform activities to ensure status and priority have valid values
+          const activitiesWithDefaults = backupData.data.activities.map((activity: any) => ({
+            ...activity,
+            status: activity.status || "pending",
+            priority: activity.priority || "medium",
+          }));
+          await tx.insert(schema.activities).values(activitiesWithDefaults);
           recordsRestored += backupData.data.activities.length;
         }
 
