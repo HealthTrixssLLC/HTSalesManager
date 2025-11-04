@@ -599,17 +599,25 @@ export default function OpportunitiesPage() {
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-medium text-sm">{opp.name}</h4>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm">{opp.name}</h4>
+                          <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-opportunity-id-${opp.id}`}>
+                            {opp.id}
+                          </p>
+                        </div>
                         {opp.rating && (
-                          <Badge variant="outline" className="text-xs h-5">
+                          <Badge variant="outline" className="text-xs h-5 flex-shrink-0">
                             {opp.rating}
                           </Badge>
                         )}
                       </div>
                       {opp.accountName && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Building2 className="h-3 w-3 flex-shrink-0" />
-                          <span className="truncate" data-testid={`text-account-${opp.id}`}>{opp.accountName}</span>
+                        <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Building2 className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate" data-testid={`text-account-${opp.id}`}>{opp.accountName}</span>
+                          </div>
+                          <span className="ml-4" data-testid={`text-account-id-${opp.id}`}>{opp.accountId}</span>
                         </div>
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
