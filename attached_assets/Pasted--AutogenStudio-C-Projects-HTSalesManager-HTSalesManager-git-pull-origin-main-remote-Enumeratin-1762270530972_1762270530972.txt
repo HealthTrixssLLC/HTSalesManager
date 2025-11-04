@@ -1,0 +1,153 @@
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 7, done.
+remote: Counting objects: 100% (7/7), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 5 (delta 2), reused 5 (delta 2), pack-reused 0 (from 0)
+Unpacking objects: 100% (5/5), 174.95 KiB | 1.55 MiB/s, done.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   42a4a2e..21a09c9  main       -> origin/main
+Updating 42a4a2e..21a09c9
+Fast-forward
+ ...ld-no-cache-Bui-1762269563238_1762269563238.txt |  83 +++++++++++++++++++++
+ attached_assets/image_1762269537263.png            | Bin 0 -> 211824 bytes
+ 2 files changed, 83 insertions(+)
+ create mode 100644 attached_assets/Pasted--AutogenStudio-C-Projects-HTSalesManager-HTSalesManager-docker-compose-build-no-cache-Bui-1762269563238_1762269563238.txt
+ create mode 100644 attached_assets/image_1762269537263.png
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>dir
+ Volume in drive C has no label.
+ Volume Serial Number is D8ED-BE4C
+
+ Directory of C:\Projects\HTSalesManager\HTSalesManager
+
+11/04/2025  09:03 AM    <DIR>          .
+10/31/2025  03:09 PM    <DIR>          ..
+11/02/2025  09:00 AM               828 .dockerignore
+11/02/2025  12:44 PM             2,872 .env.example
+10/31/2025  03:55 PM               328 .gitattributes
+10/31/2025  03:37 PM                72 .gitignore
+11/04/2025  09:03 AM               993 .replit
+11/04/2025  09:32 AM    <DIR>          attached_assets
+10/31/2025  03:37 PM    <DIR>          client
+10/31/2025  03:37 PM               478 components.json
+10/31/2025  03:37 PM             9,628 DEPLOYMENT_SUMMARY.md
+10/31/2025  03:37 PM             9,075 design_guidelines.md
+11/02/2025  12:44 PM             1,613 docker-compose.yml
+10/31/2025  03:58 PM               963 docker-entrypoint.sh
+11/02/2025  09:00 AM             4,399 Dockerfile
+10/31/2025  03:37 PM            10,835 DOCKER_DEPLOYMENT.md
+11/03/2025  08:15 AM             2,858 DRAG_DROP_IMPLEMENTATION.md
+10/31/2025  03:37 PM               339 drizzle.config.ts
+11/02/2025  03:08 PM            13,566 DYNAMICS_IMPORT_GUIDE.md
+11/02/2025  12:20 PM           318,852 package-lock.json
+11/02/2025  12:20 PM             4,052 package.json
+10/31/2025  03:37 PM                86 postcss.config.js
+10/31/2025  03:37 PM            15,620 PRODUCTION_READINESS.md
+10/31/2025  03:37 PM             4,420 README.md
+11/04/2025  08:15 AM            13,964 replit.md
+10/31/2025  03:37 PM    <DIR>          Requirements-CPDO
+11/04/2025  09:15 AM    <DIR>          server
+11/04/2025  08:15 AM    <DIR>          shared
+10/31/2025  03:37 PM             4,157 tailwind.config.ts
+10/31/2025  03:37 PM               680 tsconfig.json
+10/31/2025  03:37 PM             1,120 vite.config.ts
+              24 File(s)        421,798 bytes
+               7 Dir(s)  1,108,473,864,192 bytes free
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose down
+[+] Running 3/3
+ ✔ Container healthtrixss-crm-app                   Removed                                                                     0.0s
+ ✔ Container healthtrixss-crm-postgres              Removed                                                                     0.0s
+ ✔ Network htsalesmanager_healthtrixss-crm-network  Removed                                                                     0.6s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 21.7s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.5s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 6.03kB                                                                                             0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.4s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            8.3s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             6.1s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.5s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.1s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.3s
+ => exporting to image                                                                                                          1.6s
+ => => exporting layers                                                                                                         1.6s
+ => => writing image sha256:01b06f2cdf1ea3bf35d1f8a25061e96ba853d8b78b7aefd3157990d392c83f2b                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 3/3
+ ✔ Network htsalesmanager_healthtrixss-crm-network  Created                                                                     0.0s
+ ✔ Container healthtrixss-crm-postgres              Healthy                                                                    10.8s
+ ✔ Container healthtrixss-crm-app                   Started                                                                    10.9s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
+healthtrixss-crm-app  | PostgreSQL is unavailable - sleeping
