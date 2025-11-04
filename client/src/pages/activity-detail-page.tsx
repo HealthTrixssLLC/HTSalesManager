@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,17 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Activity, Account, Contact, Opportunity, Lead, InsertActivity } from "@shared/schema";
 import { insertActivitySchema } from "@shared/schema";
+import { AssociationManager, Association } from "@/components/association-manager";
+import { Badge } from "@/components/ui/badge";
+
+interface ActivityAssociation {
+  id: string;
+  activityId: string;
+  entityType: string;
+  entityId: string;
+  createdAt: string;
+  entityName: string;
+}
 
 export default function ActivityDetailPage() {
   const [, params] = useRoute("/activities/:id");
@@ -25,6 +36,7 @@ export default function ActivityDetailPage() {
   const activityId = params?.id;
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editAssociations, setEditAssociations] = useState<Association[]>([]);
 
   const { data: activity, isLoading: activityLoading } = useQuery<Activity>({
     queryKey: ["/api/activities", activityId],
@@ -41,14 +53,68 @@ export default function ActivityDetailPage() {
     enabled: !!activityId,
   });
 
+  const { data: associations = [], isLoading: associationsLoading } = useQuery<ActivityAssociation[]>({
+    queryKey: ["/api/activities", activityId, "associations"],
+    enabled: !!activityId,
+  });
+
+  const deleteAssociationMutation = useMutation({
+    mutationFn: async (associationId: string) => {
+      await apiRequest("DELETE", `/api/activity-associations/${associationId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId, "associations"] });
+      toast({ title: "Association removed successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to remove association", description: error.message, variant: "destructive" });
+    },
+  });
+
   const updateMutation = useMutation({
     mutationFn: async (data: Partial<InsertActivity>) => {
       const res = await apiRequest("PATCH", `/api/activities/${activityId}`, data);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Sync associations
+      const currentAssociationIds = new Set(
+        associations.map((a) => `${a.entityType}-${a.entityId}`)
+      );
+      const newAssociationIds = new Set(
+        editAssociations.map((a) => `${a.entityType}-${a.entityId}`)
+      );
+
+      // Delete removed associations
+      for (const assoc of associations) {
+        const key = `${assoc.entityType}-${assoc.entityId}`;
+        if (!newAssociationIds.has(key)) {
+          try {
+            await apiRequest("DELETE", `/api/activity-associations/${assoc.id}`);
+          } catch (error) {
+            console.error("Failed to delete association:", error);
+          }
+        }
+      }
+
+      // Add new associations
+      for (const newAssoc of editAssociations) {
+        const key = `${newAssoc.entityType}-${newAssoc.entityId}`;
+        if (!currentAssociationIds.has(key)) {
+          try {
+            await apiRequest("POST", `/api/activities/${activityId}/associations`, {
+              entityType: newAssoc.entityType,
+              entityId: newAssoc.entityId,
+            });
+          } catch (error) {
+            console.error("Failed to create association:", error);
+          }
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId, "associations"] });
       toast({ title: "Activity updated successfully" });
       setIsEditDialogOpen(false);
     },
@@ -175,6 +241,13 @@ export default function ActivityDetailPage() {
           relatedId: activity.relatedId || "",
           notes: activity.notes || "",
         });
+        setEditAssociations(
+          associations.map((a) => ({
+            entityType: a.entityType,
+            entityId: a.entityId,
+            displayName: a.entityName,
+          }))
+        );
         setIsEditDialogOpen(true);
       }}
       onDelete={() => {
@@ -217,6 +290,42 @@ export default function ActivityDetailPage() {
                 >
                   {relatedEntityInfo.name}
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {associations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-semibold">Associated Records</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {associations.map((assoc) => (
+                    <div key={assoc.id} className="flex items-center justify-between p-2 border rounded-md">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{assoc.entityType}</Badge>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-sm"
+                          onClick={() => setLocation(`/${assoc.entityType.toLowerCase()}s/${assoc.entityId}`)}
+                          data-testid={`link-association-${assoc.id}`}
+                        >
+                          {assoc.entityName}
+                        </Button>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deleteAssociationMutation.mutate(assoc.id)}
+                        data-testid={`button-delete-association-${assoc.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -384,6 +493,11 @@ export default function ActivityDetailPage() {
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+              <AssociationManager
+                associations={editAssociations}
+                onChange={setEditAssociations}
+                className="mt-4"
               />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>

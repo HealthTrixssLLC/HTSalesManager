@@ -1,10 +1,10 @@
 // Activities page with timeline view
 // Based on design_guidelines.md enterprise SaaS patterns
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download } from "lucide-react";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X } from "lucide-react";
 import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,10 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AssociationManager, Association } from "@/components/association-manager";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const activityIcons = {
   call: Phone,
@@ -28,11 +32,42 @@ const activityIcons = {
   note: FileText,
 };
 
+interface Filters {
+  type: string[];
+  status: string[];
+  priority: string[];
+  dateFrom: string;
+  dateTo: string;
+}
+
+interface SortConfig {
+  field: keyof Activity | null;
+  direction: "asc" | "desc";
+}
+
 export default function ActivitiesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [associations, setAssociations] = useState<Association[]>([]);
+  
+  // Filter and sort state
+  const [filters, setFilters] = useState<Filters>({
+    type: [],
+    status: [],
+    priority: [],
+    dateFrom: "",
+    dateTo: "",
+  });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ field: "createdAt", direction: "desc" });
+  const [visibleColumns, setVisibleColumns] = useState({
+    type: true,
+    status: true,
+    priority: true,
+    dueDate: true,
+    notes: true,
+  });
 
   const { data: activities, isLoading } = useQuery<Activity[]>({
     queryKey: ["/api/activities"],
@@ -43,10 +78,24 @@ export default function ActivitiesPage() {
       const res = await apiRequest("POST", "/api/activities", data);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: async (createdActivity) => {
+      // Create associations after activity is created
+      for (const association of associations) {
+        try {
+          await apiRequest("POST", `/api/activities/${createdActivity.id}/associations`, {
+            entityType: association.entityType,
+            entityId: association.entityId,
+          });
+        } catch (error) {
+          console.error("Failed to create association:", error);
+        }
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
       toast({ title: "Activity created successfully" });
       setIsCreateDialogOpen(false);
+      setAssociations([]);
+      form.reset();
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create activity", description: error.message, variant: "destructive" });
@@ -73,6 +122,89 @@ export default function ActivitiesPage() {
   const onSubmit = (data: InsertActivity) => {
     createMutation.mutate(data);
   };
+
+  // Filter and sort activities
+  const filteredAndSortedActivities = useMemo(() => {
+    if (!activities) return [];
+
+    let filtered = activities.filter((activity) => {
+      // Type filter
+      if (filters.type.length > 0 && !filters.type.includes(activity.type)) {
+        return false;
+      }
+      // Status filter
+      if (filters.status.length > 0 && !filters.status.includes(activity.status)) {
+        return false;
+      }
+      // Priority filter
+      if (filters.priority.length > 0 && !filters.priority.includes(activity.priority)) {
+        return false;
+      }
+      // Date filter
+      if (filters.dateFrom && activity.dueAt && new Date(activity.dueAt) < new Date(filters.dateFrom)) {
+        return false;
+      }
+      if (filters.dateTo && activity.dueAt && new Date(activity.dueAt) > new Date(filters.dateTo)) {
+        return false;
+      }
+      return true;
+    });
+
+    // Sort
+    if (sortConfig.field) {
+      filtered = [...filtered].sort((a, b) => {
+        const aVal = a[sortConfig.field!];
+        const bVal = b[sortConfig.field!];
+        
+        if (aVal === null || aVal === undefined) return 1;
+        if (bVal === null || bVal === undefined) return -1;
+        
+        let comparison = 0;
+        if (typeof aVal === "string" && typeof bVal === "string") {
+          comparison = aVal.localeCompare(bVal);
+        } else if (aVal instanceof Date && bVal instanceof Date) {
+          comparison = aVal.getTime() - bVal.getTime();
+        } else if (typeof aVal === "number" && typeof bVal === "number") {
+          comparison = aVal - bVal;
+        } else {
+          comparison = String(aVal).localeCompare(String(bVal));
+        }
+        
+        return sortConfig.direction === "asc" ? comparison : -comparison;
+      });
+    }
+
+    return filtered;
+  }, [activities, filters, sortConfig]);
+
+  const toggleFilter = (filterType: keyof Omit<Filters, "dateFrom" | "dateTo">, value: string) => {
+    setFilters((prev) => {
+      const currentValues = prev[filterType];
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter((v) => v !== value)
+        : [...currentValues, value];
+      return { ...prev, [filterType]: newValues };
+    });
+  };
+
+  const toggleSort = (field: keyof Activity) => {
+    setSortConfig((prev) => ({
+      field,
+      direction: prev.field === field && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      type: [],
+      status: [],
+      priority: [],
+      dateFrom: "",
+      dateTo: "",
+    });
+  };
+
+  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.dateFrom || filters.dateTo;
 
   const handleExport = async () => {
     try {
@@ -300,6 +432,11 @@ export default function ActivitiesPage() {
                     </FormItem>
                   )}
                 />
+                <AssociationManager
+                  associations={associations}
+                  onChange={setAssociations}
+                  className="mt-4"
+                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
@@ -315,17 +452,164 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
+      {/* Filter, Sort, and Column Controls */}
+      <div className="flex gap-2 flex-wrap">
+        {/* Filter Controls */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-filter">
+              <Filter className="h-4 w-4 mr-2" />
+              Filters
+              {hasActiveFilters && <Badge variant="secondary" className="ml-2">{filters.type.length + filters.status.length + filters.priority.length}</Badge>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80">
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-sm mb-2">Type</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["call", "email", "meeting", "task", "note"].map((type) => (
+                    <Button
+                      key={type}
+                      variant={filters.type.includes(type) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleFilter("type", type)}
+                      data-testid={`filter-type-${type}`}
+                    >
+                      {type}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm mb-2">Status</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["pending", "completed", "cancelled"].map((status) => (
+                    <Button
+                      key={status}
+                      variant={filters.status.includes(status) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleFilter("status", status)}
+                      data-testid={`filter-status-${status}`}
+                    >
+                      {status}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm mb-2">Priority</h4>
+                <div className="flex flex-wrap gap-2">
+                  {["low", "medium", "high"].map((priority) => (
+                    <Button
+                      key={priority}
+                      variant={filters.priority.includes(priority) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => toggleFilter("priority", priority)}
+                      data-testid={`filter-priority-${priority}`}
+                    >
+                      {priority}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateFrom">Due Date From</Label>
+                <Input
+                  id="dateFrom"
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                  data-testid="filter-date-from"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dateTo">Due Date To</Label>
+                <Input
+                  id="dateTo"
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                  data-testid="filter-date-to"
+                />
+              </div>
+              {hasActiveFilters && (
+                <Button variant="outline" size="sm" onClick={clearFilters} className="w-full" data-testid="button-clear-filters">
+                  <X className="h-4 w-4 mr-2" />
+                  Clear All Filters
+                </Button>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Sort Controls */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-sort">
+              <SortAsc className="h-4 w-4 mr-2" />
+              Sort{sortConfig.field && `: ${sortConfig.field}`}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56">
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm mb-2">Sort By</h4>
+              {["subject", "type", "status", "priority", "dueAt", "createdAt"].map((field) => (
+                <Button
+                  key={field}
+                  variant={sortConfig.field === field ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => toggleSort(field as keyof Activity)}
+                  className="w-full justify-start"
+                  data-testid={`sort-${field}`}
+                >
+                  {field} {sortConfig.field === field && (sortConfig.direction === "asc" ? "↑" : "↓")}
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Column Visibility Controls */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" data-testid="button-columns">
+              <Eye className="h-4 w-4 mr-2" />
+              Columns
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56">
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm mb-2">Show Columns</h4>
+              {Object.entries(visibleColumns).map(([column, visible]) => (
+                <div key={column} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={column}
+                    checked={visible}
+                    onCheckedChange={(checked) =>
+                      setVisibleColumns((prev) => ({ ...prev, [column]: !!checked }))
+                    }
+                    data-testid={`column-${column}`}
+                  />
+                  <Label htmlFor={column} className="capitalize cursor-pointer">{column}</Label>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Activity Timeline ({activities?.length || 0})
+            Activity Timeline ({filteredAndSortedActivities.length} of {activities?.length || 0})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {activities && activities.length > 0 ? (
+          {filteredAndSortedActivities && filteredAndSortedActivities.length > 0 ? (
             <div className="space-y-4">
-              {activities.map((activity) => {
+              {filteredAndSortedActivities.map((activity) => {
                 const Icon = activityIcons[activity.type];
                 return (
                   <Card 
@@ -344,8 +628,15 @@ export default function ActivitiesPage() {
                         <div className="flex items-start justify-between">
                           <div>
                             <h4 className="font-medium">{activity.subject}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="capitalize">{activity.type}</Badge>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {visibleColumns.type && <Badge variant="outline" className="capitalize">{activity.type}</Badge>}
+                              {visibleColumns.status && <Badge variant="outline" className="capitalize">{activity.status}</Badge>}
+                              {visibleColumns.priority && <Badge variant="outline" className="capitalize">{activity.priority}</Badge>}
+                              {visibleColumns.dueDate && activity.dueAt && (
+                                <span className="text-xs text-muted-foreground">
+                                  Due: {new Date(activity.dueAt).toLocaleDateString()}
+                                </span>
+                              )}
                               {activity.relatedType && (
                                 <span className="text-xs text-muted-foreground">
                                   Related to: {activity.relatedType} {activity.relatedId}
@@ -357,7 +648,7 @@ export default function ActivitiesPage() {
                             {new Date(activity.createdAt).toLocaleDateString()}
                           </span>
                         </div>
-                        {activity.notes && (
+                        {visibleColumns.notes && activity.notes && (
                           <p className="text-sm text-muted-foreground mt-2">{activity.notes}</p>
                         )}
                       </div>
