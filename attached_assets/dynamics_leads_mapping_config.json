@@ -1,7 +1,7 @@
 {
   "entity_type": "leads",
   "sheet_name": "All Leads",
-  "target_template": "leads-template.csv",
+  "target_template": "dynamics_leads_template.csv",
   "column_mapping": {
     "(Do Not Modify) Lead": "externalId",
     "First Name": "firstName",
@@ -37,7 +37,7 @@
     "external_id_fields": [
       "externalId"
     ],
-    "preserve_external_format": true
+    "preserve_external_format": false
   },
   "governance_fields": {
     "sourceSystem": "Dynamics 365",

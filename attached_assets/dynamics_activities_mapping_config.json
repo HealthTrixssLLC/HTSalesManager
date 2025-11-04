@@ -1,7 +1,7 @@
 {
   "source_file": "All Activities 11-3-2025 2-29-06 PM.xlsx",
   "sheet_name": "All Activities",
-  "target_template": "activities-template.csv",
+  "target_template": "dynamics_activities_template.csv",
   "column_mapping": {
     "Subject": "subject",
     "Activity Type": "type",

@@ -16,7 +16,7 @@
     "external_id_fields": [
       "externalId"
     ],
-    "preserve_external_format": true
+    "preserve_external_format": false
   },
   "validation_rules": {
     "required_fields": [

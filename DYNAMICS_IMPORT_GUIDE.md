@@ -160,12 +160,13 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
    - Result: CRM record id = `Opp-1024` (not a generated ID)
 
 3. **For Contacts & Leads**:
-   - If Dynamics GUID exists in "(Do Not Modify) Contact" or "(Do Not Modify) Lead"
-   - The transformation preserves it as the `id` field
-   - Result: CRM record id = `{dynamics-guid}` (not a generated ID)
+   - Dynamics only has GUIDs (no "Contact Number" or "Lead Number" fields)
+   - System **generates new IDs** using patterns: `CON-202511-00001`, `LEAD-000001`
+   - Dynamics GUID is preserved in `externalId` field for tracking
+   - Result: CRM record id = `CON-202511-00001` (generated), externalId = `{dynamics-guid}`
 
-4. **Fallback (only if no external ID exists)**:
-   - System generates new ID using pattern: `ACC-{{YYYY}}{{MM}}-{{00001}}`
+4. **Fallback (only if no external ID exists for Accounts/Opportunities)**:
+   - System generates new ID using the configured pattern
    - Example: `ACC-202511-00001` for the first account in November 2025
 
 #### Why This Matters
@@ -178,17 +179,30 @@ Your downstream systems (reporting tools, integrations, APIs) rely on these spec
 
 #### Configuration Flag
 
-This behavior is controlled by `preserve_external_format: true` in the mapping configuration:
+This behavior is controlled by `preserve_external_format` in the mapping configuration:
 
+**For Accounts & Opportunities** (have custom number fields):
 ```json
 "id_rules": {
   "internal_id_field": "id",
   "external_id_fields": ["accountNumber", "externalId"],
-  "preserve_external_format": true  // ← Preserves IDs exactly as-is
+  "preserve_external_format": true  // ← Preserves "HT Account Number" as ID
 }
 ```
 
-**All default mapping configs have this enabled**, so your Dynamics IDs are automatically preserved
+**For Contacts & Leads** (only have GUIDs):
+```json
+"id_rules": {
+  "internal_id_field": "id",
+  "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
+  "external_id_fields": ["externalId"],
+  "preserve_external_format": false  // ← Generate new IDs, preserve GUID in externalId
+}
+```
+
+**When to use `true` vs `false`:**
+- ✅ **true**: Entity has a custom number field in Dynamics (e.g., "HT Account Number", "HT Opportunity Number")
+- ✅ **false**: Entity only has a GUID (e.g., Contacts, Leads, Activities)
 
 ## Type Mapping
 

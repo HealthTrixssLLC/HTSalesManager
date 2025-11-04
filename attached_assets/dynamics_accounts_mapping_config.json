@@ -1,7 +1,7 @@
 {
   "source_file": "Active Accounts 11-2-2025 10-03-45 AM.xlsx",
   "sheet_name": "Active Accounts",
-  "target_template": "accounts-template.csv",
+  "target_template": "dynamics_accounts_template.csv",
   "column_mapping": {
     "(Do Not Modify) Modified On": "Modified On",
     "Account Name": "name",
