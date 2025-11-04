@@ -203,13 +203,6 @@ export default function OpportunityDetailPage() {
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
           </DetailSection>
 
-          <DetailSection title="Revenue & Dates">
-            <DetailField label="Actual Revenue" value={opportunity.actualRevenue} type="currency" />
-            <DetailField label="Actual Close Date" value={opportunity.actualCloseDate} type="date" />
-            <DetailField label="Est. Revenue" value={opportunity.estRevenue} type="currency" />
-            <DetailField label="Est. Close Date" value={opportunity.estCloseDate} type="date" />
-          </DetailSection>
-
           {(opportunity.externalId || opportunity.sourceSystem) && (
             <DetailSection title="Import Information">
               <DetailField label="External ID" value={opportunity.externalId} />
