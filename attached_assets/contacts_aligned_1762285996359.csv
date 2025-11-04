@@ -1,0 +1,70 @@
+id,firstName,lastName,email,phone,title,accountId
+e70821fdd258ef11bfe2000d3a1155b1,David,Duel,david@easyhealth.com,,,
+84f8f32dde0bf011998a000d3a194791,Swati,Patel,swati.patel@gebbs.com,,AVP Product,ACT-1027
+9d3f9ba4b610f011998a000d3a194791,Yaw,Asante,yaw@raapidinc.com,,"VP, Sales",ACT-1028
+9cf342c45606f011bae2000d3a194791,AJ,Alix,ajalix@optinosis.com,,CPO,ACT-1025
+97fb5adf5606f011bae2000d3a194791,Daniel,Abrams,dabrams@oystehr.com,,CEO,ACT-1024
+ec7635db9068f011b4cb000d3a569972,Jennifer,Walker Graf,jennifer.w.graf@gmail.com,,Founder,ACT-1036
+ef0044089168f011b4cb000d3a569972,Benjamin,Weisman MD,ben@insightphysicians.com,,Founder,ACT-1036
+3197530b137ef011b4cc000d3a569972,Scott,Dalgleish,scott.dalgleish@guidantmso.com,,CFO,ACT-1031
+83e568ced963f011bec2000d3a569972,Unmesh,Srivastava,,,CEO,ACT-1035
+f8479901da63f011bec2000d3a569972,Vidi,Udani,vidhi@incuvio.com,,Exec Coordinator,ACT-1035
+e586c9948111f011998a000d3a8bdf89,Lorraine,Ciccone,lorraine@integrity-bizsolutions.com,,,
+153536699a9ff011bbd3000d3a9b77df,Lou,Steinberg,Lou.Steinberg@corrohealth.com,,GM & SVP Growth & Strategy,ACT-1037
+7b5a88ac9d68f011b4cb000d3a9c283a,,Mark  Bergen,Mark.Bergen@gebbs.com,,,
+a868c80716b1ef118a690022481e1f5a,Jamie,Reddick,jamie.reddick@gbmg.org,,Chief Operating Officer,ACT-1017
+092286ce70c6ef11b8e80022481e1f5a,,Danny Duel MD,duel@psychbrighthealth.com,,,
+a12d5beb5ec8ef11b8e80022481e1f5a,Tam,Pham,tam@limohealth.com,,Vice President Healthcare Solutions,ACT-1018
+65954bf1fd5aef11bfe30022481e8160,Neil,Larson,Neil.Larson@MultiPlan.com,,"VP, Data Services",ACT-1003
+0833fe1afe5aef11bfe30022481e8160,Chris,Kemp,chris.kemp@multiplan.com,,,ACT-1003
+ebeca47e6c40ef11a3160022481ee260,Microsoft,Outlook,MicrosoftExchange329e71ec88ae4615bbc36ab6ce41109e@healthtrixss.com,,,
+c46f425ac133ef11a31600224829fbde,,samirrawat@healthtrixss.com,samirrawat@healthtrixss.com,,,
+ec0e6f609a55ef11bfe20022482bcd29,Gregg,Prothero,gregg@ubixlabs.com,,,
+ce5df71e7756f011877a6045bdd312ff,Jeannie,Hennum,jHennum@verisma.com,,"General Manager, Value Based Care",ACT-1033
+95c929d757eaef11be216045bdd5c34c,Arturo,Diaz,Arturo.Diaz@bluecrossmn.com,,VP Risk Adjustment,ACT-1021
+a47e436a58eaef11be216045bdd5c34c,Ken,Stockman,kstockman@monumentsystems.co,,CEO,ACT-1022
+9cfb5412a434ef11a3166045bdee6d24,Farzad,Hoorizadeh,farzad.hoorizadeh@cybexys.com,,Chief Financial Officer,ACT-1006
+53645324a434ef11a3166045bdee6d24,David,Foster,david@sciencephalon.com,,,
+31a469046335ef11a3166045bdee6d24,Amy,James,amy.james@elevancehealth.com,,Clinical Program Development Manager,ACT-1007
+0f54e3686335ef11a3166045bdee6d24,Andrew,Fay,andrew.fay@elevancehealth.com,,,ACT-1007
+4b37c2806335ef11a3166045bdee6d24,Brandon,O'Hara,brandon.o'hara@elevancehealth.com,,Director Risk and Quality,ACT-1007
+05c9e4216435ef11a3166045bdee6d24,Pam,Nguyen,pam.nguyen@elevance.com,,Business Information Developer Consultant | Value Based Informatics - Health Economics Analytics,ACT-1007
+edf3b6536535ef11a3166045bdee6d24,Meredith,Sheridan,meredith.sheridan@elevance.com,,Director Risk Adjustment Programs,ACT-1007
+dc4b2b78bb3fef11a3166045bdfe6200,Ceci,Alvarez,ceci.alvarez@avmed.org,,Executive Assistant,ACT-1009
+7db43617bc3fef11a3166045bdfe6200,Victor,Farinas,Victor.Farinas@avmed.org,,VP Operations,ACT-1009
+9f44c781dff3ef11be207c1e5200d9a6,Steve,Broadhead,sbroadhead@mvtech.io,,CEO,ACT-1040
+8542bf073342ef11bfe27c1e520a4fae,Brett,Meyers,brettmeyers@healthtrixss.com,,,
+f12feb193b44ef11bfe27c1e520a4fae,Puneet,Maheshwari,Puneet.Maheshwari@optum.com,,,ACT-1013
+076146653b44ef11bfe27c1e520a4fae,Matt,Rubin,matt@arammu.com,,CEO,ACT-1014
+a2b883bde680ef11ac217c1e52148d0b,Robin,Springer,Robin.Springer@davita.com,,,
+1d9319866e31ef118e4e7c1e52159c2f,Mark,Gee,mark.gee@medecision.com,,Chief Revenue Officer,ACT-1001
+5d922f9e6e31ef118e4e7c1e52159c2f,Peter,Philips,peter@cavulus.com,,Operations,ACT-1015
+196f13b66e31ef118e4e7c1e52159c2f,Scott,Dalgleish,scott.dalgleish@gbmg.org,,,ACT-1017
+d00c65d96e31ef118e4e7c1e52159c2f,Andrew,Cone,andrew.cone@gaine.com,,CRO,ACT-1030
+19ccacf16e31ef118e4e7c1e52159c2f,Jeff,Korman,jeff.kohrman@gaine.com,,"VP, Sales",ACT-1030
+a8c9b2186f31ef118e4e7c1e52159c2f,Richard,Liberman,rlieberman@cortexanalytics.com,,CEO,ACT-1012
+dfea22576f31ef118e4e7c1e52159c2f,Bryan,Lee,bryan.lee@fja.com,(212) 413-8834,VP Government Programs,ACT-1010
+4ed2836f6f31ef118e4e7c1e52159c2f,Don,Gertz,don@tplclaims.com,,CEO,ACT-1005
+1c45b6996f31ef118e4e7c1e52159c2f,David,Wedemeyer,david.wedemeyer@cybexys.com,,Investor,ACT-1006
+fb86ffe56f31ef118e4e7c1e52159c2f,Raul,Kivatinetz,raul.kivatinetz@cybexys.com,,CEO,ACT-1006
+b28cfe6f7031ef118e4e7c1e52159c2f,Tushar (TK),Desai,tk@joineasyhealth.com,,President & Chief Medical Officer,ACT-1002
+b1b4517b7431ef118e4e7c1e52159c2f,James,Collard,james.collard@fja.com,,Sales Integration,ACT-1010
+8ef72d83ea66ef11a6707c1e521640c5,Randi,Escobedo,Randi.Escobedo@providence.org,,SVP Risk Adjustment,ACT-1041
+2c883e7c03a1ef118a697c1e52676087,Dr. Daniel,Duel,dannyduelmd@psychbrighthealth.com,,CEO,ACT-1016
+de2fe276decdef118ee97c1e52676345,,dalgleish@fastmail.com,dalgleish@fastmail.com,,,
+a4aa9024f8d0ef118eea7c1e52676345,Dave,Meyer,davidpaulmeryer@outlook.com,,Principal,ACT-1039
+4b146cbcfad0ef118eea7c1e52676345,Jeanne,Williams,jeanne.williams@gbmg.org,,,ACT-1017
+f18168c8fad0ef118eea7c1e52676345,Scott,Holt,staci.holt@gbmg.org,,,ACT-1017
+1fee83d4fad0ef118eea7c1e52676345,Steve,Cantrell,steve.cantrell@gbmg.org,,,ACT-1017
+fb0183e4a0c8ef11b8e87c1e52676345,Tam,Pham,tampham00@gmail.com,,,
+ace34f7e3fdbef11a7307c1e526ab378,Scott,Dalgleish,scott.dalgleish@tvimg.com,,CFO,ACT-1023
+ae39b367e8dfef11a7307c1e526ab378,Vanessa,Harris,vanessa.harris@centene.com,,Procurement,ACT-1020
+da00d27ae8dfef11a7307c1e526ab378,,Vanessa N. Harris,Vanessa.N.Harris@CENTENE.COM,,,
+8490b739fae2ef11be217c1e526ab378,Centene,Corporation,adobesign@adobesign.com,,,
+2a859c2022b0f011bbd37ced8d18a9d5,,Kate.McClure@corrohealth.com,Kate.McClure@corrohealth.com,,,
+35b93314c947f011877a7ced8d1fb12d,Anna,Sproule,asproule@goldchp.org,,,ACT-1038
+90dbd052c947f011877a7ced8d1fb12d,Kim,Phillips,kphillips@thealliance.health,(831)430-5648,EDI Manager,ACT-1032
+f2a46133a12af0118c4c7ced8d1fb12d,,"Linares, Serrah",serrah.linares@optum.com,,,
+ece181b66b2bf0118c4c7ced8d1fb12d,,"McCoskey, Kelley A",kelley.mccoskey@optum.com,,,
+5ed4471e1331f0118c4c7ced8d1fb12d,,"Senthilkumar, Shiva",shiva_senthilkumar@optum.com,,,
+dd1f2ba2e913f01199897ced8d1fb12d,Ray,Gillani,rgillani@hovations.com,,CEO,ACT-1029
