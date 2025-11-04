@@ -50,6 +50,7 @@ export default function OpportunitiesPage() {
   const [filterProbabilityMin, setFilterProbabilityMin] = useState<string>("");
   const [filterProbabilityMax, setFilterProbabilityMax] = useState<string>("");
   const [filterRating, setFilterRating] = useState<string>("");
+  const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
   const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
     queryKey: ["/api/opportunities"],
@@ -95,7 +96,6 @@ export default function OpportunitiesPage() {
       probability: 0,
       ownerId: user?.id || "",
       closeDate: null,
-      status: null,
       actualCloseDate: null,
       actualRevenue: null,
       estCloseDate: null,
@@ -233,6 +233,42 @@ export default function OpportunitiesPage() {
     return acc;
   }, {} as Record<string, OpportunityWithAccount[]>);
 
+  // Determine card color based on selected attribute
+  const getCardColor = (opp: OpportunityWithAccount): string => {
+    if (colorCodeBy === "rating") {
+      if (!opp.rating) return "border-l-4 border-l-muted";
+      switch (opp.rating) {
+        case "hot": return "border-l-4 border-l-red-500";
+        case "warm": return "border-l-4 border-l-orange-500";
+        case "cold": return "border-l-4 border-l-blue-500";
+        default: return "border-l-4 border-l-muted";
+      }
+    }
+    
+    if (colorCodeBy === "closeDate") {
+      if (!opp.closeDate) return "border-l-4 border-l-muted";
+      const now = new Date();
+      const closeDate = new Date(opp.closeDate);
+      const daysUntilClose = Math.ceil((closeDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntilClose < 0) return "border-l-4 border-l-red-500"; // Overdue
+      if (daysUntilClose <= 7) return "border-l-4 border-l-orange-500"; // This week
+      if (daysUntilClose <= 30) return "border-l-4 border-l-yellow-500"; // This month
+      if (daysUntilClose <= 90) return "border-l-4 border-l-green-500"; // Next 3 months
+      return "border-l-4 border-l-blue-500"; // Future
+    }
+    
+    if (colorCodeBy === "probability") {
+      const prob = opp.probability || 0;
+      if (prob >= 75) return "border-l-4 border-l-green-500"; // High
+      if (prob >= 50) return "border-l-4 border-l-yellow-500"; // Medium-High
+      if (prob >= 25) return "border-l-4 border-l-orange-500"; // Medium-Low
+      return "border-l-4 border-l-red-500"; // Low
+    }
+    
+    return "border-l-4 border-l-muted";
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -249,6 +285,16 @@ export default function OpportunitiesPage() {
           <p className="text-muted-foreground">Visual pipeline to track deals and close them faster</p>
         </div>
         <div className="flex gap-2">
+          <Select value={colorCodeBy} onValueChange={(value: "rating" | "closeDate" | "probability") => setColorCodeBy(value)}>
+            <SelectTrigger className="w-[200px]" data-testid="select-color-code">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rating">Color by Rating</SelectItem>
+              <SelectItem value="closeDate">Color by Close Date</SelectItem>
+              <SelectItem value="probability">Color by Probability</SelectItem>
+            </SelectContent>
+          </Select>
           <Button variant="outline" onClick={() => setShowFilters(!showFilters)} data-testid="button-toggle-filters">
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? "Hide Filters" : "Show Filters"}
@@ -362,47 +408,32 @@ export default function OpportunitiesPage() {
                     </FormItem>
                   )}
                 />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
+                <FormField
+                  control={form.control}
+                  name="rating"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rating</FormLabel>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                        value={field.value || "none"}
+                      >
                         <FormControl>
-                          <Input placeholder="Open, Won, Lost" {...field} value={field.value || ""} data-testid="input-opportunity-status" />
+                          <SelectTrigger data-testid="select-opportunity-rating">
+                            <SelectValue placeholder="Select rating" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="rating"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Rating</FormLabel>
-                        <Select 
-                          onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
-                          value={field.value || "none"}
-                        >
-                          <FormControl>
-                            <SelectTrigger data-testid="select-opportunity-rating">
-                              <SelectValue placeholder="Select rating" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            <SelectItem value="hot">Hot</SelectItem>
-                            <SelectItem value="warm">Warm</SelectItem>
-                            <SelectItem value="cold">Cold</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="hot">Hot</SelectItem>
+                          <SelectItem value="warm">Warm</SelectItem>
+                          <SelectItem value="cold">Cold</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
@@ -555,7 +586,7 @@ export default function OpportunitiesPage() {
                 {groupedOpportunities[stage.id].map((opp) => (
                   <Card 
                     key={opp.id} 
-                    className="p-4 hover-elevate cursor-move" 
+                    className={`p-4 hover-elevate cursor-move ${getCardColor(opp)}`}
                     data-testid={`card-opportunity-${opp.id}`}
                     draggable
                     onDragStart={(e) => handleDragStart(e, opp)}
@@ -588,11 +619,6 @@ export default function OpportunitiesPage() {
                         </span>
                         <span>{opp.probability}%</span>
                       </div>
-                      {opp.status && (
-                        <div className="text-xs text-muted-foreground">
-                          Status: {opp.status}
-                        </div>
-                      )}
                       {opp.closeDate && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Calendar className="h-3 w-3" />
