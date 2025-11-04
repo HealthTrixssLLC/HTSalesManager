@@ -144,20 +144,17 @@ export class DynamicsMapper {
    * Generate Record ID using pattern or external ID
    */
   generateRecordId(row: AccountRow, index: number): string {
-    // Try to use external ID fields first
-    for (const field of this.config.id_rules.external_id_fields) {
-      const externalId = row[field];
-      if (externalId && externalId.trim()) {
-        // If preserve_external_format is true, keep the ID as-is
-        if (this.config.id_rules.preserve_external_format) {
+    // If preserve_external_format is true, try to use external ID fields first
+    if (this.config.id_rules.preserve_external_format) {
+      for (const field of this.config.id_rules.external_id_fields) {
+        const externalId = row[field];
+        if (externalId && externalId.trim()) {
           return externalId.trim();
         }
-        // Otherwise normalize: remove non-alphanumeric characters
-        return externalId.replace(/\W+/g, '');
       }
     }
 
-    // Generate internal ID using pattern
+    // Generate internal ID using pattern (either preserve is false, or no external ID found)
     const pattern = this.config.id_rules.internal_id_pattern;
     const now = new Date();
     const year = now.getFullYear().toString();
