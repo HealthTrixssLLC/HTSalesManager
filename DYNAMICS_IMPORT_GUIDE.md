@@ -59,7 +59,8 @@ You need three files:
   "id_rules": {
     "internal_id_field": "id",
     "internal_id_pattern": "ACC-{{YYYY}}{{MM}}-{{00001}}",
-    "external_id_fields": ["accountNumber", "externalId"]
+    "external_id_fields": ["accountNumber", "externalId"],
+    "preserve_external_format": true
   },
   "validation_rules": {
     "required_fields": ["name"],
@@ -142,12 +143,52 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
 
 ## ID Generation Rules
 
-The system uses smart ID generation:
+### ⚠️ CRITICAL: Preserving Dynamics IDs for Downstream Integrations
 
-1. **If HT Account Number exists**: Uses the existing account number as the ID
-2. **If Dynamics GUID exists but no Account Number**: Generates new ID using pattern
-3. **Pattern**: `ACC-{{YYYY}}{{MM}}-{{00001}}`
+**The system preserves your original Dynamics IDs** to ensure downstream systems and integrations continue to work without modifications.
+
+#### How ID Preservation Works
+
+1. **For Accounts**:
+   - If "HT Account Number" exists in your Dynamics export (e.g., `ACT-1019`)
+   - The transformation preserves it EXACTLY as-is in the `id` field
+   - Result: CRM record id = `ACT-1019` (not a generated ID)
+
+2. **For Opportunities**:
+   - If "HT Opportunity Number" exists (e.g., `Opp-1024`)
+   - The transformation preserves it EXACTLY as-is in the `id` field
+   - Result: CRM record id = `Opp-1024` (not a generated ID)
+
+3. **For Contacts & Leads**:
+   - If Dynamics GUID exists in "(Do Not Modify) Contact" or "(Do Not Modify) Lead"
+   - The transformation preserves it as the `id` field
+   - Result: CRM record id = `{dynamics-guid}` (not a generated ID)
+
+4. **Fallback (only if no external ID exists)**:
+   - System generates new ID using pattern: `ACC-{{YYYY}}{{MM}}-{{00001}}`
    - Example: `ACC-202511-00001` for the first account in November 2025
+
+#### Why This Matters
+
+Your downstream systems (reporting tools, integrations, APIs) rely on these specific IDs. Preserving them means:
+- ✅ No need to update external system references
+- ✅ Historical data linkages remain intact
+- ✅ Audit trails and reports continue to work
+- ✅ API integrations don't break
+
+#### Configuration Flag
+
+This behavior is controlled by `preserve_external_format: true` in the mapping configuration:
+
+```json
+"id_rules": {
+  "internal_id_field": "id",
+  "external_id_fields": ["accountNumber", "externalId"],
+  "preserve_external_format": true  // ← Preserves IDs exactly as-is
+}
+```
+
+**All default mapping configs have this enabled**, so your Dynamics IDs are automatically preserved
 
 ## Type Mapping
 
