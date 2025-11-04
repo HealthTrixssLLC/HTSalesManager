@@ -13,7 +13,7 @@
   },
   "id_rules": {
     "internal_id_field": "id",
-    "internal_id_pattern": "ACT-{{YYYY}}{{MM}}-{{00001}}",
+    "internal_id_pattern": "ACV-{{YYYY}}{{MM}}-{{00001}}",
     "external_id_fields": [],
     "preserve_external_format": false
   },
