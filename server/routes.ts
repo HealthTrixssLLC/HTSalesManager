@@ -13,6 +13,7 @@ import {
   insertLeadSchema,
   insertOpportunitySchema,
   insertActivitySchema,
+  insertActivityAssociationSchema,
   insertCommentSchema,
   insertCommentReactionSchema,
   insertCommentAttachmentSchema,
@@ -26,6 +27,7 @@ import {
   leads,
   opportunities,
   activities,
+  activityAssociations,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
@@ -1175,6 +1177,231 @@ export function registerRoutes(app: Express) {
       });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch related data" });
+    }
+  });
+
+  // ========== ACTIVITY ASSOCIATIONS ROUTES ==========
+
+  // Get all associations for an activity
+  app.get("/api/activities/:id/associations", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const activityId = req.params.id;
+      
+      // Verify activity exists
+      const activity = await storage.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      // Get all associations
+      const associations = await db
+        .select()
+        .from(activityAssociations)
+        .where(eq(activityAssociations.activityId, activityId));
+      
+      // Fetch entity details for each association
+      const associationsWithDetails = await Promise.all(
+        associations.map(async (assoc) => {
+          let entityDetails = null;
+          if (assoc.entityType === "Account") {
+            entityDetails = await storage.getAccountById(assoc.entityId);
+          } else if (assoc.entityType === "Contact") {
+            entityDetails = await storage.getContactById(assoc.entityId);
+          } else if (assoc.entityType === "Lead") {
+            entityDetails = await storage.getLeadById(assoc.entityId);
+          } else if (assoc.entityType === "Opportunity") {
+            entityDetails = await storage.getOpportunityById(assoc.entityId);
+          }
+          return {
+            ...assoc,
+            entity: entityDetails,
+          };
+        })
+      );
+      
+      return res.json(associationsWithDetails);
+    } catch (error) {
+      console.error("Failed to fetch associations:", error);
+      return res.status(500).json({ error: "Failed to fetch associations" });
+    }
+  });
+
+  // Create new association for an activity
+  app.post("/api/activities/:id/associations", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const activityId = req.params.id;
+      
+      // Verify activity exists
+      const activity = await storage.getActivityById(activityId);
+      if (!activity) {
+        return res.status(404).json({ error: "Activity not found" });
+      }
+      
+      const data = insertActivityAssociationSchema.parse({
+        ...req.body,
+        activityId,
+      });
+      
+      // Verify entity exists
+      let entityExists = false;
+      if (data.entityType === "Account") {
+        entityExists = !!(await storage.getAccountById(data.entityId));
+      } else if (data.entityType === "Contact") {
+        entityExists = !!(await storage.getContactById(data.entityId));
+      } else if (data.entityType === "Lead") {
+        entityExists = !!(await storage.getLeadById(data.entityId));
+      } else if (data.entityType === "Opportunity") {
+        entityExists = !!(await storage.getOpportunityById(data.entityId));
+      }
+      
+      if (!entityExists) {
+        return res.status(404).json({ error: `${data.entityType} not found` });
+      }
+      
+      // Check if association already exists
+      const existing = await db
+        .select()
+        .from(activityAssociations)
+        .where(
+          and(
+            eq(activityAssociations.activityId, activityId),
+            eq(activityAssociations.entityType, data.entityType),
+            eq(activityAssociations.entityId, data.entityId)
+          )
+        );
+      
+      if (existing.length > 0) {
+        return res.status(400).json({ error: "Association already exists" });
+      }
+      
+      // Create association
+      const [association] = await db
+        .insert(activityAssociations)
+        .values(data)
+        .returning();
+      
+      await createAudit(req, "create", "ActivityAssociation", association.id, null, association);
+      
+      return res.json(association);
+    } catch (error) {
+      console.error("Failed to create association:", error);
+      return res.status(500).json({ error: "Failed to create association" });
+    }
+  });
+
+  // Delete an association
+  app.delete("/api/activity-associations/:id", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const associationId = req.params.id;
+      
+      // Get association before deleting
+      const [association] = await db
+        .select()
+        .from(activityAssociations)
+        .where(eq(activityAssociations.id, associationId));
+      
+      if (!association) {
+        return res.status(404).json({ error: "Association not found" });
+      }
+      
+      // Delete association
+      await db
+        .delete(activityAssociations)
+        .where(eq(activityAssociations.id, associationId));
+      
+      await createAudit(req, "delete", "ActivityAssociation", associationId, association, null);
+      
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to delete association:", error);
+      return res.status(500).json({ error: "Failed to delete association" });
+    }
+  });
+
+  // Search entities for autocomplete (accounts, contacts, leads, opportunities)
+  app.get("/api/entities/search", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { q, type } = req.query;
+      
+      if (!q || typeof q !== "string" || q.length < 1) {
+        return res.json([]);
+      }
+      
+      const searchTerm = `%${q.toLowerCase()}%`;
+      const results: any[] = [];
+      
+      // Search accounts (if type not specified or type is Account)
+      if (!type || type === "Account") {
+        const accountResults = await db
+          .select({
+            id: accounts.id,
+            name: accounts.name,
+            type: sql<string>`'Account'`,
+            displayName: accounts.name,
+          })
+          .from(accounts)
+          .where(
+            sql`LOWER(${accounts.name}) LIKE ${searchTerm} OR LOWER(${accounts.id}) LIKE ${searchTerm}`
+          )
+          .limit(10);
+        results.push(...accountResults);
+      }
+      
+      // Search contacts (if type not specified or type is Contact)
+      if (!type || type === "Contact") {
+        const contactResults = await db
+          .select({
+            id: contacts.id,
+            name: sql<string>`${contacts.firstName} || ' ' || ${contacts.lastName}`,
+            type: sql<string>`'Contact'`,
+            displayName: sql<string>`${contacts.firstName} || ' ' || ${contacts.lastName}`,
+          })
+          .from(contacts)
+          .where(
+            sql`LOWER(${contacts.firstName} || ' ' || ${contacts.lastName}) LIKE ${searchTerm} OR LOWER(${contacts.id}) LIKE ${searchTerm} OR LOWER(${contacts.email}) LIKE ${searchTerm}`
+          )
+          .limit(10);
+        results.push(...contactResults);
+      }
+      
+      // Search leads (if type not specified or type is Lead)
+      if (!type || type === "Lead") {
+        const leadResults = await db
+          .select({
+            id: leads.id,
+            name: sql<string>`${leads.firstName} || ' ' || ${leads.lastName}`,
+            type: sql<string>`'Lead'`,
+            displayName: sql<string>`${leads.firstName} || ' ' || ${leads.lastName} || ' (' || ${leads.company} || ')'`,
+          })
+          .from(leads)
+          .where(
+            sql`LOWER(${leads.firstName} || ' ' || ${leads.lastName}) LIKE ${searchTerm} OR LOWER(${leads.company}) LIKE ${searchTerm} OR LOWER(${leads.id}) LIKE ${searchTerm}`
+          )
+          .limit(10);
+        results.push(...leadResults);
+      }
+      
+      // Search opportunities (if type not specified or type is Opportunity)
+      if (!type || type === "Opportunity") {
+        const opportunityResults = await db
+          .select({
+            id: opportunities.id,
+            name: opportunities.name,
+            type: sql<string>`'Opportunity'`,
+            displayName: opportunities.name,
+          })
+          .from(opportunities)
+          .where(
+            sql`LOWER(${opportunities.name}) LIKE ${searchTerm} OR LOWER(${opportunities.id}) LIKE ${searchTerm}`
+          )
+          .limit(10);
+        results.push(...opportunityResults);
+      }
+      
+      return res.json(results);
+    } catch (error) {
+      console.error("Failed to search entities:", error);
+      return res.status(500).json({ error: "Failed to search entities" });
     }
   });
   

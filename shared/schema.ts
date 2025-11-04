@@ -2,7 +2,7 @@
 // Based on CPDO requirements for lightweight self-hosted CRM
 
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -179,8 +179,8 @@ export const activities = pgTable("activities", {
   dueAt: timestamp("due_at"),
   completedAt: timestamp("completed_at"),
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
-  relatedType: text("related_type"), // "Account", "Contact", "Lead", "Opportunity"
-  relatedId: varchar("related_id", { length: 100 }), // ID of related record
+  relatedType: text("related_type"), // "Account", "Contact", "Lead", "Opportunity" - DEPRECATED, use activity_associations
+  relatedId: varchar("related_id", { length: 100 }), // ID of related record - DEPRECATED, use activity_associations
   notes: text("notes"),
   externalId: text("external_id"), // External system ID (e.g., Dynamics GUID)
   sourceSystem: text("source_system"), // Origin system (e.g., "Dynamics 365")
@@ -195,6 +195,18 @@ export const activities = pgTable("activities", {
   dueAtIdx: index("activities_due_at_idx").on(table.dueAt),
   externalIdIdx: index("activities_external_id_idx").on(table.externalId),
   statusIdx: index("activities_status_idx").on(table.status),
+}));
+
+export const activityAssociations = pgTable("activity_associations", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  activityId: varchar("activity_id", { length: 100 }).notNull().references(() => activities.id, { onDelete: "cascade" }),
+  entityType: text("entity_type").notNull(), // "Account", "Contact", "Lead", "Opportunity"
+  entityId: varchar("entity_id", { length: 100 }).notNull(), // ID of the related entity
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  activityIdIdx: index("activity_associations_activity_id_idx").on(table.activityId),
+  entityIdx: index("activity_associations_entity_idx").on(table.entityType, table.entityId),
+  uniqueAssociation: uniqueIndex("activity_associations_unique_idx").on(table.activityId, table.entityType, table.entityId),
 }));
 
 // ========== AUDIT & SYSTEM TABLES ==========
@@ -361,8 +373,13 @@ export const opportunitiesRelations = relations(opportunities, ({ one }) => ({
   owner: one(users, { fields: [opportunities.ownerId], references: [users.id] }),
 }));
 
-export const activitiesRelations = relations(activities, ({ one }) => ({
+export const activitiesRelations = relations(activities, ({ one, many }) => ({
   owner: one(users, { fields: [activities.ownerId], references: [users.id] }),
+  associations: many(activityAssociations),
+}));
+
+export const activityAssociationsRelations = relations(activityAssociations, ({ one }) => ({
+  activity: one(activities, { fields: [activityAssociations.activityId], references: [activities.id] }),
 }));
 
 export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
@@ -432,6 +449,11 @@ export type Opportunity = typeof opportunities.$inferSelect;
 export const insertActivitySchema = createInsertSchema(activities).omit({ createdAt: true, updatedAt: true });
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
+
+// Activity Associations
+export const insertActivityAssociationSchema = createInsertSchema(activityAssociations).omit({ id: true, createdAt: true });
+export type InsertActivityAssociation = z.infer<typeof insertActivityAssociationSchema>;
+export type ActivityAssociation = typeof activityAssociations.$inferSelect;
 
 // AuditLogs
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
