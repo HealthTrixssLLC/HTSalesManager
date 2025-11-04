@@ -1,7 +1,7 @@
 {
   "source_file": "All Contacts 11-2-2025 12-13-36 PM.xlsx",
   "sheet_name": "All Contacts",
-  "target_template": "contacts-template.csv",
+  "target_template": "dynamics_contacts_template.csv",
   "column_mapping": {
     "First Name": "firstName",
     "Last Name": "lastName",
