@@ -58,9 +58,11 @@ export default function ActivityDetailPage() {
     enabled: !!activityId,
   });
 
-  const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
+  const { data: users = [], isLoading: usersLoading } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
   });
+
+  console.log("Users data in activity detail:", users, "Loading:", usersLoading, "Count:", users.length);
 
   const deleteAssociationMutation = useMutation({
     mutationFn: async (associationId: string) => {

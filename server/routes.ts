@@ -1257,6 +1257,50 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Bulk update activities - MUST be before /:id route
+  app.patch("/api/activities/bulk-update", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { activityIds, updates } = req.body;
+      
+      if (!Array.isArray(activityIds) || activityIds.length === 0) {
+        return res.status(400).json({ error: "Activity IDs are required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates are required" });
+      }
+      
+      // Convert string dates to Date objects for database storage
+      const processedUpdates = { ...updates };
+      if (processedUpdates.dueAt) {
+        processedUpdates.dueAt = new Date(processedUpdates.dueAt);
+      }
+      if (processedUpdates.completedAt) {
+        processedUpdates.completedAt = new Date(processedUpdates.completedAt);
+      }
+      
+      const updatedActivities = [];
+      
+      for (const activityId of activityIds) {
+        const before = await storage.getActivityById(activityId);
+        if (before) {
+          const activity = await storage.updateActivity(activityId, processedUpdates);
+          await createAudit(req, "update", "Activity", activity.id, before, activity);
+          updatedActivities.push(activity);
+        }
+      }
+      
+      return res.json({ 
+        success: true, 
+        updated: updatedActivities.length,
+        activities: updatedActivities 
+      });
+    } catch (error) {
+      console.error("Failed to bulk update activities:", error);
+      return res.status(500).json({ error: "Failed to bulk update activities" });
+    }
+  });
+  
   app.patch("/api/activities/:id", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
     try {
       const before = await storage.getActivityById(req.params.id);
@@ -1298,50 +1342,6 @@ export function registerRoutes(app: Express) {
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: "Failed to delete activity" });
-    }
-  });
-  
-  // Bulk update activities
-  app.patch("/api/activities/bulk-update", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
-    try {
-      const { activityIds, updates } = req.body;
-      
-      if (!Array.isArray(activityIds) || activityIds.length === 0) {
-        return res.status(400).json({ error: "Activity IDs are required" });
-      }
-      
-      if (!updates || typeof updates !== 'object') {
-        return res.status(400).json({ error: "Updates are required" });
-      }
-      
-      // Convert string dates to Date objects for database storage
-      const processedUpdates = { ...updates };
-      if (processedUpdates.dueAt) {
-        processedUpdates.dueAt = new Date(processedUpdates.dueAt);
-      }
-      if (processedUpdates.completedAt) {
-        processedUpdates.completedAt = new Date(processedUpdates.completedAt);
-      }
-      
-      const updatedActivities = [];
-      
-      for (const activityId of activityIds) {
-        const before = await storage.getActivityById(activityId);
-        if (before) {
-          const activity = await storage.updateActivity(activityId, processedUpdates);
-          await createAudit(req, "update", "Activity", activity.id, before, activity);
-          updatedActivities.push(activity);
-        }
-      }
-      
-      return res.json({ 
-        success: true, 
-        updated: updatedActivities.length,
-        activities: updatedActivities 
-      });
-    } catch (error) {
-      console.error("Failed to bulk update activities:", error);
-      return res.status(500).json({ error: "Failed to bulk update activities" });
     }
   });
   

@@ -169,10 +169,13 @@ export default function ActivitiesPage() {
   };
 
   const handleBulkChangeDueDate = () => {
-    if (!bulkDueDate) {
+    console.log("Bulk due date value:", bulkDueDate, "Type:", typeof bulkDueDate, "Length:", bulkDueDate?.length);
+    if (!bulkDueDate || bulkDueDate.trim() === "") {
+      console.log("Validation failed - no due date selected");
       toast({ title: "Please select a due date", variant: "destructive" });
       return;
     }
+    console.log("Submitting bulk update with dueAt:", bulkDueDate);
     bulkUpdateMutation.mutate({
       activityIds: Array.from(selectedActivityIds),
       updates: { dueAt: bulkDueDate },
