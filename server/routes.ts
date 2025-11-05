@@ -1235,7 +1235,15 @@ export function registerRoutes(app: Express) {
   app.post("/api/activities", authenticate, requirePermission("Activity", "create"), async (req: AuthRequest, res) => {
     try {
       const data = insertActivitySchema.parse(req.body);
-      const activity = await storage.createActivity(data);
+      
+      // Convert string dates to Date objects for database storage
+      const activityData = {
+        ...data,
+        dueAt: data.dueAt ? new Date(data.dueAt) : null,
+        completedAt: data.completedAt ? new Date(data.completedAt) : null,
+      };
+      
+      const activity = await storage.createActivity(activityData as any);
       
       await createAudit(req, "create", "Activity", activity.id, null, activity);
       
@@ -1244,6 +1252,7 @@ export function registerRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
+      console.error("Failed to create activity:", error);
       return res.status(500).json({ error: "Failed to create activity" });
     }
   });
@@ -1255,7 +1264,16 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
-      const activity = await storage.updateActivity(req.params.id, req.body);
+      // Convert string dates to Date objects for database storage
+      const updates = { ...req.body };
+      if (updates.dueAt) {
+        updates.dueAt = new Date(updates.dueAt);
+      }
+      if (updates.completedAt) {
+        updates.completedAt = new Date(updates.completedAt);
+      }
+      
+      const activity = await storage.updateActivity(req.params.id, updates);
       
       await createAudit(req, "update", "Activity", activity.id, before, activity);
       
@@ -1296,12 +1314,21 @@ export function registerRoutes(app: Express) {
         return res.status(400).json({ error: "Updates are required" });
       }
       
+      // Convert string dates to Date objects for database storage
+      const processedUpdates = { ...updates };
+      if (processedUpdates.dueAt) {
+        processedUpdates.dueAt = new Date(processedUpdates.dueAt);
+      }
+      if (processedUpdates.completedAt) {
+        processedUpdates.completedAt = new Date(processedUpdates.completedAt);
+      }
+      
       const updatedActivities = [];
       
       for (const activityId of activityIds) {
         const before = await storage.getActivityById(activityId);
         if (before) {
-          const activity = await storage.updateActivity(activityId, updates);
+          const activity = await storage.updateActivity(activityId, processedUpdates);
           await createAudit(req, "update", "Activity", activity.id, before, activity);
           updatedActivities.push(activity);
         }
