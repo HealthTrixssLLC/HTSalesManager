@@ -431,11 +431,12 @@ export default function ActivityDetailPage() {
                       <FormLabel>Due Date</FormLabel>
                       <FormControl>
                         <Input 
-                          type="datetime-local" 
+                          type="date" 
                           {...field} 
-                          value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ""}
+                          value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
                           onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          data-testid="input-edit-activity-due-date" 
+                          data-testid="input-edit-activity-due-date"
+                          className="w-full"
                         />
                       </FormControl>
                       <FormMessage />
