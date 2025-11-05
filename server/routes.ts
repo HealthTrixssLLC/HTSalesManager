@@ -1189,6 +1189,41 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Bulk update activities
+  app.patch("/api/activities/bulk-update", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { activityIds, updates } = req.body;
+      
+      if (!Array.isArray(activityIds) || activityIds.length === 0) {
+        return res.status(400).json({ error: "Activity IDs are required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates are required" });
+      }
+      
+      const updatedActivities = [];
+      
+      for (const activityId of activityIds) {
+        const before = await storage.getActivityById(activityId);
+        if (before) {
+          const activity = await storage.updateActivity(activityId, updates);
+          await createAudit(req, "update", "Activity", activity.id, before, activity);
+          updatedActivities.push(activity);
+        }
+      }
+      
+      return res.json({ 
+        success: true, 
+        updated: updatedActivities.length,
+        activities: updatedActivities 
+      });
+    } catch (error) {
+      console.error("Failed to bulk update activities:", error);
+      return res.status(500).json({ error: "Failed to bulk update activities" });
+    }
+  });
+  
   // Get related data for an activity (polymorphic parent entity)
   app.get("/api/activities/:id/related", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
     try {
