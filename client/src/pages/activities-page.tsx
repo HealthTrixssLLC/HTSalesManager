@@ -66,11 +66,16 @@ export default function ActivitiesPage() {
     status: true,
     priority: true,
     dueDate: true,
+    owner: true,
     notes: true,
   });
 
   const { data: activities, isLoading } = useQuery<Activity[]>({
     queryKey: ["/api/activities"],
+  });
+
+  const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
+    queryKey: ["/api/users"],
   });
 
   const createMutation = useMutation({
@@ -380,6 +385,30 @@ export default function ActivitiesPage() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="ownerId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Owner *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-activity-owner">
+                              <SelectValue placeholder="Select owner" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {users.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
@@ -640,6 +669,11 @@ export default function ActivitiesPage() {
                               {activity.relatedType && (
                                 <span className="text-xs text-muted-foreground">
                                   Related to: {activity.relatedType} {activity.relatedId}
+                                </span>
+                              )}
+                              {visibleColumns.owner && activity.ownerId && (
+                                <span className="text-xs text-muted-foreground">
+                                  Owner: {users.find(u => u.id === activity.ownerId)?.name || "Unknown"}
                                 </span>
                               )}
                             </div>
