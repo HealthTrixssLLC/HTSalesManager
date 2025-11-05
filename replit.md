@@ -18,7 +18,10 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 **Technical Implementations & Feature Specifications:**
 
 *   **Core CRM Entities**: Accounts, Contacts, Leads, Opportunities, and Activities with dedicated CRUD pages and detail views. Entity detail pages include full information display, related entities, a comments system, and navigation.
-*   **Activity Bulk Operations**: Supports multi-select, bulk reassignment of owners, and bulk due date changes.
+*   **Activity Management**: 
+    *   **Bulk Operations**: Multi-select with checkboxes, bulk reassignment of owners, and bulk due date changes via dedicated dialogs.
+    *   **Summary Statistics**: Real-time dashboard cards showing Total Activities, By Status (pending/completed/cancelled), Overdue (high priority), and Due This Week (meetings/calls). Statistics update automatically after any activity changes.
+    *   **Date Handling**: Consistent string-based date handling (YYYY-MM-DD format) for activity due dates with proper form validation.
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and a Role-Based Access Control (RBAC) framework (Admin, SalesManager, SalesRep, ReadOnly).
 *   **Lead Management**: Multi-step Lead Conversion Wizard with duplicate detection.
 *   **Opportunity Management**: Kanban board for pipeline management and a Sales Waterfall Dashboard for annual sales target tracking.
