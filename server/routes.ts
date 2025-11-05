@@ -913,6 +913,46 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to convert lead" });
     }
   });
+
+  // Update lead
+  app.patch("/api/leads/:id", authenticate, requirePermission("Lead", "update"), async (req: AuthRequest, res) => {
+    try {
+      const leadId = req.params.id;
+      const lead = await storage.getLeadById(leadId);
+      
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+
+      const updatedLead = await storage.updateLead(leadId, req.body);
+      await createAudit(req, "update", "Lead", leadId, lead, updatedLead);
+      
+      return res.json(updatedLead);
+    } catch (error) {
+      console.error("Lead update error:", error);
+      return res.status(500).json({ error: "Failed to update lead" });
+    }
+  });
+
+  // Delete lead
+  app.delete("/api/leads/:id", authenticate, requirePermission("Lead", "delete"), async (req: AuthRequest, res) => {
+    try {
+      const leadId = req.params.id;
+      const lead = await storage.getLeadById(leadId);
+      
+      if (!lead) {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+
+      await storage.deleteLead(leadId);
+      await createAudit(req, "delete", "Lead", leadId, lead, null);
+      
+      return res.json({ success: true, message: "Lead deleted successfully" });
+    } catch (error) {
+      console.error("Lead delete error:", error);
+      return res.status(500).json({ error: "Failed to delete lead" });
+    }
+  });
   
   // ========== OPPORTUNITIES ROUTES ==========
   
