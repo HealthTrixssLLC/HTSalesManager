@@ -201,6 +201,25 @@ export function registerRoutes(app: Express) {
     return res.json(req.user);
   });
   
+  // Get all users (for dropdowns)
+  app.get("/api/users", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const allUsers = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        })
+        .from(users)
+        .where(eq(users.status, "active"));
+      
+      return res.json(allUsers);
+    } catch (error) {
+      console.error("Failed to fetch users:", error);
+      return res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+  
   // ========== ACCOUNTS ROUTES ==========
   
   // Get accounts summary statistics
