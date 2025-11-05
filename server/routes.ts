@@ -1242,19 +1242,27 @@ export function registerRoutes(app: Express) {
       // Fetch entity details for each association
       const associationsWithDetails = await Promise.all(
         associations.map(async (assoc) => {
-          let entityDetails = null;
+          let entityDetails: any = null;
+          let entityName = "";
+          
           if (assoc.entityType === "Account") {
             entityDetails = await storage.getAccountById(assoc.entityId);
+            entityName = entityDetails?.name || assoc.entityId;
           } else if (assoc.entityType === "Contact") {
             entityDetails = await storage.getContactById(assoc.entityId);
+            entityName = entityDetails ? `${entityDetails.firstName} ${entityDetails.lastName}` : assoc.entityId;
           } else if (assoc.entityType === "Lead") {
             entityDetails = await storage.getLeadById(assoc.entityId);
+            entityName = entityDetails ? `${entityDetails.firstName} ${entityDetails.lastName}` : assoc.entityId;
           } else if (assoc.entityType === "Opportunity") {
             entityDetails = await storage.getOpportunityById(assoc.entityId);
+            entityName = entityDetails?.name || assoc.entityId;
           }
+          
           return {
             ...assoc,
             entity: entityDetails,
+            entityName,
           };
         })
       );
