@@ -145,8 +145,8 @@ export default function ActivityDetailPage() {
       subject: activity?.subject || "",
       status: activity?.status || "pending",
       priority: activity?.priority || "medium",
-      dueAt: activity?.dueAt ? new Date(activity.dueAt) : null,
-      completedAt: activity?.completedAt ? new Date(activity.completedAt) : null,
+      dueAt: activity?.dueAt || null,
+      completedAt: activity?.completedAt || null,
       ownerId: activity?.ownerId || "",
       relatedType: activity?.relatedType || "",
       relatedId: activity?.relatedId || "",
@@ -234,8 +234,8 @@ export default function ActivityDetailPage() {
           subject: activity.subject,
           status: activity.status,
           priority: activity.priority,
-          dueAt: activity.dueAt ? new Date(activity.dueAt) : null,
-          completedAt: activity.completedAt ? new Date(activity.completedAt) : null,
+          dueAt: activity.dueAt,
+          completedAt: activity.completedAt,
           ownerId: activity.ownerId,
           relatedType: activity.relatedType || "",
           relatedId: activity.relatedId || "",
@@ -434,7 +434,7 @@ export default function ActivityDetailPage() {
                           type="date" 
                           {...field} 
                           value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
                           data-testid="input-edit-activity-due-date"
                           className="w-full"
                         />
