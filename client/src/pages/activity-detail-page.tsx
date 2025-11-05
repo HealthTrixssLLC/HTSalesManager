@@ -155,7 +155,12 @@ export default function ActivityDetailPage() {
   });
 
   const onSubmit = (data: InsertActivity) => {
-    updateMutation.mutate(data);
+    const submitData = {
+      ...data,
+      dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
+      completedAt: data.completedAt ? new Date(data.completedAt).toISOString() : null,
+    };
+    updateMutation.mutate(submitData as any);
   };
 
   if (activityLoading || relatedLoading) {
@@ -234,13 +239,13 @@ export default function ActivityDetailPage() {
           subject: activity.subject,
           status: activity.status,
           priority: activity.priority,
-          dueAt: activity.dueAt,
-          completedAt: activity.completedAt,
+          dueAt: activity.dueAt ? new Date(activity.dueAt).toISOString().split('T')[0] : null,
+          completedAt: activity.completedAt ? new Date(activity.completedAt).toISOString().split('T')[0] : null,
           ownerId: activity.ownerId,
           relatedType: activity.relatedType || "",
           relatedId: activity.relatedId || "",
           notes: activity.notes || "",
-        });
+        } as any);
         setEditAssociations(
           associations.map((a) => ({
             entityType: a.entityType,
@@ -432,9 +437,8 @@ export default function ActivityDetailPage() {
                       <FormControl>
                         <Input 
                           type="date" 
-                          {...field} 
-                          value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
+                          value={field.value || ""}
+                          onChange={(e) => field.onChange(e.target.value || null)}
                           data-testid="input-edit-activity-due-date"
                           className="w-full"
                         />
