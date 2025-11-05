@@ -52,6 +52,13 @@ export default function ActivitiesPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [associations, setAssociations] = useState<Association[]>([]);
   
+  // Bulk operations state
+  const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
+  const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
+  const [isChangeDueDateDialogOpen, setIsChangeDueDateDialogOpen] = useState(false);
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
+  const [bulkDueDate, setBulkDueDate] = useState("");
+  
   // Filter and sort state
   const [filters, setFilters] = useState<Filters>({
     type: [],
@@ -106,6 +113,68 @@ export default function ActivitiesPage() {
       toast({ title: "Failed to create activity", description: error.message, variant: "destructive" });
     },
   });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ activityIds, updates }: { activityIds: string[]; updates: Partial<InsertActivity> }) => {
+      const res = await apiRequest("PATCH", "/api/activities/bulk-update", { activityIds, updates });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      toast({ title: `Successfully updated ${data.updated} activities` });
+      setSelectedActivityIds(new Set());
+      setIsReassignDialogOpen(false);
+      setIsChangeDueDateDialogOpen(false);
+      setBulkOwnerId("");
+      setBulkDueDate("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to bulk update activities", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Bulk selection helpers
+  const toggleActivitySelection = (activityId: string) => {
+    const newSelection = new Set(selectedActivityIds);
+    if (newSelection.has(activityId)) {
+      newSelection.delete(activityId);
+    } else {
+      newSelection.add(activityId);
+    }
+    setSelectedActivityIds(newSelection);
+  };
+
+  const selectAllActivities = () => {
+    if (filteredAndSortedActivities) {
+      setSelectedActivityIds(new Set(filteredAndSortedActivities.map(a => a.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedActivityIds(new Set());
+  };
+
+  const handleBulkReassign = () => {
+    if (!bulkOwnerId) {
+      toast({ title: "Please select an owner", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      activityIds: Array.from(selectedActivityIds),
+      updates: { ownerId: bulkOwnerId },
+    });
+  };
+
+  const handleBulkChangeDueDate = () => {
+    if (!bulkDueDate) {
+      toast({ title: "Please select a due date", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      activityIds: Array.from(selectedActivityIds),
+      updates: { dueAt: new Date(bulkDueDate).toISOString() },
+    });
+  };
 
   const form = useForm<InsertActivity>({
     resolver: zodResolver(insertActivitySchema),
@@ -481,6 +550,55 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
+      {/* Bulk Actions Toolbar */}
+      {selectedActivityIds.size > 0 && (
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium">
+                {selectedActivityIds.size} {selectedActivityIds.size === 1 ? 'activity' : 'activities'} selected
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAllActivities}
+                  data-testid="button-select-all"
+                >
+                  Select All ({filteredAndSortedActivities?.length || 0})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearSelection}
+                  data-testid="button-clear-selection"
+                >
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsReassignDialogOpen(true)}
+                data-testid="button-bulk-reassign"
+              >
+                Reassign Owner
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsChangeDueDateDialogOpen(true)}
+                data-testid="button-bulk-change-due-date"
+              >
+                Change Due Date
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filter, Sort, and Column Controls */}
       <div className="flex gap-2 flex-wrap">
         {/* Filter Controls */}
@@ -640,16 +758,25 @@ export default function ActivitiesPage() {
             <div className="space-y-4">
               {filteredAndSortedActivities.map((activity) => {
                 const Icon = activityIcons[activity.type];
+                const isSelected = selectedActivityIds.has(activity.id);
                 return (
                   <Card 
                     key={activity.id} 
-                    className="p-4 cursor-pointer hover-elevate active-elevate-2" 
+                    className={`p-4 ${isSelected ? 'border-primary bg-primary/5' : ''}`}
                     data-testid={`card-activity-${activity.id}`}
-                    onClick={() => setLocation(`/activities/${activity.id}`)}
                   >
                     <div className="flex gap-4">
-                      <div className="flex-shrink-0">
-                        <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center">
+                      <div className="flex-shrink-0 flex items-center gap-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleActivitySelection(activity.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`checkbox-activity-${activity.id}`}
+                        />
+                        <div 
+                          className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center cursor-pointer hover-elevate active-elevate-2"
+                          onClick={() => setLocation(`/activities/${activity.id}`)}
+                        >
                           <Icon className="h-5 w-5 text-primary" />
                         </div>
                       </div>
@@ -699,6 +826,84 @@ export default function ActivitiesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Reassign Owner Dialog */}
+      <Dialog open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reassign Owner</DialogTitle>
+            <DialogDescription>
+              Assign the selected {selectedActivityIds.size} {selectedActivityIds.size === 1 ? 'activity' : 'activities'} to a new owner
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-owner">New Owner</Label>
+              <Select value={bulkOwnerId} onValueChange={setBulkOwnerId}>
+                <SelectTrigger id="bulk-owner" data-testid="select-bulk-owner">
+                  <SelectValue placeholder="Select an owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReassignDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkReassign}
+              disabled={bulkUpdateMutation.isPending}
+              data-testid="button-confirm-bulk-reassign"
+            >
+              {bulkUpdateMutation.isPending ? "Reassigning..." : "Reassign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Due Date Dialog */}
+      <Dialog open={isChangeDueDateDialogOpen} onOpenChange={setIsChangeDueDateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Due Date</DialogTitle>
+            <DialogDescription>
+              Set a new due date for the selected {selectedActivityIds.size} {selectedActivityIds.size === 1 ? 'activity' : 'activities'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="bulk-due-date">New Due Date</Label>
+              <Input
+                id="bulk-due-date"
+                type="date"
+                value={bulkDueDate}
+                onChange={(e) => setBulkDueDate(e.target.value)}
+                data-testid="input-bulk-due-date"
+                className="w-full"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsChangeDueDateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkChangeDueDate}
+              disabled={bulkUpdateMutation.isPending}
+              data-testid="button-confirm-bulk-due-date"
+            >
+              {bulkUpdateMutation.isPending ? "Updating..." : "Update Due Date"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
