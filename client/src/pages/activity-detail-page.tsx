@@ -58,6 +58,10 @@ export default function ActivityDetailPage() {
     enabled: !!activityId,
   });
 
+  const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
+    queryKey: ["/api/users"],
+  });
+
   const deleteAssociationMutation = useMutation({
     mutationFn: async (associationId: string) => {
       await apiRequest("DELETE", `/api/activity-associations/${associationId}`);
@@ -451,6 +455,30 @@ export default function ActivityDetailPage() {
                   )}
                 />
               </div>
+              <FormField
+                control={form.control}
+                name="ownerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Owner</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-edit-activity-owner">
+                          <SelectValue placeholder="Select owner" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name} ({u.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}

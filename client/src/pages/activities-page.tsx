@@ -175,7 +175,7 @@ export default function ActivitiesPage() {
     }
     bulkUpdateMutation.mutate({
       activityIds: Array.from(selectedActivityIds),
-      updates: { dueAt: new Date(bulkDueDate).toISOString() },
+      updates: { dueAt: bulkDueDate },
     });
   };
 
