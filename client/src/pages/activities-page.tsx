@@ -115,7 +115,7 @@ export default function ActivitiesPage() {
   });
 
   const bulkUpdateMutation = useMutation({
-    mutationFn: async ({ activityIds, updates }: { activityIds: string[]; updates: Partial<InsertActivity> }) => {
+    mutationFn: async ({ activityIds, updates }: { activityIds: string[]; updates: any }) => {
       const res = await apiRequest("PATCH", "/api/activities/bulk-update", { activityIds, updates });
       return await res.json();
     },
