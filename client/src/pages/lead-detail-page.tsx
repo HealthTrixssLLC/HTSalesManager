@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Loader2, ArrowRight } from "lucide-react";
@@ -80,34 +80,36 @@ export default function LeadDetailPage() {
   const form = useForm<InsertLead>({
     resolver: zodResolver(insertLeadSchema),
     defaultValues: {
-      id: lead?.id || "",
-      firstName: lead?.firstName || "",
-      lastName: lead?.lastName || "",
-      company: lead?.company || "",
-      email: lead?.email || "",
-      phone: lead?.phone || "",
-      topic: lead?.topic || "",
-      status: lead?.status || "new",
-      source: lead?.source || undefined,
-      ownerId: lead?.ownerId || undefined,
+      id: "",
+      firstName: "",
+      lastName: "",
+      company: "",
+      email: "",
+      phone: "",
+      topic: "",
+      status: "new",
+      source: undefined,
+      ownerId: undefined,
     },
   });
 
-  // Update form when lead data loads
-  if (lead && !isEditDialogOpen) {
-    form.reset({
-      id: lead.id,
-      firstName: lead.firstName,
-      lastName: lead.lastName,
-      company: lead.company || "",
-      email: lead.email || "",
-      phone: lead.phone || "",
-      topic: lead.topic || "",
-      status: lead.status,
-      source: lead.source || undefined,
-      ownerId: lead.ownerId || undefined,
-    });
-  }
+  // Update form when lead data loads or dialog opens
+  useEffect(() => {
+    if (lead && isEditDialogOpen) {
+      form.reset({
+        id: lead.id,
+        firstName: lead.firstName,
+        lastName: lead.lastName,
+        company: lead.company || "",
+        email: lead.email || "",
+        phone: lead.phone || "",
+        topic: lead.topic || "",
+        status: lead.status,
+        source: lead.source || undefined,
+        ownerId: lead.ownerId || undefined,
+      });
+    }
+  }, [lead, isEditDialogOpen, form]);
 
   const onSubmitEdit = (data: InsertLead) => {
     editMutation.mutate(data);
