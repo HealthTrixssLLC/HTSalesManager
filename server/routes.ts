@@ -1167,6 +1167,7 @@ export function registerRoutes(app: Express) {
       
       return res.json(activity);
     } catch (error) {
+      console.error("Failed to update activity:", error);
       return res.status(500).json({ error: "Failed to update activity" });
     }
   });
