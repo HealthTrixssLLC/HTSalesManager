@@ -114,6 +114,7 @@ export default function ActivityDetailPage() {
 
       queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId, "associations"] });
       toast({ title: "Activity updated successfully" });
       setIsEditDialogOpen(false);
@@ -129,6 +130,8 @@ export default function ActivityDetailPage() {
       return await res.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
       toast({ title: "Activity deleted successfully" });
       setLocation("/activities");
     },

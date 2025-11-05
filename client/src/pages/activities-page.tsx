@@ -23,6 +23,7 @@ import { AssociationManager, Association } from "@/components/association-manage
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { ActivitiesSummaryCards } from "@/components/activities-summary-cards";
 
 const activityIcons = {
   call: Phone,
@@ -104,6 +105,7 @@ export default function ActivitiesPage() {
       }
       
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
       toast({ title: "Activity created successfully" });
       setIsCreateDialogOpen(false);
       setAssociations([]);
@@ -121,6 +123,7 @@ export default function ActivitiesPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
       toast({ title: `Successfully updated ${data.updated} activities` });
       setSelectedActivityIds(new Set());
       setIsReassignDialogOpen(false);
@@ -598,6 +601,9 @@ export default function ActivitiesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Summary Statistics */}
+      <ActivitiesSummaryCards />
 
       {/* Filter, Sort, and Column Controls */}
       <div className="flex gap-2 flex-wrap">

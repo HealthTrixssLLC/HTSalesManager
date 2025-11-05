@@ -1126,6 +1126,100 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.get("/api/activities/summary", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      const allActivities = await storage.getAllActivities();
+      const allUsers = await storage.getAllUsers();
+      
+      // Total count
+      const totalCount = allActivities.length;
+      
+      // Breakdown by status
+      const byStatus = {
+        pending: allActivities.filter(a => a.status === "pending").length,
+        completed: allActivities.filter(a => a.status === "completed").length,
+        cancelled: allActivities.filter(a => a.status === "cancelled").length,
+      };
+      
+      // Breakdown by type
+      const byType = {
+        call: allActivities.filter(a => a.type === "call").length,
+        email: allActivities.filter(a => a.type === "email").length,
+        meeting: allActivities.filter(a => a.type === "meeting").length,
+        task: allActivities.filter(a => a.type === "task").length,
+        note: allActivities.filter(a => a.type === "note").length,
+      };
+      
+      // Breakdown by priority
+      const byPriority = {
+        high: allActivities.filter(a => a.priority === "high").length,
+        medium: allActivities.filter(a => a.priority === "medium").length,
+        low: allActivities.filter(a => a.priority === "low").length,
+      };
+      
+      // Time-based metrics
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      // Overdue activities (pending with due date in the past)
+      const overdueActivities = allActivities.filter(a => 
+        a.status === "pending" && a.dueAt && new Date(a.dueAt) < now
+      );
+      const overdue = overdueActivities.length;
+      const overdueHighPriority = overdueActivities.filter(a => a.priority === "high").length;
+      
+      // Due this week (pending with due date in next 7 days)
+      const dueThisWeekActivities = allActivities.filter(a =>
+        a.status === "pending" && a.dueAt && 
+        new Date(a.dueAt) >= now && new Date(a.dueAt) <= sevenDaysFromNow
+      );
+      const dueThisWeek = dueThisWeekActivities.length;
+      const dueThisWeekByType = {
+        meeting: dueThisWeekActivities.filter(a => a.type === "meeting").length,
+        call: dueThisWeekActivities.filter(a => a.type === "call").length,
+      };
+      
+      // Recent additions
+      const last7Days = allActivities.filter(a => new Date(a.createdAt) >= sevenDaysAgo).length;
+      
+      // Count by owner
+      const ownerMap = new Map<string, { count: number; ownerName: string }>();
+      allActivities.forEach(a => {
+        if (a.ownerId) {
+          const owner = allUsers.find(u => u.id === a.ownerId);
+          const ownerName = owner ? owner.name : "Unknown";
+          const current = ownerMap.get(a.ownerId);
+          ownerMap.set(a.ownerId, {
+            count: (current?.count || 0) + 1,
+            ownerName,
+          });
+        }
+      });
+      const byOwner = Object.fromEntries(
+        Array.from(ownerMap.entries()).map(([id, data]) => [id, data])
+      );
+      
+      return res.json({
+        totalCount,
+        byStatus,
+        byType,
+        byPriority,
+        overdue,
+        overdueHighPriority,
+        dueThisWeek,
+        dueThisWeekByType,
+        recentAdditions: {
+          last7Days,
+        },
+        byOwner,
+      });
+    } catch (error) {
+      console.error("Activities summary error:", error);
+      return res.status(500).json({ error: "Failed to fetch activities summary" });
+    }
+  });
+  
   app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
     try {
       const activity = await storage.getActivityById(req.params.id);
