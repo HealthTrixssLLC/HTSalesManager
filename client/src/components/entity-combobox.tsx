@@ -57,6 +57,20 @@ export function EntityCombobox({
   // Fetch search results
   const { data: searchResults = [], isLoading } = useQuery<EntitySearchResult[]>({
     queryKey: ["/api/entities/search", { q: debouncedQuery, type: entityType }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("q", debouncedQuery);
+      if (entityType) {
+        params.append("type", entityType);
+      }
+      const res = await fetch(`/api/entities/search?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to search entities");
+      }
+      return await res.json();
+    },
     enabled: debouncedQuery.length > 0,
   });
 
