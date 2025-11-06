@@ -141,7 +141,31 @@ export class PostgresStorage implements IStorage {
   // ========== ACCOUNTS ==========
   
   async getAllAccounts(): Promise<Account[]> {
-    return await db.select().from(schema.accounts);
+    // Use raw SQL for tag aggregation to avoid N+1 queries
+    const result: any[] = await db.execute(sql`
+      SELECT 
+        a.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', t.id,
+              'name', t.name,
+              'color', t.color,
+              'createdBy', t.created_by,
+              'createdAt', t.created_at,
+              'updatedAt', t.updated_at
+            )
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'::json
+        ) as tags
+      FROM accounts a
+      LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity_type = 'Account'
+      LEFT JOIN tags t ON t.id = et.tag_id
+      GROUP BY a.id
+      ORDER BY a.created_at DESC
+    `);
+    
+    return result.rows || result;
   }
   
   async getAccountById(id: string): Promise<Account | undefined> {
@@ -173,7 +197,31 @@ export class PostgresStorage implements IStorage {
   // ========== CONTACTS ==========
   
   async getAllContacts(): Promise<Contact[]> {
-    return await db.select().from(schema.contacts);
+    // Use raw SQL for tag aggregation to avoid N+1 queries
+    const result: any[] = await db.execute(sql`
+      SELECT 
+        c.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', t.id,
+              'name', t.name,
+              'color', t.color,
+              'createdBy', t.created_by,
+              'createdAt', t.created_at,
+              'updatedAt', t.updated_at
+            )
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'::json
+        ) as tags
+      FROM contacts c
+      LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity_type = 'Contact'
+      LEFT JOIN tags t ON t.id = et.tag_id
+      GROUP BY c.id
+      ORDER BY c.created_at DESC
+    `);
+    
+    return result.rows || result;
   }
   
   async getContactById(id: string): Promise<Contact | undefined> {
@@ -204,7 +252,31 @@ export class PostgresStorage implements IStorage {
   // ========== LEADS ==========
   
   async getAllLeads(): Promise<Lead[]> {
-    return await db.select().from(schema.leads);
+    // Use raw SQL for tag aggregation to avoid N+1 queries
+    const result: any[] = await db.execute(sql`
+      SELECT 
+        l.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', t.id,
+              'name', t.name,
+              'color', t.color,
+              'createdBy', t.created_by,
+              'createdAt', t.created_at,
+              'updatedAt', t.updated_at
+            )
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'::json
+        ) as tags
+      FROM leads l
+      LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity_type = 'Lead'
+      LEFT JOIN tags t ON t.id = et.tag_id
+      GROUP BY l.id
+      ORDER BY l.created_at DESC
+    `);
+    
+    return result.rows || result;
   }
   
   async getLeadById(id: string): Promise<Lead | undefined> {
@@ -235,7 +307,31 @@ export class PostgresStorage implements IStorage {
   // ========== OPPORTUNITIES ==========
   
   async getAllOpportunities(): Promise<Opportunity[]> {
-    return await db.select().from(schema.opportunities);
+    // Use raw SQL for tag aggregation to avoid N+1 queries
+    const result: any[] = await db.execute(sql`
+      SELECT 
+        o.*,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', t.id,
+              'name', t.name,
+              'color', t.color,
+              'createdBy', t.created_by,
+              'createdAt', t.created_at,
+              'updatedAt', t.updated_at
+            )
+          ) FILTER (WHERE t.id IS NOT NULL),
+          '[]'::json
+        ) as tags
+      FROM opportunities o
+      LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity_type = 'Opportunity'
+      LEFT JOIN tags t ON t.id = et.tag_id
+      GROUP BY o.id
+      ORDER BY o.created_at DESC
+    `);
+    
+    return result.rows || result;
   }
   
   async getOpportunityById(id: string): Promise<Opportunity | undefined> {

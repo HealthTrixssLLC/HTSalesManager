@@ -79,25 +79,6 @@ export default function OpportunitiesPage() {
     queryKey: ["/api/tags"],
   });
 
-  // Fetch all entity tags for client-side filtering
-  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
-    queryKey: ["/api/entity-tags-opportunities"],
-    queryFn: async () => {
-      // Fetch tags for all opportunities
-      const opportunityTagsPromises = (opportunities || []).map(async (opportunity) => {
-        const res = await fetch(`/api/opportunities/${opportunity.id}/tags`, {
-          credentials: "include",
-        });
-        if (!res.ok) return [];
-        const tags = await res.json();
-        return tags.map((tag: any) => ({ entityId: opportunity.id, tagId: tag.id }));
-      });
-      const results = await Promise.all(opportunityTagsPromises);
-      return results.flat();
-    },
-    enabled: !!opportunities && opportunities.length > 0,
-  });
-
   const createMutation = useMutation({
     mutationFn: async (data: InsertOpportunity) => {
       const res = await apiRequest("POST", "/api/opportunities", data);
@@ -346,16 +327,17 @@ export default function OpportunitiesPage() {
       return true;
     });
 
-    // Apply client-side tag filtering
+    // Apply client-side tag filtering using tags from main query
     if (filterTagIds.length > 0) {
-      result = result.filter((opp) => {
-        const oppTags = allEntityTags?.filter(et => et.entityId === opp.id).map(et => et.tagId) || [];
-        return filterTagIds.some(tagId => oppTags.includes(tagId));
+      result = result.filter((opp: any) => {
+        const oppTags = opp.tags || [];
+        const oppTagIds = oppTags.map((tag: any) => tag.id);
+        return filterTagIds.some(tagId => oppTagIds.includes(tagId));
       });
     }
 
     return result;
-  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, allEntityTags]);
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds]);
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
@@ -847,10 +829,9 @@ export default function OpportunitiesPage() {
                       )}
                       <div className="flex gap-1 flex-wrap" data-testid={`tags-${opp.id}`}>
                         {(() => {
-                          const oppTags = allEntityTags?.filter(et => et.entityId === opp.id).map(et => et.tagId) || [];
-                          const tagObjects = oppTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                          const oppTags = (opp as any).tags || [];
                           
-                          return tagObjects.map((tag: any) => (
+                          return oppTags.map((tag: any) => (
                             <Badge 
                               key={tag.id} 
                               variant="outline"

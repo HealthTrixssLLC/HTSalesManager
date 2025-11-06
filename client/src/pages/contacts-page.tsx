@@ -109,40 +109,22 @@ export default function ContactsPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch all tags for display
+  // Fetch all tags for display (for tag filter dropdown)
   const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
     queryKey: ["/api/tags"],
   });
 
-  // Fetch all entity tags for client-side filtering
-  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
-    queryKey: ["/api/entity-tags-contacts"],
-    queryFn: async () => {
-      // Fetch tags for all contacts
-      const contactTagsPromises = (allContacts || []).map(async (contact) => {
-        const res = await fetch(`/api/contacts/${contact.id}/tags`, {
-          credentials: "include",
-        });
-        if (!res.ok) return [];
-        const tags = await res.json();
-        return tags.map((tag: any) => ({ entityId: contact.id, tagId: tag.id }));
-      });
-      const results = await Promise.all(contactTagsPromises);
-      return results.flat();
-    },
-    enabled: !!allContacts && allContacts.length > 0,
-  });
-
-  // Apply client-side tag filtering
+  // Apply client-side tag filtering using tags from main query
   const displayedContacts = useMemo(() => {
     if (!filteredContacts) return [];
     if (filters.tagIds.length === 0) return filteredContacts;
 
-    return filteredContacts.filter((contact) => {
-      const contactTags = allEntityTags?.filter(et => et.entityId === contact.id).map(et => et.tagId) || [];
-      return filters.tagIds.some(tagId => contactTags.includes(tagId));
+    return filteredContacts.filter((contact: any) => {
+      const contactTags = contact.tags || [];
+      const contactTagIds = contactTags.map((tag: any) => tag.id);
+      return filters.tagIds.some(tagId => contactTagIds.includes(tagId));
     });
-  }, [filteredContacts, filters.tagIds, allEntityTags]);
+  }, [filteredContacts, filters.tagIds]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertContact) => {
@@ -733,14 +715,13 @@ export default function ContactsPage() {
                       <TableCell onClick={(e) => e.stopPropagation()} data-testid={`cell-tags-${contact.id}`}>
                         <div className="flex gap-1 flex-wrap">
                           {(() => {
-                            const contactTags = allEntityTags?.filter(et => et.entityId === contact.id).map(et => et.tagId) || [];
-                            const tagObjects = contactTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                            const contactTags = (contact as any).tags || [];
                             
-                            if (tagObjects.length === 0) {
+                            if (contactTags.length === 0) {
                               return <span className="text-muted-foreground text-sm">-</span>;
                             }
                             
-                            return tagObjects.map((tag: any) => (
+                            return contactTags.map((tag: any) => (
                               <Badge 
                                 key={tag.id} 
                                 variant="outline"

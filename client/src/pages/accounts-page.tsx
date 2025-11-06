@@ -118,35 +118,17 @@ export default function AccountsPage() {
     queryKey: ["/api/tags"],
   });
 
-  // Fetch all entity tags for client-side filtering
-  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
-    queryKey: ["/api/entity-tags-accounts"],
-    queryFn: async () => {
-      // Fetch tags for all accounts
-      const accountTagsPromises = (allAccounts || []).map(async (account) => {
-        const res = await fetch(`/api/accounts/${account.id}/tags`, {
-          credentials: "include",
-        });
-        if (!res.ok) return [];
-        const tags = await res.json();
-        return tags.map((tag: any) => ({ entityId: account.id, tagId: tag.id }));
-      });
-      const results = await Promise.all(accountTagsPromises);
-      return results.flat();
-    },
-    enabled: !!allAccounts && allAccounts.length > 0,
-  });
-
-  // Apply client-side tag filtering
+  // Apply client-side tag filtering using tags from main query
   const displayedAccounts = useMemo(() => {
     if (!filteredAccounts) return [];
     if (filters.tagIds.length === 0) return filteredAccounts;
 
-    return filteredAccounts.filter((account) => {
-      const accountTags = allEntityTags?.filter(et => et.entityId === account.id).map(et => et.tagId) || [];
-      return filters.tagIds.some(tagId => accountTags.includes(tagId));
+    return filteredAccounts.filter((account: any) => {
+      const accountTags = account.tags || [];
+      const accountTagIds = accountTags.map((tag: any) => tag.id);
+      return filters.tagIds.some(tagId => accountTagIds.includes(tagId));
     });
-  }, [filteredAccounts, filters.tagIds, allEntityTags]);
+  }, [filteredAccounts, filters.tagIds]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertAccount) => {
@@ -881,14 +863,13 @@ export default function AccountsPage() {
                       <TableCell onClick={(e) => e.stopPropagation()} data-testid={`cell-tags-${account.id}`}>
                         <div className="flex gap-1 flex-wrap">
                           {(() => {
-                            const accountTags = allEntityTags?.filter(et => et.entityId === account.id).map(et => et.tagId) || [];
-                            const tagObjects = accountTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                            const accountTags = (account as any).tags || [];
                             
-                            if (tagObjects.length === 0) {
+                            if (accountTags.length === 0) {
                               return <span className="text-muted-foreground text-sm">-</span>;
                             }
                             
-                            return tagObjects.map((tag: any) => (
+                            return accountTags.map((tag: any) => (
                               <Badge 
                                 key={tag.id} 
                                 variant="outline"

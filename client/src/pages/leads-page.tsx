@@ -125,35 +125,17 @@ export default function LeadsPage() {
     queryKey: ["/api/tags"],
   });
 
-  // Fetch all entity tags for client-side filtering
-  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
-    queryKey: ["/api/entity-tags"],
-    queryFn: async () => {
-      // Fetch tags for all leads
-      const leadTagsPromises = (allLeads || []).map(async (lead) => {
-        const res = await fetch(`/api/leads/${lead.id}/tags`, {
-          credentials: "include",
-        });
-        if (!res.ok) return [];
-        const tags = await res.json();
-        return tags.map((tag: any) => ({ entityId: lead.id, tagId: tag.id }));
-      });
-      const results = await Promise.all(leadTagsPromises);
-      return results.flat();
-    },
-    enabled: !!allLeads && allLeads.length > 0,
-  });
-
-  // Apply client-side tag filtering
+  // Apply client-side tag filtering using tags from main query
   const displayedLeads = useMemo(() => {
     if (!filteredLeads) return [];
     if (filters.tagIds.length === 0) return filteredLeads;
 
-    return filteredLeads.filter((lead) => {
-      const leadTags = allEntityTags?.filter(et => et.entityId === lead.id).map(et => et.tagId) || [];
-      return filters.tagIds.some(tagId => leadTags.includes(tagId));
+    return filteredLeads.filter((lead: any) => {
+      const leadTags = lead.tags || [];
+      const leadTagIds = leadTags.map((tag: any) => tag.id);
+      return filters.tagIds.some(tagId => leadTagIds.includes(tagId));
     });
-  }, [filteredLeads, filters.tagIds, allEntityTags]);
+  }, [filteredLeads, filters.tagIds]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertLead) => {
@@ -906,14 +888,13 @@ export default function LeadsPage() {
                       <TableCell onClick={(e) => e.stopPropagation()} data-testid={`cell-tags-${lead.id}`}>
                         <div className="flex gap-1 flex-wrap">
                           {(() => {
-                            const leadTags = allEntityTags?.filter(et => et.entityId === lead.id).map(et => et.tagId) || [];
-                            const tagObjects = leadTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                            const leadTags = (lead as any).tags || [];
                             
-                            if (tagObjects.length === 0) {
+                            if (leadTags.length === 0) {
                               return <span className="text-muted-foreground text-sm">-</span>;
                             }
                             
-                            return tagObjects.map((tag: any) => (
+                            return leadTags.map((tag: any) => (
                               <Badge 
                                 key={tag.id} 
                                 variant="outline"
