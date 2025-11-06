@@ -320,6 +320,32 @@ export const commentSubscriptions = pgTable("comment_subscriptions", {
   uniqueSubscription: index("comment_subscriptions_unique_idx").on(table.commentId, table.userId),
 }));
 
+// ========== TAGS SYSTEM ==========
+
+export const tags = pgTable("tags", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  color: text("color").notNull().default("#3b82f6"), // Hex color for tag badge
+  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  nameIdx: index("tags_name_idx").on(table.name),
+}));
+
+export const entityTags = pgTable("entity_tags", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  entity: text("entity").notNull(), // "Account", "Contact", "Lead", "Opportunity"
+  entityId: varchar("entity_id", { length: 100 }).notNull(), // ID of the record
+  tagId: varchar("tag_id", { length: 50 }).notNull().references(() => tags.id, { onDelete: "cascade" }),
+  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  entityIdx: index("entity_tags_entity_idx").on(table.entity, table.entityId),
+  tagIdx: index("entity_tags_tag_idx").on(table.tagId),
+  uniqueTag: index("entity_tags_unique_idx").on(table.entity, table.entityId, table.tagId),
+}));
+
 // ========== RELATIONS ==========
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -478,6 +504,16 @@ export type AccountCategory = typeof accountCategories.$inferSelect;
 export const insertBackupJobSchema = createInsertSchema(backupJobs).omit({ id: true, createdAt: true });
 export type InsertBackupJob = z.infer<typeof insertBackupJobSchema>;
 export type BackupJob = typeof backupJobs.$inferSelect;
+
+// Tags
+export const insertTagSchema = createInsertSchema(tags).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTag = z.infer<typeof insertTagSchema>;
+export type Tag = typeof tags.$inferSelect;
+
+// EntityTags
+export const insertEntityTagSchema = createInsertSchema(entityTags).omit({ id: true, createdAt: true });
+export type InsertEntityTag = z.infer<typeof insertEntityTagSchema>;
+export type EntityTag = typeof entityTags.$inferSelect;
 
 // ========== API RESPONSE TYPES ==========
 

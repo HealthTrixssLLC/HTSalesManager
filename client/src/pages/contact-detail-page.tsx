@@ -1,17 +1,32 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TagSelector } from "@/components/tag-selector";
+import type { Tag } from "@/components/ui/tag-badge";
 import type { Contact, Account, Opportunity, Activity } from "@shared/schema";
 
 export default function ContactDetailPage() {
   const [, params] = useRoute("/contacts/:id");
   const contactId = params?.id;
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: contact, isLoading: contactLoading } = useQuery<Contact>({
     queryKey: ["/api/contacts", contactId],
+    enabled: !!contactId,
+  });
+
+  const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
+    queryKey: ["tags", "contacts", contactId],
+    queryFn: async () => {
+      const res = await fetch(`/api/contacts/${contactId}/tags`);
+      if (!res.ok) throw new Error("Failed to fetch tags");
+      return res.json();
+    },
     enabled: !!contactId,
   });
 
@@ -24,7 +39,7 @@ export default function ContactDetailPage() {
     enabled: !!contactId,
   });
 
-  if (contactLoading || relatedLoading) {
+  if (contactLoading || relatedLoading || tagsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -84,6 +99,20 @@ export default function ContactDetailPage() {
               </div>
             </DetailSection>
           )}
+
+          <Card data-testid="section-tags">
+            <CardHeader>
+              <CardTitle>Tags</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TagSelector
+                selectedTags={tags}
+                onTagsChange={setSelectedTags}
+                entity="contacts"
+                entityId={contact.id}
+              />
+            </CardContent>
+          </Card>
 
           <CommentSystem entityType="Contact" entityId={contact.id} />
         </div>

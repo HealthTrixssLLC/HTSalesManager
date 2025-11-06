@@ -9,7 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { TagSelector } from "@/components/tag-selector";
+import type { Tag } from "@/components/ui/tag-badge";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -23,9 +26,20 @@ export default function OpportunityDetailPage() {
   const opportunityId = params?.id;
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
+    enabled: !!opportunityId,
+  });
+
+  const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
+    queryKey: ["tags", "opportunities", opportunityId],
+    queryFn: async () => {
+      const res = await fetch(`/api/opportunities/${opportunityId}/tags`);
+      if (!res.ok) throw new Error("Failed to fetch tags");
+      return res.json();
+    },
     enabled: !!opportunityId,
   });
 
@@ -152,7 +166,7 @@ export default function OpportunityDetailPage() {
     }
   };
 
-  if (oppLoading || relatedLoading) {
+  if (oppLoading || relatedLoading || tagsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -224,6 +238,20 @@ export default function OpportunityDetailPage() {
               </div>
             </DetailSection>
           )}
+
+          <Card data-testid="section-tags">
+            <CardHeader>
+              <CardTitle>Tags</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TagSelector
+                selectedTags={tags}
+                onTagsChange={setSelectedTags}
+                entity="opportunities"
+                entityId={opportunity.id}
+              />
+            </CardContent>
+          </Card>
 
           <CommentSystem entityType="Opportunity" entityId={opportunity.id} />
         </div>

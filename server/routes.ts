@@ -446,6 +446,36 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Bulk update accounts
+  app.post("/api/accounts/bulk-update", authenticate, requirePermission("Account", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { accountIds, updates } = req.body;
+      
+      if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+        return res.status(400).json({ error: "Account IDs array is required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates object is required" });
+      }
+      
+      let updatedCount = 0;
+      for (const accountId of accountIds) {
+        const account = await storage.getAccountById(accountId);
+        if (account) {
+          const updatedAccount = await storage.updateAccount(accountId, updates);
+          await createAudit(req, "bulk_update", "Account", accountId, account, updatedAccount);
+          updatedCount++;
+        }
+      }
+      
+      return res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Bulk update accounts error:", error);
+      return res.status(500).json({ error: "Failed to bulk update accounts" });
+    }
+  });
+  
   // ========== CONTACTS ROUTES ==========
   
   // Get contacts summary statistics
@@ -633,6 +663,36 @@ export function registerRoutes(app: Express) {
       });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch related data" });
+    }
+  });
+  
+  // Bulk update contacts
+  app.post("/api/contacts/bulk-update", authenticate, requirePermission("Contact", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { contactIds, updates } = req.body;
+      
+      if (!contactIds || !Array.isArray(contactIds) || contactIds.length === 0) {
+        return res.status(400).json({ error: "Contact IDs array is required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates object is required" });
+      }
+      
+      let updatedCount = 0;
+      for (const contactId of contactIds) {
+        const contact = await storage.getContactById(contactId);
+        if (contact) {
+          const updatedContact = await storage.updateContact(contactId, updates);
+          await createAudit(req, "bulk_update", "Contact", contactId, contact, updatedContact);
+          updatedCount++;
+        }
+      }
+      
+      return res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Bulk update contacts error:", error);
+      return res.status(500).json({ error: "Failed to bulk update contacts" });
     }
   });
   
@@ -973,6 +1033,36 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Bulk update leads
+  app.post("/api/leads/bulk-update", authenticate, requirePermission("Lead", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { leadIds, updates } = req.body;
+      
+      if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0) {
+        return res.status(400).json({ error: "Lead IDs array is required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates object is required" });
+      }
+      
+      let updatedCount = 0;
+      for (const leadId of leadIds) {
+        const lead = await storage.getLeadById(leadId);
+        if (lead) {
+          const updatedLead = await storage.updateLead(leadId, updates);
+          await createAudit(req, "bulk_update", "Lead", leadId, lead, updatedLead);
+          updatedCount++;
+        }
+      }
+      
+      return res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Bulk update error:", error);
+      return res.status(500).json({ error: "Failed to bulk update leads" });
+    }
+  });
+  
   // ========== OPPORTUNITIES ROUTES ==========
   
   app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
@@ -1107,6 +1197,36 @@ export function registerRoutes(app: Express) {
       });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch related data" });
+    }
+  });
+  
+  // Bulk update opportunities
+  app.post("/api/opportunities/bulk-update", authenticate, requirePermission("Opportunity", "update"), async (req: AuthRequest, res) => {
+    try {
+      const { opportunityIds, updates } = req.body;
+      
+      if (!opportunityIds || !Array.isArray(opportunityIds) || opportunityIds.length === 0) {
+        return res.status(400).json({ error: "Opportunity IDs array is required" });
+      }
+      
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ error: "Updates object is required" });
+      }
+      
+      let updatedCount = 0;
+      for (const opportunityId of opportunityIds) {
+        const opportunity = await storage.getOpportunityById(opportunityId);
+        if (opportunity) {
+          const updatedOpportunity = await storage.updateOpportunity(opportunityId, updates);
+          await createAudit(req, "bulk_update", "Opportunity", opportunityId, opportunity, updatedOpportunity);
+          updatedCount++;
+        }
+      }
+      
+      return res.json({ success: true, count: updatedCount });
+    } catch (error) {
+      console.error("Bulk update opportunities error:", error);
+      return res.status(500).json({ error: "Failed to bulk update opportunities" });
     }
   });
   
@@ -1664,6 +1784,96 @@ export function registerRoutes(app: Express) {
       return res.json(logs);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+  
+  // ========== TAG ROUTES ==========
+  
+  app.get("/api/tags", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const tags = await storage.getAllTags();
+      return res.json(tags);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch tags" });
+    }
+  });
+  
+  app.post("/api/tags", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const tag = await storage.createTag({
+        ...req.body,
+        createdBy: req.user!.id,
+      });
+      return res.status(201).json(tag);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to create tag" });
+    }
+  });
+  
+  app.patch("/api/tags/:id", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const tag = await storage.updateTag(req.params.id, req.body);
+      return res.json(tag);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to update tag" });
+    }
+  });
+  
+  app.delete("/api/tags/:id", authenticate, async (req: AuthRequest, res) => {
+    try {
+      await storage.deleteTag(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to delete tag" });
+    }
+  });
+  
+  // Entity tag routes
+  app.get("/api/:entity/:entityId/tags", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { entity, entityId } = req.params;
+      const tags = await storage.getEntityTags(entity, entityId);
+      return res.json(tags);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch entity tags" });
+    }
+  });
+  
+  app.post("/api/:entity/:entityId/tags", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { entity, entityId } = req.params;
+      const { tagIds } = req.body;
+      await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to add entity tags" });
+    }
+  });
+  
+  app.delete("/api/:entity/:entityId/tags/:tagId", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { entity, entityId, tagId } = req.params;
+      await storage.removeEntityTag(entity, entityId, tagId);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to remove entity tag" });
+    }
+  });
+  
+  // Bulk tag operations
+  app.post("/api/:entity/bulk-tags", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { entity } = req.params;
+      const { entityIds, tagIds } = req.body;
+      
+      for (const entityId of entityIds) {
+        await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
+      }
+      
+      return res.json({ success: true, count: entityIds.length });
+    } catch (error) {
+      console.error("Bulk tag assignment error:", error);
+      return res.status(500).json({ error: "Failed to assign tags" });
     }
   });
   

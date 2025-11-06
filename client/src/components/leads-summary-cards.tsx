@@ -25,15 +25,19 @@ interface LeadsSummary {
   };
 }
 
-export function LeadsSummaryCards() {
+interface LeadsSummaryCardsProps {
+  onCardClick?: (filter: { status?: string; rating?: string }) => void;
+}
+
+export function LeadsSummaryCards({ onCardClick }: LeadsSummaryCardsProps) {
   const { data: summary, isLoading } = useQuery<LeadsSummary>({
     queryKey: ["/api/leads/summary"],
   });
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
-        {[1, 2, 3, 4, 5].map((i) => (
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {[1, 2, 3, 4].map((i) => (
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <Skeleton className="h-4 w-24" />
@@ -52,8 +56,12 @@ export function LeadsSummaryCards() {
   if (!summary) return null;
 
   return (
-    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5" data-testid="leads-summary-cards">
-      <Card data-testid="card-total-leads">
+    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" data-testid="leads-summary-cards">
+      <Card 
+        data-testid="card-total-leads"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({})}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Total Leads
@@ -70,7 +78,32 @@ export function LeadsSummaryCards() {
         </CardContent>
       </Card>
 
-      <Card data-testid="card-qualified-leads">
+      <Card 
+        data-testid="card-new-leads"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({ status: "new" })}
+      >
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            New Leads
+          </CardTitle>
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-semibold" data-testid="text-new-count">
+            {summary.byStatus.new}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Awaiting contact
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card 
+        data-testid="card-qualified-leads"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({ status: "qualified" })}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Qualified Leads
@@ -82,46 +115,16 @@ export function LeadsSummaryCards() {
             {summary.byStatus.qualified}
           </div>
           <p className="text-xs text-muted-foreground">
-            {summary.byStatus.unqualified} unqualified
+            Ready for conversion
           </p>
         </CardContent>
       </Card>
 
-      <Card data-testid="card-conversion-rate">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Conversion Rate
-          </CardTitle>
-          <Target className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-semibold" data-testid="text-conversion-rate">
-            {summary.conversionRate}%
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {summary.byStatus.converted} converted leads
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card data-testid="card-recent-additions">
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Recent Additions
-          </CardTitle>
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-semibold" data-testid="text-recent-7days">
-            {summary.recentAdditions.last7Days}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Last 7 days ({summary.recentAdditions.last30Days} in 30 days)
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card data-testid="card-hot-leads">
+      <Card 
+        data-testid="card-hot-leads"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({ rating: "hot" })}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Hot Leads
@@ -133,7 +136,7 @@ export function LeadsSummaryCards() {
             {summary.byRating.hot}
           </div>
           <p className="text-xs text-muted-foreground">
-            {summary.byRating.warm} warm, {summary.byRating.cold} cold
+            High priority prospects
           </p>
         </CardContent>
       </Card>

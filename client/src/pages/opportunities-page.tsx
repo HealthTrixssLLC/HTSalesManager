@@ -4,7 +4,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
 
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
@@ -20,7 +20,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CommentSystem } from "@/components/comment-system";
+import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 
 const stages = [
   { id: "prospecting", label: "Prospecting", color: "bg-gray-500" },
@@ -43,6 +45,16 @@ export default function OpportunitiesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   
+  // Bulk operations state
+  const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<Set<string>>(new Set());
+  const [isBulkOwnerDialogOpen, setIsBulkOwnerDialogOpen] = useState(false);
+  const [isBulkStageDialogOpen, setIsBulkStageDialogOpen] = useState(false);
+  const [isBulkProbabilityDialogOpen, setIsBulkProbabilityDialogOpen] = useState(false);
+  const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
+  const [bulkStage, setBulkStage] = useState("");
+  const [bulkProbability, setBulkProbability] = useState("");
+
   // Filter states
   const [filterAccount, setFilterAccount] = useState<string>("");
   const [filterCloseDateFrom, setFilterCloseDateFrom] = useState<string>("");
@@ -54,6 +66,10 @@ export default function OpportunitiesPage() {
 
   const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
     queryKey: ["/api/opportunities"],
+  });
+
+  const { data: users } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/users"],
   });
 
   const createMutation = useMutation({
@@ -82,6 +98,28 @@ export default function OpportunitiesPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to update stage", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ opportunityIds, updates }: { opportunityIds: string[]; updates: any }) => {
+      const res = await apiRequest("POST", "/api/opportunities/bulk-update", { opportunityIds, updates });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
+      const countText = data.count !== 1 ? 'opportunities' : 'opportunity';
+      toast({ title: `Successfully updated ${data.count} ${countText}` });
+      setSelectedOpportunityIds(new Set());
+      setIsBulkOwnerDialogOpen(false);
+      setIsBulkStageDialogOpen(false);
+      setIsBulkProbabilityDialogOpen(false);
+      setBulkOwnerId("");
+      setBulkStage("");
+      setBulkProbability("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to bulk update opportunities", description: error.message, variant: "destructive" });
     },
   });
 
@@ -174,6 +212,61 @@ export default function OpportunitiesPage() {
       stage: targetStage 
     });
     setDraggedOpportunity(null);
+  };
+
+  // Bulk selection helpers
+  const toggleOpportunitySelection = (opportunityId: string) => {
+    const newSelection = new Set(selectedOpportunityIds);
+    if (newSelection.has(opportunityId)) {
+      newSelection.delete(opportunityId);
+    } else {
+      newSelection.add(opportunityId);
+    }
+    setSelectedOpportunityIds(newSelection);
+  };
+
+  const selectAllOpportunities = () => {
+    if (filteredOpportunities) {
+      setSelectedOpportunityIds(new Set(filteredOpportunities.map(o => o.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedOpportunityIds(new Set());
+  };
+
+  const handleBulkOwner = () => {
+    if (!bulkOwnerId) {
+      toast({ title: "Please select an owner", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      opportunityIds: Array.from(selectedOpportunityIds),
+      updates: { ownerId: bulkOwnerId },
+    });
+  };
+
+  const handleBulkStage = () => {
+    if (!bulkStage) {
+      toast({ title: "Please select a stage", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      opportunityIds: Array.from(selectedOpportunityIds),
+      updates: { stage: bulkStage },
+    });
+  };
+
+  const handleBulkProbability = () => {
+    const probability = parseInt(bulkProbability);
+    if (isNaN(probability) || probability < 0 || probability > 100) {
+      toast({ title: "Please enter a valid probability (0-100)", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      opportunityIds: Array.from(selectedOpportunityIds),
+      updates: { probability },
+    });
   };
 
   // Get unique accounts for filter dropdown
@@ -562,6 +655,69 @@ export default function OpportunitiesPage() {
         </Card>
       )}
 
+      {/* Bulk Actions Toolbar */}
+      {selectedOpportunityIds.size > 0 && (
+        <Card data-testid="toolbar-bulk-actions">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">
+                  {selectedOpportunityIds.size} {selectedOpportunityIds.size === 1 ? 'opportunity' : 'opportunities'} selected
+                </span>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBulkOwnerDialogOpen(true)}
+                  data-testid="button-bulk-owner"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Assign Owner
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBulkStageDialogOpen(true)}
+                  data-testid="button-bulk-stage"
+                >
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Change Stage
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBulkProbabilityDialogOpen(true)}
+                  data-testid="button-bulk-probability"
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Change Probability
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBulkTagDialogOpen(true)}
+                  data-testid="button-bulk-tags"
+                >
+                  <Tags className="h-4 w-4 mr-2" />
+                  Bulk Add Tags
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearSelection}
+                  data-testid="button-clear-selection"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Clear Selection
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Kanban Board */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map((stage) => (
@@ -599,11 +755,22 @@ export default function OpportunitiesPage() {
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium text-sm">{opp.name}</h4>
-                          <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-opportunity-id-${opp.id}`}>
-                            {opp.id}
-                          </p>
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <Checkbox
+                            checked={selectedOpportunityIds.has(opp.id)}
+                            onCheckedChange={(checked) => {
+                              toggleOpportunitySelection(opp.id);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`checkbox-opportunity-${opp.id}`}
+                            className="mt-0.5"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm">{opp.name}</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5" data-testid={`text-opportunity-id-${opp.id}`}>
+                              {opp.id}
+                            </p>
+                          </div>
                         </div>
                         {opp.rating && (
                           <Badge variant="outline" className="text-xs h-5 flex-shrink-0">
@@ -706,6 +873,127 @@ export default function OpportunitiesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Owner Dialog */}
+      <Dialog open={isBulkOwnerDialogOpen} onOpenChange={setIsBulkOwnerDialogOpen}>
+        <DialogContent data-testid="dialog-bulk-owner">
+          <DialogHeader>
+            <DialogTitle>Assign Owner to Selected Opportunities</DialogTitle>
+            <DialogDescription>
+              Assign an owner to {selectedOpportunityIds.size} selected {selectedOpportunityIds.size === 1 ? 'opportunity' : 'opportunities'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Owner</label>
+              <Select value={bulkOwnerId} onValueChange={setBulkOwnerId}>
+                <SelectTrigger data-testid="select-owner">
+                  <SelectValue placeholder="Select an owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users?.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkOwnerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkOwner} disabled={bulkUpdateMutation.isPending} data-testid="button-confirm-owner">
+              {bulkUpdateMutation.isPending ? "Updating..." : "Assign Owner"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Stage Dialog */}
+      <Dialog open={isBulkStageDialogOpen} onOpenChange={setIsBulkStageDialogOpen}>
+        <DialogContent data-testid="dialog-bulk-stage">
+          <DialogHeader>
+            <DialogTitle>Change Stage for Selected Opportunities</DialogTitle>
+            <DialogDescription>
+              Change the stage for {selectedOpportunityIds.size} selected {selectedOpportunityIds.size === 1 ? 'opportunity' : 'opportunities'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Stage</label>
+              <Select value={bulkStage} onValueChange={setBulkStage}>
+                <SelectTrigger data-testid="select-stage">
+                  <SelectValue placeholder="Select a stage" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkStageDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkStage} disabled={bulkUpdateMutation.isPending} data-testid="button-confirm-stage">
+              {bulkUpdateMutation.isPending ? "Updating..." : "Change Stage"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Probability Dialog */}
+      <Dialog open={isBulkProbabilityDialogOpen} onOpenChange={setIsBulkProbabilityDialogOpen}>
+        <DialogContent data-testid="dialog-bulk-probability">
+          <DialogHeader>
+            <DialogTitle>Change Probability for Selected Opportunities</DialogTitle>
+            <DialogDescription>
+              Set the probability for {selectedOpportunityIds.size} selected {selectedOpportunityIds.size === 1 ? 'opportunity' : 'opportunities'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Probability (%)</label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={bulkProbability}
+                onChange={(e) => setBulkProbability(e.target.value)}
+                placeholder="Enter probability (0-100)"
+                data-testid="input-probability"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkProbabilityDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBulkProbability} disabled={bulkUpdateMutation.isPending} data-testid="button-confirm-probability">
+              {bulkUpdateMutation.isPending ? "Updating..." : "Change Probability"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Tag Dialog */}
+      <BulkTagDialog
+        open={isBulkTagDialogOpen}
+        onOpenChange={setIsBulkTagDialogOpen}
+        selectedIds={Array.from(selectedOpportunityIds)}
+        entity="opportunities"
+        dataTestId="dialog-bulk-tags"
+        onSuccess={() => {
+          setSelectedOpportunityIds(new Set());
+          setIsBulkTagDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

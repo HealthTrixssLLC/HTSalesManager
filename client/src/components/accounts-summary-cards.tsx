@@ -1,29 +1,36 @@
 import { useQuery } from "@tanstack/react-query";
-import { Building2, Users, TrendingUp, Calendar, Briefcase } from "lucide-react";
+import { Building2, CheckCircle2, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface AccountsSummary {
-  totalCount: number;
-  byType: {
-    customer: number;
-    partner: number;
-    prospect: number;
-    vendor: number;
-    other: number;
-  };
-  byCategory: Record<string, number>;
-  byOwner: Record<string, { count: number; ownerName: string }>;
-  recentAdditions: {
-    last7Days: number;
-    last30Days: number;
-  };
+interface Account {
+  id: string;
+  name: string;
+  type: string | null;
+  category: string | null;
+  createdAt: string;
 }
 
-export function AccountsSummaryCards() {
-  const { data: summary, isLoading } = useQuery<AccountsSummary>({
-    queryKey: ["/api/accounts/summary"],
+interface Opportunity {
+  id: string;
+  accountId: string;
+  amount: string | null;
+}
+
+interface AccountsSummaryCardsProps {
+  onCardClick?: (filterType: string, filterValue: string) => void;
+}
+
+export function AccountsSummaryCards({ onCardClick }: AccountsSummaryCardsProps) {
+  const { data: accounts, isLoading: accountsLoading } = useQuery<Account[]>({
+    queryKey: ["/api/accounts"],
   });
+
+  const { data: opportunities, isLoading: opportunitiesLoading } = useQuery<Opportunity[]>({
+    queryKey: ["/api/opportunities"],
+  });
+
+  const isLoading = accountsLoading || opportunitiesLoading;
 
   if (isLoading) {
     return (
@@ -44,14 +51,44 @@ export function AccountsSummaryCards() {
     );
   }
 
-  if (!summary) return null;
+  if (!accounts) return null;
 
-  const topCategory = Object.entries(summary.byCategory || {})
-    .sort(([, a], [, b]) => b - a)[0];
+  // Calculate statistics
+  const totalCount = accounts.length;
+
+  // Active accounts (customers and prospects)
+  const activeAccounts = accounts.filter(
+    (a) => a.type === "customer" || a.type === "prospect"
+  ).length;
+
+  // By category - find top category
+  const categoryCounts: Record<string, number> = {};
+  accounts.forEach((a) => {
+    if (a.category) {
+      categoryCounts[a.category] = (categoryCounts[a.category] || 0) + 1;
+    }
+  });
+  const topCategoryEntry = Object.entries(categoryCounts).sort(([, a], [, b]) => b - a)[0];
+  const topCategory = topCategoryEntry ? topCategoryEntry[0] : "None";
+  const topCategoryCount = topCategoryEntry ? topCategoryEntry[1] : 0;
+
+  // High value - accounts with most opportunities
+  const opportunityCountByAccount: Record<string, number> = {};
+  opportunities?.forEach((opp) => {
+    if (opp.accountId) {
+      opportunityCountByAccount[opp.accountId] = (opportunityCountByAccount[opp.accountId] || 0) + 1;
+    }
+  });
+  const highValueEntry = Object.entries(opportunityCountByAccount).sort(([, a], [, b]) => b - a)[0];
+  const highValueCount = highValueEntry ? highValueEntry[1] : 0;
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" data-testid="accounts-summary-cards">
-      <Card data-testid="card-total-accounts">
+      <Card 
+        data-testid="card-total-accounts"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.("", "")}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Total Accounts
@@ -60,61 +97,73 @@ export function AccountsSummaryCards() {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-semibold" data-testid="text-total-count">
-            {summary.totalCount}
+            {totalCount}
           </div>
           <p className="text-xs text-muted-foreground">
-            {summary.byType.customer} customers, {summary.byType.prospect} prospects
+            All accounts in system
           </p>
         </CardContent>
       </Card>
 
-      <Card data-testid="card-customers">
+      <Card 
+        data-testid="card-active-accounts"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.("type", "active")}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Customers
+            Active Accounts
           </CardTitle>
-          <Users className="h-4 w-4 text-muted-foreground" />
+          <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-semibold" data-testid="text-customer-count">
-            {summary.byType.customer}
+          <div className="text-2xl font-semibold" data-testid="text-active-count">
+            {activeAccounts}
           </div>
           <p className="text-xs text-muted-foreground">
-            {summary.byType.partner} partners, {summary.byType.vendor} vendors
+            Customers & prospects
           </p>
         </CardContent>
       </Card>
 
-      <Card data-testid="card-recent">
+      <Card 
+        data-testid="card-top-category"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.("category", topCategory)}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Recent Additions
+            By Category
           </CardTitle>
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-semibold" data-testid="text-recent-7days">
-            {summary.recentAdditions.last7Days}
+          <div className="text-2xl font-semibold" data-testid="text-top-category">
+            {topCategoryCount}
           </div>
           <p className="text-xs text-muted-foreground">
-            Last 7 days ({summary.recentAdditions.last30Days} in 30 days)
+            {topCategory}
           </p>
         </CardContent>
       </Card>
 
-      <Card data-testid="card-top-category">
+      <Card 
+        data-testid="card-high-value"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.("highValue", "true")}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Top Category
+            High Value
           </CardTitle>
-          <Briefcase className="h-4 w-4 text-muted-foreground" />
+          <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-semibold" data-testid="text-top-category-count">
-            {topCategory ? topCategory[1] : 0}
+          <div className="text-2xl font-semibold" data-testid="text-high-value">
+            {highValueCount}
           </div>
           <p className="text-xs text-muted-foreground">
-            {topCategory ? topCategory[0] : "No categories"}
+            Most opportunities
           </p>
         </CardContent>
       </Card>

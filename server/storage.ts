@@ -91,6 +91,18 @@ export interface IStorage {
   createBackupJob(job: InsertBackupJob): Promise<BackupJob>;
   updateBackupJob(id: string, job: Partial<BackupJob>): Promise<BackupJob>;
   
+  // ========== TAGS ==========
+  getAllTags(): Promise<Tag[]>;
+  getTagById(id: string): Promise<Tag | undefined>;
+  createTag(tag: InsertTag): Promise<Tag>;
+  updateTag(id: string, tag: Partial<InsertTag>): Promise<Tag>;
+  deleteTag(id: string): Promise<void>;
+  
+  // ========== ENTITY TAGS ==========
+  getEntityTags(entity: string, entityId: string): Promise<Tag[]>;
+  addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void>;
+  removeEntityTag(entity: string, entityId: string, tagId: string): Promise<void>;
+  
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;
   

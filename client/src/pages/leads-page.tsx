@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone } from "lucide-react";
+import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone, X, Users, Building2, Star } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
@@ -57,6 +58,15 @@ export default function LeadsPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [commentsLeadId, setCommentsLeadId] = useState<string | null>(null);
   const [commentsLeadName, setCommentsLeadName] = useState<string | null>(null);
+
+  // Bulk operations state
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [isBulkOwnerDialogOpen, setIsBulkOwnerDialogOpen] = useState(false);
+  const [isBulkCompanyDialogOpen, setIsBulkCompanyDialogOpen] = useState(false);
+  const [isBulkRatingDialogOpen, setIsBulkRatingDialogOpen] = useState(false);
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
+  const [bulkCompany, setBulkCompany] = useState("");
+  const [bulkRating, setBulkRating] = useState("");
 
   // Filter and sort state
   const [filters, setFilters] = useState({
@@ -121,6 +131,27 @@ export default function LeadsPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create lead", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ leadIds, updates }: { leadIds: string[]; updates: any }) => {
+      const res = await apiRequest("POST", "/api/leads/bulk-update", { leadIds, updates });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({ title: `Successfully updated ${data.count} lead${data.count !== 1 ? 's' : ''}` });
+      setSelectedLeadIds(new Set());
+      setIsBulkOwnerDialogOpen(false);
+      setIsBulkCompanyDialogOpen(false);
+      setIsBulkRatingDialogOpen(false);
+      setBulkOwnerId("");
+      setBulkCompany("");
+      setBulkRating("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to bulk update leads", description: error.message, variant: "destructive" });
     },
   });
 
@@ -194,6 +225,68 @@ export default function LeadsPage() {
     const owner = users?.find(u => u.id === ownerId);
     return owner?.name || "Unknown";
   };
+
+  // Bulk selection helpers
+  const toggleLeadSelection = (leadId: string) => {
+    const newSelection = new Set(selectedLeadIds);
+    if (newSelection.has(leadId)) {
+      newSelection.delete(leadId);
+    } else {
+      newSelection.add(leadId);
+    }
+    setSelectedLeadIds(newSelection);
+  };
+
+  const selectAllLeads = () => {
+    if (filteredLeads) {
+      setSelectedLeadIds(new Set(filteredLeads.map(l => l.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedLeadIds(new Set());
+  };
+
+  const handleBulkAssignOwner = () => {
+    if (!bulkOwnerId) {
+      toast({ title: "Please select an owner", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      leadIds: Array.from(selectedLeadIds),
+      updates: { ownerId: bulkOwnerId },
+    });
+  };
+
+  const handleBulkChangeCompany = () => {
+    if (!bulkCompany || bulkCompany.trim() === "") {
+      toast({ title: "Please enter a company name", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      leadIds: Array.from(selectedLeadIds),
+      updates: { company: bulkCompany },
+    });
+  };
+
+  const handleBulkChangeRating = () => {
+    if (!bulkRating) {
+      toast({ title: "Please select a rating", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      leadIds: Array.from(selectedLeadIds),
+      updates: { rating: bulkRating },
+    });
+  };
+
+  const handleSummaryCardClick = useCallback((filter: { status?: string; rating?: string }) => {
+    setFilters(prev => ({
+      ...prev,
+      status: filter.status || "",
+      rating: filter.rating || "",
+    }));
+  }, []);
 
   if (isLoading) {
     return (
@@ -417,7 +510,7 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      <LeadsSummaryCards />
+      <LeadsSummaryCards onCardClick={handleSummaryCardClick} />
 
       <LeadsFilterBar
         onFilterChange={handleFilterChange}
@@ -425,11 +518,167 @@ export default function LeadsPage() {
         filteredCount={filteredLeads?.length || 0}
       />
 
+      {selectedLeadIds.size > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-medium" data-testid="text-selected-count">
+                {selectedLeadIds.size} lead{selectedLeadIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                data-testid="button-clear-selection"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Dialog open={isBulkOwnerDialogOpen} onOpenChange={setIsBulkOwnerDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-assign-owner">
+                    <Users className="h-4 w-4 mr-1" />
+                    Assign Owner
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Assign Owner to {selectedLeadIds.size} Leads</DialogTitle>
+                    <DialogDescription>
+                      Select a new owner for the selected leads
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Select value={bulkOwnerId} onValueChange={setBulkOwnerId}>
+                      <SelectTrigger data-testid="select-bulk-owner">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users?.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkOwnerDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleBulkAssignOwner} 
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid="button-confirm-bulk-owner"
+                    >
+                      {bulkUpdateMutation.isPending ? "Updating..." : "Assign Owner"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isBulkCompanyDialogOpen} onOpenChange={setIsBulkCompanyDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-change-company">
+                    <Building2 className="h-4 w-4 mr-1" />
+                    Change Company
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Company for {selectedLeadIds.size} Leads</DialogTitle>
+                    <DialogDescription>
+                      Enter a new company name for the selected leads
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Input
+                      placeholder="Company name"
+                      value={bulkCompany}
+                      onChange={(e) => setBulkCompany(e.target.value)}
+                      data-testid="input-bulk-company"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkCompanyDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleBulkChangeCompany} 
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid="button-confirm-bulk-company"
+                    >
+                      {bulkUpdateMutation.isPending ? "Updating..." : "Change Company"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isBulkRatingDialogOpen} onOpenChange={setIsBulkRatingDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-change-rating">
+                    <Star className="h-4 w-4 mr-1" />
+                    Change Rating
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Rating for {selectedLeadIds.size} Leads</DialogTitle>
+                    <DialogDescription>
+                      Select a new rating for the selected leads
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Select value={bulkRating} onValueChange={setBulkRating}>
+                      <SelectTrigger data-testid="select-bulk-rating">
+                        <SelectValue placeholder="Select rating" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hot">Hot</SelectItem>
+                        <SelectItem value="warm">Warm</SelectItem>
+                        <SelectItem value="cold">Cold</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkRatingDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleBulkChangeRating} 
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid="button-confirm-bulk-rating"
+                    >
+                      {bulkUpdateMutation.isPending ? "Updating..." : "Change Rating"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selectedLeadIds.size > 0 && selectedLeadIds.size === filteredLeads?.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        selectAllLeads();
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                    data-testid="checkbox-select-all"
+                  />
+                </TableHead>
                 {isColumnVisible("id") && (
                   <SortableTableHeader
                     label="ID"
@@ -540,6 +789,13 @@ export default function LeadsPage() {
                     onClick={() => setLocation(`/leads/${lead.id}`)}
                     data-testid={`row-lead-${lead.id}`}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedLeadIds.has(lead.id)}
+                        onCheckedChange={() => toggleLeadSelection(lead.id)}
+                        data-testid={`checkbox-select-${lead.id}`}
+                      />
+                    </TableCell>
                     {isColumnVisible("id") && (
                       <TableCell className="font-medium" data-testid={`cell-id-${lead.id}`}>
                         {lead.id}

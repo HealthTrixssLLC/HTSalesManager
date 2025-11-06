@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { TagSelector } from "@/components/tag-selector";
+import type { Tag } from "@/components/ui/tag-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
@@ -27,9 +29,20 @@ export default function LeadDetailPage() {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: lead, isLoading: leadLoading } = useQuery<Lead>({
     queryKey: ["/api/leads", leadId],
+    enabled: !!leadId,
+  });
+
+  const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
+    queryKey: ["tags", "leads", leadId],
+    queryFn: async () => {
+      const res = await fetch(`/api/leads/${leadId}/tags`);
+      if (!res.ok) throw new Error("Failed to fetch tags");
+      return res.json();
+    },
     enabled: !!leadId,
   });
 
@@ -121,7 +134,7 @@ export default function LeadDetailPage() {
     deleteMutation.mutate();
   };
 
-  if (leadLoading || relatedLoading) {
+  if (leadLoading || relatedLoading || tagsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -171,6 +184,20 @@ export default function LeadDetailPage() {
               <DetailField label="Topic" value={lead.topic} />
               <DetailField label="Source" value={lead.source} />
             </DetailSection>
+
+            <Card data-testid="section-tags">
+              <CardHeader>
+                <CardTitle>Tags</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TagSelector
+                  selectedTags={tags}
+                  onTagsChange={setSelectedTags}
+                  entity="leads"
+                  entityId={lead.id}
+                />
+              </CardContent>
+            </Card>
 
             <CommentSystem entity="leads" entityId={lead.id} />
           </div>

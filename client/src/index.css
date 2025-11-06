@@ -11,58 +11,58 @@
   --opaque-button-border-intensity: -8; /* In terms of percentages */
 
   /* Backgrounds applied on top of other backgrounds when hovered/active */
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-1: rgba(0,0,0, .05);
+  --elevate-2: rgba(0,0,0, .12);
 
   --background: 0 0% 100%;
 
-  --foreground: 210 25% 7.8431%;
+  --foreground: 210 30% 5%;
 
-  --border: 217.38deg 39.87% 30%;
+  --border: 186 30% 40%;
 
-  --card: 180 6.6667% 97.0588%;
+  --card: 186 45% 98%;
 
-  --card-foreground: 210 25% 7.8431%;
+  --card-foreground: 210 30% 5%;
 
-  --card-border: 205 25% 90.5882%;
+  --card-border: 186 25% 85%;
 
-  --sidebar: 180 6.6667% 97.0588%;
+  --sidebar: 186 50% 96%;
 
-  --sidebar-foreground: 210 25% 7.8431%;
+  --sidebar-foreground: 210 30% 5%;
 
-  --sidebar-border: 205.0000 25.0000% 90.5882%;
+  --sidebar-border: 186 30% 82%;
 
-  --sidebar-primary: 203.8863 88.2845% 53.1373%;
+  --sidebar-primary: 186 78% 32%;
 
   --sidebar-primary-foreground: 0 0% 100%;
 
-  --sidebar-accent: 211.5789 51.3514% 92.7451%;
+  --sidebar-accent: 186 45% 95%;
 
-  --sidebar-accent-foreground: 203.8863 88.2845% 53.1373%;
+  --sidebar-accent-foreground: 186 78% 25%;
 
   --sidebar-ring: 202.8169 89.1213% 53.1373%;
 
   --popover: 0 0% 100%;
 
-  --popover-foreground: 210 25% 7.8431%;
+  --popover-foreground: 210 30% 5%;
 
-  --popover-border: 210 20% 92%;
+  --popover-border: 186 20% 88%;
 
-  --primary: 217.38deg 39.87% 30%;
+  --primary: 186 78% 32%;
 
-  --primary-foreground: 0deg 0% 100%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 37.62deg 99.21% 50.2%;
+  --secondary: 38 100% 50%;
 
-  --secondary-foreground: 0deg 0% 100%;
+  --secondary-foreground: 0 0% 100%;
 
-  --muted: 42.33deg 100% 64.71%;
+  --muted: 186 20% 92%;
 
-  --muted-foreground: 210deg 25% 7.84%;
+  --muted-foreground: 210 15% 40%;
 
-  --accent: 211.5789 51.3514% 92.7451%;
+  --accent: 186 45% 95%;
 
-  --accent-foreground: 203.8863 88.2845% 53.1373%;
+  --accent-foreground: 186 78% 25%;
 
   --destructive: 356.3033 90.5579% 54.3137%;
 
@@ -129,58 +129,58 @@
   --opaque-button-border-intensity: 9;  /* In terms of percentages */
 
   /* Backgrounds applied on top of other backgrounds when hovered/active */
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255,255,255, .06);
+  --elevate-2: rgba(255,255,255, .14);
 
-  --background: 0 0% 0%;
+  --background: 210 20% 8%;
 
-  --foreground: 200 6.6667% 91.1765%;
+  --foreground: 0 0% 95%;
 
-  --border: 210 5.2632% 14.9020%;
+  --border: 186 25% 25%;
 
-  --card: 228 9.8039% 10%;
+  --card: 210 18% 12%;
 
-  --card-foreground: 0 0% 85.0980%;
+  --card-foreground: 0 0% 95%;
 
-  --card-border: 205.7143 15.7895% 26.0784%;
+  --card-border: 186 20% 22%;
 
-  --sidebar: 228 9.8039% 10%;
+  --sidebar: 210 18% 12%;
 
-  --sidebar-foreground: 0 0% 85.0980%;
+  --sidebar-foreground: 0 0% 95%;
 
-  --sidebar-border: 205.7143 15.7895% 26.0784%;
+  --sidebar-border: 186 20% 22%;
 
-  --sidebar-primary: 202.8169 89.1213% 53.1373%;
+  --sidebar-primary: 186 78% 40%;
 
   --sidebar-primary-foreground: 0 0% 100%;
 
-  --sidebar-accent: 205.7143 70% 7.8431%;
+  --sidebar-accent: 186 30% 18%;
 
-  --sidebar-accent-foreground: 203.7736 87.6033% 52.5490%;
+  --sidebar-accent-foreground: 186 70% 75%;
 
   --sidebar-ring: 202.8169 89.1213% 53.1373%;
 
-  --popover: 0 0% 0%;
+  --popover: 210 18% 12%;
 
-  --popover-foreground: 200 6.6667% 91.1765%;
+  --popover-foreground: 0 0% 95%;
 
-  --popover-border: 210 8% 18%;
+  --popover-border: 186 15% 25%;
 
-  --primary: 203.7736 87.6033% 52.5490%;
+  --primary: 186 78% 40%;
 
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 195.0000 15.3846% 94.9020%;
+  --secondary: 38 100% 50%;
 
-  --secondary-foreground: 210 25% 7.8431%;
+  --secondary-foreground: 0 0% 100%;
 
-  --muted: 0 0% 9.4118%;
+  --muted: 210 15% 18%;
 
-  --muted-foreground: 210 3.3898% 46.2745%;
+  --muted-foreground: 0 0% 65%;
 
-  --accent: 205.7143 70% 7.8431%;
+  --accent: 186 30% 18%;
 
-  --accent-foreground: 203.7736 87.6033% 52.5490%;
+  --accent-foreground: 186 70% 75%;
 
   --destructive: 356.3033 90.5579% 54.3137%;
 

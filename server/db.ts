@@ -564,11 +564,88 @@ export class PostgresStorage implements IStorage {
     }));
   }
   
+  // ========== TAGS ==========
+  
+  async getAllTags(): Promise<schema.Tag[]> {
+    return await db.select().from(schema.tags).orderBy(schema.tags.name);
+  }
+  
+  async getTagById(id: string): Promise<schema.Tag | undefined> {
+    const result = await db.select().from(schema.tags).where(eq(schema.tags.id, id)).limit(1);
+    return result[0];
+  }
+  
+  async createTag(tag: schema.InsertTag): Promise<schema.Tag> {
+    const result = await db.insert(schema.tags)
+      .values({ ...tag, updatedAt: new Date() })
+      .returning();
+    return result[0];
+  }
+  
+  async updateTag(id: string, tag: Partial<schema.InsertTag>): Promise<schema.Tag> {
+    const result = await db.update(schema.tags)
+      .set({ ...tag, updatedAt: new Date() })
+      .where(eq(schema.tags.id, id))
+      .returning();
+    return result[0];
+  }
+  
+  async deleteTag(id: string): Promise<void> {
+    await db.delete(schema.tags).where(eq(schema.tags.id, id));
+  }
+  
+  // ========== ENTITY TAGS ==========
+  
+  async getEntityTags(entity: string, entityId: string): Promise<schema.Tag[]> {
+    const result = await db
+      .select({
+        id: schema.tags.id,
+        name: schema.tags.name,
+        color: schema.tags.color,
+        createdBy: schema.tags.createdBy,
+        createdAt: schema.tags.createdAt,
+        updatedAt: schema.tags.updatedAt,
+      })
+      .from(schema.entityTags)
+      .innerJoin(schema.tags, eq(schema.entityTags.tagId, schema.tags.id))
+      .where(and(
+        eq(schema.entityTags.entity, entity),
+        eq(schema.entityTags.entityId, entityId)
+      ));
+    
+    return result;
+  }
+  
+  async addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void> {
+    if (tagIds.length === 0) return;
+    
+    const values = tagIds.map(tagId => ({
+      entity,
+      entityId,
+      tagId,
+      createdBy: userId,
+    }));
+    
+    await db.insert(schema.entityTags)
+      .values(values)
+      .onConflictDoNothing();
+  }
+  
+  async removeEntityTag(entity: string, entityId: string, tagId: string): Promise<void> {
+    await db.delete(schema.entityTags)
+      .where(and(
+        eq(schema.entityTags.entity, entity),
+        eq(schema.entityTags.entityId, entityId),
+        eq(schema.entityTags.tagId, tagId)
+      ));
+  }
+  
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {
     // Delete all CRM entity data in reverse dependency order
     // This preserves system configuration (roles, permissions, id_patterns)
+    await db.delete(schema.entityTags);
     await db.delete(schema.activities);
     await db.delete(schema.leads);
     await db.delete(schema.opportunities);

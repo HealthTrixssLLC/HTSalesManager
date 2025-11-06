@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -18,11 +18,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CommentSystem } from "@/components/comment-system";
 import { AccountsSummaryCards } from "@/components/accounts-summary-cards";
 import { AccountsFilterBar } from "@/components/accounts-filter-bar";
 import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
+import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
@@ -47,6 +49,14 @@ export default function AccountsPage() {
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [commentsAccountId, setCommentsAccountId] = useState<string | null>(null);
   const [commentsAccountName, setCommentsAccountName] = useState<string | null>(null);
+
+  // Bulk operations state
+  const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+  const [isBulkOwnerDialogOpen, setIsBulkOwnerDialogOpen] = useState(false);
+  const [isBulkCategoryDialogOpen, setIsBulkCategoryDialogOpen] = useState(false);
+  const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
+  const [bulkCategory, setBulkCategory] = useState("");
 
   // Filter and sort state
   const [filters, setFilters] = useState({
@@ -130,6 +140,25 @@ export default function AccountsPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to update account", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ accountIds, updates }: { accountIds: string[]; updates: any }) => {
+      const res = await apiRequest("POST", "/api/accounts/bulk-update", { accountIds, updates });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
+      toast({ title: `Successfully updated ${data.count} account${data.count !== 1 ? 's' : ''}` });
+      setSelectedAccountIds(new Set());
+      setIsBulkOwnerDialogOpen(false);
+      setIsBulkCategoryDialogOpen(false);
+      setBulkOwnerId("");
+      setBulkCategory("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to bulk update accounts", description: error.message, variant: "destructive" });
     },
   });
 
@@ -243,12 +272,70 @@ export default function AccountsPage() {
     setVisibleColumns(columns);
   }, []);
 
+  const handleCardClick = useCallback((filterType: string, filterValue: string) => {
+    if (filterType === "type") {
+      // Filter by active accounts (customer or prospect)
+      setFilters(prev => ({ ...prev, type: "" }));
+    } else if (filterType === "category") {
+      setFilters(prev => ({ ...prev, category: filterValue }));
+    } else if (filterType === "highValue") {
+      // For high value, we reset filters - backend would need support for this
+      setFilters(prev => ({ ...prev, search: "" }));
+    } else {
+      // Reset all filters for "Total" card
+      setFilters({ search: "", type: "", category: "", ownerId: "" });
+    }
+  }, []);
+
   const isColumnVisible = (columnId: string) => visibleColumns.includes(columnId);
 
   const getOwnerName = (ownerId: string | null) => {
     if (!ownerId) return "Unassigned";
     const owner = users?.find(u => u.id === ownerId);
     return owner?.name || "Unknown";
+  };
+
+  // Bulk selection helpers
+  const toggleAccountSelection = (accountId: string) => {
+    const newSelection = new Set(selectedAccountIds);
+    if (newSelection.has(accountId)) {
+      newSelection.delete(accountId);
+    } else {
+      newSelection.add(accountId);
+    }
+    setSelectedAccountIds(newSelection);
+  };
+
+  const selectAllAccounts = () => {
+    if (filteredAccounts) {
+      setSelectedAccountIds(new Set(filteredAccounts.map(a => a.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedAccountIds(new Set());
+  };
+
+  const handleBulkAssignOwner = () => {
+    if (!bulkOwnerId) {
+      toast({ title: "Please select an owner", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      accountIds: Array.from(selectedAccountIds),
+      updates: { ownerId: bulkOwnerId },
+    });
+  };
+
+  const handleBulkChangeCategory = () => {
+    if (!bulkCategory) {
+      toast({ title: "Please select a category", variant: "destructive" });
+      return;
+    }
+    bulkUpdateMutation.mutate({
+      accountIds: Array.from(selectedAccountIds),
+      updates: { category: bulkCategory },
+    });
   };
 
   if (isLoading) {
@@ -441,7 +528,7 @@ export default function AccountsPage() {
         </div>
       </div>
 
-      <AccountsSummaryCards />
+      <AccountsSummaryCards onCardClick={handleCardClick} />
 
       <AccountsFilterBar
         onFilterChange={handleFilterChange}
@@ -449,11 +536,142 @@ export default function AccountsPage() {
         filteredCount={filteredAccounts?.length || 0}
       />
 
+      {selectedAccountIds.size > 0 && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-medium" data-testid="text-selected-count">
+                {selectedAccountIds.size} account{selectedAccountIds.size !== 1 ? 's' : ''} selected
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                data-testid="button-clear-selection"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Dialog open={isBulkOwnerDialogOpen} onOpenChange={setIsBulkOwnerDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-assign-owner">
+                    <Users className="h-4 w-4 mr-1" />
+                    Assign Owner
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Assign Owner to {selectedAccountIds.size} Accounts</DialogTitle>
+                    <DialogDescription>
+                      Select a new owner for the selected accounts
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Select value={bulkOwnerId} onValueChange={setBulkOwnerId}>
+                      <SelectTrigger data-testid="select-bulk-owner">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users?.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkOwnerDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleBulkAssignOwner} 
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid="button-confirm-bulk-owner"
+                    >
+                      {bulkUpdateMutation.isPending ? "Updating..." : "Assign Owner"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isBulkCategoryDialogOpen} onOpenChange={setIsBulkCategoryDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-bulk-change-category">
+                    <FolderTree className="h-4 w-4 mr-1" />
+                    Change Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Category for {selectedAccountIds.size} Accounts</DialogTitle>
+                    <DialogDescription>
+                      Select a new category for the selected accounts
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <Select value={bulkCategory} onValueChange={setBulkCategory}>
+                      <SelectTrigger data-testid="select-bulk-category">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories?.map((category) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBulkCategoryDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleBulkChangeCategory} 
+                      disabled={bulkUpdateMutation.isPending}
+                      data-testid="button-confirm-bulk-category"
+                    >
+                      {bulkUpdateMutation.isPending ? "Updating..." : "Change Category"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsBulkTagDialogOpen(true)}
+                data-testid="button-bulk-add-tags"
+              >
+                <Tags className="h-4 w-4 mr-1" />
+                Bulk Add Tags
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selectedAccountIds.size > 0 && selectedAccountIds.size === filteredAccounts?.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        selectAllAccounts();
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                    data-testid="checkbox-select-all"
+                  />
+                </TableHead>
                 {isColumnVisible("id") && (
                   <SortableTableHeader
                     label="ID"
@@ -543,7 +761,7 @@ export default function AccountsPage() {
             <TableBody>
               {filteredAccounts?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={AVAILABLE_COLUMNS.length} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={AVAILABLE_COLUMNS.length + 1} className="text-center py-8 text-muted-foreground">
                     No accounts found. {filters.search || filters.type || filters.category || filters.ownerId ? "Try adjusting your filters." : "Create your first account to get started."}
                   </TableCell>
                 </TableRow>
@@ -552,46 +770,52 @@ export default function AccountsPage() {
                   <TableRow
                     key={account.id}
                     className="cursor-pointer hover-elevate"
-                    onClick={() => setLocation(`/accounts/${account.id}`)}
                     data-testid={`row-account-${account.id}`}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedAccountIds.has(account.id)}
+                        onCheckedChange={() => toggleAccountSelection(account.id)}
+                        data-testid={`checkbox-account-${account.id}`}
+                      />
+                    </TableCell>
                     {isColumnVisible("id") && (
-                      <TableCell className="font-medium" data-testid={`cell-id-${account.id}`}>
+                      <TableCell className="font-medium" onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-id-${account.id}`}>
                         {account.id}
                       </TableCell>
                     )}
                     {isColumnVisible("name") && (
-                      <TableCell data-testid={`cell-name-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-name-${account.id}`}>
                         {account.name}
                       </TableCell>
                     )}
                     {isColumnVisible("accountNumber") && (
-                      <TableCell data-testid={`cell-accountNumber-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-accountNumber-${account.id}`}>
                         {account.accountNumber || "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("type") && (
-                      <TableCell className="capitalize" data-testid={`cell-type-${account.id}`}>
+                      <TableCell className="capitalize" onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-type-${account.id}`}>
                         {account.type}
                       </TableCell>
                     )}
                     {isColumnVisible("category") && (
-                      <TableCell data-testid={`cell-category-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-category-${account.id}`}>
                         {account.category || "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("ownerId") && (
-                      <TableCell data-testid={`cell-owner-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-owner-${account.id}`}>
                         {getOwnerName(account.ownerId)}
                       </TableCell>
                     )}
                     {isColumnVisible("industry") && (
-                      <TableCell data-testid={`cell-industry-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-industry-${account.id}`}>
                         {account.industry || "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("phone") && (
-                      <TableCell data-testid={`cell-phone-${account.id}`}>
+                      <TableCell onClick={() => setLocation(`/accounts/${account.id}`)} data-testid={`cell-phone-${account.id}`}>
                         {account.phone || "-"}
                       </TableCell>
                     )}
@@ -823,6 +1047,13 @@ export default function AccountsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <BulkTagDialog
+        open={isBulkTagDialogOpen}
+        onOpenChange={setIsBulkTagDialogOpen}
+        selectedIds={Array.from(selectedAccountIds)}
+        entity="accounts"
+      />
     </div>
   );
 }
