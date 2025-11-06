@@ -33,7 +33,11 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
       const res = await apiRequest("POST", `/api/${entity}/${entityId}/tags`, {
         tagIds: [tagId],
       });
-      return await res.json();
+      if (res.status === 204 || res.status === 200) {
+        return { success: true };
+      }
+      const data = await res.json();
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
@@ -52,7 +56,11 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
     mutationFn: async (tagId: string) => {
       if (!entityId) throw new Error("Entity ID is required");
       const res = await apiRequest("DELETE", `/api/${entity}/${entityId}/tags/${tagId}`);
-      return await res.json();
+      if (res.status === 204 || res.status === 200) {
+        return { success: true };
+      }
+      const data = await res.json();
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
