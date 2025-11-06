@@ -1,0 +1,242 @@
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 376, done.
+remote: Counting objects: 100% (376/376), done.
+remote: Compressing objects: 100% (60/60), done.
+remote: Total 352 (delta 311), reused 328 (delta 287), pack-reused 0 (from 0)
+Receiving objects: 100% (352/352), 2.31 MiB | 11.27 MiB/s, done.
+Resolving deltas: 100% (311/311), completed with 21 local objects.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   ac3fd24..ed31888  main       -> origin/main
+Updating ac3fd24..ed31888
+Fast-forward
+ .replit                                            |   4 +-
+ attached_assets/image_1762297286434.png            | Bin 0 -> 189925 bytes
+ attached_assets/image_1762346878506.png            | Bin 0 -> 284445 bytes
+ attached_assets/image_1762347159090.png            | Bin 0 -> 220580 bytes
+ attached_assets/image_1762347280367.png            | Bin 0 -> 172016 bytes
+ attached_assets/image_1762348248637.png            | Bin 0 -> 243050 bytes
+ attached_assets/image_1762348421601.png            | Bin 0 -> 199128 bytes
+ attached_assets/image_1762348558564.png            | Bin 0 -> 201410 bytes
+ attached_assets/image_1762348895139.png            | Bin 0 -> 172141 bytes
+ attached_assets/image_1762349012168.png            | Bin 0 -> 151615 bytes
+ attached_assets/image_1762380541973.png            | Bin 0 -> 133763 bytes
+ attached_assets/image_1762381413989.png            | Bin 0 -> 334586 bytes
+ attached_assets/image_1762444419831.png            | Bin 0 -> 284244 bytes
+ client/src/components/accounts-filter-bar.tsx      |  15 +-
+ client/src/components/accounts-summary-cards.tsx   | 133 ++--
+ client/src/components/activities-summary-cards.tsx | 151 +++++
+ client/src/components/association-manager.tsx      | 104 +++
+ client/src/components/bulk-tag-dialog.tsx          |  94 +++
+ client/src/components/contacts-filter-bar.tsx      |  15 +-
+ client/src/components/contacts-summary-cards.tsx   | 139 ++--
+ client/src/components/create-tag-dialog.tsx        | 170 +++++
+ client/src/components/entity-combobox.tsx          | 147 +++++
+ client/src/components/leads-filter-bar.tsx         |  15 +-
+ client/src/components/leads-summary-cards.tsx      |  75 ++-
+ client/src/components/tag-filter-button.tsx        |  70 ++
+ client/src/components/tag-selector.tsx             | 187 ++++++
+ client/src/components/ui/tag-badge.tsx             |  53 ++
+ client/src/components/upcoming-activities-card.tsx | 206 ++++++
+ client/src/index.css                               |  94 +--
+ client/src/pages/account-detail-page.tsx           |  31 +-
+ client/src/pages/accounts-page.tsx                 | 332 +++++++++-
+ client/src/pages/activities-page.tsx               | 679 ++++++++++++++++++-
+ client/src/pages/activity-detail-page.tsx          | 474 +++++++++++++-
+ client/src/pages/contact-detail-page.tsx           |  31 +-
+ client/src/pages/contacts-page.tsx                 | 330 +++++++++-
+ client/src/pages/dashboard.tsx                     |   4 +
+ client/src/pages/lead-detail-page.tsx              | 543 +++++++++++----
+ client/src/pages/leads-page.tsx                    | 375 ++++++++++-
+ client/src/pages/opportunities-page.tsx            | 374 ++++++++++-
+ client/src/pages/opportunity-detail-page.tsx       |  30 +-
+ replit.md                                          | 153 +----
+ server/db.ts                                       |  81 ++-
+ server/routes.ts                                   | 727 ++++++++++++++++++++-
+ server/storage.ts                                  |  12 +
+ shared/schema.ts                                   |  72 +-
+ 45 files changed, 5394 insertions(+), 526 deletions(-)
+ create mode 100644 attached_assets/image_1762297286434.png
+ create mode 100644 attached_assets/image_1762346878506.png
+ create mode 100644 attached_assets/image_1762347159090.png
+ create mode 100644 attached_assets/image_1762347280367.png
+ create mode 100644 attached_assets/image_1762348248637.png
+ create mode 100644 attached_assets/image_1762348421601.png
+ create mode 100644 attached_assets/image_1762348558564.png
+ create mode 100644 attached_assets/image_1762348895139.png
+ create mode 100644 attached_assets/image_1762349012168.png
+ create mode 100644 attached_assets/image_1762380541973.png
+ create mode 100644 attached_assets/image_1762381413989.png
+ create mode 100644 attached_assets/image_1762444419831.png
+ create mode 100644 client/src/components/activities-summary-cards.tsx
+ create mode 100644 client/src/components/association-manager.tsx
+ create mode 100644 client/src/components/bulk-tag-dialog.tsx
+ create mode 100644 client/src/components/create-tag-dialog.tsx
+ create mode 100644 client/src/components/entity-combobox.tsx
+ create mode 100644 client/src/components/tag-filter-button.tsx
+ create mode 100644 client/src/components/tag-selector.tsx
+ create mode 100644 client/src/components/ui/tag-badge.tsx
+ create mode 100644 client/src/components/upcoming-activities-card.tsx
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 23.4s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.6s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.2s
+ => => transferring context: 605.34kB                                                                                           0.2s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 9.0s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            9.0s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             6.7s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.5s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.6s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.6s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.2s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:9365e2b73606be5b6179ed736eb9fd71c6f86e42fe036cb7067a53c4bb100da4                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                10.9s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [✓] Changes applied
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 4:51:45 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 4:51:49 PM [express] GET /api/user 401 in 4ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 4:51:54 PM [express] GET /api/user 304 in 6ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 4:51:54 PM [express] GET /api/dashboard/stats 304 in 17ms :: {"totalAccounts":"0","totalContacts":"0…
+healthtrixss-crm-app  | 4:51:54 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 16ms :: []
+healthtrixss-crm-app  | 4:51:54 PM [express] GET /api/activities/upcoming 200 in 7ms :: []
+healthtrixss-crm-app  | 4:51:57 PM [express] GET /api/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 4:51:57 PM [express] GET /api/opportunities 200 in 7ms :: []
+healthtrixss-crm-app  | 4:51:57 PM [express] GET /api/users 200 in 4ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","nam…
+healthtrixss-crm-app  | 4:52:00 PM [express] GET /api/accounts 200 in 9ms :: []
+healthtrixss-crm-app  | 4:52:00 PM [express] GET /api/accounts 200 in 7ms :: []
+healthtrixss-crm-app  | 4:52:00 PM [express] GET /api/admin/categories 304 in 15ms :: []
+healthtrixss-crm-app  | 4:52:13 PM [express] POST /api/import/accounts 200 in 175ms :: {"total":41,"success":41,"failed":0,"…
+healthtrixss-crm-app  | 4:52:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 4:52:28 PM [express] POST /api/import/contacts 200 in 228ms :: {"total":69,"success":69,"failed":0,"…
+healthtrixss-crm-app  | 4:52:38 PM [express] POST /api/import/leads 200 in 99ms :: {"total":33,"success":33,"failed":0,"skip…
+healthtrixss-crm-app  | 4:52:49 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 4:52:49 PM [express] POST /api/import/opportunities 200 in 159ms :: {"total":50,"success":47,"failed…
+healthtrixss-crm-app  | 4:52:59 PM [express] POST /api/import/activities 200 in 440ms :: {"total":457,"success":5,"failed":4…
+healthtrixss-crm-app  | 4:53:17 PM [express] GET /api/admin/id-patterns 304 in 17ms :: [{"id":"1b6cb4eb-56b2-4e67-a1d3-00cf6…
+healthtrixss-crm-app  | 4:53:17 PM [express] GET /api/admin/roles 304 in 20ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92…
+healthtrixss-crm-app  | 4:53:17 PM [express] GET /api/admin/users 304 in 23ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 4:53:19 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 4:53:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Config: {
+healthtrixss-crm-app  |   type_column: undefined,
+healthtrixss-crm-app  |   source_column: 'regardingIdentifier',
+healthtrixss-crm-app  |   target_id_field: 'relatedId',
+healthtrixss-crm-app  |   target_type_field: 'relatedType',
+healthtrixss-crm-app  |   fallback: 'create_note'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Available entities: { accounts: 41, contacts: 69, leads: 33, opportunities: 47 }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 0: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Easy Tech 1/2 Assessment',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 1: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Easy Tech 1/2 Assessment',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 2: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Anna Pozon Gibbs',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Complete - Matched: 421, Not matched: 36
+healthtrixss-crm-app  | 4:54:13 PM [express] POST /api/admin/dynamics/transform-activities 200 in 119ms
+healthtrixss-crm-app  | 4:54:19 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 4:54:29 PM [express] POST /api/import/activities 200 in 390ms :: {"total":457,"success":0,"failed":4…
+healthtrixss-crm-app  | 4:54:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
