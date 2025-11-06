@@ -1,0 +1,395 @@
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [i] No changes detected
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 5:22:50 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 5:22:54 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:22:56 PM [express] GET /api/user 304 in 6ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 5:22:56 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 12ms :: [{"name":"2025 Contracte…
+healthtrixss-crm-app  | 5:22:56 PM [express] GET /api/dashboard/stats 200 in 22ms :: {"totalAccounts":"41","totalContacts":"…
+healthtrixss-crm-app  | 5:22:56 PM [express] GET /api/activities/upcoming 304 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts 200 in 10ms :: [{"id":"CON-202511-00013","accountId":null,"fi…
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts 200 in 13ms :: [{"id":"CON-202511-00013","accountId":null,"fi…
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00013/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00020/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00057/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00068/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00072/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00073/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00015/tags 200 in 33ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/users 304 in 45ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/accounts 200 in 49ms :: [{"id":"ACT-1019","name":"Allied Behavioral He…
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00074/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00004/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00029/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00028/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00045/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00069/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00007/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00024/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00066/tags 200 in 44ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00030/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00037/tags 200 in 12ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00034/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00048/tags 200 in 12ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00005/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00018/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00067/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00001/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00058/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00027/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00050/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00055/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00049/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00022/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00026/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00053/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00059/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00014/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00046/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00023/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00006/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00070/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00025/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00012/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00011/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00040/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00042/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00032/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00017/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00019/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00043/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00031/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00039/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00051/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00054/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00047/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00075/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00041/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00044/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00008/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00064/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00060/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00036/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00002/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00061/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00063/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00016/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00052/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00065/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00009/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00010/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00035/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:00 PM [express] GET /api/contacts/CON-202511-00003/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads 200 in 6ms :: [{"id":"LEAD-000051","firstName":"Dr. Brett","last…
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads 200 in 6ms :: [{"id":"LEAD-000051","firstName":"Dr. Brett","last…
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000048/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000051/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000046/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000045/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000047/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000043/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000041/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000042/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000039/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000040/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000038/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000036/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000037/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000032/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000035/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000021/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000019/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000020/tags 200 in 12ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000017/tags 200 in 12ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000018/tags 200 in 15ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000016/tags 200 in 16ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000015/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000014/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000012/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000013/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000009/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000010/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000008/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000004/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000007/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000002/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000003/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/LEAD-000001/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:01 PM [express] GET /api/leads/summary 200 in 5ms :: {"totalCount":33,"byStatus":{"new":11,"con…
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities 200 in 5ms :: [{"id":"Opp-1024","accountId":"ACT-1002","…
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1010/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/Opp-1024/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1001/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1012/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1007/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1031/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1030/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1026/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1019/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1032/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1043/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1002/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1034/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1014/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1042/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:02 PM [express] GET /api/opportunities/OPP-1015/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1000/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1003/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1037/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1046/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1035/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1025/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1021/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1045/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1040/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1009/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1008/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1005/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1036/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1022/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1038/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1011/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1016/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1013/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1020/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1017/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1023/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1033/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1028/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1006/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1041/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1044/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1039/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1018/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1004/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/Opp-1027/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:23:03 PM [express] GET /api/opportunities/OPP-1029/tags 200 in 2ms :: []
+healthtrixss-crm-app  | 5:23:06 PM [express] GET /api/admin/id-patterns 304 in 7ms :: [{"id":"1b6cb4eb-56b2-4e67-a1d3-00cf68…
+healthtrixss-crm-app  | 5:23:06 PM [express] GET /api/admin/users 304 in 10ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 5:23:06 PM [express] GET /api/admin/roles 304 in 9ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92d…
+healthtrixss-crm-app  | 5:23:06 PM [express] GET /api/admin/categories 304 in 9ms :: []
+healthtrixss-crm-app  | 5:23:09 PM [express] POST /api/admin/reset-database 200 in 21ms :: {"success":true,"message":"Databa…
+healthtrixss-crm-app  | 5:23:09 PM [express] GET /api/user 304 in 2ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 5:23:09 PM [express] GET /api/admin/users 304 in 7ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76…
+healthtrixss-crm-app  | 5:23:09 PM [express] GET /api/admin/roles 304 in 9ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92d…
+healthtrixss-crm-app  | 5:23:09 PM [express] GET /api/admin/id-patterns 304 in 7ms :: [{"id":"1b6cb4eb-56b2-4e67-a1d3-00cf68…
+healthtrixss-crm-app  | 5:23:09 PM [express] GET /api/admin/categories 304 in 5ms :: []
+healthtrixss-crm-app  | 5:23:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Skipped - enabled: undefined existingEntities: false
+healthtrixss-crm-app  | 5:23:39 PM [express] POST /api/admin/dynamics/transform-accounts 200 in 45ms
+healthtrixss-crm-app  | 5:23:54 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Skipped - enabled: undefined existingEntities: false
+healthtrixss-crm-app  | 5:24:18 PM [express] POST /api/admin/dynamics/transform-contacts 200 in 31ms
+healthtrixss-crm-app  | 5:24:24 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Skipped - enabled: undefined existingEntities: false
+healthtrixss-crm-app  | 5:24:49 PM [express] POST /api/admin/dynamics/transform-leads 200 in 23ms
+healthtrixss-crm-app  | 5:24:54 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Skipped - enabled: undefined existingEntities: false
+healthtrixss-crm-app  | 5:25:21 PM [express] POST /api/admin/dynamics/transform-opportunities 200 in 33ms
+healthtrixss-crm-app  | 5:25:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [ENTITY LOOKUP] Config: {
+healthtrixss-crm-app  |   type_column: undefined,
+healthtrixss-crm-app  |   source_column: 'regardingIdentifier',
+healthtrixss-crm-app  |   target_id_field: 'relatedId',
+healthtrixss-crm-app  |   target_type_field: 'relatedType',
+healthtrixss-crm-app  |   fallback: 'create_note'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Available entities: { accounts: 0, contacts: 0, leads: 0, opportunities: 0 }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 0: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Easy Tech 1/2 Assessment',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 1: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Easy Tech 1/2 Assessment',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Row 2: {
+healthtrixss-crm-app  |   entityType: undefined,
+healthtrixss-crm-app  |   entityIdentifier: 'Anna Pozon Gibbs',
+healthtrixss-crm-app  |   allKeys: [
+healthtrixss-crm-app  |     'subject',
+healthtrixss-crm-app  |     'type',
+healthtrixss-crm-app  |     'completedAt',
+healthtrixss-crm-app  |     'externalId',
+healthtrixss-crm-app  |     'regardingIdentifier',
+healthtrixss-crm-app  |     'id',
+healthtrixss-crm-app  |     'dueAt',
+healthtrixss-crm-app  |     'relatedType',
+healthtrixss-crm-app  |     'relatedId',
+healthtrixss-crm-app  |     'notes',
+healthtrixss-crm-app  |     'sourceSystem',
+healthtrixss-crm-app  |     'sourceRecordId',
+healthtrixss-crm-app  |     'importStatus',
+healthtrixss-crm-app  |     'importNotes'
+healthtrixss-crm-app  |   ]
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ENTITY LOOKUP] Complete - Matched: 0, Not matched: 457
+healthtrixss-crm-app  | 5:25:51 PM [express] POST /api/admin/dynamics/transform-activities 200 in 68ms
+healthtrixss-crm-app  | 5:25:54 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts 200 in 19ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1009/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1021/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1020/tags 200 in 3ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/users 304 in 31ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1019/tags 200 in 36ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts 304 in 35ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/tags 304 in 31ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1014/tags 200 in 30ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1032/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1039/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1012/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1037/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1007/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1002/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1006/tags 200 in 11ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1030/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1010/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1017/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1027/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1031/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1038/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1029/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1000/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1015/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1018/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1035/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1026/tags 200 in 8ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1034/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1024/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1022/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1001/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1003/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1025/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1040/tags 200 in 12ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1011/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1013/tags 200 in 10ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1016/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1041/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1028/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1036/tags 200 in 5ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1008/tags 200 in 9ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1023/tags 200 in 4ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1005/tags 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/accounts/ACT-1033/tags 200 in 6ms :: []
+healthtrixss-crm-app  | 5:26:04 PM [express] GET /api/opportunities 200 in 7ms :: []
+healthtrixss-crm-app  | 5:26:14 PM [express] POST /api/import/accounts 200 in 140ms :: {"total":41,"success":41,"failed":0,"…
+healthtrixss-crm-app  | 5:26:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:26:28 PM [express] POST /api/import/contacts 200 in 179ms :: {"total":69,"success":69,"failed":0,"…
+healthtrixss-crm-app  | 5:26:40 PM [express] POST /api/import/leads 200 in 107ms :: {"total":33,"success":33,"failed":0,"ski…
+healthtrixss-crm-app  | 5:26:51 PM [express] POST /api/import/opportunities 200 in 167ms :: {"total":50,"success":46,"failed…
+healthtrixss-crm-app  | 5:26:54 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:27:24 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:27:44 PM [express] POST /api/import/opportunities 200 in 44ms :: {"total":50,"success":0,"failed":…
+healthtrixss-crm-app  | 5:27:54 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/user 304 in 9ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities 200 in 10ms :: [{"id":"Opp-1024","accountId":"ACT-1002",…
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/tags 304 in 14ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/users 304 in 16ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/Opp-1024/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1001/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1007/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1030/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1031/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1026/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1043/tags 304 in 5ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1002/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1032/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1014/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1034/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1042/tags 304 in 8ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1015/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1010/tags 304 in 45ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1003/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1000/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1037/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1046/tags 304 in 5ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1035/tags 304 in 8ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1012/tags 304 in 47ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1019/tags 304 in 46ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1025/tags 304 in 8ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1021/tags 304 in 12ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1009/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1040/tags 304 in 8ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1008/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1005/tags 304 in 10ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1022/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1038/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1036/tags 304 in 10ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1011/tags 304 in 5ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1016/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1020/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1017/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1013/tags 304 in 10ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1023/tags 304 in 6ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1033/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1006/tags 304 in 10ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1041/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1028/tags 304 in 11ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1044/tags 304 in 5ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1039/tags 304 in 9ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1004/tags 304 in 8ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/Opp-1027/tags 304 in 3ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1018/tags 304 in 7ms :: []
+healthtrixss-crm-app  | 5:28:17 PM [express] GET /api/opportunities/OPP-1029/tags 304 in 4ms :: []
+healthtrixss-crm-app  | 5:28:24 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:28:54 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:29:00 PM [express] POST /api/import/activities 200 in 407ms :: {"total":457,"success":5,"failed":4…
+healthtrixss-crm-app  | 5:29:24 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
