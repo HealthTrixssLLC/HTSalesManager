@@ -8,6 +8,7 @@ import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags,
 import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -37,6 +38,7 @@ const AVAILABLE_COLUMNS: Column[] = [
   { id: "industry", label: "Industry" },
   { id: "phone", label: "Phone" },
   { id: "website", label: "Website" },
+  { id: "tags", label: "Tags" },
   { id: "actions", label: "Actions" },
 ];
 
@@ -109,6 +111,11 @@ export default function AccountsPage() {
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
   });
 
   // Fetch all entity tags for client-side filtering
@@ -784,6 +791,9 @@ export default function AccountsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("tags") && (
+                  <TableHead>Tags</TableHead>
+                )}
                 {isColumnVisible("actions") && (
                   <TableHead className="text-right">Actions</TableHead>
                 )}
@@ -865,6 +875,34 @@ export default function AccountsPage() {
                         ) : (
                           "-"
                         )}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("tags") && (
+                      <TableCell onClick={(e) => e.stopPropagation()} data-testid={`cell-tags-${account.id}`}>
+                        <div className="flex gap-1 flex-wrap">
+                          {(() => {
+                            const accountTags = allEntityTags?.filter(et => et.entityId === account.id).map(et => et.tagId) || [];
+                            const tagObjects = accountTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                            
+                            if (tagObjects.length === 0) {
+                              return <span className="text-muted-foreground text-sm">-</span>;
+                            }
+                            
+                            return tagObjects.map((tag: any) => (
+                              <Badge 
+                                key={tag.id} 
+                                variant="outline"
+                                style={{ 
+                                  borderColor: tag.color,
+                                  color: tag.color,
+                                }}
+                                data-testid={`tag-badge-${tag.id}`}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ));
+                          })()}
+                        </div>
                       </TableCell>
                     )}
                     {isColumnVisible("actions") && (
