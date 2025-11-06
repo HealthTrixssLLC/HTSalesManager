@@ -335,7 +335,7 @@ export const tags = pgTable("tags", {
 
 export const entityTags = pgTable("entity_tags", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  entity: text("entity").notNull(), // "Account", "Contact", "Lead", "Opportunity"
+  entity: text("entity").notNull(), // "Account", "Contact", "Lead", "Opportunity", "Activity"
   entityId: varchar("entity_id", { length: 100 }).notNull(), // ID of the record
   tagId: varchar("tag_id", { length: 50 }).notNull().references(() => tags.id, { onDelete: "cascade" }),
   createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
@@ -343,7 +343,7 @@ export const entityTags = pgTable("entity_tags", {
 }, (table) => ({
   entityIdx: index("entity_tags_entity_idx").on(table.entity, table.entityId),
   tagIdx: index("entity_tags_tag_idx").on(table.tagId),
-  uniqueTag: index("entity_tags_unique_idx").on(table.entity, table.entityId, table.tagId),
+  uniqueTag: uniqueIndex("entity_tags_unique_idx").on(table.entity, table.entityId, table.tagId),
 }));
 
 // ========== RELATIONS ==========
