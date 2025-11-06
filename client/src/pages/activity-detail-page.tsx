@@ -19,6 +19,7 @@ import type { Activity, Account, Contact, Opportunity, Lead, InsertActivity } fr
 import { insertActivitySchema } from "@shared/schema";
 import { AssociationManager, Association } from "@/components/association-manager";
 import { Badge } from "@/components/ui/badge";
+import { TagSelector } from "@/components/tag-selector";
 
 interface ActivityAssociation {
   id: string;
@@ -60,6 +61,11 @@ export default function ActivityDetailPage() {
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: tags = [] } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/activities", activityId, "tags"],
+    enabled: !!activityId,
   });
 
   const deleteAssociationMutation = useMutation({
@@ -348,6 +354,22 @@ export default function ActivityDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold">Tags</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TagSelector
+                entity="activities"
+                entityId={activityId!}
+                selectedTags={tags}
+                onTagsChange={() => {
+                  queryClient.invalidateQueries({ queryKey: ["/api/activities", activityId, "tags"] });
+                }}
+              />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
