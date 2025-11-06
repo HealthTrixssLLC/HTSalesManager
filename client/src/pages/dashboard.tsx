@@ -19,7 +19,12 @@ type DashboardStats = {
   pipelineByStage: { stage: string; count: number; value: number }[];
   newLeadsThisMonth: number;
   winRate: number;
-  activitiesByUser: { userName: string; count: number }[];
+  opportunitiesByCloseDate: { 
+    period: string; 
+    count: number; 
+    value: number; 
+    opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] 
+  }[];
 };
 
 type OpportunityData = {
@@ -366,35 +371,72 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Activities by User</CardTitle>
-            <CardDescription>Distribution of activities across team members</CardDescription>
+            <CardTitle>Upcoming Opportunities by Close Date</CardTitle>
+            <CardDescription>Pipeline forecast by time period (next 6 months)</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={stats?.activitiesByUser || []}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ userName, count }) => `${userName}: ${count}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                >
-                  {(stats?.activitiesByUser || []).map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
+              <ComposedChart data={stats?.opportunitiesByCloseDate || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="period" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={11}
+                  tickFormatter={(value) => {
+                    if (value === "No Date") return value;
+                    const [year, month] = value.split('-');
+                    const date = new Date(parseInt(year), parseInt(month) - 1);
+                    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                  }}
+                />
+                <YAxis 
+                  yAxisId="left"
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={12}
+                  label={{ value: 'Count', angle: -90, position: 'insideLeft', fontSize: 11 }}
+                />
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="hsl(var(--muted-foreground))" 
+                  fontSize={12}
+                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                  label={{ value: 'Value', angle: 90, position: 'insideRight', fontSize: 11 }}
+                />
                 <Tooltip 
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "0.5rem",
                   }}
+                  formatter={(value: number, name: string) => {
+                    if (name === "count") return [value, "Opportunities"];
+                    return [`$${value.toLocaleString()}`, "Total Value"];
+                  }}
+                  labelFormatter={(label) => {
+                    if (label === "No Date") return label;
+                    const [year, month] = label.split('-');
+                    const date = new Date(parseInt(year), parseInt(month) - 1);
+                    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                  }}
                 />
-                <Legend />
-              </PieChart>
+                <Bar 
+                  yAxisId="left"
+                  dataKey="count" 
+                  fill="hsl(var(--chart-1))"
+                  radius={[4, 4, 0, 0]}
+                  name="count"
+                />
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                  name="value"
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
