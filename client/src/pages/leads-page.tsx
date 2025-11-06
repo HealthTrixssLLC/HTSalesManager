@@ -75,6 +75,7 @@ export default function LeadsPage() {
     source: "",
     rating: "",
     ownerId: "",
+    tagIds: [] as string[],
   });
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -117,6 +118,36 @@ export default function LeadsPage() {
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
   });
+
+  // Fetch all entity tags for client-side filtering
+  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
+    queryKey: ["/api/entity-tags"],
+    queryFn: async () => {
+      // Fetch tags for all leads
+      const leadTagsPromises = (allLeads || []).map(async (lead) => {
+        const res = await fetch(`/api/leads/${lead.id}/tags`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const tags = await res.json();
+        return tags.map((tag: any) => ({ entityId: lead.id, tagId: tag.id }));
+      });
+      const results = await Promise.all(leadTagsPromises);
+      return results.flat();
+    },
+    enabled: !!allLeads && allLeads.length > 0,
+  });
+
+  // Apply client-side tag filtering
+  const displayedLeads = useMemo(() => {
+    if (!filteredLeads) return [];
+    if (filters.tagIds.length === 0) return filteredLeads;
+
+    return filteredLeads.filter((lead) => {
+      const leadTags = allEntityTags?.filter(et => et.entityId === lead.id).map(et => et.tagId) || [];
+      return filters.tagIds.some(tagId => leadTags.includes(tagId));
+    });
+  }, [filteredLeads, filters.tagIds, allEntityTags]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertLead) => {
@@ -238,8 +269,8 @@ export default function LeadsPage() {
   };
 
   const selectAllLeads = () => {
-    if (filteredLeads) {
-      setSelectedLeadIds(new Set(filteredLeads.map(l => l.id)));
+    if (displayedLeads) {
+      setSelectedLeadIds(new Set(displayedLeads.map(l => l.id)));
     }
   };
 
@@ -515,7 +546,7 @@ export default function LeadsPage() {
       <LeadsFilterBar
         onFilterChange={handleFilterChange}
         totalCount={allLeads?.length || 0}
-        filteredCount={filteredLeads?.length || 0}
+        filteredCount={displayedLeads?.length || 0}
       />
 
       {selectedLeadIds.size > 0 && (
@@ -668,7 +699,7 @@ export default function LeadsPage() {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedLeadIds.size > 0 && selectedLeadIds.size === filteredLeads?.length}
+                    checked={selectedLeadIds.size > 0 && selectedLeadIds.size === displayedLeads?.length}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         selectAllLeads();
@@ -775,14 +806,14 @@ export default function LeadsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLeads?.length === 0 ? (
+              {displayedLeads?.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={AVAILABLE_COLUMNS.length} className="text-center py-8 text-muted-foreground">
                     No leads found. {filters.search || filters.status || filters.source || filters.ownerId ? "Try adjusting your filters." : "Create your first lead to get started."}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLeads?.map((lead) => (
+                displayedLeads?.map((lead) => (
                   <TableRow
                     key={lead.id}
                     className="cursor-pointer hover-elevate"
