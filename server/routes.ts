@@ -3188,7 +3188,7 @@ export function registerRoutes(app: Express) {
           const completedAtDate = parseDynamicsDate(row.completedAt);
           
           const activityData: any = {
-            id: row.id || "",
+            id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
             type: row.type || "task",
             subject: row.subject,
             status: "completed", // Default to completed for imported activities

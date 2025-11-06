@@ -97,7 +97,10 @@ export default function Dashboard() {
   };
 
   // Build waterfall data by stage (each stage starts where previous ended)
+  // Note: Closed Lost is shown separately as it doesn't contribute to target
   const waterfallData: WaterfallDataPoint[] = [];
+  const closedLostData: WaterfallDataPoint[] = [];
+  
   if (opportunities) {
     // Aggregate opportunities by stage
     const stageValues = new Map<string, number>();
@@ -106,7 +109,10 @@ export default function Dashboard() {
       stageValues.set(opp.stage, current + opp.amount);
     });
 
-    const totalActual = opportunities.reduce((sum, opp) => sum + opp.amount, 0);
+    // Calculate total excluding closed_lost
+    const totalActual = opportunities
+      .filter(opp => opp.stage !== "closed_lost")
+      .reduce((sum, opp) => sum + opp.amount, 0);
     const gap = Math.max(0, salesTarget - totalActual);
     let cumulative = 0;
     
@@ -122,8 +128,8 @@ export default function Dashboard() {
       cumulative = gap;
     }
     
-    // Add each stage in order (even if zero)
-    PIPELINE_STAGES.forEach((stage, index) => {
+    // Add progressive stages (excluding closed_lost)
+    PIPELINE_STAGES.filter(stage => stage.key !== "closed_lost").forEach((stage, index) => {
       const value = stageValues.get(stage.key) || 0;
       waterfallData.push({
         name: stage.label,
@@ -133,6 +139,17 @@ export default function Dashboard() {
       });
       cumulative += value;
     });
+    
+    // Add Closed Lost separately (not part of waterfall progression)
+    const closedLostValue = stageValues.get("closed_lost") || 0;
+    if (closedLostValue > 0) {
+      closedLostData.push({
+        name: "Closed Lost",
+        value: closedLostValue,
+        cumulative: closedLostValue,
+        stageIndex: 99, // Special index for styling
+      });
+    }
   }
 
   if (isLoading) {
@@ -234,74 +251,95 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={350}>
-              <ComposedChart 
-                data={waterfallData.map((d, i) => ({
-                  ...d,
-                  base: i === 0 ? 0 : waterfallData[i - 1].cumulative,
-                }))}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={10}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis 
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={12}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "0.5rem",
-                  }}
-                  formatter={(value: number, name: string) => {
-                    if (name === "base") return null;
-                    return [`$${value.toLocaleString()}`, "Amount"];
-                  }}
-                  labelFormatter={(label) => label}
-                />
-                <ReferenceLine 
-                  y={salesTarget} 
-                  stroke="hsl(var(--destructive))" 
-                  strokeDasharray="3 3"
-                  label={{ value: `Target: $${salesTarget.toLocaleString()}`, position: "right", fill: "hsl(var(--destructive))", fontSize: 12 }}
-                />
-                <Bar 
-                  dataKey="base" 
-                  stackId="waterfall"
-                  fill="transparent"
-                />
-                <Bar 
-                  dataKey="value" 
-                  stackId="waterfall"
-                  radius={[4, 4, 0, 0]}
-                  label={{
-                    position: 'top',
-                    formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`,
-                    fontSize: 10,
-                  }}
-                >
-                  {waterfallData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={
-                        entry.isTotal 
-                          ? "hsl(var(--destructive))" 
-                          : STAGE_COLORS[entry.stageIndex! % STAGE_COLORS.length]
-                      }
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-10">
+                <ResponsiveContainer width="100%" height={350}>
+                  <ComposedChart 
+                    data={waterfallData.map((d, i) => ({
+                      ...d,
+                      base: i === 0 ? 0 : waterfallData[i - 1].cumulative,
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={10}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
                     />
-                  ))}
-                </Bar>
-              </ComposedChart>
-            </ResponsiveContainer>
-            <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                    <YAxis 
+                      stroke="hsl(var(--muted-foreground))" 
+                      fontSize={12}
+                      tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "0.5rem",
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === "base") return null;
+                        return [`$${value.toLocaleString()}`, "Amount"];
+                      }}
+                      labelFormatter={(label) => label}
+                    />
+                    <ReferenceLine 
+                      y={salesTarget} 
+                      stroke="hsl(var(--destructive))" 
+                      strokeDasharray="3 3"
+                      label={{ value: `Target: $${salesTarget.toLocaleString()}`, position: "right", fill: "hsl(var(--destructive))", fontSize: 12 }}
+                    />
+                    <Bar 
+                      dataKey="base" 
+                      stackId="waterfall"
+                      fill="transparent"
+                    />
+                    <Bar 
+                      dataKey="value" 
+                      stackId="waterfall"
+                      radius={[4, 4, 0, 0]}
+                      label={{
+                        position: 'top',
+                        formatter: (value: number) => `$${(value / 1000).toFixed(0)}k`,
+                        fontSize: 10,
+                      }}
+                    >
+                      {waterfallData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={
+                            entry.isTotal 
+                              ? "hsl(var(--destructive))" 
+                              : STAGE_COLORS[entry.stageIndex! % STAGE_COLORS.length]
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              {closedLostData.length > 0 && (
+                <div className="col-span-2 flex flex-col items-center justify-end pb-20">
+                  <div className="text-xs text-muted-foreground mb-1 text-center">Closed Lost</div>
+                  <div 
+                    className="w-full rounded-md flex items-end justify-center"
+                    style={{
+                      height: `${Math.min(300, (closedLostData[0].value / salesTarget) * 300)}px`,
+                      backgroundColor: "hsl(var(--muted))",
+                      opacity: 0.6,
+                    }}
+                  >
+                    <div className="text-xs font-medium text-muted-foreground mb-2">
+                      ${(closedLostData[0].value / 1000).toFixed(0)}k
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-4 grid grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-muted-foreground">Target</p>
                 <p className="font-semibold">${salesTarget.toLocaleString()}</p>
@@ -314,6 +352,12 @@ export default function Dashboard() {
                 <p className="text-muted-foreground">Gap to Close</p>
                 <p className="font-semibold text-destructive">
                   ${(waterfallData.find(d => d.isTotal)?.value || 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Closed Lost</p>
+                <p className="font-semibold text-muted-foreground">
+                  ${(closedLostData[0]?.value || 0).toLocaleString()}
                 </p>
               </div>
             </div>
