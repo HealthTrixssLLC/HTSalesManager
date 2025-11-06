@@ -1,15 +1,12 @@
 import { useState, useEffect } from "react";
-import { Search, X, Tag as TagIcon } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import type { Tag } from "@/components/ui/tag-badge";
+import { TagFilterButton } from "@/components/tag-filter-button";
 
 interface User {
   id: string;
@@ -38,15 +35,10 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount }: Le
   const [rating, setRating] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
-  });
-
-  const { data: allTags = [] } = useQuery<Tag[]>({
-    queryKey: ["/api/tags"],
   });
 
   // Debounce search input
@@ -77,14 +69,6 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount }: Le
     setRating("");
     setOwnerId("");
     setSelectedTagIds([]);
-  };
-
-  const handleTagToggle = (tagId: string) => {
-    setSelectedTagIds(prev =>
-      prev.includes(tagId)
-        ? prev.filter(id => id !== tagId)
-        : [...prev, tagId]
-    );
   };
 
   const handleMyLeads = () => {
@@ -190,45 +174,10 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount }: Le
           </SelectContent>
         </Select>
 
-        <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className="w-[160px] justify-start"
-              data-testid="button-filter-tags"
-            >
-              <TagIcon className="h-4 w-4 mr-2" />
-              {selectedTagIds.length > 0 ? `${selectedTagIds.length} tag(s)` : "All Tags"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[250px] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search tags..." />
-              <CommandList>
-                <CommandEmpty>No tags found.</CommandEmpty>
-                <CommandGroup>
-                  {allTags.map((tag) => (
-                    <CommandItem
-                      key={tag.id}
-                      onSelect={() => handleTagToggle(tag.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <Checkbox
-                        checked={selectedTagIds.includes(tag.id)}
-                        data-testid={`checkbox-tag-${tag.id}`}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-sm"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      <span>{tag.name}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+        <TagFilterButton
+          selectedTagIds={selectedTagIds}
+          onTagIdsChange={setSelectedTagIds}
+        />
 
         {hasActiveFilters && (
           <Button

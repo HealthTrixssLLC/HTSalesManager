@@ -64,6 +64,7 @@ export default function AccountsPage() {
     type: "",
     category: "",
     ownerId: "",
+    tagIds: [] as string[],
   });
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -109,6 +110,36 @@ export default function AccountsPage() {
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
   });
+
+  // Fetch all entity tags for client-side filtering
+  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
+    queryKey: ["/api/entity-tags-accounts"],
+    queryFn: async () => {
+      // Fetch tags for all accounts
+      const accountTagsPromises = (allAccounts || []).map(async (account) => {
+        const res = await fetch(`/api/accounts/${account.id}/tags`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const tags = await res.json();
+        return tags.map((tag: any) => ({ entityId: account.id, tagId: tag.id }));
+      });
+      const results = await Promise.all(accountTagsPromises);
+      return results.flat();
+    },
+    enabled: !!allAccounts && allAccounts.length > 0,
+  });
+
+  // Apply client-side tag filtering
+  const displayedAccounts = useMemo(() => {
+    if (!filteredAccounts) return [];
+    if (filters.tagIds.length === 0) return filteredAccounts;
+
+    return filteredAccounts.filter((account) => {
+      const accountTags = allEntityTags?.filter(et => et.entityId === account.id).map(et => et.tagId) || [];
+      return filters.tagIds.some(tagId => accountTags.includes(tagId));
+    });
+  }, [filteredAccounts, filters.tagIds, allEntityTags]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertAccount) => {
@@ -283,7 +314,7 @@ export default function AccountsPage() {
       setFilters(prev => ({ ...prev, search: "" }));
     } else {
       // Reset all filters for "Total" card
-      setFilters({ search: "", type: "", category: "", ownerId: "" });
+      setFilters({ search: "", type: "", category: "", ownerId: "", tagIds: [] });
     }
   }, []);
 
@@ -307,8 +338,8 @@ export default function AccountsPage() {
   };
 
   const selectAllAccounts = () => {
-    if (filteredAccounts) {
-      setSelectedAccountIds(new Set(filteredAccounts.map(a => a.id)));
+    if (displayedAccounts) {
+      setSelectedAccountIds(new Set(displayedAccounts.map(a => a.id)));
     }
   };
 
@@ -533,7 +564,7 @@ export default function AccountsPage() {
       <AccountsFilterBar
         onFilterChange={handleFilterChange}
         totalCount={allAccounts?.length || 0}
-        filteredCount={filteredAccounts?.length || 0}
+        filteredCount={displayedAccounts?.length || 0}
       />
 
       {selectedAccountIds.size > 0 && (
@@ -661,7 +692,7 @@ export default function AccountsPage() {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedAccountIds.size > 0 && selectedAccountIds.size === filteredAccounts?.length}
+                    checked={selectedAccountIds.size > 0 && selectedAccountIds.size === displayedAccounts?.length}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         selectAllAccounts();
@@ -759,14 +790,14 @@ export default function AccountsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAccounts?.length === 0 ? (
+              {displayedAccounts?.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={AVAILABLE_COLUMNS.length + 1} className="text-center py-8 text-muted-foreground">
-                    No accounts found. {filters.search || filters.type || filters.category || filters.ownerId ? "Try adjusting your filters." : "Create your first account to get started."}
+                    No accounts found. {filters.search || filters.type || filters.category || filters.ownerId || filters.tagIds.length > 0 ? "Try adjusting your filters." : "Create your first account to get started."}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredAccounts?.map((account) => (
+                displayedAccounts?.map((account) => (
                   <TableRow
                     key={account.id}
                     className="cursor-pointer hover-elevate"

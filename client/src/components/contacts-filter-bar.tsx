@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
+import { TagFilterButton } from "@/components/tag-filter-button";
 
 interface User {
   id: string;
@@ -24,6 +25,7 @@ interface ContactsFilterBarProps {
     accountId: string;
     ownerId: string;
     hasEmail: string;
+    tagIds: string[];
   }) => void;
   totalCount: number;
   filteredCount: number;
@@ -35,6 +37,7 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount }:
   const [accountId, setAccountId] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [hasEmail, setHasEmail] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const { data: users } = useQuery<User[]>({
@@ -61,14 +64,16 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount }:
       accountId: accountId === "all" ? "" : accountId,
       ownerId: ownerId === "all" ? "" : ownerId,
       hasEmail: hasEmail === "all" ? "" : hasEmail,
+      tagIds: selectedTagIds,
     });
-  }, [debouncedSearch, accountId, ownerId, hasEmail, onFilterChange]);
+  }, [debouncedSearch, accountId, ownerId, hasEmail, selectedTagIds, onFilterChange]);
 
   const handleClearFilters = () => {
     setSearch("");
     setAccountId("");
     setOwnerId("");
     setHasEmail("");
+    setSelectedTagIds([]);
   };
 
   const handleMyContacts = () => {
@@ -87,9 +92,10 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount }:
     setOwnerId("");
     setAccountId("");
     setHasEmail("");
+    setSelectedTagIds([]);
   };
 
-  const hasActiveFilters = search || accountId || ownerId || hasEmail;
+  const hasActiveFilters = search || accountId || ownerId || hasEmail || selectedTagIds.length > 0;
 
   return (
     <div className="space-y-4" data-testid="contacts-filter-bar">
@@ -145,6 +151,11 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount }:
             <SelectItem value="false">Without Email</SelectItem>
           </SelectContent>
         </Select>
+
+        <TagFilterButton
+          selectedTagIds={selectedTagIds}
+          onTagIdsChange={setSelectedTagIds}
+        />
 
         {hasActiveFilters && (
           <Button

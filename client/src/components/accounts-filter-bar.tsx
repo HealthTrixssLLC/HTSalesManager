@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { AccountCategory } from "@shared/schema";
+import { TagFilterButton } from "@/components/tag-filter-button";
 
 interface User {
   id: string;
@@ -20,6 +21,7 @@ interface AccountsFilterBarProps {
     type: string;
     category: string;
     ownerId: string;
+    tagIds: string[];
   }) => void;
   totalCount: number;
   filteredCount: number;
@@ -31,6 +33,7 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount }:
   const [type, setType] = useState("");
   const [category, setCategory] = useState("");
   const [ownerId, setOwnerId] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const { data: users } = useQuery<User[]>({
@@ -57,14 +60,16 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount }:
       type,
       category,
       ownerId,
+      tagIds: selectedTagIds,
     });
-  }, [debouncedSearch, type, category, ownerId, onFilterChange]);
+  }, [debouncedSearch, type, category, ownerId, selectedTagIds, onFilterChange]);
 
   const handleClearFilters = () => {
     setSearch("");
     setType("");
     setCategory("");
     setOwnerId("");
+    setSelectedTagIds([]);
   };
 
   const handleMyAccounts = () => {
@@ -77,9 +82,10 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount }:
     setOwnerId("");
     setType("");
     setCategory("");
+    setSelectedTagIds([]);
   };
 
-  const hasActiveFilters = search || type || category || ownerId;
+  const hasActiveFilters = search || type || category || ownerId || selectedTagIds.length > 0;
 
   return (
     <div className="space-y-4" data-testid="accounts-filter-bar">
@@ -138,6 +144,11 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount }:
             ))}
           </SelectContent>
         </Select>
+
+        <TagFilterButton
+          selectedTagIds={selectedTagIds}
+          onTagIdsChange={setSelectedTagIds}
+        />
 
         {hasActiveFilters && (
           <Button

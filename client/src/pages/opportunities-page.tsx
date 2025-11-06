@@ -23,6 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { CommentSystem } from "@/components/comment-system";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
+import { TagFilterButton } from "@/components/tag-filter-button";
 
 const stages = [
   { id: "prospecting", label: "Prospecting", color: "bg-gray-500" },
@@ -62,6 +63,7 @@ export default function OpportunitiesPage() {
   const [filterProbabilityMin, setFilterProbabilityMin] = useState<string>("");
   const [filterProbabilityMax, setFilterProbabilityMax] = useState<string>("");
   const [filterRating, setFilterRating] = useState<string>("");
+  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
   const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
@@ -70,6 +72,25 @@ export default function OpportunitiesPage() {
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all entity tags for client-side filtering
+  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
+    queryKey: ["/api/entity-tags-opportunities"],
+    queryFn: async () => {
+      // Fetch tags for all opportunities
+      const opportunityTagsPromises = (opportunities || []).map(async (opportunity) => {
+        const res = await fetch(`/api/opportunities/${opportunity.id}/tags`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const tags = await res.json();
+        return tags.map((tag: any) => ({ entityId: opportunity.id, tagId: tag.id }));
+      });
+      const results = await Promise.all(opportunityTagsPromises);
+      return results.flat();
+    },
+    enabled: !!opportunities && opportunities.length > 0,
   });
 
   const createMutation = useMutation({
@@ -285,7 +306,7 @@ export default function OpportunitiesPage() {
   const filteredOpportunities = useMemo(() => {
     if (!opportunities) return [];
     
-    return opportunities.filter(opp => {
+    let result = opportunities.filter(opp => {
       // Account filter
       if (filterAccount && opp.accountId !== filterAccount) return false;
       
@@ -319,7 +340,17 @@ export default function OpportunitiesPage() {
       
       return true;
     });
-  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating]);
+
+    // Apply client-side tag filtering
+    if (filterTagIds.length > 0) {
+      result = result.filter((opp) => {
+        const oppTags = allEntityTags?.filter(et => et.entityId === opp.id).map(et => et.tagId) || [];
+        return filterTagIds.some(tagId => oppTags.includes(tagId));
+      });
+    }
+
+    return result;
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, allEntityTags]);
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
@@ -627,9 +658,17 @@ export default function OpportunitiesPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Tags</label>
+                <TagFilterButton
+                  selectedTagIds={filterTagIds}
+                  onTagIdsChange={setFilterTagIds}
+                />
+              </div>
             </div>
             
-            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating) && (
+            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0) && (
               <div className="flex gap-2 mt-4">
                 <Button 
                   variant="outline" 
@@ -641,6 +680,7 @@ export default function OpportunitiesPage() {
                     setFilterProbabilityMin("");
                     setFilterProbabilityMax("");
                     setFilterRating("");
+                    setFilterTagIds([]);
                   }}
                   data-testid="button-clear-filters"
                 >

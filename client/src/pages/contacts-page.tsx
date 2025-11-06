@@ -60,6 +60,7 @@ export default function ContactsPage() {
     accountId: "",
     ownerId: "",
     hasEmail: "",
+    tagIds: [] as string[],
   });
   const [sortBy, setSortBy] = useState("firstName");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -105,6 +106,36 @@ export default function ContactsPage() {
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
   });
+
+  // Fetch all entity tags for client-side filtering
+  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
+    queryKey: ["/api/entity-tags-contacts"],
+    queryFn: async () => {
+      // Fetch tags for all contacts
+      const contactTagsPromises = (allContacts || []).map(async (contact) => {
+        const res = await fetch(`/api/contacts/${contact.id}/tags`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const tags = await res.json();
+        return tags.map((tag: any) => ({ entityId: contact.id, tagId: tag.id }));
+      });
+      const results = await Promise.all(contactTagsPromises);
+      return results.flat();
+    },
+    enabled: !!allContacts && allContacts.length > 0,
+  });
+
+  // Apply client-side tag filtering
+  const displayedContacts = useMemo(() => {
+    if (!filteredContacts) return [];
+    if (filters.tagIds.length === 0) return filteredContacts;
+
+    return filteredContacts.filter((contact) => {
+      const contactTags = allEntityTags?.filter(et => et.entityId === contact.id).map(et => et.tagId) || [];
+      return filters.tagIds.some(tagId => contactTags.includes(tagId));
+    });
+  }, [filteredContacts, filters.tagIds, allEntityTags]);
 
   const createMutation = useMutation({
     mutationFn: async (data: InsertContact) => {
@@ -218,7 +249,7 @@ export default function ContactsPage() {
       }
     } else {
       // Reset all filters for "Total" card
-      setFilters({ search: "", accountId: "", ownerId: "", hasEmail: "" });
+      setFilters({ search: "", accountId: "", ownerId: "", hasEmail: "", tagIds: [] });
     }
   }, []);
 
@@ -248,8 +279,8 @@ export default function ContactsPage() {
   };
 
   const selectAllContacts = () => {
-    if (filteredContacts) {
-      setSelectedContactIds(new Set(filteredContacts.map(c => c.id)));
+    if (displayedContacts) {
+      setSelectedContactIds(new Set(displayedContacts.map(c => c.id)));
     }
   };
 
@@ -414,7 +445,7 @@ export default function ContactsPage() {
       <ContactsFilterBar
         onFilterChange={handleFilterChange}
         totalCount={allContacts?.length || 0}
-        filteredCount={filteredContacts?.length || 0}
+        filteredCount={displayedContacts?.length || 0}
       />
 
       {selectedContactIds.size > 0 && (
@@ -543,7 +574,7 @@ export default function ContactsPage() {
               <TableRow>
                 <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedContactIds.size > 0 && selectedContactIds.size === filteredContacts?.length}
+                    checked={selectedContactIds.size > 0 && selectedContactIds.size === displayedContacts?.length}
                     onCheckedChange={(checked) => {
                       if (checked) {
                         selectAllContacts();
@@ -623,14 +654,14 @@ export default function ContactsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredContacts?.length === 0 ? (
+              {displayedContacts?.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={AVAILABLE_COLUMNS.length + 1} className="text-center py-8 text-muted-foreground">
-                    No contacts found. {filters.search || filters.accountId || filters.ownerId || filters.hasEmail ? "Try adjusting your filters." : "Create your first contact to get started."}
+                    No contacts found. {filters.search || filters.accountId || filters.ownerId || filters.hasEmail || filters.tagIds.length > 0 ? "Try adjusting your filters." : "Create your first contact to get started."}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredContacts?.map((contact) => (
+                displayedContacts?.map((contact) => (
                   <TableRow
                     key={contact.id}
                     className="cursor-pointer hover-elevate"
