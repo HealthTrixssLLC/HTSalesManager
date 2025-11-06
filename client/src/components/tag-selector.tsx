@@ -30,16 +30,14 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
   const addEntityTagMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!entityId) throw new Error("Entity ID is required");
-      const res = await apiRequest("POST", "/api/entity-tags", {
-        entity,
-        entityId,
-        tagId,
-        createdBy: user?.id,
+      const res = await apiRequest("POST", `/api/${entity}/${entityId}/tags`, {
+        tagIds: [tagId],
       });
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/entity-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/${entity}/${entityId}/tags`] });
     },
     onError: (error: Error) => {
       toast({
@@ -53,11 +51,12 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
   const removeEntityTagMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!entityId) throw new Error("Entity ID is required");
-      const res = await apiRequest("DELETE", `/api/entity-tags/${entity}/${entityId}/${tagId}`);
+      const res = await apiRequest("DELETE", `/api/${entity}/${entityId}/tags/${tagId}`);
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/entity-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/${entity}/${entityId}/tags`] });
     },
     onError: (error: Error) => {
       toast({
