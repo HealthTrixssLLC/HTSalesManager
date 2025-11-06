@@ -43,6 +43,7 @@ const AVAILABLE_COLUMNS: Column[] = [
   { id: "company", label: "Company" },
   { id: "status", label: "Status" },
   { id: "source", label: "Source" },
+  { id: "rating", label: "Rating" },
   { id: "ownerId", label: "Owner" },
   { id: "topic", label: "Topic" },
   { id: "actions", label: "Actions" },
@@ -379,6 +380,28 @@ export default function LeadsPage() {
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="rating"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Rating</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-lead-rating">
+                            <SelectValue placeholder="Select rating" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="hot">Hot</SelectItem>
+                          <SelectItem value="warm">Warm</SelectItem>
+                          <SelectItem value="cold">Cold</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
@@ -470,6 +493,15 @@ export default function LeadsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("rating") && (
+                  <SortableTableHeader
+                    label="Rating"
+                    field="rating"
+                    currentSortBy={sortBy}
+                    currentSortOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                )}
                 {isColumnVisible("ownerId") && (
                   <SortableTableHeader
                     label="Owner"
@@ -553,6 +585,15 @@ export default function LeadsPage() {
                     {isColumnVisible("source") && (
                       <TableCell className="capitalize" data-testid={`cell-source-${lead.id}`}>
                         {lead.source || "-"}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("rating") && (
+                      <TableCell data-testid={`cell-rating-${lead.id}`}>
+                        {lead.rating ? (
+                          <Badge variant="outline" className="capitalize">
+                            {lead.rating}
+                          </Badge>
+                        ) : "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("ownerId") && (

@@ -275,6 +275,13 @@ export default function ActivityDetailPage() {
             <DetailField label="Status" value={activity.status} />
             <DetailField label="Priority" value={activity.priority} />
             <DetailField label="Due Date" value={activity.dueAt ? new Date(activity.dueAt).toISOString() : null} type="date" />
+            <DetailField 
+              label="Owner" 
+              value={activity.ownerId ? (() => {
+                const owner = users.find(u => u.id === activity.ownerId);
+                return owner ? `${owner.name} (${owner.email})` : "Unassigned";
+              })() : "Unassigned"} 
+            />
           </DetailSection>
 
           {activity.notes && (
@@ -318,7 +325,7 @@ export default function ActivityDetailPage() {
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">{assoc.entityType}</Badge>
                         <Button
-                          variant="link"
+                          variant="ghost"
                           size="sm"
                           className="h-auto p-0 text-sm"
                           onClick={() => setLocation(`/${assoc.entityType.toLowerCase()}s/${assoc.entityId}`)}

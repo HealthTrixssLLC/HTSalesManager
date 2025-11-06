@@ -737,10 +737,10 @@ export function registerRoutes(app: Express) {
         leads = leads.filter(l => l.ownerId === ownerId);
       }
       
-      // Apply rating filter (placeholder for now)
+      // Apply rating filter
       const rating = req.query.rating as string | undefined;
       if (rating) {
-        // Rating logic would go here when field is added
+        leads = leads.filter(l => l.rating === rating);
       }
       
       // Apply sorting

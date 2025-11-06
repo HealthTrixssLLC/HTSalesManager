@@ -120,6 +120,7 @@ export const leads = pgTable("leads", {
   topic: text("topic"), // Lead subject/description
   status: leadStatusEnum("status").notNull().default("new"),
   source: leadSourceEnum("source"),
+  rating: text("rating"), // Lead temperature: hot, warm, cold
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   convertedAccountId: varchar("converted_account_id", { length: 100 }).references(() => accounts.id),
   convertedContactId: varchar("converted_contact_id", { length: 100 }).references(() => contacts.id),

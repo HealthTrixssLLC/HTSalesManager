@@ -37,6 +37,7 @@ interface Filters {
   type: string[];
   status: string[];
   priority: string[];
+  ownerId: string;
   dateFrom: string;
   dateTo: string;
 }
@@ -65,6 +66,7 @@ export default function ActivitiesPage() {
     type: [],
     status: [],
     priority: [],
+    ownerId: "",
     dateFrom: "",
     dateTo: "",
   });
@@ -217,6 +219,10 @@ export default function ActivitiesPage() {
       if (filters.priority.length > 0 && !filters.priority.includes(activity.priority)) {
         return false;
       }
+      // Owner filter
+      if (filters.ownerId && activity.ownerId !== filters.ownerId) {
+        return false;
+      }
       // Date filter
       if (filters.dateFrom && activity.dueAt && new Date(activity.dueAt) < new Date(filters.dateFrom)) {
         return false;
@@ -254,11 +260,11 @@ export default function ActivitiesPage() {
     return filtered;
   }, [activities, filters, sortConfig]);
 
-  const toggleFilter = (filterType: keyof Omit<Filters, "dateFrom" | "dateTo">, value: string) => {
+  const toggleFilter = (filterType: keyof Omit<Filters, "dateFrom" | "dateTo" | "ownerId">, value: string) => {
     setFilters((prev) => {
       const currentValues = prev[filterType];
       const newValues = currentValues.includes(value)
-        ? currentValues.filter((v) => v !== value)
+        ? currentValues.filter((v: string) => v !== value)
         : [...currentValues, value];
       return { ...prev, [filterType]: newValues };
     });
@@ -276,12 +282,13 @@ export default function ActivitiesPage() {
       type: [],
       status: [],
       priority: [],
+      ownerId: "",
       dateFrom: "",
       dateTo: "",
     });
   };
 
-  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo;
 
   const handleExport = async () => {
     try {
@@ -603,7 +610,29 @@ export default function ActivitiesPage() {
       )}
 
       {/* Summary Statistics */}
-      <ActivitiesSummaryCards />
+      <ActivitiesSummaryCards onCardClick={(filter) => {
+        clearFilters();
+        if (filter.status) {
+          setFilters(prev => ({ ...prev, status: [filter.status!] }));
+        } else if (filter.priority) {
+          setFilters(prev => ({ ...prev, priority: [filter.priority!] }));
+        } else if (filter.dateRange === "overdue") {
+          // Filter to show overdue activities (due date < today)
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          setFilters(prev => ({ ...prev, dateTo: today.toISOString().split('T')[0] }));
+        } else if (filter.dateRange === "thisWeek") {
+          // Filter to show activities due this week
+          const today = new Date();
+          const endOfWeek = new Date(today);
+          endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+          setFilters(prev => ({ 
+            ...prev, 
+            dateFrom: today.toISOString().split('T')[0],
+            dateTo: endOfWeek.toISOString().split('T')[0]
+          }));
+        }
+      }} />
 
       {/* Filter, Sort, and Column Controls */}
       <div className="flex gap-2 flex-wrap">
@@ -665,6 +694,22 @@ export default function ActivitiesPage() {
                     </Button>
                   ))}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="owner">Owner</Label>
+                <Select value={filters.ownerId || undefined} onValueChange={(value) => setFilters((prev) => ({ ...prev, ownerId: value === "all" ? "" : value }))}>
+                  <SelectTrigger id="owner" data-testid="select-filter-owner">
+                    <SelectValue placeholder="All Owners" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Owners</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dateFrom">Due Date From</Label>
@@ -794,6 +839,11 @@ export default function ActivitiesPage() {
                               {visibleColumns.type && <Badge variant="outline" className="capitalize">{activity.type}</Badge>}
                               {visibleColumns.status && <Badge variant="outline" className="capitalize">{activity.status}</Badge>}
                               {visibleColumns.priority && <Badge variant="outline" className="capitalize">{activity.priority}</Badge>}
+                              {activity.ownerId && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {users.find(u => u.id === activity.ownerId)?.name || "Unassigned"}
+                                </Badge>
+                              )}
                               {visibleColumns.dueDate && activity.dueAt && (
                                 <span className="text-xs text-muted-foreground">
                                   Due: {new Date(activity.dueAt).toLocaleDateString()}

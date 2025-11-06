@@ -623,7 +623,7 @@ export default function OpportunitiesPage() {
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <DollarSign className="h-3 w-3" />
-                          ${parseFloat(opp.amount || "0").toLocaleString()}
+                          {parseFloat(opp.amount || "0").toLocaleString()}
                         </span>
                         <span>{opp.probability}%</span>
                       </div>

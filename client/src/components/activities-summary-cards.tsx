@@ -35,7 +35,11 @@ interface ActivitiesSummary {
   byOwner: Record<string, { count: number; ownerName: string }>;
 }
 
-export function ActivitiesSummaryCards() {
+interface ActivitiesSummaryCardsProps {
+  onCardClick?: (filter: { status?: string; priority?: string; dateRange?: "overdue" | "thisWeek" }) => void;
+}
+
+export function ActivitiesSummaryCards({ onCardClick }: ActivitiesSummaryCardsProps) {
   const { data: summary, isLoading } = useQuery<ActivitiesSummary>({
     queryKey: ["/api/activities/summary"],
   });
@@ -63,7 +67,11 @@ export function ActivitiesSummaryCards() {
 
   return (
     <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" data-testid="activities-summary-cards">
-      <Card data-testid="card-total-activities">
+      <Card 
+        data-testid="card-total-activities"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({})}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Total Activities
@@ -80,7 +88,11 @@ export function ActivitiesSummaryCards() {
         </CardContent>
       </Card>
 
-      <Card data-testid="card-overdue">
+      <Card 
+        data-testid="card-overdue"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({ dateRange: "overdue" })}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Overdue
@@ -97,7 +109,11 @@ export function ActivitiesSummaryCards() {
         </CardContent>
       </Card>
 
-      <Card data-testid="card-due-this-week">
+      <Card 
+        data-testid="card-due-this-week"
+        className={onCardClick ? "cursor-pointer hover-elevate active-elevate-2" : ""}
+        onClick={() => onCardClick?.({ dateRange: "thisWeek" })}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Due This Week

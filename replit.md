@@ -18,6 +18,7 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 **Technical Implementations & Feature Specifications:**
 
 *   **Core CRM Entities**: Accounts, Contacts, Leads, Opportunities, and Activities with dedicated CRUD pages and detail views. Entity detail pages include full information display, related entities, a comments system, and navigation.
+*   **Lead Rating System**: Leads include a rating field (Hot/Warm/Cold) with full CRUD support in create/edit forms and filtering capabilities on the leads list page.
 *   **Activity Management**: 
     *   **Bulk Operations**: Multi-select with checkboxes, bulk reassignment of owners, and bulk due date changes via dedicated dialogs.
     *   **Summary Statistics**: Real-time dashboard cards showing Total Activities, By Status (pending/completed/cancelled), Overdue (high priority), and Due This Week (meetings/calls). Statistics update automatically after any activity changes.

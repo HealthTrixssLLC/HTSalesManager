@@ -89,6 +89,7 @@ export default function LeadDetailPage() {
       topic: "",
       status: "new",
       source: undefined,
+      rating: undefined,
       ownerId: undefined,
     },
   });
@@ -106,6 +107,7 @@ export default function LeadDetailPage() {
         topic: lead.topic || "",
         status: lead.status,
         source: lead.source || undefined,
+        rating: lead.rating || undefined,
         ownerId: lead.ownerId || undefined,
       });
     }
@@ -396,6 +398,28 @@ export default function LeadDetailPage() {
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="rating"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Rating</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-edit-rating">
+                        <SelectValue placeholder="Select rating" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="hot">Hot</SelectItem>
+                      <SelectItem value="warm">Warm</SelectItem>
+                      <SelectItem value="cold">Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
