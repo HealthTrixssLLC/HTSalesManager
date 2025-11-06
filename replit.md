@@ -37,7 +37,11 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 *   **Dashboard**: Provides key insights like pipeline status, win rates, and upcoming opportunity forecasts. Features a Sales Waterfall chart for annual target tracking and an Upcoming Opportunities by Close Date chart showing pipeline forecast by time period (next 6 months) with both opportunity counts and total values displayed on dual Y-axes.
 *   **Analytics & Forecasting System**: OKR-driven analytics platform with four forecasting models, a Pipeline Health Score, Sales Velocity Metrics, Rep Performance Analytics, Deal Closing Predictions, and an Executive Dashboard. Includes 7 API endpoints and interactive visualizations using Recharts.
 *   **Comments System**: Full-featured threaded commenting with emoji reactions, pin/resolve status, edit/delete capabilities, and RBAC-enforced permissions for Accounts, Contacts, Leads, and Opportunities.
-*   **Performance Optimization**: Over 20 database indexes on frequently queried columns and optimized dashboard aggregation queries.
+*   **Tagging System**: Multi-tag support across all entities (Accounts, Contacts, Leads, Opportunities) with clickable filter cards, custom colors, and bulk tag operations.
+*   **Performance Optimization**: 
+    *   Over 20 database indexes on frequently queried columns
+    *   Optimized dashboard aggregation queries
+    *   **Tag Loading Optimization** (Nov 2025): Eliminated N+1 query problem by using PostgreSQL JSON aggregation with LEFT JOIN in entity list queries. Tags are now included directly in the main entity response (`getAllAccounts`, `getAllContacts`, `getAllLeads`, `getAllOpportunities`) using `json_agg` and `FILTER` clauses, reducing hundreds of individual tag API calls to a single query per entity type.
 
 **System Design Choices:**
 
