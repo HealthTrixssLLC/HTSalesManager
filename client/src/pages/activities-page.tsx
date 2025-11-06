@@ -24,6 +24,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ActivitiesSummaryCards } from "@/components/activities-summary-cards";
+import { TagFilterButton } from "@/components/tag-filter-button";
+import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 
 const activityIcons = {
   call: Phone,
@@ -40,6 +42,7 @@ interface Filters {
   ownerId: string;
   dateFrom: string;
   dateTo: string;
+  tagIds: string[];
 }
 
 interface SortConfig {
@@ -58,6 +61,7 @@ export default function ActivitiesPage() {
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
   const [isChangeDueDateDialogOpen, setIsChangeDueDateDialogOpen] = useState(false);
+  const [isBulkTagDialogOpen, setIsBulkTagDialogOpen] = useState(false);
   const [bulkOwnerId, setBulkOwnerId] = useState("");
   const [bulkDueDate, setBulkDueDate] = useState("");
   
@@ -69,6 +73,7 @@ export default function ActivitiesPage() {
     ownerId: "",
     dateFrom: "",
     dateTo: "",
+    tagIds: [],
   });
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: "createdAt", direction: "desc" });
   const [visibleColumns, setVisibleColumns] = useState({
@@ -86,6 +91,30 @@ export default function ActivitiesPage() {
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
+  });
+
+  // Fetch all entity tags for client-side filtering
+  const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
+    queryKey: ["/api/entity-tags-activities"],
+    queryFn: async () => {
+      // Fetch tags for all activities
+      const activityTagsPromises = (activities || []).map(async (activity) => {
+        const res = await fetch(`/api/activities/${activity.id}/tags`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const tags = await res.json();
+        return tags.map((tag: any) => ({ entityId: activity.id, tagId: tag.id }));
+      });
+      const results = await Promise.all(activityTagsPromises);
+      return results.flat();
+    },
+    enabled: !!activities && activities.length > 0,
   });
 
   const createMutation = useMutation({
@@ -233,6 +262,14 @@ export default function ActivitiesPage() {
       return true;
     });
 
+    // Apply client-side tag filtering
+    if (filters.tagIds.length > 0) {
+      filtered = filtered.filter((activity) => {
+        const activityTags = allEntityTags?.filter(et => et.entityId === activity.id).map(et => et.tagId) || [];
+        return filters.tagIds.some(tagId => activityTags.includes(tagId));
+      });
+    }
+
     // Sort
     if (sortConfig.field) {
       filtered = [...filtered].sort((a, b) => {
@@ -258,7 +295,7 @@ export default function ActivitiesPage() {
     }
 
     return filtered;
-  }, [activities, filters, sortConfig]);
+  }, [activities, filters, sortConfig, allEntityTags]);
 
   const toggleFilter = (filterType: keyof Omit<Filters, "dateFrom" | "dateTo" | "ownerId">, value: string) => {
     setFilters((prev) => {
@@ -285,10 +322,11 @@ export default function ActivitiesPage() {
       ownerId: "",
       dateFrom: "",
       dateTo: "",
+      tagIds: [],
     });
   };
 
-  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo;
+  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo || filters.tagIds.length > 0;
 
   const handleExport = async () => {
     try {
@@ -604,6 +642,14 @@ export default function ActivitiesPage() {
               >
                 Change Due Date
               </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsBulkTagDialogOpen(true)}
+                data-testid="button-bulk-tag"
+              >
+                Bulk Tag
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -741,6 +787,12 @@ export default function ActivitiesPage() {
           </PopoverContent>
         </Popover>
 
+        {/* Tag Filter */}
+        <TagFilterButton
+          selectedTagIds={filters.tagIds}
+          onTagIdsChange={(tagIds: string[]) => setFilters(prev => ({ ...prev, tagIds }))}
+        />
+
         {/* Sort Controls */}
         <Popover>
           <PopoverTrigger asChild>
@@ -859,6 +911,25 @@ export default function ActivitiesPage() {
                                   Owner: {users.find(u => u.id === activity.ownerId)?.name || "Unknown"}
                                 </span>
                               )}
+                              {(() => {
+                                const activityTags = allEntityTags?.filter(et => et.entityId === activity.id).map(et => et.tagId) || [];
+                                const tagObjects = activityTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                                
+                                return tagObjects.map((tag: any) => (
+                                  <Badge 
+                                    key={tag.id} 
+                                    variant="outline"
+                                    className="text-xs h-5"
+                                    style={{ 
+                                      borderColor: tag.color,
+                                      color: tag.color,
+                                    }}
+                                    data-testid={`tag-badge-${tag.id}`}
+                                  >
+                                    {tag.name}
+                                  </Badge>
+                                ));
+                              })()}
                             </div>
                           </div>
                           <span className="text-xs text-muted-foreground">
@@ -960,6 +1031,19 @@ export default function ActivitiesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Tag Dialog */}
+      <BulkTagDialog
+        open={isBulkTagDialogOpen}
+        onOpenChange={setIsBulkTagDialogOpen}
+        entity="activities"
+        selectedIds={Array.from(selectedActivityIds)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/entity-tags-activities"] });
+          setSelectedActivityIds(new Set());
+          setIsBulkTagDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

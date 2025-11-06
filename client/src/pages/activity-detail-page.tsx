@@ -63,7 +63,7 @@ export default function ActivityDetailPage() {
     queryKey: ["/api/users"],
   });
 
-  const { data: tags = [] } = useQuery<Array<{ id: string; name: string; color: string }>>({
+  const { data: tags = [] } = useQuery<any[]>({
     queryKey: ["/api/activities", activityId, "tags"],
     enabled: !!activityId,
   });

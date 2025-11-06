@@ -29,6 +29,7 @@ export function BulkTagDialog({ open, onOpenChange, selectedIds, entity, onSucce
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [`/api/${entity}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/entity-tags"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/entity-tags-${entity}`] });
       toast({ 
         title: `Successfully added tags to ${data.count} ${entity}${data.count !== 1 ? 's' : ''}` 
       });
