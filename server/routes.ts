@@ -2765,7 +2765,7 @@ export function registerRoutes(app: Express) {
         try {
           // Prepare account data (use empty strings for optional fields to match schema validation)
           const accountData: any = {
-            id: row.id || "", // Will be auto-generated if empty
+            id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
             name: row.name,
             accountNumber: row.accountNumber || "",
             type: row.type || null,
@@ -2857,7 +2857,7 @@ export function registerRoutes(app: Express) {
         const row = records[i];
         try {
           const contactData: any = {
-            id: row.id || "",
+            id: row.id && row.id.trim() !== "" ? row.id : undefined,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email || null,
@@ -2961,7 +2961,7 @@ export function registerRoutes(app: Express) {
           }
           
           const leadData: any = {
-            id: row.id || "",
+            id: row.id && row.id.trim() !== "" ? row.id : undefined,
             firstName: row.firstName,
             lastName: row.lastName,
             company: row.company || null,
@@ -3067,7 +3067,7 @@ export function registerRoutes(app: Express) {
           }
           
           const oppData: any = {
-            id: row.id || "",
+            id: row.id && row.id.trim() !== "" ? row.id : undefined,
             name: row.name,
             accountId: row.accountId,
             stage: stage,
