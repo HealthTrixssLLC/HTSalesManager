@@ -2520,6 +2520,11 @@ export function registerRoutes(app: Express) {
     { name: 'templateCsv', maxCount: 1 }
   ]), async (req: AuthRequest, res) => {
     try {
+      console.log('\n=== ACTIVITY TRANSFORM DIAGNOSTICS ===');
+      console.log('[ACTIVITY-TRANSFORM] Starting activity transformation');
+      console.log('[ACTIVITY-TRANSFORM] Timestamp:', new Date().toISOString());
+      console.log('[ACTIVITY-TRANSFORM] User:', req.user?.email);
+      
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       
       if (!files.excelFile || !files.mappingConfig || !files.templateCsv) {
@@ -2538,36 +2543,108 @@ export function registerRoutes(app: Express) {
       // Get Excel buffer
       const excelBuffer = files.excelFile[0].buffer;
 
-      // Fetch all entities for related entity lookup
+      console.log('[ACTIVITY-TRANSFORM] Files loaded:', {
+        excelFile: files.excelFile[0].originalname,
+        excelSize: files.excelFile[0].size,
+        mappingConfigSize: files.mappingConfig[0].size,
+        templateCsvSize: files.templateCsv[0].size
+      });
+
+      // Database diagnostic - test connection before queries
+      console.log('[ACTIVITY-TRANSFORM] Testing database connection...');
+      try {
+        const testQuery = await db.execute(sql`SELECT 1 as test`);
+        console.log('[ACTIVITY-TRANSFORM] Database connection test successful:', testQuery);
+      } catch (dbError) {
+        console.error('[ACTIVITY-TRANSFORM] Database connection test FAILED:', dbError);
+      }
+
+      // Fetch all entities for related entity lookup with detailed diagnostics
+      console.log('[ACTIVITY-TRANSFORM] Fetching existing entities from database...');
+      const startTime = Date.now();
+
+      console.log('[ACTIVITY-TRANSFORM] Querying accounts...');
+      const accountsStart = Date.now();
+      const accountsResult = await db.select({
+        id: accounts.id,
+        externalId: accounts.externalId,
+        accountNumber: accounts.accountNumber,
+        name: accounts.name
+      }).from(accounts);
+      console.log(`[ACTIVITY-TRANSFORM] Accounts query took ${Date.now() - accountsStart}ms, returned ${accountsResult.length} rows`);
+      if (accountsResult.length > 0) {
+        console.log('[ACTIVITY-TRANSFORM] Sample account:', accountsResult[0]);
+      }
+
+      console.log('[ACTIVITY-TRANSFORM] Querying contacts...');
+      const contactsStart = Date.now();
+      const contactsResult = await db.select({
+        id: contacts.id,
+        email: contacts.email,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName
+      }).from(contacts);
+      console.log(`[ACTIVITY-TRANSFORM] Contacts query took ${Date.now() - contactsStart}ms, returned ${contactsResult.length} rows`);
+      if (contactsResult.length > 0) {
+        console.log('[ACTIVITY-TRANSFORM] Sample contact:', contactsResult[0]);
+      }
+
+      console.log('[ACTIVITY-TRANSFORM] Querying leads...');
+      const leadsStart = Date.now();
+      const leadsResult = await db.select({
+        id: leads.id,
+        email: leads.email,
+        firstName: leads.firstName,
+        lastName: leads.lastName
+      }).from(leads);
+      console.log(`[ACTIVITY-TRANSFORM] Leads query took ${Date.now() - leadsStart}ms, returned ${leadsResult.length} rows`);
+      if (leadsResult.length > 0) {
+        console.log('[ACTIVITY-TRANSFORM] Sample lead:', leadsResult[0]);
+      }
+
+      console.log('[ACTIVITY-TRANSFORM] Querying opportunities...');
+      const opportunitiesStart = Date.now();
+      const opportunitiesResult = await db.select({
+        id: opportunities.id,
+        externalId: opportunities.externalId,
+        name: opportunities.name
+      }).from(opportunities);
+      console.log(`[ACTIVITY-TRANSFORM] Opportunities query took ${Date.now() - opportunitiesStart}ms, returned ${opportunitiesResult.length} rows`);
+      if (opportunitiesResult.length > 0) {
+        console.log('[ACTIVITY-TRANSFORM] Sample opportunity:', opportunitiesResult[0]);
+      }
+
+      const totalQueryTime = Date.now() - startTime;
+      console.log(`[ACTIVITY-TRANSFORM] All entity queries completed in ${totalQueryTime}ms`);
+
       const existingEntities = {
-        accounts: await db.select({
-          id: accounts.id,
-          externalId: accounts.externalId,
-          accountNumber: accounts.accountNumber,
-          name: accounts.name
-        }).from(accounts),
-        contacts: await db.select({
-          id: contacts.id,
-          email: contacts.email,
-          firstName: contacts.firstName,
-          lastName: contacts.lastName
-        }).from(contacts),
-        leads: await db.select({
-          id: leads.id,
-          email: leads.email,
-          firstName: leads.firstName,
-          lastName: leads.lastName
-        }).from(leads),
-        opportunities: await db.select({
-          id: opportunities.id,
-          externalId: opportunities.externalId,
-          name: opportunities.name
-        }).from(opportunities)
+        accounts: accountsResult,
+        contacts: contactsResult,
+        leads: leadsResult,
+        opportunities: opportunitiesResult
       };
 
+      console.log('[ACTIVITY-TRANSFORM] Entity counts summary:', {
+        accounts: existingEntities.accounts.length,
+        contacts: existingEntities.contacts.length,
+        leads: existingEntities.leads.length,
+        opportunities: existingEntities.opportunities.length,
+        total: existingEntities.accounts.length + existingEntities.contacts.length + 
+               existingEntities.leads.length + existingEntities.opportunities.length
+      });
+
       // Create mapper and transform
+      console.log('[ACTIVITY-TRANSFORM] Creating DynamicsMapper and starting transformation...');
       const mapper = new DynamicsMapper(config);
       const result = mapper.transform(excelBuffer, templateCsv, [], existingEntities);
+
+      console.log('[ACTIVITY-TRANSFORM] Transformation complete. Stats:', result.stats);
+      console.log('[ACTIVITY-TRANSFORM] Transformed data rows:', result.data.length);
+      
+      // Log a sample of transformed data
+      if (result.data.length > 0) {
+        console.log('[ACTIVITY-TRANSFORM] Sample transformed row:', result.data[0]);
+      }
 
       // Set ownerId to the current user for all activities
       result.data = result.data.map(row => ({
@@ -2577,6 +2654,7 @@ export function registerRoutes(app: Express) {
 
       // Convert to CSV
       const csvContent = mapper.toCSV(result.data);
+      console.log('[ACTIVITY-TRANSFORM] CSV generated, size:', csvContent.length, 'bytes');
 
       // Create audit log
       await createAudit(req, "transform", "DynamicsImport", null, null, {
@@ -2585,6 +2663,9 @@ export function registerRoutes(app: Express) {
         stats: result.stats,
       });
 
+      console.log('[ACTIVITY-TRANSFORM] Activity transformation completed successfully');
+      console.log('=== END ACTIVITY TRANSFORM DIAGNOSTICS ===\n');
+
       // Return CSV file with timestamp
       const timestamp = Date.now();
       res.setHeader('Content-Type', 'text/csv');
@@ -2592,9 +2673,173 @@ export function registerRoutes(app: Express) {
       
       return res.send(csvContent);
     } catch (error: any) {
-      console.error("Dynamics activities transform error:", error);
+      console.error('[ACTIVITY-TRANSFORM] ERROR during transformation:', error);
+      console.error('[ACTIVITY-TRANSFORM] Error stack:', error.stack);
+      console.log('=== END ACTIVITY TRANSFORM DIAGNOSTICS (ERROR) ===\n');
       return res.status(500).json({ 
         error: "Failed to transform activities", 
+        details: error.message 
+      });
+    }
+  });
+  
+  // ========== DATABASE DIAGNOSTICS ENDPOINT ==========
+  
+  app.get("/api/admin/diagnostics/database", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      console.log('\n=== DATABASE DIAGNOSTICS ===');
+      console.log('[DB-DIAGNOSTIC] Starting database diagnostics');
+      console.log('[DB-DIAGNOSTIC] Timestamp:', new Date().toISOString());
+      console.log('[DB-DIAGNOSTIC] User:', req.user?.email);
+
+      const diagnostics: any = {
+        timestamp: new Date().toISOString(),
+        database: {
+          connected: false,
+          connectionTest: null,
+        },
+        entities: {
+          accounts: { count: 0, sample: null, error: null },
+          contacts: { count: 0, sample: null, error: null },
+          leads: { count: 0, sample: null, error: null },
+          opportunities: { count: 0, sample: null, error: null },
+          activities: { count: 0, sample: null, error: null },
+        },
+        queryTimes: {},
+      };
+
+      // Test database connection
+      try {
+        const startConn = Date.now();
+        const testResult = await db.execute(sql`SELECT 1 as test, current_database() as db_name, current_user as db_user`);
+        diagnostics.database.connected = true;
+        diagnostics.database.connectionTest = testResult;
+        diagnostics.queryTimes.connectionTest = Date.now() - startConn;
+        console.log('[DB-DIAGNOSTIC] Connection test successful:', testResult);
+      } catch (error: any) {
+        diagnostics.database.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Connection test failed:', error);
+      }
+
+      // Query each entity type
+      try {
+        const startAccounts = Date.now();
+        const accountsData = await db.select({
+          id: accounts.id,
+          name: accounts.name,
+          externalId: accounts.externalId,
+          accountNumber: accounts.accountNumber,
+        }).from(accounts).limit(3);
+        
+        diagnostics.entities.accounts.count = accountsData.length;
+        diagnostics.entities.accounts.sample = accountsData[0] || null;
+        diagnostics.queryTimes.accounts = Date.now() - startAccounts;
+        
+        // Get actual count
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ${accounts}`);
+        diagnostics.entities.accounts.totalCount = countResult.rows?.[0]?.count || 0;
+        
+        console.log(`[DB-DIAGNOSTIC] Accounts: ${diagnostics.entities.accounts.totalCount} total`);
+      } catch (error: any) {
+        diagnostics.entities.accounts.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Accounts query failed:', error);
+      }
+
+      try {
+        const startContacts = Date.now();
+        const contactsData = await db.select({
+          id: contacts.id,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          email: contacts.email,
+        }).from(contacts).limit(3);
+        
+        diagnostics.entities.contacts.count = contactsData.length;
+        diagnostics.entities.contacts.sample = contactsData[0] || null;
+        diagnostics.queryTimes.contacts = Date.now() - startContacts;
+        
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ${contacts}`);
+        diagnostics.entities.contacts.totalCount = countResult.rows?.[0]?.count || 0;
+        
+        console.log(`[DB-DIAGNOSTIC] Contacts: ${diagnostics.entities.contacts.totalCount} total`);
+      } catch (error: any) {
+        diagnostics.entities.contacts.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Contacts query failed:', error);
+      }
+
+      try {
+        const startLeads = Date.now();
+        const leadsData = await db.select({
+          id: leads.id,
+          firstName: leads.firstName,
+          lastName: leads.lastName,
+          email: leads.email,
+        }).from(leads).limit(3);
+        
+        diagnostics.entities.leads.count = leadsData.length;
+        diagnostics.entities.leads.sample = leadsData[0] || null;
+        diagnostics.queryTimes.leads = Date.now() - startLeads;
+        
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ${leads}`);
+        diagnostics.entities.leads.totalCount = countResult.rows?.[0]?.count || 0;
+        
+        console.log(`[DB-DIAGNOSTIC] Leads: ${diagnostics.entities.leads.totalCount} total`);
+      } catch (error: any) {
+        diagnostics.entities.leads.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Leads query failed:', error);
+      }
+
+      try {
+        const startOpportunities = Date.now();
+        const opportunitiesData = await db.select({
+          id: opportunities.id,
+          name: opportunities.name,
+          externalId: opportunities.externalId,
+        }).from(opportunities).limit(3);
+        
+        diagnostics.entities.opportunities.count = opportunitiesData.length;
+        diagnostics.entities.opportunities.sample = opportunitiesData[0] || null;
+        diagnostics.queryTimes.opportunities = Date.now() - startOpportunities;
+        
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ${opportunities}`);
+        diagnostics.entities.opportunities.totalCount = countResult.rows?.[0]?.count || 0;
+        
+        console.log(`[DB-DIAGNOSTIC] Opportunities: ${diagnostics.entities.opportunities.totalCount} total`);
+      } catch (error: any) {
+        diagnostics.entities.opportunities.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Opportunities query failed:', error);
+      }
+
+      try {
+        const startActivities = Date.now();
+        const activitiesData = await db.select({
+          id: activities.id,
+          subject: activities.subject,
+          activityType: activities.activityType,
+        }).from(activities).limit(3);
+        
+        diagnostics.entities.activities.count = activitiesData.length;
+        diagnostics.entities.activities.sample = activitiesData[0] || null;
+        diagnostics.queryTimes.activities = Date.now() - startActivities;
+        
+        const countResult = await db.execute(sql`SELECT COUNT(*) as count FROM ${activities}`);
+        diagnostics.entities.activities.totalCount = countResult.rows?.[0]?.count || 0;
+        
+        console.log(`[DB-DIAGNOSTIC] Activities: ${diagnostics.entities.activities.totalCount} total`);
+      } catch (error: any) {
+        diagnostics.entities.activities.error = error.message;
+        console.error('[DB-DIAGNOSTIC] Activities query failed:', error);
+      }
+
+      console.log('[DB-DIAGNOSTIC] Database diagnostics complete');
+      console.log('=== END DATABASE DIAGNOSTICS ===\n');
+
+      return res.json(diagnostics);
+    } catch (error: any) {
+      console.error('[DB-DIAGNOSTIC] Unexpected error:', error);
+      console.log('=== END DATABASE DIAGNOSTICS (ERROR) ===\n');
+      return res.status(500).json({ 
+        error: "Database diagnostics failed", 
         details: error.message 
       });
     }
