@@ -74,6 +74,11 @@ export default function OpportunitiesPage() {
     queryKey: ["/api/users"],
   });
 
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
+  });
+
   // Fetch all entity tags for client-side filtering
   const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
     queryKey: ["/api/entity-tags-opportunities"],
@@ -840,6 +845,27 @@ export default function OpportunitiesPage() {
                           {new Date(opp.closeDate).toLocaleDateString()}
                         </div>
                       )}
+                      <div className="flex gap-1 flex-wrap" data-testid={`tags-${opp.id}`}>
+                        {(() => {
+                          const oppTags = allEntityTags?.filter(et => et.entityId === opp.id).map(et => et.tagId) || [];
+                          const tagObjects = oppTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                          
+                          return tagObjects.map((tag: any) => (
+                            <Badge 
+                              key={tag.id} 
+                              variant="outline"
+                              className="text-xs h-5"
+                              style={{ 
+                                borderColor: tag.color,
+                                color: tag.color,
+                              }}
+                              data-testid={`tag-badge-${tag.id}`}
+                            >
+                              {tag.name}
+                            </Badge>
+                          ));
+                        })()}
+                      </div>
                       <div className="flex gap-1 pt-2" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
