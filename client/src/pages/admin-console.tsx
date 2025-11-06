@@ -52,6 +52,13 @@ export default function AdminConsole() {
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
   const { data: categories } = useQuery<AccountCategory[]>({ queryKey: ["/api/admin/categories"] });
+  
+  // Fetch database diagnostics when activities entity type is selected
+  const { data: dbDiagnostics } = useQuery({
+    queryKey: ["/api/admin/diagnostics/database"],
+    enabled: dynamicsEntityType === "activities", // Only fetch when activities is selected
+    staleTime: 30000, // Cache for 30 seconds
+  });
 
   const createUserMutation = useMutation({
     mutationFn: async (data: { name: string; email: string; password: string; roleId: string }) => {
@@ -916,6 +923,94 @@ export default function AdminConsole() {
                       : "Transform Dynamics 365 accounts with enriched fields"}
                   </p>
                 </div>
+
+                {/* Pre-flight check for activities import */}
+                {dynamicsEntityType === "activities" && dbDiagnostics && (
+                  <Card className="border-primary/20 bg-primary/5">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-primary" />
+                        <CardTitle className="text-base">Database Entity Status</CardTitle>
+                      </div>
+                      <CardDescription>
+                        Activities require existing entities to link to. Verify entities exist before importing.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Accounts:</span>
+                            <Badge 
+                              variant={dbDiagnostics.entities?.accounts?.totalCount > 0 ? "default" : "secondary"}
+                              data-testid="badge-accounts-count"
+                            >
+                              {dbDiagnostics.entities?.accounts?.totalCount || 0}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Contacts:</span>
+                            <Badge 
+                              variant={dbDiagnostics.entities?.contacts?.totalCount > 0 ? "default" : "secondary"}
+                              data-testid="badge-contacts-count"
+                            >
+                              {dbDiagnostics.entities?.contacts?.totalCount || 0}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Leads:</span>
+                            <Badge 
+                              variant={dbDiagnostics.entities?.leads?.totalCount > 0 ? "default" : "secondary"}
+                              data-testid="badge-leads-count"
+                            >
+                              {dbDiagnostics.entities?.leads?.totalCount || 0}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Opportunities:</span>
+                            <Badge 
+                              variant={dbDiagnostics.entities?.opportunities?.totalCount > 0 ? "default" : "secondary"}
+                              data-testid="badge-opportunities-count"
+                            >
+                              {dbDiagnostics.entities?.opportunities?.totalCount || 0}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {dbDiagnostics.entities && (
+                        (dbDiagnostics.entities.accounts?.totalCount === 0 && 
+                         dbDiagnostics.entities.contacts?.totalCount === 0 && 
+                         dbDiagnostics.entities.leads?.totalCount === 0 && 
+                         dbDiagnostics.entities.opportunities?.totalCount === 0) ? (
+                          <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+                            <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-destructive">No entities found</p>
+                              <p className="text-xs text-muted-foreground">
+                                Import Accounts, Contacts, Leads, or Opportunities first before importing activities.
+                                Activities need to be linked to existing entities.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 p-3 rounded-md bg-green-500/10 border border-green-500/20">
+                            <Check className="h-4 w-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              Entities available for activity linking
+                            </p>
+                          </div>
+                        )
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="dynamics-excel">Excel File</Label>
