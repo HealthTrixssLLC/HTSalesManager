@@ -34,7 +34,7 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
     *   **Dynamics 365 Migration Tools**: Specialized transformation tools in the Admin Console for migrating Accounts, Contacts, Leads, and Activities from Dynamics 365, including enriched fields, structured addresses, automatic linking, governance metadata, and smart ID generation.
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backup/restore, database reset, and configurable account categories.
 *   **Help & Migration Guide**: Comprehensive documentation including a Dynamics 365 migration guide.
-*   **Dashboard**: Provides key insights like pipeline status, win rates, and user activity summaries.
+*   **Dashboard**: Provides key insights like pipeline status, win rates, and upcoming opportunity forecasts. Features a Sales Waterfall chart for annual target tracking and an Upcoming Opportunities by Close Date chart showing pipeline forecast by time period (next 6 months) with both opportunity counts and total values displayed on dual Y-axes.
 *   **Analytics & Forecasting System**: OKR-driven analytics platform with four forecasting models, a Pipeline Health Score, Sales Velocity Metrics, Rep Performance Analytics, Deal Closing Predictions, and an Executive Dashboard. Includes 7 API endpoints and interactive visualizations using Recharts.
 *   **Comments System**: Full-featured threaded commenting with emoji reactions, pin/resolve status, edit/delete capabilities, and RBAC-enforced permissions for Accounts, Contacts, Leads, and Opportunities.
 *   **Performance Optimization**: Over 20 database indexes on frequently queried columns and optimized dashboard aggregation queries.
