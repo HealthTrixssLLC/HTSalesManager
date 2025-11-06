@@ -1,0 +1,94 @@
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 37, done.
+remote: Counting objects: 100% (37/37), done.
+remote: Compressing objects: 100% (3/3), done.
+remote: Total 24 (delta 21), reused 24 (delta 21), pack-reused 0 (from 0)
+Unpacking objects: 100% (24/24), 8.40 KiB | 220.00 KiB/s, done.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   ed31888..6ecb1b9  main       -> origin/main
+Updating ed31888..6ecb1b9
+Fast-forward
+ ...te-Enumerating--1762448121343_1762448121344.txt | 242 +++++++++++++++++++++
+ client/src/components/bulk-tag-dialog.tsx          |   1 +
+ client/src/pages/activities-page.tsx               |  88 +++++++-
+ client/src/pages/activity-detail-page.tsx          |   2 +-
+ client/src/pages/dashboard.tsx                     | 184 ++++++++++------
+ server/routes.ts                                   |   2 +-
+ 6 files changed, 445 insertions(+), 74 deletions(-)
+ create mode 100644 attached_assets/Pasted--AutogenStudio-C-Projects-HTSalesManager-HTSalesManager-git-pull-origin-main-remote-Enumerating--1762448121343_1762448121344.txt
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 22.9s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.4s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.1s
+ => => transferring context: 239.82kB                                                                                           0.1s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.5s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            8.1s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             6.7s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.5s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.5s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.6s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.3s
+ => exporting to image                                                                                                          1.6s
+ => => exporting layers                                                                                                         1.6s
+ => => writing image sha256:761abb14e773cc8f4ba9018751b2bfdbf756e440149a8181ac786d97b72739a7                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                10.9s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [i] No changes detected
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 5:03:07 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 5:03:10 PM [express] GET /api/user 304 in 7ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 5:03:10 PM [express] GET /api/dashboard/sales-waterfall/2025 200 in 14ms :: [{"name":"2025 Contracte…
+healthtrixss-crm-app  | 5:03:10 PM [express] GET /api/dashboard/stats 200 in 23ms :: {"totalAccounts":"41","totalContacts":"…
+healthtrixss-crm-app  | 5:03:10 PM [express] GET /api/activities/upcoming 304 in 8ms :: []
+healthtrixss-crm-app  | 5:03:11 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 5:03:18 PM [express] POST /api/import/accounts 200 in 482ms :: {"total":457,"success":0,"failed":457…

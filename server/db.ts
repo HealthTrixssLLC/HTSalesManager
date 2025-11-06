@@ -7,7 +7,7 @@ import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
 import { Pool as PgPool } from "pg";
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { eq, sql, and, gte, lte, ne, asc, desc, inArray } from "drizzle-orm";
+import { eq, sql, and, gte, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type { IStorage } from "./storage";
 import type {
@@ -502,15 +502,75 @@ export class PostgresStorage implements IStorage {
     const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
     const winRate = totalClosed > 0 ? Math.round(((closedWon[0]?.count || 0) / totalClosed) * 100) : 0;
     
-    // Get activities by user
-    const activitiesByUser = await db
+    // Get upcoming opportunities grouped by close date (month)
+    // Only include open opportunities (not closed_won or closed_lost)
+    const now = new Date();
+    const sixMonthsLater = new Date(now);
+    sixMonthsLater.setMonth(now.getMonth() + 6);
+    
+    const upcomingOpps = await db
       .select({
-        userName: schema.users.name,
-        count: sql<number>`count(*)`,
+        id: schema.opportunities.id,
+        name: schema.opportunities.name,
+        amount: schema.opportunities.amount,
+        closeDate: schema.opportunities.closeDate,
+        stage: schema.opportunities.stage,
       })
-      .from(schema.activities)
-      .innerJoin(schema.users, eq(schema.activities.ownerId, schema.users.id))
-      .groupBy(schema.users.name);
+      .from(schema.opportunities)
+      .where(
+        and(
+          notInArray(schema.opportunities.stage, ["closed_won", "closed_lost"]),
+          or(
+            and(
+              isNotNull(schema.opportunities.closeDate),
+              gte(schema.opportunities.closeDate, now),
+              lte(schema.opportunities.closeDate, sixMonthsLater)
+            ),
+            isNull(schema.opportunities.closeDate) // Include opportunities without close date
+          )
+        )
+      )
+      .orderBy(schema.opportunities.closeDate);
+    
+    // Group by month/quarter
+    const oppsByPeriod = new Map<string, { count: number; value: number; opportunities: any[] }>();
+    
+    upcomingOpps.forEach(opp => {
+      let period: string;
+      if (opp.closeDate) {
+        const date = new Date(opp.closeDate);
+        period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        period = "No Date";
+      }
+      
+      if (!oppsByPeriod.has(period)) {
+        oppsByPeriod.set(period, { count: 0, value: 0, opportunities: [] });
+      }
+      
+      const periodData = oppsByPeriod.get(period)!;
+      periodData.count++;
+      periodData.value += parseFloat(opp.amount || "0");
+      periodData.opportunities.push({
+        id: opp.id,
+        name: opp.name,
+        amount: parseFloat(opp.amount || "0"),
+        closeDate: opp.closeDate?.toISOString() || null,
+      });
+    });
+    
+    const opportunitiesByCloseDate = Array.from(oppsByPeriod.entries())
+      .map(([period, data]) => ({
+        period,
+        count: data.count,
+        value: data.value,
+        opportunities: data.opportunities,
+      }))
+      .sort((a, b) => {
+        if (a.period === "No Date") return 1;
+        if (b.period === "No Date") return -1;
+        return a.period.localeCompare(b.period);
+      });
     
     return {
       totalAccounts: accounts[0]?.count || 0,
@@ -524,10 +584,7 @@ export class PostgresStorage implements IStorage {
       })),
       newLeadsThisMonth: newLeads[0]?.count || 0,
       winRate,
-      activitiesByUser: activitiesByUser.map(a => ({
-        userName: a.userName,
-        count: a.count,
-      })),
+      opportunitiesByCloseDate,
     };
   }
   
