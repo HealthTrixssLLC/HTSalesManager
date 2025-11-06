@@ -47,6 +47,7 @@ const AVAILABLE_COLUMNS: Column[] = [
   { id: "rating", label: "Rating" },
   { id: "ownerId", label: "Owner" },
   { id: "topic", label: "Topic" },
+  { id: "tags", label: "Tags" },
   { id: "actions", label: "Actions" },
 ];
 
@@ -117,6 +118,11 @@ export default function LeadsPage() {
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
   });
 
   // Fetch all entity tags for client-side filtering
@@ -800,6 +806,9 @@ export default function LeadsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("tags") && (
+                  <TableHead>Tags</TableHead>
+                )}
                 {isColumnVisible("actions") && (
                   <TableHead className="text-right">Actions</TableHead>
                 )}
@@ -891,6 +900,34 @@ export default function LeadsPage() {
                     {isColumnVisible("topic") && (
                       <TableCell data-testid={`cell-topic-${lead.id}`}>
                         {lead.topic || "-"}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("tags") && (
+                      <TableCell onClick={(e) => e.stopPropagation()} data-testid={`cell-tags-${lead.id}`}>
+                        <div className="flex gap-1 flex-wrap">
+                          {(() => {
+                            const leadTags = allEntityTags?.filter(et => et.entityId === lead.id).map(et => et.tagId) || [];
+                            const tagObjects = leadTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);
+                            
+                            if (tagObjects.length === 0) {
+                              return <span className="text-muted-foreground text-sm">-</span>;
+                            }
+                            
+                            return tagObjects.map((tag: any) => (
+                              <Badge 
+                                key={tag.id} 
+                                variant="outline"
+                                style={{ 
+                                  borderColor: tag.color,
+                                  color: tag.color,
+                                }}
+                                data-testid={`tag-badge-${tag.id}`}
+                              >
+                                {tag.name}
+                              </Badge>
+                            ));
+                          })()}
+                        </div>
                       </TableCell>
                     )}
                     {isColumnVisible("actions") && (
