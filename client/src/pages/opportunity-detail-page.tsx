@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -17,8 +18,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Opportunity, Account, Contact, Activity, InsertOpportunity } from "@shared/schema";
-import { insertOpportunitySchema } from "@shared/schema";
+import type { Opportunity, Account, Contact, Activity, InsertOpportunity, InsertActivity } from "@shared/schema";
+import { insertOpportunitySchema, insertActivitySchema } from "@shared/schema";
 import { z } from "zod";
 
 export default function OpportunityDetailPage() {
@@ -27,6 +28,7 @@ export default function OpportunityDetailPage() {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
@@ -52,6 +54,10 @@ export default function OpportunityDetailPage() {
     enabled: !!opportunityId,
   });
 
+  const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
+    queryKey: ["/api/users"],
+  });
+
   const updateMutation = useMutation({
     mutationFn: async (data: InsertOpportunity & { id: string }) => {
       const res = await apiRequest("PATCH", `/api/opportunities/${data.id}`, data);
@@ -65,6 +71,23 @@ export default function OpportunityDetailPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to update opportunity", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createActivityMutation = useMutation({
+    mutationFn: async (data: InsertActivity) => {
+      const res = await apiRequest("POST", "/api/activities", data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId, "related"] });
+      toast({ title: "Activity created successfully" });
+      setIsCreateActivityDialogOpen(false);
+      activityForm.reset();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to create activity", description: error.message, variant: "destructive" });
     },
   });
 
@@ -94,6 +117,42 @@ export default function OpportunityDetailPage() {
       rating: null,
     },
   });
+
+  const activityFormSchema = insertActivitySchema.extend({
+    dueDate: z.union([z.date(), z.string(), z.null()]).optional(),
+  });
+
+  const activityForm = useForm<InsertActivity>({
+    resolver: zodResolver(activityFormSchema),
+    defaultValues: {
+      id: "",
+      type: "task",
+      subject: "",
+      status: "pending",
+      priority: "medium",
+      dueDate: null,
+      ownerId: "",
+      relatedType: "Opportunity",
+      relatedId: opportunityId || "",
+      notes: "",
+    },
+  });
+
+  const onActivitySubmit = (data: InsertActivity) => {
+    // Convert date strings to Date objects for the API
+    const submitData: any = { ...data };
+
+    // Convert dueDate from string to Date object
+    if (submitData.dueDate) {
+      if (typeof submitData.dueDate === 'string' && submitData.dueDate !== '') {
+        submitData.dueDate = new Date(submitData.dueDate);
+      } else if (submitData.dueDate === '') {
+        submitData.dueDate = null;
+      }
+    }
+
+    createActivityMutation.mutate(submitData);
+  };
 
   const onSubmit = (data: InsertOpportunity) => {
     if (opportunity) {
@@ -278,6 +337,22 @@ export default function OpportunityDetailPage() {
             entities={relatedData?.activities.items || []}
             entityType="activities"
             emptyMessage="No activities logged"
+            onAdd={() => {
+              // Reset form with opportunity pre-filled
+              activityForm.reset({
+                id: "",
+                type: "task",
+                subject: "",
+                status: "pending",
+                priority: "medium",
+                dueDate: null,
+                ownerId: "",
+                relatedType: "Opportunity",
+                relatedId: opportunityId || "",
+                notes: "",
+              });
+              setIsCreateActivityDialogOpen(true);
+            }}
           />
         </div>
       </div>
@@ -449,6 +524,169 @@ export default function OpportunityDetailPage() {
                 </Button>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-edit">
                   {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Activity Dialog */}
+      <Dialog open={isCreateActivityDialogOpen} onOpenChange={setIsCreateActivityDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Activity</DialogTitle>
+            <DialogDescription>Add a new activity for this opportunity</DialogDescription>
+          </DialogHeader>
+          <Form {...activityForm}>
+            <form onSubmit={activityForm.handleSubmit(onActivitySubmit)} className="space-y-4">
+              <FormField
+                control={activityForm.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-activity-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="call">Call</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="meeting">Meeting</SelectItem>
+                        <SelectItem value="task">Task</SelectItem>
+                        <SelectItem value="note">Note</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={activityForm.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subject *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Follow-up call..." {...field} data-testid="input-activity-subject" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={activityForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-activity-status">
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={activityForm.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Priority *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-activity-priority">
+                            <SelectValue placeholder="Select priority" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={activityForm.control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Date</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="datetime-local" 
+                          {...field} 
+                          value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ""}
+                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
+                          data-testid="input-activity-due-date" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={activityForm.control}
+                  name="ownerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Owner *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-activity-owner">
+                            <SelectValue placeholder="Select owner" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {users.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={activityForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <Textarea placeholder="Add additional details..." {...field} value={field.value || ""} data-testid="input-activity-notes" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsCreateActivityDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createActivityMutation.isPending} data-testid="button-submit-activity">
+                  {createActivityMutation.isPending ? "Creating..." : "Create Activity"}
                 </Button>
               </DialogFooter>
             </form>
