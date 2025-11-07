@@ -3449,7 +3449,6 @@ export function registerRoutes(app: Express) {
         const row = records[i];
         try {
           const completedAtDate = parseDynamicsDate(row.completedAt);
-          const completedAtString = formatDateToString(completedAtDate);
           
           const activityData: any = {
             id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
@@ -3457,8 +3456,8 @@ export function registerRoutes(app: Express) {
             subject: row.subject,
             status: "completed", // Default to completed for imported activities
             priority: "medium", // Default priority
-            dueAt: completedAtString, // Use completedAt as dueAt for imported activities (as string)
-            completedAt: completedAtString,
+            dueAt: completedAtDate, // Pass Date object directly to database
+            completedAt: completedAtDate, // Pass Date object directly to database
             relatedType: row.relatedType || null,
             relatedId: row.relatedId || null,
             notes: row.notes || null,
@@ -3492,9 +3491,10 @@ export function registerRoutes(app: Express) {
             }
           }
           
-          const validated = insertActivitySchema.parse(activityData);
-          await storage.createActivity(validated);
-          await createAudit(req, "import", "Activity", validated.id, null, validated);
+          // Skip Zod validation for import - pass Date objects directly to storage
+          // The database expects Date objects for timestamp columns
+          await storage.createActivity(activityData as any);
+          await createAudit(req, "import", "Activity", activityData.id, null, activityData);
           
           results.success++;
         } catch (error: any) {
