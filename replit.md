@@ -42,6 +42,7 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
     *   Over 20 database indexes on frequently queried columns
     *   Optimized dashboard aggregation queries
     *   **Tag Loading Optimization** (Nov 2025): Eliminated N+1 query problem by using PostgreSQL JSON aggregation with LEFT JOIN in entity list queries. Tags are now included directly in the main entity response (`getAllAccounts`, `getAllContacts`, `getAllLeads`, `getAllOpportunities`) using `json_agg` and `FILTER` clauses, reducing hundreds of individual tag API calls to a single query per entity type.
+        *   **Cross-Driver Compatibility Fix** (Nov 2025): Fixed critical data fetching issue where standard PostgreSQL driver and Neon serverless driver return different result formats. Standard pg driver returns `{rows, rowCount, ...}` object while Neon returns array directly. All `db.execute()` calls now normalize results using `Array.isArray(result) ? result : result?.rows ?? []` pattern to ensure compatibility across both environments.
 
 **System Design Choices:**
 
