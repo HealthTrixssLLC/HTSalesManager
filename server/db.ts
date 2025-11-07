@@ -210,7 +210,16 @@ export class PostgresStorage implements IStorage {
       // Use raw SQL for tag aggregation to avoid N+1 queries
       const result: any = await db.execute(sql`
         SELECT 
-          c.*,
+          c.id,
+          c.account_id as "accountId",
+          c.first_name as "firstName",
+          c.last_name as "lastName",
+          c.email,
+          c.phone,
+          c.title,
+          c.owner_id as "ownerId",
+          c.created_at as "createdAt",
+          c.updated_at as "updatedAt",
           COALESCE(
             json_agg(
               json_build_object(
@@ -227,7 +236,7 @@ export class PostgresStorage implements IStorage {
         FROM contacts c
         LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity = 'Contact'
         LEFT JOIN tags t ON t.id = et.tag_id
-        GROUP BY c.id
+        GROUP BY c.id, c.account_id, c.first_name, c.last_name, c.email, c.phone, c.title, c.owner_id, c.created_at, c.updated_at
         ORDER BY c.created_at DESC
       `);
       

@@ -429,15 +429,33 @@ export function registerRoutes(app: Express) {
       }
       
       // Fetch related data
-      const [allContacts, allOpportunities, allActivities] = await Promise.all([
+      const [allContacts, allOpportunities, allActivities, activityAssocs] = await Promise.all([
         storage.getAllContacts(),
         storage.getAllOpportunities(),
         storage.getAllActivities(),
+        // Fetch activity associations for this account
+        db.select().from(activityAssociations).where(
+          and(
+            eq(activityAssociations.entityType, "Account"),
+            eq(activityAssociations.entityId, accountId)
+          )
+        ),
       ]);
       
       const contacts = allContacts.filter(c => c.accountId === accountId);
       const opportunities = allOpportunities.filter(o => o.accountId === accountId);
-      const activities = allActivities.filter(a => a.relatedType === "Account" && a.relatedId === accountId);
+      
+      // Get activities from BOTH the deprecated relatedType/relatedId fields AND the activity_associations table
+      const activitiesFromDeprecated = allActivities.filter(a => a.relatedType === "Account" && a.relatedId === accountId);
+      const activityIdsFromAssociations = activityAssocs.map((a: any) => a.activityId);
+      const activitiesFromAssociations = allActivities.filter(a => activityIdsFromAssociations.includes(a.id));
+      
+      // Merge and deduplicate activities
+      const activitiesMap = new Map();
+      [...activitiesFromDeprecated, ...activitiesFromAssociations].forEach(activity => {
+        activitiesMap.set(activity.id, activity);
+      });
+      const activities = Array.from(activitiesMap.values());
       
       return res.json({
         contacts: { items: contacts, total: contacts.length },
@@ -653,14 +671,32 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Contact not found" });
       }
       
-      const [account, allOpportunities, allActivities] = await Promise.all([
+      const [account, allOpportunities, allActivities, activityAssocs] = await Promise.all([
         contact.accountId ? storage.getAccountById(contact.accountId) : Promise.resolve(null),
         storage.getAllOpportunities(),
         storage.getAllActivities(),
+        // Fetch activity associations for this contact
+        db.select().from(activityAssociations).where(
+          and(
+            eq(activityAssociations.entityType, "Contact"),
+            eq(activityAssociations.entityId, contactId)
+          )
+        ),
       ]);
       
       const opportunities = allOpportunities.filter(o => o.accountId === contact.accountId);
-      const activities = allActivities.filter(a => a.relatedType === "Contact" && a.relatedId === contactId);
+      
+      // Get activities from BOTH the deprecated relatedType/relatedId fields AND the activity_associations table
+      const activitiesFromDeprecated = allActivities.filter(a => a.relatedType === "Contact" && a.relatedId === contactId);
+      const activityIdsFromAssociations = activityAssocs.map((a: any) => a.activityId);
+      const activitiesFromAssociations = allActivities.filter(a => activityIdsFromAssociations.includes(a.id));
+      
+      // Merge and deduplicate activities
+      const activitiesMap = new Map();
+      [...activitiesFromDeprecated, ...activitiesFromAssociations].forEach(activity => {
+        activitiesMap.set(activity.id, activity);
+      });
+      const activities = Array.from(activitiesMap.values());
       
       return res.json({
         account: account ? { items: [account], total: 1 } : { items: [], total: 0 },
@@ -879,8 +915,28 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Lead not found" });
       }
       
-      const allActivities = await storage.getAllActivities();
-      const activities = allActivities.filter(a => a.relatedType === "Lead" && a.relatedId === leadId);
+      const [allActivities, activityAssocs] = await Promise.all([
+        storage.getAllActivities(),
+        // Fetch activity associations for this lead
+        db.select().from(activityAssociations).where(
+          and(
+            eq(activityAssociations.entityType, "Lead"),
+            eq(activityAssociations.entityId, leadId)
+          )
+        ),
+      ]);
+      
+      // Get activities from BOTH the deprecated relatedType/relatedId fields AND the activity_associations table
+      const activitiesFromDeprecated = allActivities.filter(a => a.relatedType === "Lead" && a.relatedId === leadId);
+      const activityIdsFromAssociations = activityAssocs.map((a: any) => a.activityId);
+      const activitiesFromAssociations = allActivities.filter(a => activityIdsFromAssociations.includes(a.id));
+      
+      // Merge and deduplicate activities
+      const activitiesMap = new Map();
+      [...activitiesFromDeprecated, ...activitiesFromAssociations].forEach(activity => {
+        activitiesMap.set(activity.id, activity);
+      });
+      const activities = Array.from(activitiesMap.values());
       
       // If converted, fetch the converted entities
       const conversionData: any = {};
@@ -1190,14 +1246,32 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
-      const [account, allContacts, allActivities] = await Promise.all([
+      const [account, allContacts, allActivities, activityAssocs] = await Promise.all([
         storage.getAccountById(opportunity.accountId),
         storage.getAllContacts(),
         storage.getAllActivities(),
+        // Fetch activity associations for this opportunity
+        db.select().from(activityAssociations).where(
+          and(
+            eq(activityAssociations.entityType, "Opportunity"),
+            eq(activityAssociations.entityId, opportunityId)
+          )
+        ),
       ]);
       
       const contacts = allContacts.filter(c => c.accountId === opportunity.accountId);
-      const activities = allActivities.filter(a => a.relatedType === "Opportunity" && a.relatedId === opportunityId);
+      
+      // Get activities from BOTH the deprecated relatedType/relatedId fields AND the activity_associations table
+      const activitiesFromDeprecated = allActivities.filter(a => a.relatedType === "Opportunity" && a.relatedId === opportunityId);
+      const activityIdsFromAssociations = activityAssocs.map((a: any) => a.activityId);
+      const activitiesFromAssociations = allActivities.filter(a => activityIdsFromAssociations.includes(a.id));
+      
+      // Merge and deduplicate activities
+      const activitiesMap = new Map();
+      [...activitiesFromDeprecated, ...activitiesFromAssociations].forEach(activity => {
+        activitiesMap.set(activity.id, activity);
+      });
+      const activities = Array.from(activitiesMap.values());
       
       return res.json({
         account: account ? { items: [account], total: 1 } : { items: [], total: 0 },
@@ -1392,6 +1466,21 @@ export function registerRoutes(app: Express) {
       };
       
       const activity = await storage.createActivity(activityData as any);
+      
+      // IMPORTANT: Also create activity_associations entry if relatedType and relatedId are provided
+      // This ensures the activity shows up on entity detail pages
+      if (data.relatedType && data.relatedId) {
+        try {
+          await db.insert(activityAssociations).values({
+            activityId: activity.id,
+            entityType: data.relatedType,
+            entityId: data.relatedId,
+          });
+        } catch (assocError) {
+          console.error("[ACTIVITIES-ROUTE] Failed to create activity association:", assocError);
+          // Don't fail the entire request if association creation fails
+        }
+      }
       
       await createAudit(req, "create", "Activity", activity.id, null, activity);
       
