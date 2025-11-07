@@ -142,7 +142,7 @@ export class PostgresStorage implements IStorage {
   
   async getAllAccounts(): Promise<Account[]> {
     // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any[] = await db.execute(sql`
+    const result: any = await db.execute(sql`
       SELECT 
         a.*,
         COALESCE(
@@ -165,7 +165,9 @@ export class PostgresStorage implements IStorage {
       ORDER BY a.created_at DESC
     `);
     
-    return result.rows || result;
+    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+    const rows = Array.isArray(result) ? result : result?.rows ?? [];
+    return rows;
   }
   
   async getAccountById(id: string): Promise<Account | undefined> {
@@ -198,7 +200,7 @@ export class PostgresStorage implements IStorage {
   
   async getAllContacts(): Promise<Contact[]> {
     // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any[] = await db.execute(sql`
+    const result: any = await db.execute(sql`
       SELECT 
         c.*,
         COALESCE(
@@ -221,7 +223,9 @@ export class PostgresStorage implements IStorage {
       ORDER BY c.created_at DESC
     `);
     
-    return result.rows || result;
+    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+    const rows = Array.isArray(result) ? result : result?.rows ?? [];
+    return rows;
   }
   
   async getContactById(id: string): Promise<Contact | undefined> {
@@ -253,7 +257,7 @@ export class PostgresStorage implements IStorage {
   
   async getAllLeads(): Promise<Lead[]> {
     // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any[] = await db.execute(sql`
+    const result: any = await db.execute(sql`
       SELECT 
         l.*,
         COALESCE(
@@ -276,7 +280,9 @@ export class PostgresStorage implements IStorage {
       ORDER BY l.created_at DESC
     `);
     
-    return result.rows || result;
+    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+    const rows = Array.isArray(result) ? result : result?.rows ?? [];
+    return rows;
   }
   
   async getLeadById(id: string): Promise<Lead | undefined> {
@@ -308,7 +314,7 @@ export class PostgresStorage implements IStorage {
   
   async getAllOpportunities(): Promise<Opportunity[]> {
     // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any[] = await db.execute(sql`
+    const result: any = await db.execute(sql`
       SELECT 
         o.*,
         COALESCE(
@@ -331,7 +337,9 @@ export class PostgresStorage implements IStorage {
       ORDER BY o.created_at DESC
     `);
     
-    return result.rows || result;
+    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+    const rows = Array.isArray(result) ? result : result?.rows ?? [];
+    return rows;
   }
   
   async getOpportunityById(id: string): Promise<Opportunity | undefined> {
