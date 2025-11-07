@@ -148,36 +148,24 @@ export default function OpportunityDetailPage() {
       status: "pending" as const,
       priority: "medium" as const,
       dueAt: null,
-      ownerId: "",
+      ownerId: null,
       relatedType: "Opportunity",
       relatedId: opportunityId || "",
-      notes: "",
+      notes: null,
     },
   });
 
-  // Log form errors for debugging
-  console.log("[ACTIVITY-FORM] Form errors:", activityForm.formState.errors);
-  console.log("[ACTIVITY-FORM] Form is valid:", activityForm.formState.isValid);
-  console.log("[ACTIVITY-FORM] Form is submitting:", activityForm.formState.isSubmitting);
-
   const onActivitySubmit = (data: any) => {
-    console.log("[ACTIVITY-FORM] onActivitySubmit called!");
-    console.log("[ACTIVITY-FORM] Received data:", data);
-    console.log("[ACTIVITY-FORM] All form errors at submit:", activityForm.formState.errors);
-    
     // Convert date strings to Date objects for the API
     const submitData: any = { ...data };
 
-    // Convert dueAt from string to Date object
-    if (submitData.dueAt) {
-      if (typeof submitData.dueAt === 'string' && submitData.dueAt !== '') {
-        submitData.dueAt = new Date(submitData.dueAt);
-      } else if (submitData.dueAt === '') {
-        submitData.dueAt = null;
-      }
+    // Convert dueAt from string to Date object, or empty string to null
+    if (submitData.dueAt === '' || (typeof submitData.dueAt === 'string' && submitData.dueAt.trim() === '')) {
+      submitData.dueAt = null;
+    } else if (submitData.dueAt && typeof submitData.dueAt === 'string') {
+      submitData.dueAt = new Date(submitData.dueAt);
     }
 
-    console.log("[ACTIVITY-FORM] Submitting to API:", submitData);
     createActivityMutation.mutate(submitData);
   };
 
@@ -370,10 +358,10 @@ export default function OpportunityDetailPage() {
                 status: "pending",
                 priority: "medium",
                 dueAt: null,
-                ownerId: "",
+                ownerId: null,
                 relatedType: "Opportunity",
                 relatedId: opportunityId || "",
-                notes: "",
+                notes: null,
               });
               setIsCreateActivityDialogOpen(true);
             }}
