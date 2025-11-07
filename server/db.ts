@@ -160,7 +160,7 @@ export class PostgresStorage implements IStorage {
             '[]'::json
           ) as tags
         FROM accounts a
-        LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity_type = 'Account'
+        LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity = 'Account'
         LEFT JOIN tags t ON t.id = et.tag_id
         GROUP BY a.id
         ORDER BY a.created_at DESC
@@ -232,7 +232,7 @@ export class PostgresStorage implements IStorage {
             '[]'::json
           ) as tags
         FROM contacts c
-        LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity_type = 'Contact'
+        LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity = 'Contact'
         LEFT JOIN tags t ON t.id = et.tag_id
         GROUP BY c.id
         ORDER BY c.created_at DESC
@@ -303,7 +303,7 @@ export class PostgresStorage implements IStorage {
             '[]'::json
           ) as tags
         FROM leads l
-        LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity_type = 'Lead'
+        LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity = 'Lead'
         LEFT JOIN tags t ON t.id = et.tag_id
         GROUP BY l.id
         ORDER BY l.created_at DESC
@@ -374,7 +374,7 @@ export class PostgresStorage implements IStorage {
             '[]'::json
           ) as tags
         FROM opportunities o
-        LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity_type = 'Opportunity'
+        LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity = 'Opportunity'
         LEFT JOIN tags t ON t.id = et.tag_id
         GROUP BY o.id
         ORDER BY o.created_at DESC

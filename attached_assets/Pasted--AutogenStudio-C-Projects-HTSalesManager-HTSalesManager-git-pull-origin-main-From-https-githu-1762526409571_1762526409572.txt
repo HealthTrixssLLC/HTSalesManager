@@ -1,0 +1,886 @@
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 23.0s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.5s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 7.13kB                                                                                             0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.9s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            8.3s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             6.6s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.5s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.5s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.3s
+ => exporting to image                                                                                                          1.6s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:9ab15585af98ed196bf93d61ce8168f109e5cf66371536af9512583aee15a2df                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                11.0s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>echo "Host: $PGHOST"
+"Host: $PGHOST"
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>echo "Host: $PGHOST"
+"Host: $PGHOST"
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>psql $DATABASE_URL
+'psql' is not recognized as an internal or external command,
+operable program or batch file.
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>echo $DATABASE_URL
+$DATABASE_URL
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [i] No changes detected
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 2:21:36 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 2:21:39 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:21:48 PM [express] GET /api/user 304 in 13ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","emai…
+healthtrixss-crm-app  | 2:21:48 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 13ms :: []
+healthtrixss-crm-app  | 2:21:48 PM [express] GET /api/dashboard/stats 200 in 21ms :: {"totalAccounts":"41","totalContacts":"…
+healthtrixss-crm-app  | 2:21:48 PM [express] GET /api/activities/upcoming 304 in 12ms :: []
+healthtrixss-crm-app  | 2:21:57 PM [express] POST /api/logout 200 in 1ms :: {"success":true}
+healthtrixss-crm-app  | 2:22:09 PM [express] POST /api/login 200 in 77ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","em…
+healthtrixss-crm-app  | 2:22:09 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/accounts 500 in 9ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/accounts 500 in 20ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/users 304 in 20ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/tags 304 in 22ms :: []
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/admin/categories 304 in 26ms :: []
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/accounts 500 in 5ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:22:13 PM [express] GET /api/opportunities 304 in 14ms :: []
+healthtrixss-crm-app  | 2:22:27 PM [express] POST /api/import/accounts 200 in 58ms :: {"total":41,"success":0,"failed":0,"sk…
+healthtrixss-crm-app  | 2:22:39 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:22:59 PM [express] GET /api/accounts 500 in 15ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:22:59 PM [express] GET /api/accounts 500 in 19ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/user 304 in 9ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/accounts 500 in 9ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/accounts 500 in 24ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/tags 304 in 21ms :: []
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/users 304 in 25ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/admin/categories 304 in 30ms :: []
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/accounts 500 in 4ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:23:01 PM [express] GET /api/opportunities 304 in 7ms :: []
+healthtrixss-crm-app  | 2:23:09 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:23:39 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:24:10 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:24:40 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:25:10 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:25:40 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:26:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:26:40 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:27:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:27:40 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:28:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:28:40 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:29:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:29:40 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:30:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:30:40 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:31:10 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:31:40 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:32:11 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:32:41 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:33:11 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:33:41 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:34:11 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:34:41 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:35:11 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:35:41 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:36:11 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:36:41 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:37:11 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:37:41 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:38:11 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:38:41 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/velocity 304 in 42ms :: {"totalValue":0,"days":90,"velocityP…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/historical 304 in 55ms :: {"wonCount":0,"lostCount":0,"total…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/rep-performance 304 in 50ms :: [{"rep":{"id":"a86349f0-a2c7-…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/predictions 304 in 57ms :: {"predictions":[],"summary":{"tot…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/forecast 304 in 68ms :: {"targetDate":"2025-11-30T00:00:00.0…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/conversions 200 in 63ms :: {"conversions":{"prospecting_to_q…
+healthtrixss-crm-app  | 2:39:08 PM [express] GET /api/analytics/pipeline-health 304 in 19ms :: {"score":0,"components":{"pip…
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:39:09 PM [express] GET /api/accounts 500 in 6ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error in getAllAccounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-ACCOUNTS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error fetching accounts: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '520',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [ACCOUNTS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllAccounts (file:///app/dist/index.js:665:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:2976:23
+healthtrixss-crm-app  | 2:39:09 PM [express] GET /api/accounts 500 in 9ms :: {"error":"Failed to fetch accounts"}
+healthtrixss-crm-app  | 2:39:11 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | [DB-LEADS] Error in getAllLeads: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '517',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-LEADS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-LEADS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20
+healthtrixss-crm-app  | [LEADS-ROUTE] Error fetching leads: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '517',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [LEADS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [LEADS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20
+healthtrixss-crm-app  | 2:39:12 PM [express] GET /api/leads 500 in 6ms :: {"error":"Failed to fetch leads"}
+healthtrixss-crm-app  | [DB-LEADS] Error in getAllLeads: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '517',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-LEADS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-LEADS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20
+healthtrixss-crm-app  | [LEADS-ROUTE] Error fetching leads: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '517',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [LEADS-ROUTE] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [LEADS-ROUTE] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3330:20
+healthtrixss-crm-app  | 2:39:12 PM [express] GET /api/leads 500 in 6ms :: {"error":"Failed to fetch leads"}
+healthtrixss-crm-app  | [DB-LEADS] Error in getAllLeads: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3284:24 {
+healthtrixss-crm-app  |   length: 113,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '517',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | [DB-LEADS] Error message: column et.entity_type does not exist
+healthtrixss-crm-app  | [DB-LEADS] Error stack: error: column et.entity_type does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async PostgresStorage.getAllLeads (file:///app/dist/index.js:781:26)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:3284:24
+healthtrixss-crm-app  | 2:39:12 PM [express] GET /api/leads/summary 500 in 4ms :: {"error":"Failed to fetch leads summary"}
+healthtrixss-crm-app  | 2:39:14 PM [express] GET /api/activities 304 in 4ms :: []
+healthtrixss-crm-app  | 2:39:14 PM [express] GET /api/activities/summary 304 in 3ms :: {"totalCount":0,"byStatus":{"pending"…
+healthtrixss-crm-app  | 2:39:41 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
