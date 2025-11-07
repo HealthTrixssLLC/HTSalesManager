@@ -348,6 +348,9 @@ export function registerRoutes(app: Express) {
       
       return res.json(accounts);
     } catch (error) {
+      console.error('[ACCOUNTS-ROUTE] Error fetching accounts:', error);
+      console.error('[ACCOUNTS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[ACCOUNTS-ROUTE] Error stack:', error instanceof Error ? error.stack : 'No stack');
       return res.status(500).json({ error: "Failed to fetch accounts" });
     }
   });
@@ -605,6 +608,9 @@ export function registerRoutes(app: Express) {
       
       return res.json(contacts);
     } catch (error) {
+      console.error('[CONTACTS-ROUTE] Error fetching contacts:', error);
+      console.error('[CONTACTS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[CONTACTS-ROUTE] Error stack:', error instanceof Error ? error.stack : 'No stack');
       return res.status(500).json({ error: "Failed to fetch contacts" });
     }
   });
@@ -828,6 +834,9 @@ export function registerRoutes(app: Express) {
       
       return res.json(leads);
     } catch (error) {
+      console.error('[LEADS-ROUTE] Error fetching leads:', error);
+      console.error('[LEADS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[LEADS-ROUTE] Error stack:', error instanceof Error ? error.stack : 'No stack');
       return res.status(500).json({ error: "Failed to fetch leads" });
     }
   });

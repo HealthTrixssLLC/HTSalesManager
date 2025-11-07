@@ -141,33 +141,47 @@ export class PostgresStorage implements IStorage {
   // ========== ACCOUNTS ==========
   
   async getAllAccounts(): Promise<Account[]> {
-    // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any = await db.execute(sql`
-      SELECT 
-        a.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', t.id,
-              'name', t.name,
-              'color', t.color,
-              'createdBy', t.created_by,
-              'createdAt', t.created_at,
-              'updatedAt', t.updated_at
-            )
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'::json
-        ) as tags
-      FROM accounts a
-      LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity_type = 'Account'
-      LEFT JOIN tags t ON t.id = et.tag_id
-      GROUP BY a.id
-      ORDER BY a.created_at DESC
-    `);
-    
-    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
-    const rows = Array.isArray(result) ? result : result?.rows ?? [];
-    return rows;
+    try {
+      // Use raw SQL for tag aggregation to avoid N+1 queries
+      const result: any = await db.execute(sql`
+        SELECT 
+          a.*,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', t.id,
+                'name', t.name,
+                'color', t.color,
+                'createdBy', t.created_by,
+                'createdAt', t.created_at,
+                'updatedAt', t.updated_at
+              )
+            ) FILTER (WHERE t.id IS NOT NULL),
+            '[]'::json
+          ) as tags
+        FROM accounts a
+        LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity_type = 'Account'
+        LEFT JOIN tags t ON t.id = et.tag_id
+        GROUP BY a.id
+        ORDER BY a.created_at DESC
+      `);
+      
+      console.log('[DB-ACCOUNTS] Query executed successfully');
+      console.log('[DB-ACCOUNTS] Result type:', typeof result);
+      console.log('[DB-ACCOUNTS] Is array:', Array.isArray(result));
+      console.log('[DB-ACCOUNTS] Has rows:', result?.rows !== undefined);
+      console.log('[DB-ACCOUNTS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
+      
+      // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+      const rows = Array.isArray(result) ? result : result?.rows ?? [];
+      console.log('[DB-ACCOUNTS] Returning rows count:', rows.length);
+      return rows;
+    } catch (error) {
+      console.error('[DB-ACCOUNTS] Error in getAllAccounts:', error);
+      console.error('[DB-ACCOUNTS] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[DB-ACCOUNTS] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
   }
   
   async getAccountById(id: string): Promise<Account | undefined> {
