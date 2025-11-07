@@ -213,33 +213,47 @@ export class PostgresStorage implements IStorage {
   // ========== CONTACTS ==========
   
   async getAllContacts(): Promise<Contact[]> {
-    // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any = await db.execute(sql`
-      SELECT 
-        c.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', t.id,
-              'name', t.name,
-              'color', t.color,
-              'createdBy', t.created_by,
-              'createdAt', t.created_at,
-              'updatedAt', t.updated_at
-            )
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'::json
-        ) as tags
-      FROM contacts c
-      LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity_type = 'Contact'
-      LEFT JOIN tags t ON t.id = et.tag_id
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-    `);
-    
-    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
-    const rows = Array.isArray(result) ? result : result?.rows ?? [];
-    return rows;
+    try {
+      // Use raw SQL for tag aggregation to avoid N+1 queries
+      const result: any = await db.execute(sql`
+        SELECT 
+          c.*,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', t.id,
+                'name', t.name,
+                'color', t.color,
+                'createdBy', t.created_by,
+                'createdAt', t.created_at,
+                'updatedAt', t.updated_at
+              )
+            ) FILTER (WHERE t.id IS NOT NULL),
+            '[]'::json
+          ) as tags
+        FROM contacts c
+        LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity_type = 'Contact'
+        LEFT JOIN tags t ON t.id = et.tag_id
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+      `);
+      
+      console.log('[DB-CONTACTS] Query executed successfully');
+      console.log('[DB-CONTACTS] Result type:', typeof result);
+      console.log('[DB-CONTACTS] Is array:', Array.isArray(result));
+      console.log('[DB-CONTACTS] Has rows:', result?.rows !== undefined);
+      console.log('[DB-CONTACTS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
+      
+      // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+      const rows = Array.isArray(result) ? result : result?.rows ?? [];
+      console.log('[DB-CONTACTS] Returning rows count:', rows.length);
+      return rows;
+    } catch (error) {
+      console.error('[DB-CONTACTS] Error in getAllContacts:', error);
+      console.error('[DB-CONTACTS] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[DB-CONTACTS] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
   }
   
   async getContactById(id: string): Promise<Contact | undefined> {
@@ -270,33 +284,47 @@ export class PostgresStorage implements IStorage {
   // ========== LEADS ==========
   
   async getAllLeads(): Promise<Lead[]> {
-    // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any = await db.execute(sql`
-      SELECT 
-        l.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', t.id,
-              'name', t.name,
-              'color', t.color,
-              'createdBy', t.created_by,
-              'createdAt', t.created_at,
-              'updatedAt', t.updated_at
-            )
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'::json
-        ) as tags
-      FROM leads l
-      LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity_type = 'Lead'
-      LEFT JOIN tags t ON t.id = et.tag_id
-      GROUP BY l.id
-      ORDER BY l.created_at DESC
-    `);
-    
-    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
-    const rows = Array.isArray(result) ? result : result?.rows ?? [];
-    return rows;
+    try {
+      // Use raw SQL for tag aggregation to avoid N+1 queries
+      const result: any = await db.execute(sql`
+        SELECT 
+          l.*,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', t.id,
+                'name', t.name,
+                'color', t.color,
+                'createdBy', t.created_by,
+                'createdAt', t.created_at,
+                'updatedAt', t.updated_at
+              )
+            ) FILTER (WHERE t.id IS NOT NULL),
+            '[]'::json
+          ) as tags
+        FROM leads l
+        LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity_type = 'Lead'
+        LEFT JOIN tags t ON t.id = et.tag_id
+        GROUP BY l.id
+        ORDER BY l.created_at DESC
+      `);
+      
+      console.log('[DB-LEADS] Query executed successfully');
+      console.log('[DB-LEADS] Result type:', typeof result);
+      console.log('[DB-LEADS] Is array:', Array.isArray(result));
+      console.log('[DB-LEADS] Has rows:', result?.rows !== undefined);
+      console.log('[DB-LEADS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
+      
+      // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+      const rows = Array.isArray(result) ? result : result?.rows ?? [];
+      console.log('[DB-LEADS] Returning rows count:', rows.length);
+      return rows;
+    } catch (error) {
+      console.error('[DB-LEADS] Error in getAllLeads:', error);
+      console.error('[DB-LEADS] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[DB-LEADS] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
   }
   
   async getLeadById(id: string): Promise<Lead | undefined> {
