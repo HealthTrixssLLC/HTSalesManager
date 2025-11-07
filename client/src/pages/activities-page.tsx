@@ -574,15 +574,84 @@ export default function ActivitiesPage() {
                   <FormField
                     control={form.control}
                     name="relatedId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Related ID</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ACCT-2025-00001" {...field} value={field.value || ""} data-testid="input-related-id" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const relatedType = form.watch("relatedType");
+                      
+                      // Get the appropriate entity list based on relatedType
+                      let entities: Array<{ id: string; name: string }> = [];
+                      if (relatedType === "Account") {
+                        entities = accounts.map(a => ({ id: a.id, name: a.name }));
+                      } else if (relatedType === "Contact") {
+                        entities = contacts.map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}` }));
+                      } else if (relatedType === "Lead") {
+                        entities = leads.map(l => ({ id: l.id, name: `${l.firstName} ${l.lastName}` }));
+                      } else if (relatedType === "Opportunity") {
+                        entities = opportunities.map(o => ({ id: o.id, name: o.name }));
+                      }
+                      
+                      return (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>Related ID</FormLabel>
+                          <Popover open={relatedEntitySearchOpen} onOpenChange={setRelatedEntitySearchOpen}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={relatedEntitySearchOpen}
+                                  className={cn(
+                                    "w-full justify-between",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                  data-testid="input-related-id"
+                                  disabled={!relatedType}
+                                >
+                                  {field.value
+                                    ? entities.find((entity) => entity.id === field.value)?.name || field.value
+                                    : relatedType 
+                                      ? `Search for a ${relatedType.toLowerCase()}...` 
+                                      : "Select Related To first"}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder={`Search by ${relatedType?.toLowerCase()} name or ID...`} />
+                                <CommandList>
+                                  <CommandEmpty>No {relatedType?.toLowerCase()} found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {entities.map((entity) => (
+                                      <CommandItem
+                                        key={entity.id}
+                                        value={`${entity.name} ${entity.id}`}
+                                        onSelect={() => {
+                                          form.setValue("relatedId", entity.id);
+                                          setRelatedEntitySearchOpen(false);
+                                        }}
+                                        data-testid={`related-entity-option-${entity.id}`}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === entity.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{entity.name}</span>
+                                          <span className="text-sm text-muted-foreground">{entity.id}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 </div>
                 <FormField
