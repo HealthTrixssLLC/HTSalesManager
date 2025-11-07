@@ -136,18 +136,17 @@ export default function OpportunityDetailPage() {
     },
   });
 
-  const activityFormSchema = insertActivitySchema.extend({
+  const activityFormSchema = insertActivitySchema.omit({ id: true }).extend({
     dueAt: z.union([z.date(), z.string(), z.null()]).optional(),
   });
 
-  const activityForm = useForm<InsertActivity>({
+  const activityForm = useForm({
     resolver: zodResolver(activityFormSchema),
     defaultValues: {
-      id: "",
-      type: "task",
+      type: "task" as const,
       subject: "",
-      status: "pending",
-      priority: "medium",
+      status: "pending" as const,
+      priority: "medium" as const,
       dueAt: null,
       ownerId: "",
       relatedType: "Opportunity",
@@ -156,7 +155,7 @@ export default function OpportunityDetailPage() {
     },
   });
 
-  const onActivitySubmit = (data: InsertActivity) => {
+  const onActivitySubmit = (data: any) => {
     // Convert date strings to Date objects for the API
     const submitData: any = { ...data };
 
