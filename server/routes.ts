@@ -3436,10 +3436,20 @@ export function registerRoutes(app: Express) {
         }
       };
       
+      // Helper function to convert Date to YYYY-MM-DD string format
+      const formatDateToString = (date: Date | null): string | null => {
+        if (!date) return null;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
           const completedAtDate = parseDynamicsDate(row.completedAt);
+          const completedAtString = formatDateToString(completedAtDate);
           
           const activityData: any = {
             id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
@@ -3447,8 +3457,8 @@ export function registerRoutes(app: Express) {
             subject: row.subject,
             status: "completed", // Default to completed for imported activities
             priority: "medium", // Default priority
-            dueAt: completedAtDate, // Use completedAt as dueAt for imported activities
-            completedAt: completedAtDate,
+            dueAt: completedAtString, // Use completedAt as dueAt for imported activities (as string)
+            completedAt: completedAtString,
             relatedType: row.relatedType || null,
             relatedId: row.relatedId || null,
             notes: row.notes || null,
