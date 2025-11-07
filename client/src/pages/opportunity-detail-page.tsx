@@ -155,7 +155,16 @@ export default function OpportunityDetailPage() {
     },
   });
 
+  // Log form errors for debugging
+  console.log("[ACTIVITY-FORM] Form errors:", activityForm.formState.errors);
+  console.log("[ACTIVITY-FORM] Form is valid:", activityForm.formState.isValid);
+  console.log("[ACTIVITY-FORM] Form is submitting:", activityForm.formState.isSubmitting);
+
   const onActivitySubmit = (data: any) => {
+    console.log("[ACTIVITY-FORM] onActivitySubmit called!");
+    console.log("[ACTIVITY-FORM] Received data:", data);
+    console.log("[ACTIVITY-FORM] All form errors at submit:", activityForm.formState.errors);
+    
     // Convert date strings to Date objects for the API
     const submitData: any = { ...data };
 
@@ -168,6 +177,7 @@ export default function OpportunityDetailPage() {
       }
     }
 
+    console.log("[ACTIVITY-FORM] Submitting to API:", submitData);
     createActivityMutation.mutate(submitData);
   };
 
@@ -355,7 +365,6 @@ export default function OpportunityDetailPage() {
             onAdd={() => {
               // Reset form with opportunity pre-filled
               activityForm.reset({
-                id: "",
                 type: "task",
                 subject: "",
                 status: "pending",
