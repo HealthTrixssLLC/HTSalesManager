@@ -30,7 +30,8 @@ import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
   { id: "id", label: "ID" },
-  { id: "name", label: "Name" },
+  { id: "firstName", label: "First Name" },
+  { id: "lastName", label: "Last Name" },
   { id: "email", label: "Email" },
   { id: "phone", label: "Phone" },
   { id: "accountId", label: "Account" },
@@ -583,10 +584,19 @@ export default function ContactsPage() {
                     onSort={handleSort}
                   />
                 )}
-                {isColumnVisible("name") && (
+                {isColumnVisible("firstName") && (
                   <SortableTableHeader
-                    label="Name"
+                    label="First Name"
                     field="firstName"
+                    currentSortBy={sortBy}
+                    currentSortOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                )}
+                {isColumnVisible("lastName") && (
+                  <SortableTableHeader
+                    label="Last Name"
+                    field="lastName"
                     currentSortBy={sortBy}
                     currentSortOrder={sortOrder}
                     onSort={handleSort}
@@ -671,9 +681,14 @@ export default function ContactsPage() {
                         {contact.id}
                       </TableCell>
                     )}
-                    {isColumnVisible("name") && (
-                      <TableCell className="font-medium" onClick={() => setLocation(`/contacts/${contact.id}`)} data-testid={`cell-name-${contact.id}`}>
-                        {contact.firstName} {contact.lastName}
+                    {isColumnVisible("firstName") && (
+                      <TableCell className="font-medium" onClick={() => setLocation(`/contacts/${contact.id}`)} data-testid={`cell-firstname-${contact.id}`}>
+                        {contact.firstName || "-"}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("lastName") && (
+                      <TableCell className="font-medium" onClick={() => setLocation(`/contacts/${contact.id}`)} data-testid={`cell-lastname-${contact.id}`}>
+                        {contact.lastName || "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("email") && (
