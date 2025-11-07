@@ -166,15 +166,8 @@ export class PostgresStorage implements IStorage {
         ORDER BY a.created_at DESC
       `);
       
-      console.log('[DB-ACCOUNTS] Query executed successfully');
-      console.log('[DB-ACCOUNTS] Result type:', typeof result);
-      console.log('[DB-ACCOUNTS] Is array:', Array.isArray(result));
-      console.log('[DB-ACCOUNTS] Has rows:', result?.rows !== undefined);
-      console.log('[DB-ACCOUNTS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
-      
       // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
       const rows = Array.isArray(result) ? result : result?.rows ?? [];
-      console.log('[DB-ACCOUNTS] Returning rows count:', rows.length);
       return rows;
     } catch (error) {
       console.error('[DB-ACCOUNTS] Error in getAllAccounts:', error);
@@ -238,15 +231,8 @@ export class PostgresStorage implements IStorage {
         ORDER BY c.created_at DESC
       `);
       
-      console.log('[DB-CONTACTS] Query executed successfully');
-      console.log('[DB-CONTACTS] Result type:', typeof result);
-      console.log('[DB-CONTACTS] Is array:', Array.isArray(result));
-      console.log('[DB-CONTACTS] Has rows:', result?.rows !== undefined);
-      console.log('[DB-CONTACTS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
-      
       // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
       const rows = Array.isArray(result) ? result : result?.rows ?? [];
-      console.log('[DB-CONTACTS] Returning rows count:', rows.length);
       return rows;
     } catch (error) {
       console.error('[DB-CONTACTS] Error in getAllContacts:', error);
@@ -309,15 +295,8 @@ export class PostgresStorage implements IStorage {
         ORDER BY l.created_at DESC
       `);
       
-      console.log('[DB-LEADS] Query executed successfully');
-      console.log('[DB-LEADS] Result type:', typeof result);
-      console.log('[DB-LEADS] Is array:', Array.isArray(result));
-      console.log('[DB-LEADS] Has rows:', result?.rows !== undefined);
-      console.log('[DB-LEADS] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
-      
       // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
       const rows = Array.isArray(result) ? result : result?.rows ?? [];
-      console.log('[DB-LEADS] Returning rows count:', rows.length);
       return rows;
     } catch (error) {
       console.error('[DB-LEADS] Error in getAllLeads:', error);
@@ -380,15 +359,8 @@ export class PostgresStorage implements IStorage {
         ORDER BY o.created_at DESC
       `);
       
-      console.log('[DB-OPPORTUNITIES] Query executed successfully');
-      console.log('[DB-OPPORTUNITIES] Result type:', typeof result);
-      console.log('[DB-OPPORTUNITIES] Is array:', Array.isArray(result));
-      console.log('[DB-OPPORTUNITIES] Has rows:', result?.rows !== undefined);
-      console.log('[DB-OPPORTUNITIES] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
-      
       // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
       const rows = Array.isArray(result) ? result : result?.rows ?? [];
-      console.log('[DB-OPPORTUNITIES] Returning rows count:', rows.length);
       return rows;
     } catch (error) {
       console.error('[DB-OPPORTUNITIES] Error in getAllOpportunities:', error);
