@@ -4,8 +4,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target } from "lucide-react";
-import { Opportunity, InsertOpportunity, insertOpportunitySchema } from "@shared/schema";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target, Check, ChevronsUpDown } from "lucide-react";
+import { Opportunity, InsertOpportunity, insertOpportunitySchema, Account } from "@shared/schema";
 
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +24,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CommentSystem } from "@/components/comment-system";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { TagFilterButton } from "@/components/tag-filter-button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const stages = [
   { id: "prospecting", label: "Prospecting", color: "bg-gray-500" },
@@ -45,6 +48,7 @@ export default function OpportunitiesPage() {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   
   // Bulk operations state
   const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<Set<string>>(new Set());
@@ -72,6 +76,11 @@ export default function OpportunitiesPage() {
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all accounts for autocomplete
+  const { data: accounts } = useQuery<Account[]>({
+    queryKey: ["/api/accounts"],
   });
 
   // Fetch all tags for display
@@ -458,11 +467,61 @@ export default function OpportunitiesPage() {
                   control={form.control}
                   name="accountId"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Account ID *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ACCT-2025-00001" {...field} data-testid="input-opportunity-account" />
-                      </FormControl>
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Account *</FormLabel>
+                      <Popover open={accountSearchOpen} onOpenChange={setAccountSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={accountSearchOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="input-opportunity-account"
+                            >
+                              {field.value
+                                ? accounts?.find((account) => account.id === field.value)?.name || field.value
+                                : "Search for an account..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search by account name or ID..." />
+                            <CommandList>
+                              <CommandEmpty>No account found.</CommandEmpty>
+                              <CommandGroup>
+                                {accounts?.map((account) => (
+                                  <CommandItem
+                                    key={account.id}
+                                    value={`${account.name} ${account.id}`}
+                                    onSelect={() => {
+                                      form.setValue("accountId", account.id);
+                                      setAccountSearchOpen(false);
+                                    }}
+                                    data-testid={`account-option-${account.id}`}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === account.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{account.name}</span>
+                                      <span className="text-sm text-muted-foreground">{account.id}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
                   )}
