@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,9 +25,11 @@ import { z } from "zod";
 
 export default function OpportunityDetailPage() {
   const [, params] = useRoute("/opportunities/:id");
+  const [, setLocation] = useLocation();
   const opportunityId = params?.id;
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
 
@@ -71,6 +74,21 @@ export default function OpportunityDetailPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to update opportunity", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", `/api/opportunities/${opportunityId}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
+      toast({ title: "Opportunity deleted successfully" });
+      setLocation("/opportunities");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete opportunity", description: error.message, variant: "destructive" });
     },
   });
 
@@ -259,9 +277,7 @@ export default function OpportunityDetailPage() {
       status={opportunity.stage}
       statusVariant={getStageVariant(opportunity.stage)}
       onEdit={handleEdit}
-      onDelete={() => {
-        // TODO: Show delete confirmation
-      }}
+      onDelete={() => setIsDeleteDialogOpen(true)}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -693,6 +709,28 @@ export default function OpportunityDetailPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the opportunity "{opportunity.name}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DetailPageLayout>
   );
 }

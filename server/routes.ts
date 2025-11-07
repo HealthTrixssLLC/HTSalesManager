@@ -1236,6 +1236,24 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.delete("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "delete"), async (req: AuthRequest, res) => {
+    try {
+      const before = await storage.getOpportunityById(req.params.id);
+      if (!before) {
+        return res.status(404).json({ error: "Opportunity not found" });
+      }
+      
+      await storage.deleteOpportunity(req.params.id);
+      
+      await createAudit(req, "delete", "Opportunity", req.params.id, before, null);
+      
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Delete opportunity error:", error);
+      return res.status(500).json({ error: "Failed to delete opportunity" });
+    }
+  });
+  
   // Get related data for an opportunity (account, contacts, activities)
   app.get("/api/opportunities/:id/related", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
     try {
