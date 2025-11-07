@@ -119,7 +119,7 @@ export default function OpportunityDetailPage() {
   });
 
   const activityFormSchema = insertActivitySchema.extend({
-    dueDate: z.union([z.date(), z.string(), z.null()]).optional(),
+    dueAt: z.union([z.date(), z.string(), z.null()]).optional(),
   });
 
   const activityForm = useForm<InsertActivity>({
@@ -130,7 +130,7 @@ export default function OpportunityDetailPage() {
       subject: "",
       status: "pending",
       priority: "medium",
-      dueDate: null,
+      dueAt: null,
       ownerId: "",
       relatedType: "Opportunity",
       relatedId: opportunityId || "",
@@ -142,12 +142,12 @@ export default function OpportunityDetailPage() {
     // Convert date strings to Date objects for the API
     const submitData: any = { ...data };
 
-    // Convert dueDate from string to Date object
-    if (submitData.dueDate) {
-      if (typeof submitData.dueDate === 'string' && submitData.dueDate !== '') {
-        submitData.dueDate = new Date(submitData.dueDate);
-      } else if (submitData.dueDate === '') {
-        submitData.dueDate = null;
+    // Convert dueAt from string to Date object
+    if (submitData.dueAt) {
+      if (typeof submitData.dueAt === 'string' && submitData.dueAt !== '') {
+        submitData.dueAt = new Date(submitData.dueAt);
+      } else if (submitData.dueAt === '') {
+        submitData.dueAt = null;
       }
     }
 
@@ -345,7 +345,7 @@ export default function OpportunityDetailPage() {
                 subject: "",
                 status: "pending",
                 priority: "medium",
-                dueDate: null,
+                dueAt: null,
                 ownerId: "",
                 relatedType: "Opportunity",
                 relatedId: opportunityId || "",
@@ -626,7 +626,7 @@ export default function OpportunityDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={activityForm.control}
-                  name="dueDate"
+                  name="dueAt"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Due Date</FormLabel>
