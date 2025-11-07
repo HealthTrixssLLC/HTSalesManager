@@ -355,33 +355,47 @@ export class PostgresStorage implements IStorage {
   // ========== OPPORTUNITIES ==========
   
   async getAllOpportunities(): Promise<Opportunity[]> {
-    // Use raw SQL for tag aggregation to avoid N+1 queries
-    const result: any = await db.execute(sql`
-      SELECT 
-        o.*,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', t.id,
-              'name', t.name,
-              'color', t.color,
-              'createdBy', t.created_by,
-              'createdAt', t.created_at,
-              'updatedAt', t.updated_at
-            )
-          ) FILTER (WHERE t.id IS NOT NULL),
-          '[]'::json
-        ) as tags
-      FROM opportunities o
-      LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity_type = 'Opportunity'
-      LEFT JOIN tags t ON t.id = et.tag_id
-      GROUP BY o.id
-      ORDER BY o.created_at DESC
-    `);
-    
-    // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
-    const rows = Array.isArray(result) ? result : result?.rows ?? [];
-    return rows;
+    try {
+      // Use raw SQL for tag aggregation to avoid N+1 queries
+      const result: any = await db.execute(sql`
+        SELECT 
+          o.*,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', t.id,
+                'name', t.name,
+                'color', t.color,
+                'createdBy', t.created_by,
+                'createdAt', t.created_at,
+                'updatedAt', t.updated_at
+              )
+            ) FILTER (WHERE t.id IS NOT NULL),
+            '[]'::json
+          ) as tags
+        FROM opportunities o
+        LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity_type = 'Opportunity'
+        LEFT JOIN tags t ON t.id = et.tag_id
+        GROUP BY o.id
+        ORDER BY o.created_at DESC
+      `);
+      
+      console.log('[DB-OPPORTUNITIES] Query executed successfully');
+      console.log('[DB-OPPORTUNITIES] Result type:', typeof result);
+      console.log('[DB-OPPORTUNITIES] Is array:', Array.isArray(result));
+      console.log('[DB-OPPORTUNITIES] Has rows:', result?.rows !== undefined);
+      console.log('[DB-OPPORTUNITIES] Rows length:', Array.isArray(result) ? result.length : result?.rows?.length);
+      
+      // Normalize result: Neon driver returns array, standard pg driver returns {rows, rowCount, ...}
+      const rows = Array.isArray(result) ? result : result?.rows ?? [];
+      console.log('[DB-OPPORTUNITIES] Returning rows count:', rows.length);
+      return rows;
+    } catch (error) {
+      console.error('[DB-OPPORTUNITIES] Error in getAllOpportunities:', error);
+      console.error('[DB-OPPORTUNITIES] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[DB-OPPORTUNITIES] Error stack:', error instanceof Error ? error.stack : 'No stack');
+      throw error;
+    }
   }
   
   async getOpportunityById(id: string): Promise<Opportunity | undefined> {
