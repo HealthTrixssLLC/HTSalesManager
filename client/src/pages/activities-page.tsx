@@ -4,8 +4,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X } from "lucide-react";
-import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X, Check, ChevronsUpDown } from "lucide-react";
+import { Activity, InsertActivity, insertActivitySchema, Account, Contact, Lead, Opportunity } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,8 @@ import { Label } from "@/components/ui/label";
 import { ActivitiesSummaryCards } from "@/components/activities-summary-cards";
 import { TagFilterButton } from "@/components/tag-filter-button";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const activityIcons = {
   call: Phone,
@@ -56,6 +58,7 @@ export default function ActivitiesPage() {
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [associations, setAssociations] = useState<Association[]>([]);
+  const [relatedEntitySearchOpen, setRelatedEntitySearchOpen] = useState(false);
   
   // Bulk operations state
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
@@ -91,6 +94,23 @@ export default function ActivitiesPage() {
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  // Fetch all entities for Related ID autocomplete
+  const { data: accounts = [] } = useQuery<Account[]>({
+    queryKey: ["/api/accounts"],
+  });
+
+  const { data: contacts = [] } = useQuery<Contact[]>({
+    queryKey: ["/api/contacts"],
+  });
+
+  const { data: leads = [] } = useQuery<Lead[]>({
+    queryKey: ["/api/leads"],
+  });
+
+  const { data: opportunities = [] } = useQuery<Opportunity[]>({
+    queryKey: ["/api/opportunities"],
   });
 
   // Fetch all tags for display
