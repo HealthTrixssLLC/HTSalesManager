@@ -113,11 +113,6 @@ export default function AccountsPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch all tags for display
-  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
-    queryKey: ["/api/tags"],
-  });
-
   // Apply client-side tag filtering using tags from main query
   const displayedAccounts = useMemo(() => {
     if (!filteredAccounts) return [];

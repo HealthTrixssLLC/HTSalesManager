@@ -6,7 +6,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TagBadge, type Tag } from "@/components/ui/tag-badge";
 import { CreateTagDialog } from "@/components/create-tag-dialog";
-import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -18,7 +17,6 @@ interface TagSelectorProps {
 }
 
 export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: TagSelectorProps) {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);

@@ -120,11 +120,6 @@ export default function LeadsPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch all tags for display
-  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
-    queryKey: ["/api/tags"],
-  });
-
   // Apply client-side tag filtering using tags from main query
   const displayedLeads = useMemo(() => {
     if (!filteredLeads) return [];

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Users, CheckCircle, TrendingUp, Target, Zap } from "lucide-react";
+import { Users, CheckCircle, TrendingUp, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 

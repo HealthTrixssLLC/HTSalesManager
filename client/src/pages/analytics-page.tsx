@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle } from "lucide-react";
 import {
   AreaChart,
   Area,

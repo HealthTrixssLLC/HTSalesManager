@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRoute, useLocation } from "wouter";
+import { useRoute } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
@@ -12,7 +12,6 @@ import type { Account, Contact, Opportunity, Activity } from "@shared/schema";
 
 export default function AccountDetailPage() {
   const [, params] = useRoute("/accounts/:id");
-  const [, setLocation] = useLocation();
   const accountId = params?.id;
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
