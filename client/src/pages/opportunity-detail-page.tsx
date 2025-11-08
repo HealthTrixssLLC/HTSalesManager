@@ -138,6 +138,7 @@ export default function OpportunityDetailPage() {
 
   const activityFormSchema = insertActivitySchema.omit({ id: true }).extend({
     dueAt: z.union([z.date(), z.string(), z.null()]).optional(),
+    completedAt: z.union([z.date(), z.string(), z.null()]).optional(),
   });
 
   const activityForm = useForm({
@@ -148,6 +149,7 @@ export default function OpportunityDetailPage() {
       status: "pending" as const,
       priority: "medium" as const,
       dueAt: null,
+      completedAt: null,
       ownerId: null,
       relatedType: "Opportunity",
       relatedId: opportunityId || "",
@@ -358,6 +360,7 @@ export default function OpportunityDetailPage() {
                 status: "pending",
                 priority: "medium",
                 dueAt: null,
+                completedAt: null,
                 ownerId: null,
                 relatedType: "Opportunity",
                 relatedId: opportunityId || "",
