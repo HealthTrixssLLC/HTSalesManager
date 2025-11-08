@@ -139,6 +139,8 @@ export default function OpportunityDetailPage() {
   const activityFormSchema = insertActivitySchema.omit({ id: true }).extend({
     dueAt: z.union([z.date(), z.string(), z.null()]).optional(),
     completedAt: z.union([z.date(), z.string(), z.null()]).optional(),
+    ownerId: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
   });
 
   const activityForm = useForm({
@@ -158,14 +160,33 @@ export default function OpportunityDetailPage() {
   });
 
   const onActivitySubmit = (data: any) => {
-    // Convert date strings to Date objects for the API
+    // Convert date strings to Date objects for the API and handle optional fields
     const submitData: any = { ...data };
+
+    // Remove id field if it exists (backend will auto-generate)
+    delete submitData.id;
 
     // Convert dueAt from string to Date object, or empty string to null
     if (submitData.dueAt === '' || (typeof submitData.dueAt === 'string' && submitData.dueAt.trim() === '')) {
       submitData.dueAt = null;
     } else if (submitData.dueAt && typeof submitData.dueAt === 'string') {
       submitData.dueAt = new Date(submitData.dueAt);
+    }
+
+    // Convert completedAt from string to Date object, or empty string to null
+    if (submitData.completedAt === '' || (typeof submitData.completedAt === 'string' && submitData.completedAt.trim() === '')) {
+      submitData.completedAt = null;
+    } else if (submitData.completedAt && typeof submitData.completedAt === 'string') {
+      submitData.completedAt = new Date(submitData.completedAt);
+    }
+
+    // Convert empty strings and undefined to null for optional fields
+    if (!submitData.ownerId || submitData.ownerId === '' || submitData.ownerId === undefined) {
+      submitData.ownerId = null;
+    }
+
+    if (!submitData.notes || submitData.notes === '' || submitData.notes === undefined) {
+      submitData.notes = null;
     }
 
     createActivityMutation.mutate(submitData);
@@ -663,11 +684,14 @@ export default function OpportunityDetailPage() {
                   name="ownerId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Owner *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                      <FormLabel>Owner</FormLabel>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value || null)} 
+                        value={field.value || undefined}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-activity-owner">
-                            <SelectValue placeholder="Select owner" />
+                            <SelectValue placeholder="Select owner (optional)" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
