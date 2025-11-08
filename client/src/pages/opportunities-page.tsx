@@ -85,11 +85,6 @@ export default function OpportunitiesPage() {
     queryKey: ["/api/accounts"],
   });
 
-  // Fetch all tags for display
-  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
-    queryKey: ["/api/tags"],
-  });
-
   const createMutation = useMutation({
     mutationFn: async (data: InsertOpportunity) => {
       const res = await apiRequest("POST", "/api/opportunities", data);
@@ -242,12 +237,6 @@ export default function OpportunitiesPage() {
       newSelection.add(opportunityId);
     }
     setSelectedOpportunityIds(newSelection);
-  };
-
-  const selectAllOpportunities = () => {
-    if (filteredOpportunities) {
-      setSelectedOpportunityIds(new Set(filteredOpportunities.map(o => o.id)));
-    }
   };
 
   const clearSelection = () => {

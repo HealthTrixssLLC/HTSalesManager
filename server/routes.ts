@@ -745,7 +745,6 @@ export function registerRoutes(app: Express) {
   app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
     try {
       const allLeads = await storage.getAllLeads();
-      const allUsers = await storage.getAllUsers();
       
       // Total count
       const totalCount = allLeads.length;
@@ -3561,15 +3560,6 @@ export function registerRoutes(app: Express) {
         }
       };
       
-      // Helper function to convert Date to YYYY-MM-DD string format
-      const formatDateToString = (date: Date | null): string | null => {
-        if (!date) return null;
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      };
-      
       for (let i = 0; i < records.length; i++) {
         const row = records[i];
         try {
@@ -4268,22 +4258,6 @@ export function registerRoutes(app: Express) {
         "Total Amount": data.amount,
         "Avg Amount": data.count > 0 ? data.amount / data.count : 0
       }));
-      
-      // Top 10 opportunities
-      const top10 = [...opps]
-        .sort((a, b) => {
-          const amtA = a.amount ? parseFloat(a.amount) : 0;
-          const amtB = b.amount ? parseFloat(b.amount) : 0;
-          return amtB - amtA;
-        })
-        .slice(0, 10)
-        .map(o => ({
-          "Opportunity": o.name,
-          "Account": accountMap.get(o.accountId) || o.accountId,
-          "Amount": o.amount ? parseFloat(o.amount) : 0,
-          "Stage": o.stage,
-          "Probability": o.probability || 0
-        }));
       
       // Monthly forecast
       const monthlyForecast: Record<string, { count: number; weighted: number; total: number }> = {};
