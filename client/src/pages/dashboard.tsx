@@ -7,9 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save, Download } from "lucide-react";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
 import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
+import { useToast } from "@/hooks/use-toast";
 
 type DashboardStats = {
   totalAccounts: number;
@@ -79,6 +82,14 @@ export default function Dashboard() {
     return saved ? parseFloat(saved) : 1000000;
   });
   const [targetInput, setTargetInput] = useState(salesTarget.toString());
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [reportFilters, setReportFilters] = useState({
+    accountId: "",
+    rating: "",
+    startDate: "",
+    endDate: ""
+  });
+  const { toast } = useToast();
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
@@ -86,6 +97,10 @@ export default function Dashboard() {
 
   const { data: opportunities } = useQuery<OpportunityData[]>({
     queryKey: ["/api/dashboard/sales-waterfall", selectedYear],
+  });
+
+  const { data: accounts } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/accounts"],
   });
 
   useEffect(() => {
@@ -99,6 +114,39 @@ export default function Dashboard() {
     const newTarget = parseFloat(targetInput) || 1000000;
     setSalesTarget(newTarget);
     localStorage.setItem(`salesTarget_${selectedYear}`, newTarget.toString());
+  };
+
+  const handleDownloadReport = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (reportFilters.accountId) params.append("accountId", reportFilters.accountId);
+      if (reportFilters.rating) params.append("rating", reportFilters.rating);
+      if (reportFilters.startDate) params.append("startDate", reportFilters.startDate);
+      if (reportFilters.endDate) params.append("endDate", reportFilters.endDate);
+      
+      const response = await fetch(`/api/reports/sales-forecast?${params.toString()}`, {
+        credentials: "include"
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to generate report");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sales-forecast-${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      setIsReportDialogOpen(false);
+      toast({ title: "Report downloaded successfully" });
+    } catch (error) {
+      toast({ title: "Failed to download report", variant: "destructive" });
+    }
   };
 
   // Build waterfall data by stage (each stage starts where previous ended)
@@ -167,9 +215,15 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your sales pipeline and activities</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Overview of your sales pipeline and activities</p>
+        </div>
+        <Button onClick={() => setIsReportDialogOpen(true)} data-testid="button-download-forecast">
+          <Download className="h-4 w-4 mr-2" />
+          Download Sales Forecast
+        </Button>
       </div>
 
       {/* Stat Cards */}
@@ -444,6 +498,85 @@ export default function Dashboard() {
 
       {/* Upcoming Activities */}
       <UpcomingActivitiesCard />
+
+      {/* Sales Forecast Report Dialog */}
+      <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Download Sales Forecast Report</DialogTitle>
+            <DialogDescription>
+              Generate an Excel report with opportunity details, executive summary, and monthly forecast. Apply optional filters to refine the data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="filter-account">Filter by Account (Optional)</Label>
+              <Select 
+                value={reportFilters.accountId || undefined} 
+                onValueChange={(value) => setReportFilters(prev => ({ ...prev, accountId: value || "" }))}
+              >
+                <SelectTrigger id="filter-account" data-testid="select-filter-account">
+                  <SelectValue placeholder="All accounts" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts?.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="filter-rating">Filter by Rating (Optional)</Label>
+              <Select 
+                value={reportFilters.rating || undefined} 
+                onValueChange={(value) => setReportFilters(prev => ({ ...prev, rating: value || "" }))}
+              >
+                <SelectTrigger id="filter-rating" data-testid="select-filter-rating">
+                  <SelectValue placeholder="All ratings" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hot">Hot</SelectItem>
+                  <SelectItem value="warm">Warm</SelectItem>
+                  <SelectItem value="cold">Cold</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="filter-start-date">Start Date (Optional)</Label>
+                <Input
+                  id="filter-start-date"
+                  type="date"
+                  value={reportFilters.startDate}
+                  onChange={(e) => setReportFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                  data-testid="input-filter-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="filter-end-date">End Date (Optional)</Label>
+                <Input
+                  id="filter-end-date"
+                  type="date"
+                  value={reportFilters.endDate}
+                  onChange={(e) => setReportFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                  data-testid="input-filter-end-date"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReportDialogOpen(false)} data-testid="button-cancel-report">
+              Cancel
+            </Button>
+            <Button onClick={handleDownloadReport} data-testid="button-confirm-download">
+              <Download className="h-4 w-4 mr-2" />
+              Download Report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

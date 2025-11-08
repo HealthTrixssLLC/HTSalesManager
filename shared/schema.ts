@@ -167,6 +167,7 @@ export const opportunities = pgTable("opportunities", {
   accountIdIdx: index("opportunities_account_id_idx").on(table.accountId),
   ownerIdIdx: index("opportunities_owner_id_idx").on(table.ownerId),
   stageIdx: index("opportunities_stage_idx").on(table.stage),
+  statusIdx: index("opportunities_status_idx").on(table.status),
   closeDateIdx: index("opportunities_close_date_idx").on(table.closeDate),
   externalIdIdx: index("opportunities_external_id_idx").on(table.externalId),
 }));

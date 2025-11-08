@@ -34,6 +34,7 @@ import * as analyticsService from "./analytics-service";
 import { DynamicsMapper, type DynamicsMappingConfig } from "./dynamics-mapper";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
+import * as XLSX from "xlsx";
 
 // Configure multer for file uploads (memory storage)
 const upload = multer({ storage: multer.memoryStorage() });
@@ -4172,6 +4173,167 @@ export function registerRoutes(app: Express) {
     } catch (error: any) {
       console.error("Pipeline health error:", error);
       return res.status(500).json({ error: "Failed to calculate pipeline health", details: error.message });
+    }
+  });
+
+  // ========== SALES FORECAST REPORT ==========
+  
+  app.get("/api/reports/sales-forecast", authenticate, async (req: AuthRequest, res) => {
+    try {
+      const { accountId, rating, startDate, endDate } = req.query;
+      
+      // Build filter conditions
+      const filters: any[] = [];
+      if (accountId && typeof accountId === "string") {
+        filters.push(eq(opportunities.accountId, accountId));
+      }
+      if (rating && typeof rating === "string") {
+        filters.push(eq(opportunities.rating, rating));
+      }
+      if (startDate && typeof startDate === "string") {
+        filters.push(gte(opportunities.closeDate, new Date(startDate)));
+      }
+      if (endDate && typeof endDate === "string") {
+        filters.push(lte(opportunities.closeDate, new Date(endDate)));
+      }
+      
+      // Fetch opportunities with filters
+      const opps = filters.length > 0
+        ? await db.select().from(opportunities).where(and(...filters))
+        : await db.select().from(opportunities);
+      
+      // Fetch all accounts and users for lookups
+      const [allAccounts, allUsers] = await Promise.all([
+        db.select().from(accounts),
+        db.select().from(users)
+      ]);
+      
+      const accountMap = new Map(allAccounts.map(a => [a.id, a.name]));
+      const userMap = new Map(allUsers.map(u => [u.id, u.name]));
+      
+      // Transform opportunities for Excel
+      const oppDetails = opps.map(o => ({
+        "ID": o.id,
+        "Name": o.name,
+        "Account": accountMap.get(o.accountId) || o.accountId,
+        "Stage": o.stage,
+        "Amount": o.amount ? parseFloat(o.amount) : 0,
+        "Probability": o.probability || 0,
+        "Close Date": o.closeDate ? new Date(o.closeDate).toLocaleDateString() : "",
+        "Owner": o.ownerId ? (userMap.get(o.ownerId) || o.ownerId) : "",
+        "Status": o.status || "",
+        "Rating": o.rating || "",
+        "Created": new Date(o.createdAt).toLocaleDateString()
+      }));
+      
+      // Calculate metrics for Executive Summary
+      const totalPipeline = opps.reduce((sum, o) => sum + (o.amount ? parseFloat(o.amount) : 0), 0);
+      const weightedForecast = opps.reduce((sum, o) => {
+        const amount = o.amount ? parseFloat(o.amount) : 0;
+        const prob = o.probability || 0;
+        return sum + (amount * prob / 100);
+      }, 0);
+      const totalOpps = opps.length;
+      const avgDealSize = totalOpps > 0 ? totalPipeline / totalOpps : 0;
+      
+      // Pipeline by stage
+      const byStage = opps.reduce((acc, o) => {
+        const stage = o.stage;
+        if (!acc[stage]) {
+          acc[stage] = { count: 0, amount: 0 };
+        }
+        acc[stage].count++;
+        acc[stage].amount += o.amount ? parseFloat(o.amount) : 0;
+        return acc;
+      }, {} as Record<string, { count: number; amount: number }>);
+      
+      const stageData = Object.entries(byStage).map(([stage, data]) => ({
+        "Stage": stage,
+        "Count": data.count,
+        "Total Amount": data.amount,
+        "Avg Amount": data.count > 0 ? data.amount / data.count : 0
+      }));
+      
+      // Top 10 opportunities
+      const top10 = [...opps]
+        .sort((a, b) => {
+          const amtA = a.amount ? parseFloat(a.amount) : 0;
+          const amtB = b.amount ? parseFloat(b.amount) : 0;
+          return amtB - amtA;
+        })
+        .slice(0, 10)
+        .map(o => ({
+          "Opportunity": o.name,
+          "Account": accountMap.get(o.accountId) || o.accountId,
+          "Amount": o.amount ? parseFloat(o.amount) : 0,
+          "Stage": o.stage,
+          "Probability": o.probability || 0
+        }));
+      
+      // Monthly forecast
+      const monthlyForecast: Record<string, { count: number; weighted: number; total: number }> = {};
+      opps.forEach(o => {
+        if (o.closeDate) {
+          const month = new Date(o.closeDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+          if (!monthlyForecast[month]) {
+            monthlyForecast[month] = { count: 0, weighted: 0, total: 0 };
+          }
+          const amount = o.amount ? parseFloat(o.amount) : 0;
+          const prob = o.probability || 0;
+          monthlyForecast[month].count++;
+          monthlyForecast[month].weighted += amount * prob / 100;
+          monthlyForecast[month].total += amount;
+        }
+      });
+      
+      const forecastData = Object.entries(monthlyForecast)
+        .map(([month, data]) => ({
+          "Month": month,
+          "Expected Contracts": data.count,
+          "Weighted Revenue": data.weighted,
+          "Total Pipeline": data.total,
+          "Win Probability": data.total > 0 ? (data.weighted / data.total * 100).toFixed(1) + "%" : "0%"
+        }))
+        .sort((a, b) => new Date(a.Month).getTime() - new Date(b.Month).getTime());
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Tab 1: Opportunity Details
+      const ws1 = XLSX.utils.json_to_sheet(oppDetails);
+      XLSX.utils.book_append_sheet(wb, ws1, "Opportunity Details");
+      
+      // Tab 2: Executive Summary
+      const summaryData = [
+        { "Metric": "Total Pipeline Value", "Value": totalPipeline.toFixed(2) },
+        { "Metric": "Weighted Forecast", "Value": weightedForecast.toFixed(2) },
+        { "Metric": "Total Opportunities", "Value": totalOpps },
+        { "Metric": "Average Deal Size", "Value": avgDealSize.toFixed(2) },
+        { "Metric": "", "Value": "" }, // Spacer
+        { "Metric": "Pipeline by Stage", "Value": "" },
+        ...stageData.map((d: any) => ({ "Metric": d.Stage, "Value": `${d.Count} opps, $${d['Total Amount'].toFixed(2)}` })),
+        { "Metric": "", "Value": "" }, // Spacer
+        { "Metric": "Top 10 Opportunities", "Value": "" },
+      ];
+      
+      const ws2 = XLSX.utils.json_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, ws2, "Executive Summary");
+      
+      // Tab 3: Forecast Table
+      const ws3 = XLSX.utils.json_to_sheet(forecastData);
+      XLSX.utils.book_append_sheet(wb, ws3, "Revenue Forecast");
+      
+      // Generate buffer
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      
+      // Set headers and send file
+      res.setHeader("Content-Disposition", `attachment; filename="sales-forecast-${new Date().toISOString().split('T')[0]}.xlsx"`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      return res.send(buffer);
+      
+    } catch (error: any) {
+      console.error("Sales forecast report error:", error);
+      return res.status(500).json({ error: "Failed to generate sales forecast report", details: error.message });
     }
   });
 }
