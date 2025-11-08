@@ -1,0 +1,267 @@
+Unused variable, import, function or class
+Preview
+Last scan: 1 minute ago
+Unused variable, import, function or class
+Unused local variables make code hard to read and understand. Any computation used to initialize an unused variable is wasted, which may lead to performance problems.
+
+Similarly, unused imports and unused functions or classes can be confusing. They may even be a symptom of a bug caused, for example, by an incomplete refactoring.
+
+Recommendation
+Remove the unused program element.
+
+Example
+In this code, the function f initializes a local variable x with a call to the function expensiveComputation, but later on this variable is never read. Removing x would improve code quality and performance.
+
+JavaScript
+function f() {
+	var x = expensiveComputation();
+	return 23;
+}
+A slightly subtle case is shown below, where a function expression named f is assigned to a variable f:
+
+JavaScript
+var f = function f() {
+  return "Hi!";
+};
+f();
+Note that this example involves two distinct variables, both named f: the global variable to which the function is assigned, and the variable implicitly declared by the function expression. The call to f() refers to the former variable, whereas the latter is unused. Hence the example can be rewritten as follows, eliminating the useless variable:
+
+JavaScript
+var f = function () {
+  return "Hi!";
+};
+f();
+A similar situation can occur with ECMAScript 2015 module exports, as shown in the following example:
+
+JavaScript
+export default function f() {
+  return "Hi!";
+};
+Again, the named function expression implicitly declares a variable f, but because the export statement is a default export, this variable is unused and can be eliminated:
+
+JavaScript
+export default function () {
+  return "Hi!";
+};
+References
+Coding Horror: Code Smells.
+Mozilla Developer Network: Named function expressions.
+Mozilla Developer Network: Using the default export.
+Show less
+Select a tab navigation
+Open
+34
+ (34)
+Dismissed
+0
+ (0)
+client/src/components/activities-summary-cards.tsx:2
+import { useQuery } from "@tanstack/react-query";
+import { ClipboardList, CheckCircle2, AlertCircle, Calendar, Clock, TrendingUp } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+client/src/components/bulk-tag-dialog.tsx:2
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Tags } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+client/src/components/leads-summary-cards.tsx:2
+import { useQuery } from "@tanstack/react-query";
+import { Users, CheckCircle, TrendingUp, Target, Zap } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+client/src/components/tag-selector.tsx:21
+}
+
+export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: TagSelectorProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+client/src/pages/account-detail-page.tsx:15
+
+export default function AccountDetailPage() {
+  const [, params] = useRoute("/accounts/:id");
+  const [, setLocation] = useLocation();
+  const accountId = params?.id;
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+
+client/src/pages/account-detail-page.tsx:17
+  const [, params] = useRoute("/accounts/:id");
+  const [, setLocation] = useLocation();
+  const accountId = params?.id;
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+
+  const { data: account, isLoading: accountLoading } = useQuery<Account>({
+    queryKey: ["/api/accounts", accountId],
+client/src/pages/activity-detail-page.tsx:57
+    enabled: !!activityId,
+  });
+
+  const { data: associations = [], isLoading: associationsLoading } = useQuery<ActivityAssociation[]>({
+    queryKey: ["/api/activities", activityId, "associations"],
+    enabled: !!activityId,
+  });
+client/src/pages/activities-page.tsx:7
+import { useState, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X, Check, ChevronsUpDown } from "lucide-react";
+import { Activity, InsertActivity, insertActivitySchema, Account, Contact, Lead, Opportunity } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+client/src/pages/accounts-page.tsx:7
+import { useState, useCallback, useMemo } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree } from "lucide-react";
+import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+client/src/pages/accounts-page.tsx:117
+  });
+
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
+  });
+
+client/src/pages/analytics-page.tsx:6
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+client/src/pages/analytics-page.tsx:7
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+
+export default function AnalyticsPage() {
+  // Fetch all analytics data
+client/src/pages/audit-log-page.tsx:12
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
+const actionColors: Record<string, string> = {
+  create: "bg-green-500",
+client/src/pages/contact-detail-page.tsx:16
+export default function ContactDetailPage() {
+  const [, params] = useRoute("/contacts/:id");
+  const contactId = params?.id;
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+
+  const { data: contact, isLoading: contactLoading } = useQuery<Contact>({
+    queryKey: ["/api/contacts", contactId],
+client/src/pages/dashboard.tsx:12
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save, Download } from "lucide-react";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
+import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
+import { useToast } from "@/hooks/use-toast";
+client/src/pages/dashboard.tsx:13
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save, Download } from "lucide-react";
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
+import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
+import { useToast } from "@/hooks/use-toast";
+
+client/src/pages/dashboard.tsx:69
+  "hsl(186, 78%, 32%)", // Health Trixss primary teal
+];
+
+const COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+client/src/pages/contacts-page.tsx:114
+  });
+
+  // Fetch all tags for display (for tag filter dropdown)
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
+  });
+
+client/src/pages/help-page.tsx:6
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Building2, Users, Target, TrendingUp, Download, Upload, FileText, Database, ShieldCheck, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+client/src/pages/help-page.tsx:7
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Building2, Users, Target, TrendingUp, Download, Upload, FileText, Database, ShieldCheck, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+client/src/pages/import-page.tsx:14
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+
+type EntityType = "accounts" | "contacts" | "leads" | "opportunities" | "activities";
+
+client/src/pages/lead-detail-page.tsx:21
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import type { Lead, Activity, Account, Contact, Opportunity, InsertLead } from "@shared/schema";
+import { insertLeadSchema } from "@shared/schema";
+
+client/src/pages/lead-detail-page.tsx:32
+  const { toast } = useToast();
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+
+  const { data: lead, isLoading: leadLoading } = useQuery<Lead>({
+    queryKey: ["/api/leads", leadId],
+client/src/pages/leads-page.tsx:124
+  });
+
+  // Fetch all tags for display
+  const { data: allTags } = useQuery<Array<{ id: string; name: string; color: string }>>({
+    queryKey: ["/api/tags"],
+  });
+
+client/src/pages/opportunity-detail-page.tsx:4
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useRoute, useLocation } from "wouter";
+import { Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText } from "lucide-react";
+import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
+import { RelatedEntitiesSection } from "@/components/related-entities-section";
+import { CommentSystem } from "@/components/comment-system";
