@@ -55,6 +55,11 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 *   **Database Schema**: 17+ tables covering authentication, RBAC, CRM entities, comments, and system configurations.
 *   **Development Workflow**: `npm run dev` for development, `npm run db:push` for migrations.
 *   **Security**: Emphasizes strong secrets, production environment checks, and regular security audits.
+*   **Test Credentials** (Development Only): A test admin user is automatically seeded for development and testing purposes:
+    *   Email: `admin@test.com`
+    *   Password: `admin123`
+    *   Role: Admin (full system access)
+    *   This user is created by `server/seed.ts` and should be removed before production deployment.
 
 ## External Dependencies
 

@@ -2,8 +2,9 @@
 // Run this script to populate the database with default data
 
 import { db } from "./db";
-import { roles, permissions, rolePermissions } from "@shared/schema";
+import { roles, permissions, rolePermissions, users, userRoles } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "./auth";
 
 type RoleConfig = {
   name: string;
@@ -145,11 +146,51 @@ export async function seedRolesAndPermissions() {
   }
 }
 
+// Create test admin user for development
+export async function seedTestAdminUser() {
+  const testEmail = "admin@test.com";
+  const testPassword = "admin123";
+  const testName = "Test Admin";
+  
+  // Check if test user already exists
+  const [existingUser] = await db.select().from(users).where(eq(users.email, testEmail));
+  if (existingUser) {
+    console.log("Test admin user already exists, skipping");
+    return;
+  }
+  
+  console.log("Creating test admin user...");
+  
+  // Hash password
+  const hashedPassword = await hashPassword(testPassword);
+  
+  // Create user
+  const [user] = await db.insert(users).values({
+    email: testEmail,
+    name: testName,
+    password: hashedPassword,
+    status: "active",
+  }).returning();
+  
+  // Assign Admin role
+  const [adminRole] = await db.select().from(roles).where(eq(roles.name, "Admin"));
+  if (adminRole) {
+    await db.insert(userRoles).values({
+      userId: user.id,
+      roleId: adminRole.id,
+    });
+    console.log(`✓ Created test admin user: ${testEmail} / ${testPassword}`);
+  } else {
+    console.error("Admin role not found, cannot assign to test user");
+  }
+}
+
 async function seed() {
   console.log("Starting database seed...");
   
   try {
     await seedRolesAndPermissions();
+    await seedTestAdminUser();
     console.log("✓ Database seed completed successfully!");
     
   } catch (error) {
