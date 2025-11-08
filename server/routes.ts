@@ -5,7 +5,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
-import { requirePermission, requireRole, DEFAULT_ROLE } from "./rbac";
+import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission } from "./rbac";
 import {
   insertUserSchema,
   insertAccountSchema,
@@ -3870,7 +3870,13 @@ export function registerRoutes(app: Express) {
       
       // Check if user owns the comment or has update permission
       if (existingComment.createdBy !== req.user!.id) {
-        await requirePermission(req, "Comment", "update");
+        const allowed = await hasPermission(req.user!.id, "Comment", "update");
+        if (!allowed) {
+          return res.status(403).json({ 
+            error: "Forbidden",
+            message: "You do not have permission to update Comment"
+          });
+        }
       }
       
       // Check edit window (15 minutes)
@@ -3922,7 +3928,13 @@ export function registerRoutes(app: Express) {
       
       // Check if user owns the comment or has delete permission
       if (existingComment.createdBy !== req.user!.id) {
-        await requirePermission(req, "Comment", "delete");
+        const allowed = await hasPermission(req.user!.id, "Comment", "delete");
+        if (!allowed) {
+          return res.status(403).json({ 
+            error: "Forbidden",
+            message: "You do not have permission to delete Comment"
+          });
+        }
       }
       
       await db.delete(comments).where(eq(comments.id, commentId));
