@@ -22,6 +22,7 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 *   **Activity Management**: 
     *   **Bulk Operations**: Multi-select with checkboxes, bulk reassignment of owners, and bulk due date changes via dedicated dialogs.
     *   **Summary Statistics**: Real-time dashboard cards showing Total Activities, By Status (pending/completed/cancelled), Overdue (high priority), and Due This Week (meetings/calls). Statistics update automatically after any activity changes.
+    *   **Pending Activities Dashboard Card** (Nov 2025): Shows all non-completed activities (status != 'completed') with dual view modes (list/calendar). Replaces previous "Upcoming Activities" limited to 30-day window. Endpoint: `GET /api/activities/pending` returns up to 100 activities sorted by due date.
     *   **Date Handling**: Consistent string-based date handling (YYYY-MM-DD format) for activity due dates with proper form validation.
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and a Role-Based Access Control (RBAC) framework (Admin, SalesManager, SalesRep, ReadOnly).
 *   **Lead Management**: Multi-step Lead Conversion Wizard with duplicate detection.
