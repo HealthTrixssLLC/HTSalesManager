@@ -33,24 +33,26 @@ interface DateRange {
 export async function getHistoricalMetrics(dateRange: DateRange) {
   const { start, end } = dateRange;
 
-  // Get closed/won opportunities in date range
+  // Get closed/won opportunities in date range (only those included in forecast)
   const wonOpportunities = await db
     .select()
     .from(schema.opportunities)
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_won"),
         gte(schema.opportunities.updatedAt, start),
         lte(schema.opportunities.updatedAt, end)
       )
     );
 
-  // Get closed/lost opportunities in date range
+  // Get closed/lost opportunities in date range (only those included in forecast)
   const lostOpportunities = await db
     .select()
     .from(schema.opportunities)
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_lost"),
         gte(schema.opportunities.updatedAt, start),
         lte(schema.opportunities.updatedAt, end)
@@ -96,6 +98,14 @@ export async function getHistoricalMetrics(dateRange: DateRange) {
 export async function getStageConversionRates(dateRange: DateRange) {
   const { start, end } = dateRange;
 
+  // First, get all opportunity IDs that are included in forecast
+  const includedOpps = await db
+    .select({ id: schema.opportunities.id })
+    .from(schema.opportunities)
+    .where(eq(schema.opportunities.includeInForecast, true));
+  
+  const includedOppIds = new Set(includedOpps.map(o => o.id));
+
   // Get audit logs for opportunity stage changes in the date range
   const stageChanges = await db
     .select()
@@ -122,6 +132,11 @@ export async function getStageConversionRates(dateRange: DateRange) {
 
   stageChanges.forEach((log) => {
     try {
+      // Only process audit logs for opportunities that are included in forecast
+      if (!includedOppIds.has(log.resourceId)) {
+        return; // Skip this log entry
+      }
+
       const before = typeof log.before === 'string' ? JSON.parse(log.before) : log.before;
       const after = typeof log.after === 'string' ? JSON.parse(log.after) : log.after;
 
@@ -192,8 +207,8 @@ export async function getStageConversionRates(dateRange: DateRange) {
     ? getTransitionCount("negotiation", "closed_won") / negotiationTotal 
     : 0;
 
-  // Current snapshot for reference (not used in conversion calculations)
-  const currentOpps = await db.select().from(schema.opportunities);
+  // Current snapshot for reference (not used in conversion calculations, only those included in forecast)
+  const currentOpps = await db.select().from(schema.opportunities).where(eq(schema.opportunities.includeInForecast, true));
   const stageCount: Record<string, number> = {
     prospecting: 0,
     qualification: 0,
@@ -222,12 +237,13 @@ export async function getPipelineVelocity(dateRange: DateRange) {
   const { start, end } = dateRange;
   const days = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
 
-  // Get opportunities that moved in this period
+  // Get opportunities that moved in this period (only those included in forecast)
   const movedOpps = await db
     .select()
     .from(schema.opportunities)
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         gte(schema.opportunities.updatedAt, start),
         lte(schema.opportunities.updatedAt, end),
         or(
@@ -258,12 +274,13 @@ export async function calculateForecasts(targetDate?: Date) {
   const now = new Date();
   const target = targetDate || new Date(now.getFullYear(), now.getMonth() + 1, 0); // End of current month
 
-  // Get all open opportunities
+  // Get all open opportunities (only those included in forecast)
   const openOpps = await db
     .select()
     .from(schema.opportunities)
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         lte(schema.opportunities.closeDate, target),
         or(
@@ -347,6 +364,7 @@ export async function calculateForecasts(targetDate?: Date) {
     .from(schema.opportunities)
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_won"),
         gte(schema.opportunities.updatedAt, firstDayOfMonth),
         lte(schema.opportunities.updatedAt, now)
@@ -398,6 +416,7 @@ export async function predictDealClosing(daysAhead: number = 30) {
     .leftJoin(schema.users, eq(schema.opportunities.ownerId, schema.users.id))
     .where(
       and(
+        eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         gte(schema.opportunities.closeDate, now),
         lte(schema.opportunities.closeDate, targetDate),
@@ -491,6 +510,7 @@ export async function getRepPerformance(dateRange: DateRange) {
         .from(schema.opportunities)
         .where(
           and(
+            eq(schema.opportunities.includeInForecast, true),
             eq(schema.opportunities.ownerId, rep.id),
             eq(schema.opportunities.stage, "closed_won"),
             gte(schema.opportunities.updatedAt, start),
@@ -504,6 +524,7 @@ export async function getRepPerformance(dateRange: DateRange) {
         .from(schema.opportunities)
         .where(
           and(
+            eq(schema.opportunities.includeInForecast, true),
             eq(schema.opportunities.ownerId, rep.id),
             eq(schema.opportunities.stage, "closed_lost"),
             gte(schema.opportunities.updatedAt, start),
@@ -517,6 +538,7 @@ export async function getRepPerformance(dateRange: DateRange) {
         .from(schema.opportunities)
         .where(
           and(
+            eq(schema.opportunities.includeInForecast, true),
             eq(schema.opportunities.ownerId, rep.id),
             or(
               eq(schema.opportunities.stage, "prospecting"),
@@ -571,11 +593,14 @@ export async function calculatePipelineHealth() {
     .select()
     .from(schema.opportunities)
     .where(
-      or(
-        eq(schema.opportunities.stage, "prospecting"),
-        eq(schema.opportunities.stage, "qualification"),
-        eq(schema.opportunities.stage, "proposal"),
-        eq(schema.opportunities.stage, "negotiation")
+      and(
+        eq(schema.opportunities.includeInForecast, true),
+        or(
+          eq(schema.opportunities.stage, "prospecting"),
+          eq(schema.opportunities.stage, "qualification"),
+          eq(schema.opportunities.stage, "proposal"),
+          eq(schema.opportunities.stage, "negotiation")
+        )
       )
     );
 

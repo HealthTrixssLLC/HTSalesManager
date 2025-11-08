@@ -161,6 +161,7 @@ export const opportunities = pgTable("opportunities", {
   sourceRecordId: text("source_record_id"), // Original record ID in source system
   importStatus: text("import_status"), // Import status
   importNotes: text("import_notes"), // Import notes
+  includeInForecast: boolean("include_in_forecast").notNull().default(true), // Exclude internal/test opportunities from sales metrics
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -170,6 +171,7 @@ export const opportunities = pgTable("opportunities", {
   statusIdx: index("opportunities_status_idx").on(table.status),
   closeDateIdx: index("opportunities_close_date_idx").on(table.closeDate),
   externalIdIdx: index("opportunities_external_id_idx").on(table.externalId),
+  includeInForecastIdx: index("opportunities_include_in_forecast_idx").on(table.includeInForecast),
 }));
 
 export const activities = pgTable("activities", {

@@ -12,7 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
 import { useForm } from "react-hook-form";
@@ -133,6 +135,7 @@ export default function OpportunityDetailPage() {
       estCloseDate: null,
       estRevenue: null,
       rating: null,
+      includeInForecast: true,
     },
   });
 
@@ -258,6 +261,7 @@ export default function OpportunityDetailPage() {
         estCloseDate: formatDate(opportunity.estCloseDate) as any,
         estRevenue: opportunity.estRevenue || null,
         rating: opportunity.rating || null,
+        includeInForecast: opportunity.includeInForecast ?? true,
       });
       setIsEditDialogOpen(true);
     }
@@ -310,6 +314,25 @@ export default function OpportunityDetailPage() {
             <DetailField label="Amount" value={opportunity.amount} type="currency" />
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
+            <div className="col-span-full">
+              <label className="text-sm font-medium text-muted-foreground">Forecast Status</label>
+              <div className="mt-1">
+                {opportunity.includeInForecast !== false ? (
+                  <Badge variant="outline" className="text-xs" data-testid="badge-forecast-included">
+                    ✓ Included in forecast
+                  </Badge>
+                ) : (
+                  <div className="space-y-1">
+                    <Badge variant="secondary" className="text-xs" data-testid="badge-forecast-excluded">
+                      Excluded from forecast
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      This opportunity is excluded from all sales metrics, dashboards, and forecast reports.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           </DetailSection>
 
           {(opportunity.externalId || opportunity.sourceSystem) && (
@@ -323,14 +346,6 @@ export default function OpportunityDetailPage() {
                   <p className="text-sm text-muted-foreground">{opportunity.importNotes}</p>
                 </div>
               )}
-            </DetailSection>
-          )}
-
-          {opportunity.description && (
-            <DetailSection title="Description">
-              <div className="col-span-full">
-                <p className="text-sm whitespace-pre-wrap">{opportunity.description}</p>
-              </div>
             </DetailSection>
           )}
 
@@ -348,7 +363,7 @@ export default function OpportunityDetailPage() {
             </CardContent>
           </Card>
 
-          <CommentSystem entityType="Opportunity" entityId={opportunity.id} />
+          <CommentSystem entity="opportunities" entityId={opportunity.id} />
         </div>
 
         <div className="space-y-6">
@@ -553,6 +568,27 @@ export default function OpportunityDetailPage() {
                     </FormItem>
                   );
                 }}
+              />
+              <FormField
+                control={form.control}
+                name="includeInForecast"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Include in Forecast</FormLabel>
+                      <div className="text-sm text-muted-foreground">
+                        When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+                      </div>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-edit-include-in-forecast"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
               />
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit">

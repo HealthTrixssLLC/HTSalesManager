@@ -345,9 +345,31 @@ export class PostgresStorage implements IStorage {
   async getAllOpportunities(): Promise<Opportunity[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
+      // Explicitly alias all columns to ensure proper snake_case to camelCase conversion
       const result: any = await db.execute(sql`
         SELECT 
-          o.*,
+          o.id,
+          o.name,
+          o.account_id as "accountId",
+          o.stage,
+          o.amount,
+          o.probability,
+          o.close_date as "closeDate",
+          o.status,
+          o.actual_close_date as "actualCloseDate",
+          o.actual_revenue as "actualRevenue",
+          o.est_close_date as "estCloseDate",
+          o.est_revenue as "estRevenue",
+          o.rating,
+          o.external_id as "externalId",
+          o.source_system as "sourceSystem",
+          o.source_record_id as "sourceRecordId",
+          o.import_status as "importStatus",
+          o.import_notes as "importNotes",
+          o.owner_id as "ownerId",
+          o.include_in_forecast as "includeInForecast",
+          o.created_at as "createdAt",
+          o.updated_at as "updatedAt",
           COALESCE(
             json_agg(
               json_build_object(
@@ -604,15 +626,17 @@ export class PostgresStorage implements IStorage {
     pipelineByStage: { stage: string; count: number; value: number }[];
     newLeadsThisMonth: number;
     winRate: number;
-    activitiesByUser: { userName: string; count: number }[];
+    opportunitiesByCloseDate: { period: string; count: number; value: number; opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] }[];
   }> {
     // Get counts
     const accounts = await db.select({ count: sql<number>`count(*)` }).from(schema.accounts);
     const contacts = await db.select({ count: sql<number>`count(*)` }).from(schema.contacts);
     const leads = await db.select({ count: sql<number>`count(*)` }).from(schema.leads);
-    const opportunities = await db.select({ count: sql<number>`count(*)` }).from(schema.opportunities);
+    const opportunities = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.opportunities)
+      .where(eq(schema.opportunities.includeInForecast, true));
     
-    // Get pipeline by stage
+    // Get pipeline by stage (only opportunities included in forecast)
     const pipeline = await db
       .select({
         stage: schema.opportunities.stage,
@@ -620,6 +644,7 @@ export class PostgresStorage implements IStorage {
         value: sql<number>`sum(cast(${schema.opportunities.amount} as numeric))`,
       })
       .from(schema.opportunities)
+      .where(eq(schema.opportunities.includeInForecast, true))
       .groupBy(schema.opportunities.stage);
     
     // Get new leads this month
@@ -631,14 +656,20 @@ export class PostgresStorage implements IStorage {
       .from(schema.leads)
       .where(gte(schema.leads.createdAt, startOfMonth));
     
-    // Calculate win rate
+    // Calculate win rate (only opportunities included in forecast)
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.stage, "closed_won"));
+      .where(and(
+        eq(schema.opportunities.stage, "closed_won"),
+        eq(schema.opportunities.includeInForecast, true)
+      ));
     
     const closedLost = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.stage, "closed_lost"));
+      .where(and(
+        eq(schema.opportunities.stage, "closed_lost"),
+        eq(schema.opportunities.includeInForecast, true)
+      ));
     
     const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
     const winRate = totalClosed > 0 ? Math.round(((closedWon[0]?.count || 0) / totalClosed) * 100) : 0;
@@ -660,6 +691,7 @@ export class PostgresStorage implements IStorage {
       .from(schema.opportunities)
       .where(
         and(
+          eq(schema.opportunities.includeInForecast, true),
           notInArray(schema.opportunities.stage, ["closed_won", "closed_lost"]),
           or(
             and(
@@ -749,8 +781,10 @@ export class PostgresStorage implements IStorage {
       })
       .from(schema.opportunities)
       .where(
-        sql`(${schema.opportunities.closeDate} >= ${startOfYear} AND ${schema.opportunities.closeDate} <= ${endOfYear})
-            OR (${schema.opportunities.closeDate} IS NULL AND ${schema.opportunities.createdAt} >= ${startOfYear})`
+        sql`${schema.opportunities.includeInForecast} = true AND (
+          (${schema.opportunities.closeDate} >= ${startOfYear} AND ${schema.opportunities.closeDate} <= ${endOfYear})
+          OR (${schema.opportunities.closeDate} IS NULL AND ${schema.opportunities.createdAt} >= ${startOfYear})
+        )`
       )
       .orderBy(schema.opportunities.createdAt);
     

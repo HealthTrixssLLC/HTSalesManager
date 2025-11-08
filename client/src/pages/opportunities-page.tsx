@@ -26,6 +26,7 @@ import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { TagFilterButton } from "@/components/tag-filter-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 const stages = [
@@ -68,6 +69,7 @@ export default function OpportunitiesPage() {
   const [filterProbabilityMax, setFilterProbabilityMax] = useState<string>("");
   const [filterRating, setFilterRating] = useState<string>("");
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
+  const [filterIncludeInForecast, setFilterIncludeInForecast] = useState<string>("all");
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
   const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
@@ -155,6 +157,7 @@ export default function OpportunitiesPage() {
       estCloseDate: null,
       estRevenue: null,
       rating: null,
+      includeInForecast: true,
     },
   });
 
@@ -333,6 +336,10 @@ export default function OpportunitiesPage() {
       // Rating filter
       if (filterRating && opp.rating !== filterRating) return false;
       
+      // Include in Forecast filter
+      if (filterIncludeInForecast === "included" && opp.includeInForecast !== true) return false;
+      if (filterIncludeInForecast === "excluded" && opp.includeInForecast !== false) return false;
+      
       return true;
     });
 
@@ -346,7 +353,7 @@ export default function OpportunitiesPage() {
     }
 
     return result;
-  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds]);
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, filterIncludeInForecast]);
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
@@ -604,6 +611,27 @@ export default function OpportunitiesPage() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="includeInForecast"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Include in Forecast</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+                        </div>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-include-in-forecast"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
@@ -706,6 +734,20 @@ export default function OpportunitiesPage() {
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium">Forecast Status</label>
+                <Select value={filterIncludeInForecast} onValueChange={setFilterIncludeInForecast}>
+                  <SelectTrigger data-testid="select-filter-forecast-status">
+                    <SelectValue placeholder="All opportunities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All opportunities</SelectItem>
+                    <SelectItem value="included">Included in forecast</SelectItem>
+                    <SelectItem value="excluded">Excluded from forecast</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium">Tags</label>
                 <TagFilterButton
                   selectedTagIds={filterTagIds}
@@ -714,7 +756,7 @@ export default function OpportunitiesPage() {
               </div>
             </div>
             
-            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0) && (
+            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterIncludeInForecast !== "all" || filterTagIds.length > 0) && (
               <div className="flex gap-2 mt-4">
                 <Button 
                   variant="outline" 
@@ -727,6 +769,7 @@ export default function OpportunitiesPage() {
                     setFilterProbabilityMax("");
                     setFilterRating("");
                     setFilterTagIds([]);
+                    setFilterIncludeInForecast("all");
                   }}
                   data-testid="button-clear-filters"
                 >
@@ -858,11 +901,18 @@ export default function OpportunitiesPage() {
                             </p>
                           </div>
                         </div>
-                        {opp.rating && (
-                          <Badge variant="outline" className="text-xs h-5 flex-shrink-0">
-                            {opp.rating}
-                          </Badge>
-                        )}
+                        <div className="flex gap-1 flex-shrink-0">
+                          {opp.rating && (
+                            <Badge variant="outline" className="text-xs h-5">
+                              {opp.rating}
+                            </Badge>
+                          )}
+                          {opp.includeInForecast === false && (
+                            <Badge variant="secondary" className="text-xs h-5" data-testid={`badge-excluded-${opp.id}`}>
+                              Excluded
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       {opp.accountName && (
                         <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">

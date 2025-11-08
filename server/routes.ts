@@ -1155,6 +1155,7 @@ export function registerRoutes(app: Express) {
           sourceRecordId: opportunities.sourceRecordId,
           importStatus: opportunities.importStatus,
           importNotes: opportunities.importNotes,
+          includeInForecast: opportunities.includeInForecast,
           createdAt: opportunities.createdAt,
           updatedAt: opportunities.updatedAt,
           accountName: accounts.name,
@@ -4198,8 +4199,8 @@ export function registerRoutes(app: Express) {
     try {
       const { accountId, rating, startDate, endDate } = req.query;
       
-      // Build filter conditions
-      const filters: any[] = [];
+      // Build filter conditions (always filter by includeInForecast = true)
+      const filters: any[] = [eq(opportunities.includeInForecast, true)];
       if (accountId && typeof accountId === "string") {
         filters.push(eq(opportunities.accountId, accountId));
       }
@@ -4213,10 +4214,8 @@ export function registerRoutes(app: Express) {
         filters.push(lte(opportunities.closeDate, new Date(endDate)));
       }
       
-      // Fetch opportunities with filters
-      const opps = filters.length > 0
-        ? await db.select().from(opportunities).where(and(...filters))
-        : await db.select().from(opportunities);
+      // Fetch opportunities with filters (always include includeInForecast filter)
+      const opps = await db.select().from(opportunities).where(and(...filters));
       
       // Fetch all accounts and users for lookups
       const [allAccounts, allUsers] = await Promise.all([
