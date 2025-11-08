@@ -907,6 +907,11 @@ export default function OpportunitiesPage() {
                               {opp.rating}
                             </Badge>
                           )}
+                          {opp.includeInForecast === true && (
+                            <div className="flex items-center gap-1 text-primary" title="Included in forecast">
+                              <TrendingUp className="h-4 w-4" data-testid={`icon-included-${opp.id}`} />
+                            </div>
+                          )}
                           {opp.includeInForecast === false && (
                             <Badge variant="secondary" className="text-xs h-5" data-testid={`badge-excluded-${opp.id}`}>
                               Excluded
