@@ -33,7 +33,7 @@ export function UpcomingActivitiesCard() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const { data: activities = [], isLoading } = useQuery<Activity[]>({
-    queryKey: ["/api/activities/upcoming"],
+    queryKey: ["/api/activities/pending"],
   });
 
   const handleViewChange = (newView: "list" | "calendar") => {
@@ -58,8 +58,8 @@ export function UpcomingActivitiesCard() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-4">
         <div>
-          <CardTitle>Upcoming Activities</CardTitle>
-          <CardDescription>Your scheduled tasks and meetings</CardDescription>
+          <CardTitle>Pending Activities</CardTitle>
+          <CardDescription>All activities that are not yet completed</CardDescription>
         </div>
         <div className="flex gap-1">
           <Button
@@ -86,7 +86,7 @@ export function UpcomingActivitiesCard() {
         ) : view === "list" ? (
           <div className="space-y-3" data-testid="list-view">
             {activities.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upcoming activities</p>
+              <p className="text-sm text-muted-foreground">No pending activities</p>
             ) : (
               activities.slice(0, 10).map((activity) => {
                 const Icon = ACTIVITY_ICONS[activity.type as keyof typeof ACTIVITY_ICONS];

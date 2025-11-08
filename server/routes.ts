@@ -1366,6 +1366,22 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to fetch upcoming activities" });
     }
   });
+
+  app.get("/api/activities/pending", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+    try {
+      // Get all activities that are not completed (pending or cancelled)
+      const pendingActivities = await db.select()
+        .from(activities)
+        .where(ne(activities.status, 'completed'))
+        .orderBy(asc(activities.dueAt))
+        .limit(100);
+      
+      return res.json(pendingActivities);
+    } catch (error) {
+      console.error("Pending activities error:", error);
+      return res.status(500).json({ error: "Failed to fetch pending activities" });
+    }
+  });
   
   app.get("/api/activities/summary", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
     try {
