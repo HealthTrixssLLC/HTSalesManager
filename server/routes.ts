@@ -662,6 +662,23 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  app.patch("/api/contacts/:id", authenticate, requirePermission("Contact", "update"), async (req: AuthRequest, res) => {
+    try {
+      const before = await storage.getContactById(req.params.id);
+      if (!before) {
+        return res.status(404).json({ error: "Contact not found" });
+      }
+      
+      const contact = await storage.updateContact(req.params.id, req.body);
+      
+      await createAudit(req, "update", "Contact", contact.id, before, contact);
+      
+      return res.json(contact);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to update contact" });
+    }
+  });
+  
   // Get related data for a contact (account, opportunities, activities)
   app.get("/api/contacts/:id/related", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
     try {
