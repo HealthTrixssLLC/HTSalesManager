@@ -669,12 +669,17 @@ export function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Contact not found" });
       }
       
-      const contact = await storage.updateContact(req.params.id, req.body);
+      const data = insertContactSchema.omit({ id: true }).parse(req.body);
+      
+      const contact = await storage.updateContact(req.params.id, data);
       
       await createAudit(req, "update", "Contact", contact.id, before, contact);
       
       return res.json(contact);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
       return res.status(500).json({ error: "Failed to update contact" });
     }
   });
