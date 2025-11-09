@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
@@ -8,12 +8,25 @@ import { CommentSystem } from "@/components/comment-system";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
-import type { Contact, Account, Opportunity, Activity } from "@shared/schema";
+import type { Contact, Account, Opportunity, Activity, InsertContact } from "@shared/schema";
+import { insertContactSchema } from "@shared/schema";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function ContactDetailPage() {
   const [, params] = useRoute("/contacts/:id");
   const contactId = params?.id;
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const { toast } = useToast();
 
   const { data: contact, isLoading: contactLoading } = useQuery<Contact>({
     queryKey: ["/api/contacts", contactId],
@@ -38,6 +51,78 @@ export default function ContactDetailPage() {
     queryKey: ["/api/contacts", contactId, "related"],
     enabled: !!contactId,
   });
+
+  const { data: accounts } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/accounts"],
+  });
+
+  const { data: users } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/users"],
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: InsertContact) => {
+      const res = await apiRequest("PATCH", `/api/contacts/${contactId}`, data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts", contactId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      toast({ title: "Contact updated successfully" });
+      setIsEditDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update contact", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const form = useForm<InsertContact>({
+    resolver: zodResolver(insertContactSchema.omit({ id: true })),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      mobile: "",
+      title: "",
+      department: "",
+      mailingStreet: "",
+      mailingCity: "",
+      mailingState: "",
+      mailingPostalCode: "",
+      mailingCountry: "",
+      description: "",
+      accountId: null,
+      ownerId: "",
+    },
+  });
+
+  const onSubmit = (data: InsertContact) => {
+    updateMutation.mutate(data);
+  };
+
+  const openEditDialog = () => {
+    if (contact) {
+      form.reset({
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email || "",
+        phone: contact.phone || "",
+        mobile: contact.mobile || "",
+        title: contact.title || "",
+        department: contact.department || "",
+        mailingStreet: contact.mailingStreet || "",
+        mailingCity: contact.mailingCity || "",
+        mailingState: contact.mailingState || "",
+        mailingPostalCode: contact.mailingPostalCode || "",
+        mailingCountry: contact.mailingCountry || "",
+        description: contact.description || "",
+        accountId: contact.accountId || null,
+        ownerId: contact.ownerId || "",
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
 
   if (contactLoading || relatedLoading || tagsLoading) {
     return (
@@ -114,7 +199,7 @@ export default function ContactDetailPage() {
             </CardContent>
           </Card>
 
-          <CommentSystem entityType="Contact" entityId={contact.id} />
+          <CommentSystem entity="Contact" entityId={contact.id} />
         </div>
 
         <div className="space-y-6">
