@@ -91,6 +91,14 @@ export interface IStorage {
   createBackupJob(job: InsertBackupJob): Promise<BackupJob>;
   updateBackupJob(id: string, job: Partial<BackupJob>): Promise<BackupJob>;
   
+  // ========== API KEYS ==========
+  getAllApiKeys(): Promise<ApiKey[]>;
+  getApiKeyById(id: string): Promise<ApiKey | undefined>;
+  getApiKeyByHashedKey(hashedKey: string): Promise<ApiKey | undefined>;
+  createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
+  updateApiKeyLastUsed(id: string): Promise<void>;
+  revokeApiKey(id: string, userId: string): Promise<ApiKey>;
+  
   // ========== TAGS ==========
   getAllTags(): Promise<Tag[]>;
   getTagById(id: string): Promise<Tag | undefined>;

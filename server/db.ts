@@ -796,6 +796,45 @@ export class PostgresStorage implements IStorage {
     }));
   }
   
+  // ========== API KEYS ==========
+  
+  async getAllApiKeys(): Promise<schema.ApiKey[]> {
+    return await db.select().from(schema.apiKeys).orderBy(desc(schema.apiKeys.createdAt));
+  }
+  
+  async getApiKeyById(id: string): Promise<schema.ApiKey | undefined> {
+    const result = await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.id, id)).limit(1);
+    return result[0];
+  }
+  
+  async getApiKeyByHashedKey(hashedKey: string): Promise<schema.ApiKey | undefined> {
+    const result = await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.hashedKey, hashedKey)).limit(1);
+    return result[0];
+  }
+  
+  async createApiKey(apiKey: schema.InsertApiKey): Promise<schema.ApiKey> {
+    const result = await db.insert(schema.apiKeys).values(apiKey).returning();
+    return result[0];
+  }
+  
+  async updateApiKeyLastUsed(id: string): Promise<void> {
+    await db.update(schema.apiKeys)
+      .set({ lastUsedAt: new Date() })
+      .where(eq(schema.apiKeys.id, id));
+  }
+  
+  async revokeApiKey(id: string, userId: string): Promise<schema.ApiKey> {
+    const result = await db.update(schema.apiKeys)
+      .set({
+        isActive: false,
+        revokedBy: userId,
+        revokedAt: new Date(),
+      })
+      .where(eq(schema.apiKeys.id, id))
+      .returning();
+    return result[0];
+  }
+  
   // ========== TAGS ==========
   
   async getAllTags(): Promise<schema.Tag[]> {

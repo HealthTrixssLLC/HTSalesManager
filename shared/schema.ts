@@ -331,6 +331,25 @@ export const commentSubscriptions = pgTable("comment_subscriptions", {
   uniqueSubscription: index("comment_subscriptions_unique_idx").on(table.commentId, table.userId),
 }));
 
+// ========== API KEYS FOR EXTERNAL INTEGRATIONS ==========
+
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  hashedKey: text("hashed_key").notNull().unique(), // Bcrypt hash of the API key
+  name: text("name").notNull(), // Human-readable name for the key
+  description: text("description"), // Purpose/usage description
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at"),
+  expiresAt: timestamp("expires_at"), // Optional expiration date
+  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  revokedBy: varchar("revoked_by", { length: 50 }).references(() => users.id),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  hashedKeyIdx: index("api_keys_hashed_key_idx").on(table.hashedKey),
+  isActiveIdx: index("api_keys_is_active_idx").on(table.isActive),
+}));
+
 // ========== TAGS SYSTEM ==========
 
 export const tags = pgTable("tags", {
@@ -519,6 +538,10 @@ export type InsertBackupJob = z.infer<typeof insertBackupJobSchema>;
 export type BackupJob = typeof backupJobs.$inferSelect;
 
 // Tags
+export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true });
+export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
+export type ApiKey = typeof apiKeys.$inferSelect;
+
 export const insertTagSchema = createInsertSchema(tags).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertTag = z.infer<typeof insertTagSchema>;
 export type Tag = typeof tags.$inferSelect;

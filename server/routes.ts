@@ -17,6 +17,7 @@ import {
   insertCommentSchema,
   insertCommentReactionSchema,
   insertCommentAttachmentSchema,
+  insertApiKeySchema,
   comments,
   commentReactions,
   commentAttachments,
@@ -32,6 +33,8 @@ import {
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
 import { DynamicsMapper, type DynamicsMappingConfig } from "./dynamics-mapper";
+import { generateApiKey } from "./api-key-utils";
+import externalApiRoutes from "./external-api-routes";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
@@ -4359,4 +4362,81 @@ export function registerRoutes(app: Express) {
       return res.status(500).json({ error: "Failed to generate sales forecast report", details: error.message });
     }
   });
+  
+  // ========== API KEY MANAGEMENT ROUTES ==========
+  
+  // Get all API keys (admin only)
+  app.get("/api/admin/api-keys", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const keys = await storage.getAllApiKeys();
+      
+      // Don't send hashed keys to client
+      const sanitized = keys.map(k => ({
+        id: k.id,
+        name: k.name,
+        description: k.description,
+        isActive: k.isActive,
+        lastUsedAt: k.lastUsedAt,
+        expiresAt: k.expiresAt,
+        createdBy: k.createdBy,
+        revokedBy: k.revokedBy,
+        revokedAt: k.revokedAt,
+        createdAt: k.createdAt,
+      }));
+      
+      return res.json(sanitized);
+    } catch (error) {
+      console.error("Error fetching API keys:", error);
+      return res.status(500).json({ error: "Failed to fetch API keys" });
+    }
+  });
+  
+  // Generate a new API key (admin only)
+  app.post("/api/admin/api-keys", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const data = insertApiKeySchema.omit({ hashedKey: true }).parse(req.body);
+      
+      // Generate API key
+      const { publicKey, hashedKey } = generateApiKey();
+      
+      // Store in database
+      const apiKey = await storage.createApiKey({
+        ...data,
+        hashedKey,
+        createdBy: req.user!.id,
+      });
+      
+      // Return public key (only shown once!) and key info
+      return res.json({
+        apiKey: publicKey,
+        id: apiKey.id,
+        name: apiKey.name,
+        description: apiKey.description,
+        expiresAt: apiKey.expiresAt,
+        createdAt: apiKey.createdAt,
+        warning: "This is the only time the API key will be shown. Please save it securely.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating API key:", error);
+      return res.status(500).json({ error: "Failed to create API key" });
+    }
+  });
+  
+  // Revoke an API key (admin only)
+  app.delete("/api/admin/api-keys/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const apiKey = await storage.revokeApiKey(req.params.id, req.user!.id);
+      return res.json({ success: true, apiKey });
+    } catch (error) {
+      console.error("Error revoking API key:", error);
+      return res.status(500).json({ error: "Failed to revoke API key" });
+    }
+  });
+  
+  // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
+  // Mount external API routes under /api/v1/external
+  app.use("/api/v1/external", externalApiRoutes);
 }
