@@ -3,8 +3,8 @@
 
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check } from "lucide-react";
-import { User, Role, IdPattern, AccountCategory, InsertAccountCategory } from "@shared/schema";
+import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar } from "lucide-react";
+import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -47,11 +47,18 @@ export default function AdminConsole() {
     name: "", description: "", isActive: true
   });
   const [categoryToDelete, setCategoryToDelete] = useState<AccountCategory | null>(null);
+  const [createApiKeyOpen, setCreateApiKeyOpen] = useState(false);
+  const [newApiKeyData, setNewApiKeyData] = useState<{name: string; description: string; expiresAt: string}>({
+    name: "", description: "", expiresAt: ""
+  });
+  const [generatedApiKey, setGeneratedApiKey] = useState<{key: string; name: string} | null>(null);
+  const [revokeApiKeyId, setRevokeApiKeyId] = useState<string | null>(null);
 
   const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
   const { data: categories } = useQuery<AccountCategory[]>({ queryKey: ["/api/admin/categories"] });
+  const { data: apiKeys } = useQuery<ApiKey[]>({ queryKey: ["/api/admin/api-keys"] });
   
   // Fetch database diagnostics when activities entity type is selected
   const { data: dbDiagnostics } = useQuery({
@@ -311,6 +318,56 @@ export default function AdminConsole() {
       });
     },
   });
+
+  const createApiKeyMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string; expiresAt?: string }) => {
+      const res = await apiRequest("POST", "/api/admin/api-keys", {
+        name: data.name,
+        description: data.description || null,
+        expiresAt: data.expiresAt || null,
+        isActive: true,
+        rateLimitPerMin: 100, // Default rate limit
+      });
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/api-keys"] });
+      setGeneratedApiKey({ key: data.apiKey, name: data.name });
+      setCreateApiKeyOpen(false);
+      setNewApiKeyData({ name: "", description: "", expiresAt: "" });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to create API key",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const revokeApiKeyMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/admin/api-keys/${id}`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/api-keys"] });
+      toast({ title: "API key revoked successfully" });
+      setRevokeApiKeyId(null);
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Failed to revoke API key",
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copied to clipboard" });
+  };
   
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -480,6 +537,7 @@ export default function AdminConsole() {
           <TabsTrigger value="roles" data-testid="tab-roles">Roles</TabsTrigger>
           <TabsTrigger value="id-patterns" data-testid="tab-id-patterns">ID Patterns</TabsTrigger>
           <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
+          <TabsTrigger value="api-keys" data-testid="tab-api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
@@ -818,6 +876,83 @@ export default function AdminConsole() {
                       </TableRow>
                     );
                   })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* API Keys Tab */}
+        <TabsContent value="api-keys" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    API Key Management
+                  </CardTitle>
+                  <CardDescription>Manage API keys for external integrations</CardDescription>
+                </div>
+                <Button onClick={() => setCreateApiKeyOpen(true)} data-testid="button-create-api-key">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Generate API Key
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Used</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!apiKeys?.length && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        No API keys yet. Generate one to get started.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {apiKeys?.map((key) => (
+                    <TableRow key={key.id}>
+                      <TableCell className="font-medium">{key.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {key.description || "—"}
+                      </TableCell>
+                      <TableCell>
+                        {key.isActive && !key.revokedAt ? (
+                          <Badge variant="default" data-testid={`badge-key-active-${key.id}`}>Active</Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid={`badge-key-revoked-${key.id}`}>Revoked</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : "Never"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : "Never"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {key.isActive && !key.revokedAt && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setRevokeApiKeyId(key.id)}
+                            data-testid={`button-revoke-key-${key.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1476,6 +1611,151 @@ export default function AdminConsole() {
               data-testid="button-confirm-delete-category"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create API Key Dialog */}
+      <Dialog open={createApiKeyOpen} onOpenChange={setCreateApiKeyOpen}>
+        <DialogContent data-testid="dialog-create-api-key">
+          <DialogHeader>
+            <DialogTitle>Generate API Key</DialogTitle>
+            <DialogDescription>
+              Create a new API key for external integrations (e.g., forecasting app)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="api-key-name">Name *</Label>
+              <Input
+                id="api-key-name"
+                value={newApiKeyData.name}
+                onChange={(e) => setNewApiKeyData({...newApiKeyData, name: e.target.value})}
+                placeholder="Forecasting App Integration"
+                data-testid="input-api-key-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api-key-description">Description</Label>
+              <Input
+                id="api-key-description"
+                value={newApiKeyData.description}
+                onChange={(e) => setNewApiKeyData({...newApiKeyData, description: e.target.value})}
+                placeholder="Used by external forecasting application"
+                data-testid="input-api-key-description"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api-key-expires">Expires At (optional)</Label>
+              <Input
+                id="api-key-expires"
+                type="date"
+                value={newApiKeyData.expiresAt}
+                onChange={(e) => setNewApiKeyData({...newApiKeyData, expiresAt: e.target.value})}
+                data-testid="input-api-key-expires"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateApiKeyOpen(false)}
+              disabled={createApiKeyMutation.isPending}
+              data-testid="button-cancel-create-api-key"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createApiKeyMutation.mutate(newApiKeyData)}
+              disabled={createApiKeyMutation.isPending || !newApiKeyData.name}
+              data-testid="button-save-api-key"
+            >
+              {createApiKeyMutation.isPending ? "Generating..." : "Generate API Key"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generated API Key Dialog (shown once) */}
+      <Dialog open={!!generatedApiKey} onOpenChange={() => setGeneratedApiKey(null)}>
+        <DialogContent data-testid="dialog-generated-api-key">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-primary" />
+              API Key Generated
+            </DialogTitle>
+            <DialogDescription>
+              This is the only time the API key will be shown. Save it securely.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <p className="text-sm font-medium">{generatedApiKey?.name}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>API Key</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={generatedApiKey?.key || ""}
+                  readOnly
+                  className="font-mono text-sm"
+                  data-testid="input-generated-api-key"
+                />
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => generatedApiKey && copyToClipboard(generatedApiKey.key)}
+                  data-testid="button-copy-api-key"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                    Save this key now!
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                    You won't be able to see it again. Store it in a secure location.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setGeneratedApiKey(null)}
+              data-testid="button-close-api-key-dialog"
+            >
+              I've Saved It
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Revoke API Key Confirmation Dialog */}
+      <AlertDialog open={!!revokeApiKeyId} onOpenChange={() => setRevokeApiKeyId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke API Key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will immediately invalidate the API key. Any applications using this key will lose access.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-revoke-api-key">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => revokeApiKeyId && revokeApiKeyMutation.mutate(revokeApiKeyId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-revoke-api-key"
+            >
+              Revoke
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
