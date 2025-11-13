@@ -40,6 +40,18 @@ The design system is inspired by Linear, featuring a clean, professional enterpr
 *   **Sales Forecast Reports** (Nov 2025): Excel export system accessible from Dashboard with comprehensive pipeline analytics. Generates `.xlsx` files with three tabs: (1) Opportunity Details with full opportunity data including account info, stage, amounts, close dates, and probabilities; (2) Executive Summary with key metrics (total pipeline value, win rate, average deal size), stage breakdown visualization data, and monthly trend data; (3) Monthly Forecast table showing opportunity counts, total values, and probability-weighted forecasts by month. Supports optional filtering by account, lead rating (hot/warm/cold), and date range. Download triggered via dialog with shadcn Select filters and date pickers. API endpoint: `GET /api/reports/sales-forecast` with query parameters for `accountId`, `rating`, `startDate`, and `endDate`.
 *   **Comments System**: Full-featured threaded commenting with emoji reactions, pin/resolve status, edit/delete capabilities, and RBAC-enforced permissions for Accounts, Contacts, Leads, and Opportunities.
 *   **Tagging System**: Multi-tag support across all entities (Accounts, Contacts, Leads, Opportunities) with clickable filter cards, custom colors, and bulk tag operations.
+*   **External API for Forecasting Integration** (Nov 2025): Secure RESTful API endpoints under `/api/v1/external` prefix for custom forecasting app integration. Features include:
+    *   **API Key Authentication**: Crypto-based 64-byte Base64-encoded keys with bcrypt hashing (12 rounds), stored only as hashed values, public key shown only once at creation
+    *   **Rate Limiting**: Per-key configurable rate limiting (default 100 req/min) using express-rate-limit with API key ID as identifier
+    *   **Audit Logging**: All external API requests logged to audit_logs with action='external_api_request', includes endpoint, method, status code, latency, and API key metadata
+    *   **Data Endpoints**: 
+        *   `GET /api/v1/external/accounts` - List accounts with pagination (limit/offset), incremental sync (updatedSince timestamp), expand parameter for related opportunities
+        *   `GET /api/v1/external/accounts/:id` - Get single account with expand support (opportunities, contacts, leads, activities)
+        *   `GET /api/v1/external/opportunities` - List opportunities with includeInForecast filtering, updatedSince sync, pagination, expand for account details
+        *   `GET /api/v1/external/opportunities/:id` - Get single opportunity with expand support
+    *   **Admin Console Integration**: API Keys tab in Admin Console with generate, list, view last used, revoke capabilities. Generated keys displayed once with copy-to-clipboard and security warning
+    *   **Security Features**: Expiration dates support, IP allowlist (optional), isActive toggle for instant revocation, last-used tracking
+    *   **Integration Pattern**: CRM serves as source of truth for opportunity IDs; forecasting app pulls data via API keys with delta sync using updatedSince timestamps
 *   **Performance Optimization**: 
     *   Over 20 database indexes on frequently queried columns
     *   Optimized dashboard aggregation queries
