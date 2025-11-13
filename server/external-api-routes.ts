@@ -1,14 +1,53 @@
 // External API routes for forecasting app integration
 // Provides read-only access to accounts and opportunities data
 
-import { Router } from "express";
+import { Router, Response, NextFunction } from "express";
 import { storage } from "./db";
-import { authenticateApiKey, ApiKeyRequest } from "./api-key-auth";
+import { authenticateApiKey, createApiKeyRateLimiter, ApiKeyRequest } from "./api-key-auth";
 
 const router = Router();
 
 // Apply API key authentication to all external routes
 router.use(authenticateApiKey);
+
+// Apply rate limiting based on API key configuration
+router.use(createApiKeyRateLimiter());
+
+// Audit logging middleware for external API requests
+router.use(async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  
+  // Capture response details
+  const originalSend = res.send;
+  res.send = function(data: any) {
+    const latency = Date.now() - startTime;
+    
+    // Log API request to audit log (fire and forget)
+    storage.createAuditLog({
+      actorId: null, // External API requests are not user-scoped
+      action: "external_api_request",
+      resource: "api_key",
+      resourceId: req.apiKey?.id || null,
+      before: null,
+      after: {
+        endpoint: req.path,
+        method: req.method,
+        statusCode: res.statusCode,
+        latencyMs: latency,
+        apiKeyName: req.apiKey?.name,
+        queryParams: req.query,
+      },
+      ipAddress: req.ip || req.connection.remoteAddress || null,
+      userAgent: req.headers["user-agent"] || null,
+    }).catch(err => {
+      console.error("[EXTERNAL-API] Failed to create audit log:", err);
+    });
+    
+    return originalSend.call(this, data);
+  };
+  
+  next();
+});
 
 // ========== ACCOUNTS ENDPOINTS ==========
 

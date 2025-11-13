@@ -2,6 +2,7 @@
 // For external integrations and forecasting app access
 
 import { Request, Response, NextFunction } from "express";
+import rateLimit from "express-rate-limit";
 import { storage } from "./db";
 import { verifyApiKey, validateApiKeyFormat } from "./api-key-utils";
 
@@ -10,6 +11,7 @@ export interface ApiKeyRequest extends Request {
     id: string;
     name: string;
     description: string | null;
+    rateLimitPerMin: number | null;
   };
 }
 
@@ -82,6 +84,7 @@ export async function authenticateApiKey(
       id: matchedKey.id,
       name: matchedKey.name,
       description: matchedKey.description,
+      rateLimitPerMin: matchedKey.rateLimitPerMin,
     };
     
     next();
@@ -92,4 +95,33 @@ export async function authenticateApiKey(
       message: "An error occurred during authentication"
     });
   }
+}
+
+/**
+ * Create rate limiter middleware for external API
+ * Uses per-key rate limiting based on API key configuration
+ */
+export function createApiKeyRateLimiter() {
+  return rateLimit({
+    windowMs: 60 * 1000, // 1 minute window
+    max: async (req: ApiKeyRequest) => {
+      // Use per-key rate limit if configured, otherwise default to 100 req/min
+      return req.apiKey?.rateLimitPerMin || 100;
+    },
+    // Use API key ID as identifier for rate limiting (not IP-based)
+    keyGenerator: (req: ApiKeyRequest) => {
+      // Always use API key ID as the rate limit key
+      // This ensures proper per-key limits regardless of IP
+      return req.apiKey?.id || "unknown";
+    },
+    standardHeaders: true, // Return rate limit info in headers
+    legacyHeaders: false,  // Disable X-RateLimit-* headers
+    message: {
+      error: "Too many requests",
+      message: "You have exceeded the rate limit for this API key. Please try again later.",
+    },
+    // Skip failed requests (don't count them against the limit)
+    skipFailedRequests: false,
+    skipSuccessfulRequests: false,
+  });
 }
