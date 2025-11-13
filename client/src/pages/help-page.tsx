@@ -320,12 +320,67 @@ export default function HelpPage() {
                         <td className="p-2">The provided API key has expired</td>
                       </tr>
                       <tr className="border-b">
+                        <td className="p-2"><code>404</code></td>
+                        <td className="p-2">Account not found</td>
+                        <td className="p-2">No account found with the specified ID</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>404</code></td>
+                        <td className="p-2">Opportunity not found</td>
+                        <td className="p-2">No opportunity found with the specified ID</td>
+                      </tr>
+                      <tr className="border-b">
                         <td className="p-2"><code>429</code></td>
                         <td className="p-2">Too many requests</td>
                         <td className="p-2">Rate limit exceeded</td>
                       </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>500</code></td>
+                        <td className="p-2">Failed to fetch accounts</td>
+                        <td className="p-2">Server error listing accounts</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>500</code></td>
+                        <td className="p-2">Failed to fetch account</td>
+                        <td className="p-2">Server error fetching account details</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>500</code></td>
+                        <td className="p-2">Failed to fetch opportunities</td>
+                        <td className="p-2">Server error listing opportunities</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>500</code></td>
+                        <td className="p-2">Failed to fetch opportunity</td>
+                        <td className="p-2">Server error fetching opportunity details</td>
+                      </tr>
                     </tbody>
                   </table>
+                </div>
+                
+                <div className="space-y-3">
+                  <h3 className="font-semibold">Example Error Responses</h3>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">404 Not Found:</p>
+                    <div className="bg-muted p-4 rounded-md">
+                      <pre className="text-xs overflow-x-auto">
+{`{
+  "error": "Account not found",
+  "message": "No account found with ID: ACT-1234"
+}`}
+                      </pre>
+                    </div>
+                    
+                    <p className="text-sm font-medium mt-3">401 Unauthorized:</p>
+                    <div className="bg-muted p-4 rounded-md">
+                      <pre className="text-xs overflow-x-auto">
+{`{
+  "error": "Invalid API key",
+  "message": "The provided API key is invalid or has been revoked"
+}`}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
