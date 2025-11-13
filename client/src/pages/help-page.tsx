@@ -301,18 +301,23 @@ export default function HelpPage() {
                     <tbody className="text-muted-foreground">
                       <tr className="border-b">
                         <td className="p-2"><code>401</code></td>
-                        <td className="p-2">Missing API key</td>
+                        <td className="p-2">API key required</td>
                         <td className="p-2">No x-api-key header provided</td>
                       </tr>
                       <tr className="border-b">
                         <td className="p-2"><code>401</code></td>
-                        <td className="p-2">Invalid API key</td>
-                        <td className="p-2">API key not found or invalid</td>
+                        <td className="p-2">Invalid API key format</td>
+                        <td className="p-2">The provided API key format is invalid</td>
                       </tr>
                       <tr className="border-b">
-                        <td className="p-2"><code>403</code></td>
+                        <td className="p-2"><code>401</code></td>
+                        <td className="p-2">Invalid API key</td>
+                        <td className="p-2">API key is invalid or has been revoked</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>401</code></td>
                         <td className="p-2">API key expired</td>
-                        <td className="p-2">API key has passed expiration date</td>
+                        <td className="p-2">The provided API key has expired</td>
                       </tr>
                       <tr className="border-b">
                         <td className="p-2"><code>429</code></td>
@@ -364,7 +369,7 @@ export default function HelpPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <code>expand</code>
-                        <span className="text-muted-foreground col-span-2">Comma-separated: opportunities</span>
+                        <span className="text-muted-foreground col-span-2">opportunities (includes only forecast opportunities)</span>
                       </div>
                     </div>
 
@@ -434,19 +439,19 @@ export default function HelpPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <code>offset</code>
-                        <span className="text-muted-foreground col-span-2">Number of results to skip</span>
+                        <span className="text-muted-foreground col-span-2">Number of results to skip (default: 0)</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <code>updatedSince</code>
-                        <span className="text-muted-foreground col-span-2">ISO 8601 timestamp</span>
+                        <span className="text-muted-foreground col-span-2">ISO 8601 timestamp for delta sync</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <code>includeInForecast</code>
-                        <span className="text-muted-foreground col-span-2">true/false - Filter by forecast inclusion</span>
+                        <span className="text-muted-foreground col-span-2">true (default) | false | all - Filter by forecast flag</span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <code>expand</code>
-                        <span className="text-muted-foreground col-span-2">account</span>
+                        <span className="text-muted-foreground col-span-2">account (include account details)</span>
                       </div>
                     </div>
 
@@ -647,8 +652,8 @@ console.log(\`Account: \${opportunity.account?.name}\`);`}
       return robustCrmRequest(endpoint, params);
     }
     
-    if (error.message.includes('401') || error.message.includes('403')) {
-      // Authentication error - check API key
+    if (error.message.includes('401')) {
+      // Authentication error - check API key (expired, invalid, or revoked)
       console.error('Authentication failed. Check your API key.');
       throw error;
     }

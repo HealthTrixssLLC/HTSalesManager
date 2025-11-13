@@ -4394,7 +4394,7 @@ export function registerRoutes(app: Express) {
   // Generate a new API key (admin only)
   app.post("/api/admin/api-keys", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
     try {
-      const data = insertApiKeySchema.omit({ hashedKey: true }).parse(req.body);
+      const data = insertApiKeySchema.omit({ hashedKey: true, createdBy: true }).parse(req.body);
       
       // Generate API key
       const { publicKey, hashedKey } = generateApiKey();
