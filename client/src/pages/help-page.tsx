@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Building2, Users, Target, TrendingUp, Download, Upload, FileText, Database, ShieldCheck, Zap } from "lucide-react";
+import { Building2, Users, Target, TrendingUp, Download, Upload, FileText, Database, ShieldCheck, Zap, Key, Code2, Terminal, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -17,9 +17,10 @@ export default function HelpPage() {
       </div>
 
       <Tabs defaultValue="getting-started" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="getting-started" data-testid="tab-getting-started">Getting Started</TabsTrigger>
           <TabsTrigger value="features" data-testid="tab-features">Features Guide</TabsTrigger>
+          <TabsTrigger value="api-docs" data-testid="tab-api-docs">API Documentation</TabsTrigger>
           <TabsTrigger value="migration" data-testid="tab-migration">Dynamics Migration</TabsTrigger>
           <TabsTrigger value="examples" data-testid="tab-examples">Examples</TabsTrigger>
           <TabsTrigger value="faq" data-testid="tab-faq">FAQ</TabsTrigger>
@@ -183,6 +184,569 @@ export default function HelpPage() {
                 </p>
                 <div className="bg-muted p-4 rounded-md">
                   <p className="text-sm">All create, update, delete, and convert operations are logged with user, timestamp, IP address, and full data diffs.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* API Documentation Tab */}
+        <TabsContent value="api-docs" className="space-y-4">
+          <Alert>
+            <Code2 className="h-4 w-4" />
+            <AlertTitle>External API for Integrations</AlertTitle>
+            <AlertDescription>
+              Secure RESTful API for building custom forecasting tools and external integrations
+            </AlertDescription>
+          </Alert>
+
+          {/* Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-primary" />
+                API Overview
+              </CardTitle>
+              <CardDescription>Read-only API for accessing accounts and opportunities data</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                The External API provides secure, read-only access to your CRM data for building custom forecasting applications, 
+                business intelligence tools, and third-party integrations. All endpoints require API key authentication and support 
+                pagination, filtering, and delta synchronization.
+              </p>
+              <div className="bg-muted p-4 rounded-md space-y-2">
+                <p className="text-sm font-medium">Base URL</p>
+                <code className="text-sm">https://your-crm-domain.com/api/v1/external</code>
+                <p className="text-sm font-medium mt-3">Authentication</p>
+                <p className="text-sm text-muted-foreground">API Key via <code>x-api-key</code> header</p>
+                <p className="text-sm font-medium mt-3">Rate Limit</p>
+                <p className="text-sm text-muted-foreground">100 requests per minute (configurable per key)</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Getting Started */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-primary" />
+                Getting Started
+              </CardTitle>
+              <CardDescription>Generate your first API key and make your first request</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <h3 className="font-semibold">Step 1: Generate an API Key</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>Navigate to <strong>Admin Console → API Keys</strong> tab (Admin access required)</li>
+                  <li>Click <strong>"Generate API Key"</strong></li>
+                  <li>Enter a descriptive name (e.g., "Forecasting App Integration")</li>
+                  <li>Optionally set an expiration date for security</li>
+                  <li>Click <strong>"Generate API Key"</strong> and copy the key immediately</li>
+                </ol>
+                <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertTitle className="text-yellow-800 dark:text-yellow-200">Important</AlertTitle>
+                  <AlertDescription className="text-yellow-700 dark:text-yellow-300 text-sm">
+                    The API key is shown only once. Store it securely in your environment variables or secrets manager.
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-semibold">Step 2: Test Your API Key</h3>
+                <div className="bg-muted p-4 rounded-md space-y-2">
+                  <p className="text-sm font-medium">Example Request (cURL)</p>
+                  <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
+{`curl -H "x-api-key: YOUR_API_KEY_HERE" \\
+  https://your-crm-domain.com/api/v1/external/accounts?limit=5`}
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Authentication */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                Authentication
+              </CardTitle>
+              <CardDescription>Secure your API requests with API keys</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <h3 className="font-semibold">API Key Header</h3>
+                <p className="text-sm text-muted-foreground">
+                  Include your API key in the <code>x-api-key</code> header with every request:
+                </p>
+                <div className="bg-muted p-3 rounded-md">
+                  <code className="text-sm">x-api-key: your_64_character_api_key_here</code>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-semibold">Error Responses</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Status Code</th>
+                        <th className="text-left p-2">Error</th>
+                        <th className="text-left p-2">Description</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-muted-foreground">
+                      <tr className="border-b">
+                        <td className="p-2"><code>401</code></td>
+                        <td className="p-2">Missing API key</td>
+                        <td className="p-2">No x-api-key header provided</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>401</code></td>
+                        <td className="p-2">Invalid API key</td>
+                        <td className="p-2">API key not found or invalid</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>403</code></td>
+                        <td className="p-2">API key expired</td>
+                        <td className="p-2">API key has passed expiration date</td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="p-2"><code>429</code></td>
+                        <td className="p-2">Too many requests</td>
+                        <td className="p-2">Rate limit exceeded</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Endpoint Reference */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Terminal className="h-5 w-5 text-primary" />
+                Endpoint Reference
+              </CardTitle>
+              <CardDescription>Available API endpoints and parameters</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Accounts Endpoints */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-primary">Accounts API</h3>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">GET</code>
+                    <code className="text-sm">/api/v1/external/accounts</code>
+                  </div>
+                  <p className="text-sm text-muted-foreground">List all accounts with pagination and filtering</p>
+                  
+                  <div className="bg-muted p-4 rounded-md space-y-3">
+                    <p className="text-sm font-medium">Query Parameters</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>limit</code>
+                        <span className="text-muted-foreground col-span-2">Number of results (default: 100, max: 1000)</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>offset</code>
+                        <span className="text-muted-foreground col-span-2">Number of results to skip (default: 0)</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>updatedSince</code>
+                        <span className="text-muted-foreground col-span-2">ISO 8601 timestamp for delta sync</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>expand</code>
+                        <span className="text-muted-foreground col-span-2">Comma-separated: opportunities</span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm font-medium mt-4">Example Response</p>
+                    <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
+{`{
+  "data": [
+    {
+      "id": "ACT-1019",
+      "name": "Allied Behavioral Health",
+      "accountNumber": "A001",
+      "type": "Provider",
+      "category": "Healthcare Provider",
+      "industry": "Healthcare",
+      "ownerId": "user-123",
+      "createdAt": "2025-01-15T10:00:00Z",
+      "updatedAt": "2025-01-20T14:30:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 156,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": true
+  }
+}`}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">GET</code>
+                    <code className="text-sm">/api/v1/external/accounts/:id</code>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Get a single account by ID</p>
+                  
+                  <div className="bg-muted p-4 rounded-md space-y-3">
+                    <p className="text-sm font-medium">Query Parameters</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>expand</code>
+                        <span className="text-muted-foreground col-span-2">opportunities,contacts,leads,activities</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Opportunities Endpoints */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-primary">Opportunities API</h3>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">GET</code>
+                    <code className="text-sm">/api/v1/external/opportunities</code>
+                  </div>
+                  <p className="text-sm text-muted-foreground">List all opportunities with filtering</p>
+                  
+                  <div className="bg-muted p-4 rounded-md space-y-3">
+                    <p className="text-sm font-medium">Query Parameters</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>limit</code>
+                        <span className="text-muted-foreground col-span-2">Number of results (default: 100, max: 1000)</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>offset</code>
+                        <span className="text-muted-foreground col-span-2">Number of results to skip</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>updatedSince</code>
+                        <span className="text-muted-foreground col-span-2">ISO 8601 timestamp</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>includeInForecast</code>
+                        <span className="text-muted-foreground col-span-2">true/false - Filter by forecast inclusion</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>expand</code>
+                        <span className="text-muted-foreground col-span-2">account</span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm font-medium mt-4">Example Response</p>
+                    <pre className="text-xs bg-background p-3 rounded border overflow-x-auto">
+{`{
+  "data": [
+    {
+      "id": "OPP-2025-00042",
+      "name": "Q1 Software License Renewal",
+      "accountId": "ACT-1019",
+      "stage": "Proposal",
+      "amount": 150000,
+      "closeDate": "2025-03-31",
+      "probability": 75,
+      "includeInForecast": true,
+      "ownerId": "user-123",
+      "createdAt": "2025-01-10T09:00:00Z",
+      "updatedAt": "2025-01-25T16:45:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 89,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}`}
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">GET</code>
+                    <code className="text-sm">/api/v1/external/opportunities/:id</code>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Get a single opportunity by ID</p>
+                  
+                  <div className="bg-muted p-4 rounded-md space-y-3">
+                    <p className="text-sm font-medium">Query Parameters</p>
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-3 gap-2">
+                        <code>expand</code>
+                        <span className="text-muted-foreground col-span-2">account</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Implementation Guide */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code2 className="h-5 w-5 text-primary" />
+                Implementation Guide
+              </CardTitle>
+              <CardDescription>Step-by-step integration examples using Node.js</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-3">
+                <h3 className="font-semibold">1. Initial Setup</h3>
+                <div className="bg-muted p-4 rounded-md">
+                  <pre className="text-xs overflow-x-auto">
+{`// Store your API key in environment variables
+const API_KEY = process.env.CRM_API_KEY;
+const BASE_URL = 'https://your-crm.com/api/v1/external';
+
+// Helper function for API requests
+async function crmRequest(endpoint, params = {}) {
+  const url = new URL(\`\${BASE_URL}\${endpoint}\`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) url.searchParams.append(key, value);
+  });
+
+  const response = await fetch(url, {
+    headers: {
+      'x-api-key': API_KEY,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(\`API Error: \${response.status}\`);
+  }
+
+  return response.json();
+}`}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-semibold">2. Fetch Accounts with Pagination</h3>
+                <div className="bg-muted p-4 rounded-md">
+                  <pre className="text-xs overflow-x-auto">
+{`// Fetch first 100 accounts
+const accountsPage1 = await crmRequest('/accounts', {
+  limit: 100,
+  offset: 0
+});
+
+console.log(\`Total accounts: \${accountsPage1.pagination.total}\`);
+console.log(\`Fetched: \${accountsPage1.data.length}\`);
+console.log(\`Has more: \${accountsPage1.pagination.hasMore}\`);
+
+// Fetch all accounts using pagination
+async function getAllAccounts() {
+  let allAccounts = [];
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const response = await crmRequest('/accounts', { limit, offset });
+    allAccounts.push(...response.data);
+    
+    if (!response.pagination.hasMore) break;
+    offset += limit;
+  }
+
+  return allAccounts;
+}`}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-semibold">3. Delta Sync (Incremental Updates)</h3>
+                <div className="bg-muted p-4 rounded-md">
+                  <pre className="text-xs overflow-x-auto">
+{`// Store last sync timestamp
+let lastSyncTime = '2025-01-01T00:00:00Z';
+
+async function syncNewOpportunities() {
+  const response = await crmRequest('/opportunities', {
+    updatedSince: lastSyncTime,
+    includeInForecast: true,
+    limit: 1000
+  });
+
+  // Process only changed opportunities
+  console.log(\`Found \${response.data.length} updated opportunities\`);
+  
+  // Update your local database
+  for (const opp of response.data) {
+    await updateLocalOpportunity(opp);
+  }
+
+  // Update sync timestamp for next run
+  lastSyncTime = new Date().toISOString();
+  await saveLastSyncTime(lastSyncTime);
+}
+
+// Run sync every hour
+setInterval(syncNewOpportunities, 60 * 60 * 1000);`}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-semibold">4. Expand Related Entities</h3>
+                <div className="bg-muted p-4 rounded-md">
+                  <pre className="text-xs overflow-x-auto">
+{`// Fetch account with all related opportunities
+const account = await crmRequest('/accounts/ACT-1019', {
+  expand: 'opportunities'
+});
+
+console.log(\`Account: \${account.name}\`);
+console.log(\`Opportunities: \${account.opportunities?.length || 0}\`);
+
+// Fetch opportunity with account details
+const opportunity = await crmRequest('/opportunities/OPP-2025-00042', {
+  expand: 'account'
+});
+
+console.log(\`Opportunity: \${opportunity.name}\`);
+console.log(\`Account: \${opportunity.account?.name}\`);`}
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="font-semibold">5. Error Handling</h3>
+                <div className="bg-muted p-4 rounded-md">
+                  <pre className="text-xs overflow-x-auto">
+{`async function robustCrmRequest(endpoint, params = {}) {
+  try {
+    return await crmRequest(endpoint, params);
+  } catch (error) {
+    if (error.message.includes('429')) {
+      // Rate limit exceeded - wait and retry
+      console.log('Rate limit hit, waiting 60 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 60000));
+      return robustCrmRequest(endpoint, params);
+    }
+    
+    if (error.message.includes('401') || error.message.includes('403')) {
+      // Authentication error - check API key
+      console.error('Authentication failed. Check your API key.');
+      throw error;
+    }
+    
+    // Other errors
+    console.error(\`API request failed: \${error.message}\`);
+    throw error;
+  }
+}`}
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Rate Limiting */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Rate Limiting</CardTitle>
+              <CardDescription>Understand and respect API rate limits</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Each API key has a configurable rate limit (default: 100 requests per minute). Rate limit information is returned in response headers:
+              </p>
+              <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <code>RateLimit-Limit</code>
+                  <span className="text-muted-foreground">Maximum requests per minute</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <code>RateLimit-Remaining</code>
+                  <span className="text-muted-foreground">Remaining requests in current window</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <code>RateLimit-Reset</code>
+                  <span className="text-muted-foreground">Time when limit resets (epoch timestamp)</span>
+                </div>
+              </div>
+              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-900/20">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800 dark:text-blue-200">Best Practice</AlertTitle>
+                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                  Implement exponential backoff when you receive 429 responses. Monitor the RateLimit-Remaining header to avoid hitting limits.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          {/* Best Practices */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Best Practices</CardTitle>
+              <CardDescription>Recommended patterns for reliable integrations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex gap-3">
+                  <ShieldCheck className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Secure API Key Storage</p>
+                    <p className="text-sm text-muted-foreground">Never hardcode API keys. Use environment variables or secrets managers (AWS Secrets Manager, Azure Key Vault, etc.)</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Key className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Key Rotation</p>
+                    <p className="text-sm text-muted-foreground">Rotate API keys regularly (every 90 days recommended). Set expiration dates when generating keys.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Database className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Use Delta Sync</p>
+                    <p className="text-sm text-muted-foreground">Use the <code>updatedSince</code> parameter to fetch only changed records. Store the last sync timestamp and use it in subsequent requests.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Zap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Implement Caching</p>
+                    <p className="text-sm text-muted-foreground">Cache responses locally to reduce API calls. Use ETags if available for conditional requests.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <TrendingUp className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Pagination Strategy</p>
+                    <p className="text-sm text-muted-foreground">Use appropriate page sizes (100-1000). Don't fetch all data at once if you only need recent changes.</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <AlertCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Error Monitoring</p>
+                    <p className="text-sm text-muted-foreground">Log all API errors with context. Set up alerts for authentication failures and rate limit violations.</p>
+                  </div>
                 </div>
               </div>
             </CardContent>
