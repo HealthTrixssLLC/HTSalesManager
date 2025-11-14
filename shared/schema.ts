@@ -339,6 +339,7 @@ export const apiKeys = pgTable("api_keys", {
   name: text("name").notNull(), // Human-readable name for the key
   description: text("description"), // Purpose/usage description
   isActive: boolean("is_active").notNull().default(true),
+  rateLimitPerMin: integer("rate_limit_per_min").default(100), // Requests per minute limit
   lastUsedAt: timestamp("last_used_at"),
   expiresAt: timestamp("expires_at"), // Optional expiration date
   createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),

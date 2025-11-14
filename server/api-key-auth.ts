@@ -16,9 +16,44 @@ export interface ApiKeyRequest extends Request {
 }
 
 /**
+ * Helper to log authentication failures (fire-and-forget for performance)
+ */
+function logAuthFailure(
+  req: Request,
+  statusCode: number,
+  error: string,
+  message: string,
+  apiKeyId: string | null = null
+) {
+  // Fire and forget - don't block request processing
+  storage.createAuditLog({
+    actorId: null,
+    action: "external_api_auth_failure",
+    resource: "api_key",
+    resourceId: apiKeyId,
+    before: null,
+    after: {
+      endpoint: req.path,
+      method: req.method,
+      statusCode,
+      error,
+      message,
+      apiKeyProvided: !!req.headers["x-api-key"],
+      apiKeyFormat: req.headers["x-api-key"] ? "provided" : "missing",
+      timestamp: new Date().toISOString(),
+    },
+    ipAddress: req.ip || req.connection.remoteAddress || null,
+    userAgent: req.headers["user-agent"] || null,
+  }).catch(err => {
+    console.error("[API-AUTH] Failed to log auth failure:", err);
+  });
+}
+
+/**
  * Middleware to authenticate requests using API keys
  * Checks x-api-key header, validates format, verifies against database
  * Updates lastUsedAt timestamp on successful auth
+ * Logs all authentication attempts (success and failure) for compliance
  */
 export async function authenticateApiKey(
   req: ApiKeyRequest,
@@ -30,18 +65,28 @@ export async function authenticateApiKey(
     const providedKey = req.headers["x-api-key"] as string;
     
     if (!providedKey) {
-      return res.status(401).json({
+      const errorData = {
         error: "API key required",
         message: "Please provide your API key in the x-api-key header"
-      });
+      };
+      
+      // Log authentication failure (fire-and-forget)
+      logAuthFailure(req, 401, errorData.error, errorData.message);
+      
+      return res.status(401).json(errorData);
     }
     
     // Validate format
     if (!validateApiKeyFormat(providedKey)) {
-      return res.status(401).json({
+      const errorData = {
         error: "Invalid API key format",
         message: "The provided API key format is invalid"
-      });
+      };
+      
+      // Log authentication failure (fire-and-forget)
+      logAuthFailure(req, 401, errorData.error, errorData.message);
+      
+      return res.status(401).json(errorData);
     }
     
     // Get all active API keys and check against each hashed key
@@ -60,23 +105,52 @@ export async function authenticateApiKey(
     }
     
     if (!matchedKey) {
-      return res.status(401).json({
+      const errorData = {
         error: "Invalid API key",
         message: "The provided API key is invalid or has been revoked"
-      });
+      };
+      
+      // Log authentication failure (fire-and-forget, no API key ID since we couldn't match it)
+      logAuthFailure(req, 401, errorData.error, errorData.message);
+      
+      return res.status(401).json(errorData);
     }
     
     // Check if key has expired
     if (matchedKey.expiresAt && new Date(matchedKey.expiresAt) < new Date()) {
-      return res.status(401).json({
+      const errorData = {
         error: "API key expired",
         message: "The provided API key has expired"
-      });
+      };
+      
+      // Log authentication failure with matched key ID (fire-and-forget)
+      logAuthFailure(req, 401, errorData.error, errorData.message, matchedKey.id);
+      
+      return res.status(401).json(errorData);
     }
     
     // Update last used timestamp (fire and forget, don't block request)
     storage.updateApiKeyLastUsed(matchedKey.id).catch(err => {
       console.error("Failed to update API key last used:", err);
+    });
+    
+    // Log successful authentication
+    storage.createAuditLog({
+      actorId: null,
+      action: "external_api_auth_success",
+      resource: "api_key",
+      resourceId: matchedKey.id,
+      before: null,
+      after: {
+        endpoint: req.path,
+        method: req.method,
+        apiKeyName: matchedKey.name,
+        timestamp: new Date().toISOString(),
+      },
+      ipAddress: req.ip || req.connection.remoteAddress || null,
+      userAgent: req.headers["user-agent"] || null,
+    }).catch(err => {
+      console.error("[API-AUTH] Failed to log auth success:", err);
     });
     
     // Attach API key info to request
@@ -89,7 +163,16 @@ export async function authenticateApiKey(
     
     next();
   } catch (error) {
-    console.error("API key authentication error:", error);
+    console.error("[API-AUTH] Authentication error:", error);
+    
+    // Log internal authentication error (fire-and-forget)
+    logAuthFailure(
+      req,
+      500,
+      "Authentication error",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    
     return res.status(500).json({
       error: "Authentication error",
       message: "An error occurred during authentication"

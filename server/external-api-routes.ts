@@ -10,44 +10,119 @@ const router = Router();
 // Apply API key authentication to all external routes
 router.use(authenticateApiKey);
 
-// Apply rate limiting based on API key configuration
-router.use(createApiKeyRateLimiter());
-
 // Audit logging middleware for external API requests
+// IMPORTANT: Must come BEFORE rate limiter to capture 429 responses
 router.use(async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
   const startTime = Date.now();
+  let responseBody: any = null;
+  let logged = false; // Prevent duplicate logging
   
   // Capture response details
   const originalSend = res.send;
+  const originalJson = res.json;
+  
+  // Override send to capture response
   res.send = function(data: any) {
+    responseBody = data;
+    return originalSend.call(this, data);
+  };
+  
+  // Override json to capture response
+  res.json = function(data: any) {
+    responseBody = data;
+    return originalJson.call(this, data);
+  };
+  
+  // Helper to create and log audit record
+  const createAuditLog = (statusCode: number, aborted: boolean = false) => {
+    if (logged) return; // Prevent duplicate logging
+    logged = true;
+    
     const latency = Date.now() - startTime;
+    const isSuccess = statusCode >= 200 && statusCode < 300;
+    const isClientError = statusCode >= 400 && statusCode < 500;
+    const isServerError = statusCode >= 500;
+    
+    // Prepare log data
+    const logData: any = {
+      endpoint: req.path,
+      method: req.method,
+      statusCode,
+      latencyMs: latency,
+      apiKeyName: req.apiKey?.name,
+      queryParams: req.query,
+      success: isSuccess,
+      aborted, // Track if client disconnected early
+    };
+    
+    // Add error details for failures
+    if (isClientError || isServerError) {
+      logData.errorType = isClientError ? 'client_error' : 'server_error';
+      
+      // Parse error from response body
+      try {
+        const parsedBody = typeof responseBody === 'string' 
+          ? JSON.parse(responseBody) 
+          : responseBody;
+        
+        if (parsedBody?.error) {
+          logData.error = parsedBody.error;
+          logData.errorMessage = parsedBody.message;
+        }
+      } catch (e) {
+        // Response body wasn't JSON
+      }
+      
+      // Add resource ID for 404 errors
+      if (statusCode === 404 && req.params?.id) {
+        logData.resourceId = req.params.id;
+        logData.resourceType = req.path.includes('accounts') ? 'account' : 'opportunity';
+      }
+    }
+    
+    // Add response size (limit to 1MB for performance)
+    if (responseBody) {
+      const bodyString = typeof responseBody === 'string' 
+        ? responseBody 
+        : JSON.stringify(responseBody);
+      const bodySize = Math.min(bodyString.length, 1048576); // Cap at 1MB
+      logData.responseSizeBytes = bodySize;
+    }
     
     // Log API request to audit log (fire and forget)
     storage.createAuditLog({
       actorId: null, // External API requests are not user-scoped
-      action: "external_api_request",
+      action: isSuccess ? "external_api_request_success" : "external_api_request_failure",
       resource: "api_key",
       resourceId: req.apiKey?.id || null,
       before: null,
-      after: {
-        endpoint: req.path,
-        method: req.method,
-        statusCode: res.statusCode,
-        latencyMs: latency,
-        apiKeyName: req.apiKey?.name,
-        queryParams: req.query,
-      },
+      after: logData,
       ipAddress: req.ip || req.connection.remoteAddress || null,
       userAgent: req.headers["user-agent"] || null,
     }).catch(err => {
       console.error("[EXTERNAL-API] Failed to create audit log:", err);
     });
-    
-    return originalSend.call(this, data);
   };
+  
+  // Log after response is sent (normal case)
+  res.on('finish', () => {
+    createAuditLog(res.statusCode, false);
+  });
+  
+  // Log if client disconnects early (DDoS abuse, network issues, etc.)
+  res.on('close', () => {
+    if (!logged) {
+      // Response wasn't finished - client disconnected
+      createAuditLog(res.statusCode || 499, true); // 499 = Client Closed Request
+    }
+  });
   
   next();
 });
+
+// Apply rate limiting based on API key configuration
+// Placed AFTER logging middleware so 429 responses are captured in audit logs
+router.use(createApiKeyRateLimiter());
 
 // ========== ACCOUNTS ENDPOINTS ==========
 
