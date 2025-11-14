@@ -26,7 +26,13 @@ The design adheres to a clean, professional enterprise SaaS aesthetic inspired b
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backups, database reset, and configurable account categories.
 *   **Dashboard & Analytics**: Provides key insights like pipeline status, win rates, and forecasts. Features an OKR-driven analytics platform with multiple forecasting models, Pipeline Health Score, Sales Velocity, Rep Performance, Deal Closing Predictions, an Executive Dashboard, and sales forecast reports with Excel export capabilities.
 *   **Comments & Tagging**: Full-featured threaded commenting with reactions and RBAC, and a multi-tagging system across all entities with custom colors and bulk operations.
-*   **External API for Forecasting**: Secure RESTful API endpoints (`/api/v1/external`) for custom forecasting app integration, featuring API Key authentication with rate limiting, comprehensive audit logging, and specific endpoints for accounts and opportunities with pagination and incremental sync capabilities. Integrated Admin Console management for API keys and comprehensive developer documentation.
+*   **External API for Forecasting**: Secure RESTful API endpoints (`/api/v1/external`) for custom forecasting app integration. Features include:
+    *   **API Key Authentication**: Crypto-based 64-byte Base64-encoded keys with bcrypt hashing (12 rounds), stored as hashed values, shown only once at creation
+    *   **Rate Limiting**: Per-key configurable rate limiting (default 100 req/min, configurable via `rateLimitPerMin` column) using express-rate-limit
+    *   **Comprehensive Audit Logging**: Production-ready compliance logging capturing ALL API access (success/failure) with detailed metadata. Logs authentication attempts (`external_api_auth_success`/`external_api_auth_failure`), request/response data (`external_api_request_success`/`external_api_request_failure`), rate limits (429), client disconnects (499 with `aborted` flag), error details, response sizes (capped at 1MB), latency, IP addresses, and user agents. Fire-and-forget logging for zero performance impact.
+    *   **Data Endpoints**: Four REST endpoints for accounts and opportunities (list/detail) with pagination, incremental sync (`updatedSince`), relationship expansion, and forecast filtering
+    *   **Admin Console Integration**: API key management with generation, revocation, activity tracking, and configuration
+    *   **Developer Documentation**: Complete API documentation in Help page with 8 sections, exact error codes, and Node.js examples
 *   **Performance Optimization**: Over 20 database indexes, optimized dashboard queries, N+1 query problem resolution for tags using PostgreSQL JSON aggregation, and cross-driver compatibility fixes for database results.
 *   **Error Logging & Debugging**: Comprehensive error logging across all API routes and database methods for rapid diagnosis.
 
