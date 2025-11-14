@@ -504,31 +504,75 @@ router.get("/logs", async (req: ApiKeyRequest, res) => {
     const { db, sql, and, gte, lte, eq, desc } = await import("./db");
     const { auditLogs } = await import("@shared/schema");
     
-    // Parse and validate parameters
-    const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
-    const offsetNum = parseInt(offset as string) || 0;
+    // CRITICAL SECURITY: API key must be present (authentication required)
+    if (!req.apiKey?.id) {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "API key authentication required"
+      });
+    }
+    
+    // Validate and parse parameters
+    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+    
+    // Validate date parameters (strict ISO 8601)
+    if (startDate && typeof startDate === 'string') {
+      const parsed = new Date(startDate);
+      if (isNaN(parsed.getTime())) {
+        return res.status(400).json({
+          error: "Invalid startDate",
+          message: "startDate must be valid ISO 8601 timestamp"
+        });
+      }
+    }
+    if (endDate && typeof endDate === 'string') {
+      const parsed = new Date(endDate);
+      if (isNaN(parsed.getTime())) {
+        return res.status(400).json({
+          error: "Invalid endDate",
+          message: "endDate must be valid ISO 8601 timestamp"
+        });
+      }
+    }
+    
+    // Validate status parameter (must be valid HTTP status code)
+    if (status && typeof status === 'string') {
+      const statusNum = parseInt(status, 10);
+      if (isNaN(statusNum) || statusNum < 100 || statusNum > 599) {
+        return res.status(400).json({
+          error: "Invalid status",
+          message: "status must be valid HTTP status code (100-599)"
+        });
+      }
+    }
+    
+    // Validate action parameter (must be from allowed list)
+    if (action && typeof action === 'string') {
+      const allowedActions = ['auth_success', 'auth_failure', 'request_success', 'request_failure'];
+      if (!allowedActions.includes(action)) {
+        return res.status(400).json({
+          error: "Invalid action",
+          message: `action must be one of: ${allowedActions.join(', ')}`
+        });
+      }
+    }
     
     // Build filters for external API actions only
     const filters: any[] = [];
     filters.push(sql`${auditLogs.action} LIKE 'external_api_%'`);
     
-    // Only show logs related to THIS API key (security constraint)
-    if (req.apiKey?.id) {
-      filters.push(sql`${auditLogs.after}->>'apiKeyId' = ${req.apiKey.id}`);
-    }
+    // CRITICAL SECURITY: Only show logs for THIS API key (resourceId = API key ID)
+    filters.push(eq(auditLogs.resourceId, req.apiKey.id));
     
     // Date range filter
-    if (startDate) {
-      const startDateTime = new Date(startDate as string);
-      if (!isNaN(startDateTime.getTime())) {
-        filters.push(gte(auditLogs.createdAt, startDateTime));
-      }
+    if (startDate && typeof startDate === 'string') {
+      const startDateTime = new Date(startDate);
+      filters.push(gte(auditLogs.createdAt, startDateTime));
     }
-    if (endDate) {
-      const endDateTime = new Date(endDate as string);
-      if (!isNaN(endDateTime.getTime())) {
-        filters.push(lte(auditLogs.createdAt, endDateTime));
-      }
+    if (endDate && typeof endDate === 'string') {
+      const endDateTime = new Date(endDate);
+      filters.push(lte(auditLogs.createdAt, endDateTime));
     }
     
     // Status code filter
@@ -537,15 +581,15 @@ router.get("/logs", async (req: ApiKeyRequest, res) => {
     }
     
     // Action type filter (allow simplified names)
-    if (action) {
+    if (action && typeof action === 'string') {
       const actionMap: Record<string, string> = {
         'auth_success': 'external_api_auth_success',
         'auth_failure': 'external_api_auth_failure',
         'request_success': 'external_api_request_success',
         'request_failure': 'external_api_request_failure',
       };
-      const fullAction = actionMap[action as string] || action;
-      filters.push(eq(auditLogs.action, fullAction as string));
+      const fullAction = actionMap[action];
+      filters.push(eq(auditLogs.action, fullAction));
     }
     
     // Fetch logs with pagination
