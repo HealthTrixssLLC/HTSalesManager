@@ -4511,6 +4511,102 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // Export API access logs to CSV (admin only) - server-side processing for large datasets
+  app.get("/api/admin/api-access-logs/export", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { startDate, endDate, apiKeyId, status, action } = req.query;
+      
+      // Build filters for external API actions only
+      const filters: any[] = [];
+      filters.push(sql`${auditLogs.action} LIKE 'external_api_%'`);
+      
+      if (startDate) {
+        filters.push(gte(auditLogs.createdAt, new Date(startDate as string)));
+      }
+      if (endDate) {
+        filters.push(lte(auditLogs.createdAt, new Date(endDate as string)));
+      }
+      if (apiKeyId) {
+        filters.push(sql`${auditLogs.after}->>'apiKeyId' = ${apiKeyId}`);
+      }
+      if (status) {
+        filters.push(sql`${auditLogs.after}->>'statusCode' = ${status}`);
+      }
+      if (action) {
+        filters.push(eq(auditLogs.action, action as string));
+      }
+      
+      // Fetch all matching logs (no pagination for export)
+      const logs = await db
+        .select()
+        .from(auditLogs)
+        .where(and(...filters))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(10000); // Cap at 10k rows for safety
+      
+      // CSV Headers
+      const headers = [
+        "Timestamp",
+        "Action",
+        "Endpoint",
+        "Method",
+        "Status Code",
+        "API Key Name",
+        "API Key ID",
+        "IP Address",
+        "User Agent",
+        "Latency (ms)",
+        "Response Size (bytes)",
+        "Aborted",
+        "Error Type",
+        "Error Code",
+        "Error Message",
+        "Resource Type",
+        "Resource ID",
+        "Query Params"
+      ];
+      
+      // Build CSV content
+      const csvRows = [headers.join(",")];
+      
+      for (const log of logs) {
+        const metadata = log.after || {};
+        const row = [
+          new Date(log.createdAt).toISOString(),
+          log.action,
+          metadata.endpoint || "",
+          metadata.method || "",
+          metadata.statusCode || "",
+          metadata.apiKeyName || "",
+          metadata.apiKeyId || "",
+          log.ipAddress || "",
+          `"${(log.userAgent || "").replace(/"/g, '""')}"`, // Escape quotes
+          metadata.latency || "",
+          metadata.responseSize || "",
+          metadata.aborted ? "Yes" : "No",
+          metadata.errorType || "",
+          metadata.errorCode || "",
+          `"${(metadata.errorMessage || "").replace(/"/g, '""')}"`, // Escape quotes
+          metadata.resourceType || "",
+          metadata.resourceId || "",
+          `"${(metadata.query || "").replace(/"/g, '""')}"` // Escape quotes
+        ];
+        csvRows.push(row.join(","));
+      }
+      
+      const csv = csvRows.join("\n");
+      
+      // Set response headers for CSV download
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="api-access-logs-${new Date().toISOString()}.csv"`);
+      
+      return res.send(csv);
+    } catch (error) {
+      console.error("Error exporting API access logs:", error);
+      return res.status(500).json({ error: "Failed to export API access logs" });
+    }
+  });
+  
   // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);

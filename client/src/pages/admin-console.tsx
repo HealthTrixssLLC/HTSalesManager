@@ -5,6 +5,7 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
+import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -538,6 +539,7 @@ export default function AdminConsole() {
           <TabsTrigger value="id-patterns" data-testid="tab-id-patterns">ID Patterns</TabsTrigger>
           <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
           <TabsTrigger value="api-keys" data-testid="tab-api-keys">API Keys</TabsTrigger>
+          <TabsTrigger value="api-logs" data-testid="tab-api-logs">API Access Logs</TabsTrigger>
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
@@ -957,6 +959,11 @@ export default function AdminConsole() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* API Access Logs Tab */}
+        <TabsContent value="api-logs">
+          <ApiAccessLogsTab apiKeys={apiKeys} />
         </TabsContent>
 
         {/* Backup & Restore Tab */}
