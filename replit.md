@@ -23,7 +23,7 @@ The design adheres to a clean, professional enterprise SaaS aesthetic inspired b
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and a Role-Based Access Control (RBAC) framework (Admin, SalesManager, SalesRep, ReadOnly).
 *   **Opportunity Management**: Kanban board for pipeline visualization and a Sales Waterfall Dashboard for annual target tracking.
 *   **Data Management**: Includes configurable ID patterns, comprehensive audit logging, encrypted backup/restore, CSV import/export with validation and deduplication, and specialized Dynamics 365 migration tools.
-*   **Admin Console**: Centralized management for users, roles, ID patterns, backups, database reset, and configurable account categories.
+*   **Admin Console**: Centralized management for users, roles, ID patterns, backups, database reset, configurable account categories, and API Access Logs viewer with filtering and CSV export for debugging external API calls.
 *   **Dashboard & Analytics**: Provides key insights like pipeline status, win rates, and forecasts. Features an OKR-driven analytics platform with multiple forecasting models, Pipeline Health Score, Sales Velocity, Rep Performance, Deal Closing Predictions, an Executive Dashboard, and sales forecast reports with Excel export capabilities.
 *   **Comments & Tagging**: Full-featured threaded commenting with reactions and RBAC, and a multi-tagging system across all entities with custom colors and bulk operations.
 *   **External API for Forecasting**: Secure RESTful API endpoints (`/api/v1/external`) for custom forecasting app integration. Features include:
