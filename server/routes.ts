@@ -29,6 +29,7 @@ import {
   opportunities,
   activities,
   activityAssociations,
+  auditLogs,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
@@ -4433,6 +4434,80 @@ export function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error revoking API key:", error);
       return res.status(500).json({ error: "Failed to revoke API key" });
+    }
+  });
+  
+  // Get API access logs (admin only) - for debugging external API calls
+  app.get("/api/admin/api-access-logs", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+    try {
+      const { 
+        startDate, 
+        endDate, 
+        apiKeyId, 
+        status, 
+        action,
+        limit = "100",
+        offset = "0" 
+      } = req.query;
+      
+      // Build filters for external API actions only
+      const filters: any[] = [];
+      
+      // Filter for external API actions
+      filters.push(sql`${auditLogs.action} LIKE 'external_api_%'`);
+      
+      // Date range filter
+      if (startDate) {
+        filters.push(gte(auditLogs.createdAt, new Date(startDate as string)));
+      }
+      if (endDate) {
+        filters.push(lte(auditLogs.createdAt, new Date(endDate as string)));
+      }
+      
+      // API key filter (stored in 'after' jsonb as apiKeyName)
+      if (apiKeyId) {
+        filters.push(sql`${auditLogs.after}->>'apiKeyId' = ${apiKeyId}`);
+      }
+      
+      // Status code filter (stored in 'after' jsonb)
+      if (status) {
+        filters.push(sql`${auditLogs.after}->>'statusCode' = ${status}`);
+      }
+      
+      // Action type filter
+      if (action) {
+        filters.push(eq(auditLogs.action, action as string));
+      }
+      
+      // Fetch logs with pagination
+      const logs = await db
+        .select()
+        .from(auditLogs)
+        .where(and(...filters))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(parseInt(limit as string))
+        .offset(parseInt(offset as string));
+      
+      // Get total count for pagination
+      const countResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(auditLogs)
+        .where(and(...filters));
+      
+      const total = Number(countResult[0]?.count || 0);
+      
+      return res.json({
+        logs,
+        pagination: {
+          total,
+          limit: parseInt(limit as string),
+          offset: parseInt(offset as string),
+          hasMore: parseInt(offset as string) + logs.length < total,
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching API access logs:", error);
+      return res.status(500).json({ error: "Failed to fetch API access logs" });
     }
   });
   
