@@ -475,4 +475,135 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
   }
 });
 
+// ========== AUDIT LOGS ENDPOINT ==========
+
+/**
+ * GET /api/v1/external/logs
+ * Access audit logs for debugging and monitoring (programmatic access with API key)
+ * 
+ * Query Parameters:
+ * - startDate: ISO 8601 timestamp (e.g., 2024-01-01T00:00:00Z)
+ * - endDate: ISO 8601 timestamp
+ * - status: HTTP status code (e.g., 200, 401, 404, 429, 500)
+ * - action: Action type filter (auth_success, auth_failure, request_success, request_failure)
+ * - limit: Number of results (default: 100, max: 1000)
+ * - offset: Number of results to skip (default: 0)
+ */
+router.get("/logs", async (req: ApiKeyRequest, res) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      status,
+      action,
+      limit = "100",
+      offset = "0",
+    } = req.query;
+    
+    // Import database utilities
+    const { db, sql, and, gte, lte, eq, desc } = await import("./db");
+    const { auditLogs } = await import("@shared/schema");
+    
+    // Parse and validate parameters
+    const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
+    const offsetNum = parseInt(offset as string) || 0;
+    
+    // Build filters for external API actions only
+    const filters: any[] = [];
+    filters.push(sql`${auditLogs.action} LIKE 'external_api_%'`);
+    
+    // Only show logs related to THIS API key (security constraint)
+    if (req.apiKey?.id) {
+      filters.push(sql`${auditLogs.after}->>'apiKeyId' = ${req.apiKey.id}`);
+    }
+    
+    // Date range filter
+    if (startDate) {
+      const startDateTime = new Date(startDate as string);
+      if (!isNaN(startDateTime.getTime())) {
+        filters.push(gte(auditLogs.createdAt, startDateTime));
+      }
+    }
+    if (endDate) {
+      const endDateTime = new Date(endDate as string);
+      if (!isNaN(endDateTime.getTime())) {
+        filters.push(lte(auditLogs.createdAt, endDateTime));
+      }
+    }
+    
+    // Status code filter
+    if (status) {
+      filters.push(sql`${auditLogs.after}->>'statusCode' = ${status as string}`);
+    }
+    
+    // Action type filter (allow simplified names)
+    if (action) {
+      const actionMap: Record<string, string> = {
+        'auth_success': 'external_api_auth_success',
+        'auth_failure': 'external_api_auth_failure',
+        'request_success': 'external_api_request_success',
+        'request_failure': 'external_api_request_failure',
+      };
+      const fullAction = actionMap[action as string] || action;
+      filters.push(eq(auditLogs.action, fullAction as string));
+    }
+    
+    // Fetch logs with pagination
+    const logs = await db
+      .select()
+      .from(auditLogs)
+      .where(and(...filters))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(limitNum)
+      .offset(offsetNum);
+    
+    // Get total count for pagination
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(auditLogs)
+      .where(and(...filters));
+    
+    const total = Number(countResult[0]?.count || 0);
+    
+    // Format logs for API response
+    const formattedLogs = logs.map((log: any) => {
+      const metadata = log.after || {};
+      return {
+        timestamp: log.createdAt,
+        action: log.action,
+        endpoint: metadata.endpoint || null,
+        method: metadata.method || null,
+        statusCode: metadata.statusCode || null,
+        latencyMs: metadata.latencyMs || null,
+        responseSizeBytes: metadata.responseSizeBytes || null,
+        aborted: metadata.aborted || false,
+        errorType: metadata.errorType || null,
+        errorCode: metadata.errorCode || null,
+        errorMessage: metadata.errorMessage || null,
+        resourceType: metadata.resourceType || null,
+        resourceId: metadata.resourceId || null,
+        queryParams: metadata.queryParams || null,
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+      };
+    });
+    
+    return res.json({
+      data: formattedLogs,
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + logs.length < total,
+      }
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching logs:", error);
+    return res.status(500).json({
+      error: "Failed to fetch logs",
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 export default router;
