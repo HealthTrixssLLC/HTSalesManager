@@ -21,7 +21,7 @@ The design adheres to a clean, professional enterprise SaaS aesthetic inspired b
 *   **Lead Management**: Features a lead rating system (Hot/Warm/Cold), multi-step conversion wizard with duplicate detection.
 *   **Activity Management**: Supports bulk operations (reassignment, due date changes), real-time summary statistics, and a pending activities dashboard card with list/calendar views.
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and a Role-Based Access Control (RBAC) framework (Admin, SalesManager, SalesRep, ReadOnly).
-*   **Opportunity Management**: Kanban board for pipeline visualization and a Sales Waterfall Dashboard for annual target tracking.
+*   **Opportunity Management**: Kanban board for pipeline visualization and a Sales Waterfall Dashboard for annual target tracking. **All opportunities require a close date** (NOT NULL constraint enforced at database level).
 *   **Data Management**: Includes configurable ID patterns, comprehensive audit logging, encrypted backup/restore, CSV import/export with validation and deduplication, and specialized Dynamics 365 migration tools.
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backups, database reset, configurable account categories, and API Access Logs viewer with filtering and CSV export for debugging external API calls.
 *   **Dashboard & Analytics**: Provides key insights like pipeline status, win rates, and forecasts. Features an OKR-driven analytics platform with multiple forecasting models, Pipeline Health Score, Sales Velocity, Rep Performance, Deal Closing Predictions, an Executive Dashboard, and sales forecast reports with Excel export capabilities.
