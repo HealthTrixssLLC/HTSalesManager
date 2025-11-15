@@ -157,14 +157,14 @@ export function ApiAccessLogsTab({ apiKeys }: ApiAccessLogsTabProps) {
             <div className="space-y-2">
               <Label htmlFor="api-key-filter">API Key</Label>
               <Select
-                value={filters.apiKeyId}
-                onValueChange={(value) => handleFilterChange("apiKeyId", value)}
+                value={filters.apiKeyId || "all"}
+                onValueChange={(value) => handleFilterChange("apiKeyId", value === "all" ? "" : value)}
               >
                 <SelectTrigger id="api-key-filter" data-testid="select-api-key">
                   <SelectValue placeholder="All API Keys" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All API Keys</SelectItem>
+                  <SelectItem value="all">All API Keys</SelectItem>
                   {apiKeys?.map((key) => (
                     <SelectItem key={key.id} value={key.id}>
                       {key.name}
@@ -176,14 +176,14 @@ export function ApiAccessLogsTab({ apiKeys }: ApiAccessLogsTabProps) {
             <div className="space-y-2">
               <Label htmlFor="status-filter">Status Code</Label>
               <Select
-                value={filters.status}
-                onValueChange={(value) => handleFilterChange("status", value)}
+                value={filters.status || "all"}
+                onValueChange={(value) => handleFilterChange("status", value === "all" ? "" : value)}
               >
                 <SelectTrigger id="status-filter" data-testid="select-status">
                   <SelectValue placeholder="All Status Codes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status Codes</SelectItem>
+                  <SelectItem value="all">All Status Codes</SelectItem>
                   <SelectItem value="200">200 - Success</SelectItem>
                   <SelectItem value="401">401 - Unauthorized</SelectItem>
                   <SelectItem value="404">404 - Not Found</SelectItem>
@@ -196,14 +196,14 @@ export function ApiAccessLogsTab({ apiKeys }: ApiAccessLogsTabProps) {
             <div className="space-y-2">
               <Label htmlFor="action-filter">Action Type</Label>
               <Select
-                value={filters.action}
-                onValueChange={(value) => handleFilterChange("action", value)}
+                value={filters.action || "all"}
+                onValueChange={(value) => handleFilterChange("action", value === "all" ? "" : value)}
               >
                 <SelectTrigger id="action-filter" data-testid="select-action">
                   <SelectValue placeholder="All Actions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="all">All Actions</SelectItem>
                   <SelectItem value="external_api_auth_success">Auth Success</SelectItem>
                   <SelectItem value="external_api_auth_failure">Auth Failure</SelectItem>
                   <SelectItem value="external_api_request_success">Request Success</SelectItem>
