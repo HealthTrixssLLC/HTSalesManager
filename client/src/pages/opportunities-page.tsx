@@ -146,7 +146,7 @@ export default function OpportunitiesPage() {
       amount: "0",
       probability: 0,
       ownerId: user?.id || "",
-      closeDate: null,
+      closeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default to 30 days from now
       actualCloseDate: null,
       actualRevenue: null,
       estCloseDate: null,
@@ -570,6 +570,25 @@ export default function OpportunitiesPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="closeDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Close Date *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                          data-testid="input-opportunity-close-date" 
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -551,7 +551,7 @@ export default function OpportunityDetailPage() {
                   
                   return (
                     <FormItem>
-                      <FormLabel>Close Date</FormLabel>
+                      <FormLabel>Close Date *</FormLabel>
                       <FormControl>
                         <Input
                           type="date"
@@ -562,6 +562,7 @@ export default function OpportunityDetailPage() {
                             field.onChange(dateValue || null);
                           }}
                           data-testid="input-edit-opportunity-closedate"
+                          required
                         />
                       </FormControl>
                       <FormMessage />
