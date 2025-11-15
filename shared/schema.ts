@@ -155,7 +155,7 @@ export const opportunities = pgTable("opportunities", {
   name: text("name").notNull(),
   stage: opportunityStageEnum("stage").notNull().default("prospecting"),
   amount: decimal("amount", { precision: 15, scale: 2 }),
-  closeDate: timestamp("close_date"),
+  closeDate: timestamp("close_date").notNull(),
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   probability: integer("probability").default(0), // 0-100
   status: text("status"), // Dynamics status field (Won, Lost, Open, etc.)
