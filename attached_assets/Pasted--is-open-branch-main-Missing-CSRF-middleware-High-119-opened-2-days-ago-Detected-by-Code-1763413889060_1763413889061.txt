@@ -1,0 +1,128 @@
+
+is:open branch:main 
+
+
+Missing CSRF middleware
+High
+#119 opened 2 days ago • Detected by CodeQL in server/index.ts :34
+main
+
+Loop bound injection
+High
+#118 opened 2 days ago • Detected by CodeQL in server/dynamics-mapper.ts :107
+main
+
+Missing rate limiting
+High
+#117 opened 2 days ago • Detected by CodeQL in server/routes.ts :4515
+main
+
+Missing rate limiting
+High
+#116 opened 2 days ago • Detected by CodeQL in server/routes.ts :4441
+main
+
+Missing rate limiting
+High
+#115 opened 2 days ago • Detected by CodeQL in server/routes.ts :4430
+main
+
+Missing rate limiting
+High
+#114 opened 2 days ago • Detected by CodeQL in server/routes.ts :4396
+main
+
+Missing rate limiting
+High
+#113 opened 2 days ago • Detected by CodeQL in server/routes.ts :4370
+main
+
+Missing rate limiting
+High
+#112 opened 2 days ago • Detected by CodeQL in server/routes.ts :4226
+main
+
+Missing rate limiting
+High
+#111 opened 2 days ago • Detected by CodeQL in server/routes.ts :4214
+main
+
+Missing rate limiting
+High
+#110 opened 2 days ago • Detected by CodeQL in server/routes.ts :4198
+main
+
+Missing rate limiting
+High
+#109 opened 2 days ago • Detected by CodeQL in server/routes.ts :4186
+main
+
+Missing rate limiting
+High
+#108 opened 2 days ago • Detected by CodeQL in server/routes.ts :4170
+main
+
+Missing rate limiting
+High
+#107 opened 2 days ago • Detected by CodeQL in server/routes.ts :4154
+main
+
+Missing rate limiting
+High
+#106 opened 2 days ago • Detected by CodeQL in server/routes.ts :4138
+main
+
+Missing rate limiting
+High
+#105 opened 2 days ago • Detected by CodeQL in server/routes.ts :4123
+main
+
+Missing rate limiting
+High
+#104 opened 2 days ago • Detected by CodeQL in server/routes.ts :4101
+main
+
+Missing rate limiting
+High
+#103 opened 2 days ago • Detected by CodeQL in server/routes.ts :4069
+main
+
+Missing rate limiting
+High
+#102 opened 2 days ago • Detected by CodeQL in server/routes.ts :4027
+main
+
+Missing rate limiting
+High
+#101 opened 2 days ago • Detected by CodeQL in server/routes.ts :4002
+main
+
+Missing rate limiting
+High
+#100 opened 2 days ago • Detected by CodeQL in server/routes.ts :3977
+main
+
+Missing rate limiting
+High
+#99 opened 2 days ago • Detected by CodeQL in server/routes.ts :3946
+main
+
+Missing rate limiting
+High
+#98 opened 2 days ago • Detected by CodeQL in server/routes.ts :3886
+main
+
+Missing rate limiting
+High
+#97 opened 2 days ago • Detected by CodeQL in server/routes.ts :3848
+main
+
+Missing rate limiting
+High
+#96 opened 2 days ago • Detected by CodeQL in server/routes.ts :3661
+main
+
+Missing rate limiting
+High
+#95 opened 2 days ago • Detected by CodeQL in server/routes.ts :3539
+main
