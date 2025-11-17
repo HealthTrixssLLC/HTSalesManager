@@ -1,0 +1,59 @@
+(AutogenStudio) C:\Projects\HTFinancialForecast>docker-compose build --no-cache
+time="2025-11-17T08:57:07-06:00" level=warning msg="C:\\Projects\\HTFinancialForecast\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Building 18.9s (18/22)
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 556B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 1.34kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-slim                                                                 1.1s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 222B                                                                                               0.0s
+ => [internal] load build context                                                                                               0.3s
+ => => transferring context: 1.27MB                                                                                             0.3s
+ => [builder 1/6] FROM docker.io/library/node:20-slim@sha256:12541e65a3777c6035245518eb43006ed08ca8c684e68cd04ecb4653bdf6cfe1   3.7s
+ => => resolve docker.io/library/node:20-slim@sha256:12541e65a3777c6035245518eb43006ed08ca8c684e68cd04ecb4653bdf6cfe1           0.0s
+ => => sha256:1adabd6b0d6b8acfa4ad149a984df0977135a7babf423538c7284a02744a4ee8 28.23MB / 28.23MB                                1.7s
+ => => sha256:1f707883943caee6170d1c96b0e24f29b11404bd9817e8e658e8c24898f94807 3.31kB / 3.31kB                                  0.2s
+ => => sha256:c9be599d8cff95c94bc0036ba643b354bfb691616e6f582ee79e08a20071764e 40.98MB / 40.98MB                                2.6s
+ => => sha256:12541e65a3777c6035245518eb43006ed08ca8c684e68cd04ecb4653bdf6cfe1 6.49kB / 6.49kB                                  0.0s
+ => => sha256:0500f7464ed738b37b5ddf0ffbfdbcd7a91591682ba0d706bc822ac202b6d0f5 1.93kB / 1.93kB                                  0.0s
+ => => sha256:9b888f58258d60384c696911d0a0ac0c0dceff4fa938fe9a68415fa68a61e443 6.88kB / 6.88kB                                  0.0s
+ => => sha256:561299ddc92fb2324b06da8e6e176820a7eba31727bb4bc1cb1a28403ff4db12 1.71MB / 1.71MB                                  0.9s
+ => => sha256:9b7eb6b5a2b17e46a979515b9e341cce1eafc9b6035d440d435715fbb77690bb 445B / 445B                                      1.0s
+ => => extracting sha256:1adabd6b0d6b8acfa4ad149a984df0977135a7babf423538c7284a02744a4ee8                                       0.9s
+ => => extracting sha256:1f707883943caee6170d1c96b0e24f29b11404bd9817e8e658e8c24898f94807                                       0.0s
+ => => extracting sha256:c9be599d8cff95c94bc0036ba643b354bfb691616e6f582ee79e08a20071764e                                       0.8s
+ => => extracting sha256:561299ddc92fb2324b06da8e6e176820a7eba31727bb4bc1cb1a28403ff4db12                                       0.0s
+ => => extracting sha256:9b7eb6b5a2b17e46a979515b9e341cce1eafc9b6035d440d435715fbb77690bb                                       0.0s
+ => [stage-1  2/11] RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*                   8.1s
+ => [builder 2/6] WORKDIR /app                                                                                                  0.2s
+ => [builder 3/6] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/6] RUN npm ci                                                                                                    8.5s
+ => [stage-1  3/11] WORKDIR /app                                                                                                0.0s
+ => [stage-1  4/11] COPY package*.json ./                                                                                       0.0s
+ => [builder 5/6] COPY . .                                                                                                      0.0s
+ => [builder 6/6] RUN npm run build                                                                                             4.1s
+ => CACHED [stage-1  5/11] COPY --from=builder /app/node_modules ./node_modules                                                 0.0s
+ => CACHED [stage-1  6/11] COPY --from=builder /app/dist ./dist                                                                 0.0s
+ => ERROR [stage-1  7/11] COPY --from=builder /app/migrations ./migrations                                                      0.0s
+------
+ > [stage-1  7/11] COPY --from=builder /app/migrations ./migrations:
+------
+Dockerfile:35
+
+--------------------
+
+  33 |
+
+  34 |     # Copy migrations and schema for drizzle
+
+  35 | >>> COPY --from=builder /app/migrations ./migrations
+
+  36 |     COPY --from=builder /app/shared ./shared
+
+  37 |     COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref cf211060-ba9e-4bfe-998c-2767998d3924::td03s8vohfzc7wc60kziok9ou: "/app/migrations": not found
