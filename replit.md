@@ -36,11 +36,20 @@ The design adheres to a clean, professional enterprise SaaS aesthetic inspired b
     *   **Developer Documentation**: Complete INTEGRATION_GUIDE.md covering setup, authentication, all endpoints, debugging, error handling, rate limiting, best practices, and code examples in Node.js, Python, and cURL
 *   **Performance Optimization**: Over 20 database indexes, optimized dashboard queries, N+1 query problem resolution for tags using PostgreSQL JSON aggregation, and cross-driver compatibility fixes for database results.
 *   **Error Logging & Debugging**: Comprehensive error logging across all API routes and database methods for rapid diagnosis.
+*   **Security Hardening**: Production-grade security features protecting all 117 API endpoints:
+    *   **CSRF Protection**: Double-submit cookie pattern with crypto-generated tokens, timing-safe comparison, and automatic frontend token management. Exempts login/register and external API routes.
+    *   **Tiered Rate Limiting**: IPv4/IPv6 compatible throttling across all routes:
+        - Authentication routes: 5 req/min (login, register, logout, password reset)
+        - Sensitive admin routes: 20 req/min (user management, backups, API keys, database operations)
+        - CRUD operations: 100 req/min (all POST/PUT/PATCH/DELETE endpoints)
+        - Read operations: 200 req/min (all GET endpoints including dashboards, analytics, exports)
+    *   **CSV Security**: Header length validation (10KB max) prevents loop bound injection DoS attacks in Dynamics 365 migration tools
+    *   All security measures validated against CodeQL static analysis findings
 
 **System Design Choices:**
 
 *   **Database Schema**: Comprises 17+ tables for authentication, RBAC, CRM entities, comments, and system configurations.
-*   **Security**: Emphasizes strong secrets, production environment checks, and regular security audits.
+*   **Security**: Emphasizes strong secrets, production environment checks, CSRF protection, comprehensive rate limiting, and regular security audits.
 
 ## External Dependencies
 
