@@ -274,6 +274,12 @@ export class BackupService {
           recordsRestored += backupData.data.users.length;
         }
 
+        // Restore API keys (depends on users)
+        if (backupData.data.apiKeys && backupData.data.apiKeys.length > 0) {
+          await tx.insert(schema.apiKeys).values(backupData.data.apiKeys.map(k => this.convertDates(k)));
+          recordsRestored += backupData.data.apiKeys.length;
+        }
+
         if (backupData.data.userRoles.length > 0) {
           await tx.insert(schema.userRoles).values(backupData.data.userRoles.map(ur => this.convertDates(ur)));
           recordsRestored += backupData.data.userRoles.length;
