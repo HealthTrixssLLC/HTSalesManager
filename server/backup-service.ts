@@ -246,11 +246,13 @@ export class BackupService {
         await tx.delete(schema.rolePermissions);
         // User roles reference users and roles
         await tx.delete(schema.userRoles);
+        // API keys reference users (created_by foreign key)
+        await tx.delete(schema.apiKeys);
         // Permissions are independent
         await tx.delete(schema.permissions);
         // Roles are independent  
         await tx.delete(schema.roles);
-        // Users are independent
+        // Users are independent (but must be deleted AFTER api_keys)
         await tx.delete(schema.users);
         // ID patterns are independent
         await tx.delete(schema.idPatterns);
