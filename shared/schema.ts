@@ -538,8 +538,20 @@ export const insertBackupJobSchema = createInsertSchema(backupJobs).omit({ id: t
 export type InsertBackupJob = z.infer<typeof insertBackupJobSchema>;
 export type BackupJob = typeof backupJobs.$inferSelect;
 
-// Tags
-export const insertApiKeySchema = createInsertSchema(apiKeys).omit({ id: true, createdAt: true });
+// API Keys - handle date string conversion for expiresAt
+export const insertApiKeySchema = createInsertSchema(apiKeys)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    expiresAt: z.preprocess(
+      (val) => {
+        if (val === null || val === undefined || val === "") return null;
+        if (val instanceof Date) return val;
+        if (typeof val === "string") return new Date(val);
+        return val;
+      },
+      z.date().nullable().optional()
+    ).optional(),
+  });
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
 
