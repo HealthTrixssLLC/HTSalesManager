@@ -1,0 +1,59 @@
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: healthtrixss-crm-postgres
+    environment:
+      POSTGRES_DB: healthtrixss_crm
+      POSTGRES_USER: healthtrixss
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-healthtrixss_dev_password_CHANGE_IN_PRODUCTION}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthtrixss"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - healthtrixss-crm-network
+    restart: unless-stopped
+
+  # Health Trixss CRM application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: healthtrixss-crm-app
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://healthtrixss:${DB_PASSWORD:-healthtrixss_dev_password_CHANGE_IN_PRODUCTION}@postgres:5432/healthtrixss_crm
+      SESSION_SECRET: ${SESSION_SECRET:-CHANGE_THIS_generate_with_openssl_rand_base64_32}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-CHANGE_THIS_generate_with_openssl_rand_base64_32}
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist backup files
+      - app_backups:/app/backups
+      # Persist uploaded attachments
+      - app_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - healthtrixss-crm-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  app_backups:
+    driver: local
+  app_uploads:
+    driver: local
+
+networks:
+  healthtrixss-crm-network:
+    driver: bridge
