@@ -100,6 +100,17 @@ export class DynamicsMapper {
     
     // Parse CSV header (handle quoted fields)
     const header = lines[0];
+    
+    // Security: Validate header length to prevent loop bound injection DoS attacks
+    // Max 10KB per CSV header line (reasonable limit for column names)
+    const MAX_HEADER_LENGTH = 10 * 1024; // 10KB
+    if (header.length > MAX_HEADER_LENGTH) {
+      throw new Error(
+        `CSV header too long (${header.length} bytes). Maximum allowed is ${MAX_HEADER_LENGTH} bytes. ` +
+        `This may indicate a malformed CSV file or an attempt to cause resource exhaustion.`
+      );
+    }
+    
     const columns: string[] = [];
     let currentCol = '';
     let inQuotes = false;
