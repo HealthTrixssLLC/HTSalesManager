@@ -325,7 +325,7 @@ export default function AdminConsole() {
       const res = await apiRequest("POST", "/api/admin/api-keys", {
         name: data.name,
         description: data.description || null,
-        expiresAt: data.expiresAt || null,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         isActive: true,
         rateLimitPerMin: 100, // Default rate limit
       });
