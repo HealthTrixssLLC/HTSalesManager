@@ -6,6 +6,7 @@ import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
 import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission } from "./rbac";
+import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter } from "./rate-limiters";
 import {
   insertUserSchema,
   insertAccountSchema,
@@ -65,7 +66,7 @@ export function registerRoutes(app: Express) {
   
   // ========== AUTHENTICATION ROUTES ==========
   
-  app.post("/api/register", async (req, res) => {
+  app.post("/api/register", authRateLimiter, async (req, res) => {
     try {
       const data = insertUserSchema.parse(req.body);
       
@@ -151,7 +152,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/login", async (req, res) => {
+  app.post("/api/login", authRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       
@@ -194,7 +195,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/logout", (req, res) => {
+  app.post("/api/logout", authRateLimiter, (req, res) => {
     res.clearCookie("token");
     return res.json({ success: true });
   });
@@ -372,7 +373,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/accounts", authenticate, requirePermission("Account", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/accounts", authenticate, requirePermission("Account", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertAccountSchema.parse(req.body);
       const account = await storage.createAccount(data);
@@ -388,7 +389,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/accounts/:id", authenticate, requirePermission("Account", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/accounts/:id", authenticate, requirePermission("Account", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getAccountById(req.params.id);
       if (!before) {
@@ -405,7 +406,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/accounts/:id", authenticate, requirePermission("Account", "delete"), async (req: AuthRequest, res) => {
+  app.delete("/api/accounts/:id", authenticate, requirePermission("Account", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getAccountById(req.params.id);
       if (!before) {
@@ -473,7 +474,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk update accounts
-  app.post("/api/accounts/bulk-update", authenticate, requirePermission("Account", "update"), async (req: AuthRequest, res) => {
+  app.post("/api/accounts/bulk-update", authenticate, requirePermission("Account", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { accountIds, updates } = req.body;
       
@@ -650,7 +651,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/contacts", authenticate, requirePermission("Contact", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/contacts", authenticate, requirePermission("Contact", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertContactSchema.parse(req.body);
       const contact = await storage.createContact(data);
@@ -666,7 +667,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/contacts/:id", authenticate, requirePermission("Contact", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/contacts/:id", authenticate, requirePermission("Contact", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getContactById(req.params.id);
       if (!before) {
@@ -736,7 +737,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk update contacts
-  app.post("/api/contacts/bulk-update", authenticate, requirePermission("Contact", "update"), async (req: AuthRequest, res) => {
+  app.post("/api/contacts/bulk-update", authenticate, requirePermission("Contact", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { contactIds, updates } = req.body;
       
@@ -915,7 +916,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/leads", authenticate, requirePermission("Lead", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/leads", authenticate, requirePermission("Lead", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
       const lead = await storage.createLead(data);
@@ -987,7 +988,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Lead Conversion
-  app.post("/api/leads/:id/convert", authenticate, requirePermission("Lead", "convert"), async (req: AuthRequest, res) => {
+  app.post("/api/leads/:id/convert", authenticate, requirePermission("Lead", "convert"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const { 
@@ -1085,7 +1086,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Update lead
-  app.patch("/api/leads/:id", authenticate, requirePermission("Lead", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/leads/:id", authenticate, requirePermission("Lead", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
@@ -1105,7 +1106,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Delete lead
-  app.delete("/api/leads/:id", authenticate, requirePermission("Lead", "delete"), async (req: AuthRequest, res) => {
+  app.delete("/api/leads/:id", authenticate, requirePermission("Lead", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
@@ -1125,7 +1126,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk update leads
-  app.post("/api/leads/bulk-update", authenticate, requirePermission("Lead", "update"), async (req: AuthRequest, res) => {
+  app.post("/api/leads/bulk-update", authenticate, requirePermission("Lead", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { leadIds, updates } = req.body;
       
@@ -1206,7 +1207,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/opportunities", authenticate, requirePermission("Opportunity", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/opportunities", authenticate, requirePermission("Opportunity", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertOpportunitySchema.parse(req.body);
       const opportunity = await storage.createOpportunity(data);
@@ -1222,7 +1223,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getOpportunityById(req.params.id);
       if (!before) {
@@ -1263,7 +1264,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "delete"), async (req: AuthRequest, res) => {
+  app.delete("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getOpportunityById(req.params.id);
       if (!before) {
@@ -1329,7 +1330,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk update opportunities
-  app.post("/api/opportunities/bulk-update", authenticate, requirePermission("Opportunity", "update"), async (req: AuthRequest, res) => {
+  app.post("/api/opportunities/bulk-update", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { opportunityIds, updates } = req.body;
       
@@ -1515,7 +1516,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/activities", authenticate, requirePermission("Activity", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/activities", authenticate, requirePermission("Activity", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertActivitySchema.parse(req.body);
       
@@ -1556,7 +1557,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk update activities - MUST be before /:id route
-  app.patch("/api/activities/bulk-update", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/activities/bulk-update", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { activityIds, updates } = req.body;
       
@@ -1599,7 +1600,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/activities/:id", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+  app.patch("/api/activities/:id", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getActivityById(req.params.id);
       if (!before) {
@@ -1626,7 +1627,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/activities/:id", authenticate, requirePermission("Activity", "delete"), async (req: AuthRequest, res) => {
+  app.delete("/api/activities/:id", authenticate, requirePermission("Activity", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getActivityById(req.params.id);
       if (!before) {
@@ -1730,7 +1731,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Create new association for an activity
-  app.post("/api/activities/:id/associations", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+  app.post("/api/activities/:id/associations", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activityId = req.params.id;
       
@@ -1793,7 +1794,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Delete an association
-  app.delete("/api/activity-associations/:id", authenticate, requirePermission("Activity", "update"), async (req: AuthRequest, res) => {
+  app.delete("/api/activity-associations/:id", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const associationId = req.params.id;
       
@@ -1957,7 +1958,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/tags", authenticate, async (req: AuthRequest, res) => {
+  app.post("/api/tags", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const tag = await storage.createTag({
         ...req.body,
@@ -1969,7 +1970,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/tags/:id", authenticate, async (req: AuthRequest, res) => {
+  app.patch("/api/tags/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const tag = await storage.updateTag(req.params.id, req.body);
       return res.json(tag);
@@ -1978,7 +1979,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/tags/:id", authenticate, async (req: AuthRequest, res) => {
+  app.delete("/api/tags/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       await storage.deleteTag(req.params.id);
       return res.json({ success: true });
@@ -1998,7 +1999,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/:entity/:entityId/tags", authenticate, async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:entityId/tags", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity, entityId } = req.params;
       const { tagIds } = req.body;
@@ -2009,7 +2010,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/:entity/:entityId/tags/:tagId", authenticate, async (req: AuthRequest, res) => {
+  app.delete("/api/:entity/:entityId/tags/:tagId", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity, entityId, tagId } = req.params;
       await storage.removeEntityTag(entity, entityId, tagId);
@@ -2020,7 +2021,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Bulk tag operations
-  app.post("/api/:entity/bulk-tags", authenticate, async (req: AuthRequest, res) => {
+  app.post("/api/:entity/bulk-tags", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity } = req.params;
       const { entityIds, tagIds } = req.body;
@@ -2054,7 +2055,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/users", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/users", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, email, password, roleId } = req.body;
       
@@ -2093,7 +2094,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/admin/users/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.patch("/api/admin/users/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
       const { name, email, status, roleId } = req.body;
@@ -2145,7 +2146,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/admin/id-patterns/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.patch("/api/admin/id-patterns/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { pattern, startValue, counter } = req.body;
       const updates: any = {};
@@ -2175,7 +2176,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/categories", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/categories", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, description, isActive } = req.body;
       
@@ -2200,7 +2201,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/admin/categories/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.patch("/api/admin/categories/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, description, isActive } = req.body;
       const updates: any = {};
@@ -2223,7 +2224,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/admin/categories/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.delete("/api/admin/categories/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const category = await storage.getAccountCategory(req.params.id);
       if (!category) {
@@ -2240,7 +2241,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/backup", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/backup", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const job = await storage.createBackupJob({
         status: "in_progress",
@@ -2290,7 +2291,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/restore", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/restore", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Body should be a Buffer from express.raw() middleware
       let backupBuffer = req.body;
@@ -2353,7 +2354,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/reset-database", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/reset-database", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Delete CRM entity data (in reverse dependency order)
       await storage.resetDatabase();
@@ -2370,7 +2371,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/clear-accounts", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/clear-accounts", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Delete all accounts and related data (in reverse dependency order)
       // Delete comments related to accounts
@@ -2400,7 +2401,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/system-reset", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/system-reset", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Create audit log BEFORE deleting users
       await createAudit(req, "reset", "System", null, null, { 
@@ -2436,7 +2437,7 @@ export function registerRoutes(app: Express) {
   
   // ========== DYNAMICS 365 IMPORT ROUTES ==========
   
-  app.post("/api/admin/dynamics/transform-accounts", authenticate, requireRole("Admin"), upload.fields([
+  app.post("/api/admin/dynamics/transform-accounts", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2496,7 +2497,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-contacts", authenticate, requireRole("Admin"), upload.fields([
+  app.post("/api/admin/dynamics/transform-contacts", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2557,7 +2558,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-leads", authenticate, requireRole("Admin"), upload.fields([
+  app.post("/api/admin/dynamics/transform-leads", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2612,7 +2613,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-opportunities", authenticate, requireRole("Admin"), upload.fields([
+  app.post("/api/admin/dynamics/transform-opportunities", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2673,7 +2674,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-activities", authenticate, requireRole("Admin"), upload.fields([
+  app.post("/api/admin/dynamics/transform-activities", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -3141,7 +3142,7 @@ export function registerRoutes(app: Express) {
   
   // ========== CSV IMPORT ROUTES ==========
   
-  app.post("/api/import/accounts", authenticate, requirePermission("Account", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/accounts", authenticate, requirePermission("Account", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -3236,7 +3237,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/import/contacts", authenticate, requirePermission("Contact", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/contacts", authenticate, requirePermission("Contact", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -3328,7 +3329,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/import/leads", authenticate, requirePermission("Lead", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/leads", authenticate, requirePermission("Lead", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -3426,7 +3427,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/import/opportunities", authenticate, requirePermission("Opportunity", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/opportunities", authenticate, requirePermission("Opportunity", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -3536,7 +3537,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/import/activities", authenticate, requirePermission("Activity", "create"), upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/activities", authenticate, requirePermission("Activity", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -3845,7 +3846,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Create a new comment
-  app.post("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "create"), async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try{
       
       const { entity, id } = req.params;
@@ -3883,7 +3884,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Update a comment
-  app.patch("/api/:entity/:id/comments/:commentId", authenticate, async (req: AuthRequest, res) => {
+  app.patch("/api/:entity/:id/comments/:commentId", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { commentId } = req.params;
       const { body } = req.body;
@@ -3943,7 +3944,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Delete a comment
-  app.delete("/api/:entity/:id/comments/:commentId", authenticate, async (req: AuthRequest, res) => {
+  app.delete("/api/:entity/:id/comments/:commentId", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { commentId } = req.params;
       
@@ -3974,7 +3975,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Toggle pin on a comment
-  app.post("/api/:entity/:id/comments/:commentId/pin", authenticate, requirePermission("Comment", "pin"), async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:id/comments/:commentId/pin", authenticate, requirePermission("Comment", "pin"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       
       const { commentId } = req.params;
@@ -3999,7 +4000,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Toggle resolve on a comment
-  app.post("/api/:entity/:id/comments/:commentId/resolve", authenticate, requirePermission("Comment", "resolve"), async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:id/comments/:commentId/resolve", authenticate, requirePermission("Comment", "resolve"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       
       const { commentId } = req.params;
@@ -4024,7 +4025,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Add/remove reaction
-  app.post("/api/:entity/:id/comments/:commentId/reactions", authenticate, requirePermission("Comment", "react"), async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:id/comments/:commentId/reactions", authenticate, requirePermission("Comment", "react"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       
       const { commentId } = req.params;
@@ -4066,7 +4067,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Subscribe to comment thread
-  app.post("/api/:entity/:id/comments/:commentId/subscribe", authenticate, async (req: AuthRequest, res) => {
+  app.post("/api/:entity/:id/comments/:commentId/subscribe", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { commentId } = req.params;
       
@@ -4098,7 +4099,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Unsubscribe from comment thread
-  app.delete("/api/:entity/:id/comments/:commentId/subscribe", authenticate, async (req: AuthRequest, res) => {
+  app.delete("/api/:entity/:id/comments/:commentId/subscribe", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { commentId } = req.params;
       
@@ -4393,7 +4394,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Generate a new API key (admin only)
-  app.post("/api/admin/api-keys", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.post("/api/admin/api-keys", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertApiKeySchema.omit({ hashedKey: true, createdBy: true }).parse(req.body);
       
@@ -4427,7 +4428,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Revoke an API key (admin only)
-  app.delete("/api/admin/api-keys/:id", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.delete("/api/admin/api-keys/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const apiKey = await storage.revokeApiKey(req.params.id, req.user!.id);
       return res.json({ success: true, apiKey });
