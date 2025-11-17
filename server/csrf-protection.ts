@@ -2,34 +2,49 @@ import { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
 /**
- * Custom CSRF protection middleware
- * Generates and validates CSRF tokens using session storage
+ * Custom CSRF protection middleware using Double Submit Cookie pattern
+ * Works with JWT-based authentication (stateless)
+ * 
+ * How it works:
+ * 1. Generate a random CSRF token and send it in a cookie
+ * 2. Client must include the same token in X-CSRF-Token header for state-changing requests
+ * 3. Server validates that cookie token matches header token
  */
 
-interface SessionWithCsrf extends Express.Session {
-  csrfToken?: string;
-}
+const CSRF_COOKIE_NAME = "_csrf";
 
 /**
- * Generates a random CSRF token and stores it in the session
+ * Generates a random CSRF token and sets it in a cookie
+ * This token must be included in the X-CSRF-Token header for state-changing requests
  */
-export function generateCsrfToken(req: Request): string {
-  const session = req.session as SessionWithCsrf;
+export function generateCsrfToken(req: Request, res: Response): string {
+  // Check if token already exists in cookie
+  let token = req.cookies?.[CSRF_COOKIE_NAME];
   
   // Generate new token if one doesn't exist
-  if (!session.csrfToken) {
-    session.csrfToken = crypto.randomBytes(32).toString('hex');
+  if (!token) {
+    token = crypto.randomBytes(32).toString('hex');
+    
+    // Set secure cookie with SameSite protection
+    res.cookie(CSRF_COOKIE_NAME, token, {
+      httpOnly: true,  // Prevent JavaScript access
+      secure: process.env.NODE_ENV === 'production',  // HTTPS only in production
+      sameSite: 'strict',  // Prevent CSRF attacks
+      maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days (matches JWT expiry)
+    });
   }
   
-  return session.csrfToken;
+  return token;
 }
 
 /**
  * Middleware to validate CSRF tokens on state-changing requests
+ * Uses Double Submit Cookie pattern - validates that cookie matches header
+ * 
  * Exempts:
  * - GET, HEAD, OPTIONS requests (safe methods)
  * - External API routes (use API key authentication instead)
- * - Login route (needs to work before CSRF token is available)
+ * - Login/register routes (user doesn't have token yet)
  */
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   // Skip CSRF for safe HTTP methods
@@ -42,25 +57,22 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
-  // Skip CSRF for login route (user doesn't have token yet)
-  if (req.path === '/api/login') {
+  // Skip CSRF for login/register routes (user doesn't have token yet)
+  if (req.path === '/api/login' || req.path === '/api/register') {
     return next();
   }
 
-  // Get token from session and request
-  const session = req.session as SessionWithCsrf;
-  const sessionToken = session.csrfToken;
-  
-  // Get token from header or body
-  const requestToken = req.headers['x-csrf-token'] as string || req.body._csrf;
+  // Get token from cookie and header
+  const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+  const headerToken = req.headers['x-csrf-token'] as string;
 
-  // Validate token
-  if (!sessionToken || !requestToken) {
+  // Validate tokens exist
+  if (!cookieToken || !headerToken) {
     console.error('CSRF token missing', {
       path: req.path,
       method: req.method,
-      hasSessionToken: !!sessionToken,
-      hasRequestToken: !!requestToken,
+      hasCookieToken: !!cookieToken,
+      hasHeaderToken: !!headerToken,
     });
     return res.status(403).json({ 
       error: 'CSRF token missing',
@@ -69,11 +81,11 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   }
 
   // Use timing-safe comparison to prevent timing attacks
-  const sessionBuffer = Buffer.from(sessionToken);
-  const requestBuffer = Buffer.from(requestToken);
+  const cookieBuffer = Buffer.from(cookieToken);
+  const headerBuffer = Buffer.from(headerToken);
   
-  if (sessionBuffer.length !== requestBuffer.length || 
-      !crypto.timingSafeEqual(sessionBuffer, requestBuffer)) {
+  if (cookieBuffer.length !== headerBuffer.length || 
+      !crypto.timingSafeEqual(cookieBuffer, headerBuffer)) {
     console.error('CSRF token mismatch', {
       path: req.path,
       method: req.method,

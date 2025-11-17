@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
 import { storage } from "./db";
+import { csrfProtection, generateCsrfToken } from "./csrf-protection";
 
 // Set default BACKUP_ENCRYPTION_KEY for development if not already set
 if (!process.env.BACKUP_ENCRYPTION_KEY) {
@@ -32,6 +33,9 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// CSRF protection middleware - validates tokens on state-changing requests
+app.use(csrfProtection);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -70,6 +74,12 @@ app.use((req, res, next) => {
   // Initialize default ID patterns
   await storage.initializeIdPatterns();
   console.log("ID patterns initialized");
+  
+  // CSRF token endpoint - generates and returns token for frontend
+  app.get("/api/csrf-token", (req, res) => {
+    const token = generateCsrfToken(req, res);
+    res.json({ csrfToken: token });
+  });
   
   // Register API routes
   registerRoutes(app);
