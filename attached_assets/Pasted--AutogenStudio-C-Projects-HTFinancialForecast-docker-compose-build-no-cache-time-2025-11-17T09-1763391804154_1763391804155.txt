@@ -1,0 +1,45 @@
+(AutogenStudio) C:\Projects\HTFinancialForecast>docker-compose build --no-cache
+time="2025-11-17T09:02:49-06:00" level=warning msg="C:\\Projects\\HTFinancialForecast\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+[+] Building 14.1s (18/22)
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 556B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 1.34kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-slim                                                                 0.4s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 222B                                                                                               0.0s
+ => CACHED [builder 1/6] FROM docker.io/library/node:20-slim@sha256:12541e65a3777c6035245518eb43006ed08ca8c684e68cd04ecb4653bd  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 7.15kB                                                                                             0.0s
+ => CACHED [builder 2/6] WORKDIR /app                                                                                           0.0s
+ => [stage-1  2/11] RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*                   8.2s
+ => [builder 3/6] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/6] RUN npm ci                                                                                                    8.5s
+ => [stage-1  3/11] WORKDIR /app                                                                                                0.0s
+ => [stage-1  4/11] COPY package*.json ./                                                                                       0.0s
+ => [builder 5/6] COPY . .                                                                                                      0.0s
+ => [builder 6/6] RUN npm run build                                                                                             3.8s
+ => CACHED [stage-1  5/11] COPY --from=builder /app/node_modules ./node_modules                                                 0.0s
+ => CACHED [stage-1  6/11] COPY --from=builder /app/dist ./dist                                                                 0.0s
+ => ERROR [stage-1  7/11] COPY --from=builder /app/migrations ./migrations                                                      0.0s
+------
+ > [stage-1  7/11] COPY --from=builder /app/migrations ./migrations:
+------
+Dockerfile:35
+
+--------------------
+
+  33 |
+
+  34 |     # Copy migrations and schema for drizzle
+
+  35 | >>> COPY --from=builder /app/migrations ./migrations
+
+  36 |     COPY --from=builder /app/shared ./shared
+
+  37 |     COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+
+--------------------
+
+failed to solve: failed to compute cache key: failed to calculate checksum of ref cf211060-ba9e-4bfe-998c-2767998d3924::zsmfszb0phyahyxiars36bo5l: "/app/migrations": not found
