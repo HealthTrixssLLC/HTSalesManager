@@ -23,6 +23,7 @@ export interface BackupData {
     activities: any[];
     auditLogs: any[];
     idPatterns: any[];
+    apiKeys: any[];
   };
 }
 
