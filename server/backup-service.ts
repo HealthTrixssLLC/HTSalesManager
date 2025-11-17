@@ -104,6 +104,7 @@ export class BackupService {
       activities,
       auditLogs,
       idPatterns,
+      apiKeys,
     ] = await Promise.all([
       db.select().from(schema.users),
       db.select().from(schema.roles),
@@ -117,6 +118,7 @@ export class BackupService {
       db.select().from(schema.activities),
       db.select().from(schema.auditLogs),
       db.select().from(schema.idPatterns),
+      db.select().from(schema.apiKeys),
     ]);
 
     const backupData: BackupData = {
@@ -135,6 +137,7 @@ export class BackupService {
         activities,
         auditLogs,
         idPatterns,
+        apiKeys,
       },
     };
 
