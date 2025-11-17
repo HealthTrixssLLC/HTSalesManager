@@ -6,7 +6,7 @@ import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
 import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission } from "./rbac";
-import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter } from "./rate-limiters";
+import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter, readRateLimiter } from "./rate-limiters";
 import {
   insertUserSchema,
   insertAccountSchema,
@@ -200,7 +200,7 @@ export function registerRoutes(app: Express) {
     return res.json({ success: true });
   });
   
-  app.get("/api/user", optionalAuthenticate, (req: AuthRequest, res) => {
+  app.get("/api/user", optionalAuthenticate, readRateLimiter, (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Not authenticated" });
     }
@@ -208,7 +208,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get all users (for dropdowns)
-  app.get("/api/users", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/users", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allUsers = await db
         .select({
@@ -229,7 +229,7 @@ export function registerRoutes(app: Express) {
   // ========== ACCOUNTS ROUTES ==========
   
   // Get accounts summary statistics
-  app.get("/api/accounts/summary", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/accounts/summary", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allAccounts = await storage.getAllAccounts();
       const allUsers = await storage.getAllUsers();
@@ -295,7 +295,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/accounts", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/accounts", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       let accounts = await storage.getAllAccounts();
       
@@ -361,7 +361,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/accounts/:id", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/accounts/:id", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const account = await storage.getAccountById(req.params.id);
       if (!account) {
@@ -424,7 +424,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get related data for an account (contacts, opportunities, activities)
-  app.get("/api/accounts/:id/related", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/accounts/:id/related", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const accountId = req.params.id;
       
@@ -506,7 +506,7 @@ export function registerRoutes(app: Express) {
   // ========== CONTACTS ROUTES ==========
   
   // Get contacts summary statistics
-  app.get("/api/contacts/summary", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/contacts/summary", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allContacts = await storage.getAllContacts();
       const allAccounts = await storage.getAllAccounts();
@@ -570,7 +570,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/contacts", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/contacts", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       let contacts = await storage.getAllContacts();
       
@@ -639,7 +639,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/contacts/:id", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/contacts/:id", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const contact = await storage.getContactById(req.params.id);
       if (!contact) {
@@ -690,7 +690,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get related data for a contact (account, opportunities, activities)
-  app.get("/api/contacts/:id/related", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/contacts/:id/related", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const contactId = req.params.id;
       
@@ -769,7 +769,7 @@ export function registerRoutes(app: Express) {
   // ========== LEADS ROUTES ==========
   
   // Get leads summary statistics
-  app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allLeads = await storage.getAllLeads();
       
@@ -830,7 +830,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/leads", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       let leads = await storage.getAllLeads();
       
@@ -904,7 +904,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/leads/:id", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/leads/:id", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const lead = await storage.getLeadById(req.params.id);
       if (!lead) {
@@ -933,7 +933,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get related data for a lead (activities, conversion info)
-  app.get("/api/leads/:id/related", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/leads/:id/related", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       
@@ -1157,7 +1157,7 @@ export function registerRoutes(app: Express) {
   
   // ========== OPPORTUNITIES ROUTES ==========
   
-  app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Fetch opportunities with account information
       const opportunitiesWithAccounts = await db
@@ -1195,7 +1195,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const opportunity = await storage.getOpportunityById(req.params.id);
       if (!opportunity) {
@@ -1283,7 +1283,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get related data for an opportunity (account, contacts, activities)
-  app.get("/api/opportunities/:id/related", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/opportunities/:id/related", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const opportunityId = req.params.id;
       
@@ -1361,7 +1361,7 @@ export function registerRoutes(app: Express) {
   
   // ========== ACTIVITIES ROUTES ==========
   
-  app.get("/api/activities", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activities = await storage.getAllActivities();
       return res.json(activities);
@@ -1370,7 +1370,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/activities/upcoming", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/upcoming", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const now = new Date();
       const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -1394,7 +1394,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/activities/pending", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/pending", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Get all activities that are not completed (pending or cancelled)
       const pendingActivities = await db.select()
@@ -1410,7 +1410,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/activities/summary", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/summary", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allActivities = await storage.getAllActivities();
       const allUsers = await storage.getAllUsers();
@@ -1504,7 +1504,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activity = await storage.getActivityById(req.params.id);
       if (!activity) {
@@ -1645,7 +1645,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get related data for an activity (polymorphic parent entity)
-  app.get("/api/activities/:id/related", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/:id/related", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activityId = req.params.id;
       
@@ -1679,7 +1679,7 @@ export function registerRoutes(app: Express) {
   // ========== ACTIVITY ASSOCIATIONS ROUTES ==========
 
   // Get all associations for an activity
-  app.get("/api/activities/:id/associations", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/activities/:id/associations", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activityId = req.params.id;
       
@@ -1823,7 +1823,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Search entities for autocomplete (accounts, contacts, leads, opportunities)
-  app.get("/api/entities/search", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/entities/search", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { q, type } = req.query;
       
@@ -1911,7 +1911,7 @@ export function registerRoutes(app: Express) {
   
   // ========== DASHBOARD ROUTES ==========
   
-  app.get("/api/dashboard/stats", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/dashboard/stats", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const stats = await storage.getDashboardStats();
       return res.json(stats);
@@ -1921,7 +1921,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/dashboard/sales-waterfall/:year", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/dashboard/sales-waterfall/:year", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const year = parseInt(req.params.year);
       if (isNaN(year) || year < 2000 || year > 2100) {
@@ -1938,7 +1938,7 @@ export function registerRoutes(app: Express) {
   
   // ========== AUDIT LOG ROUTES ==========
   
-  app.get("/api/audit-logs", authenticate, requirePermission("AuditLog", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/audit-logs", authenticate, requirePermission("AuditLog", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const logs = await storage.getAllAuditLogs();
       return res.json(logs);
@@ -1949,7 +1949,7 @@ export function registerRoutes(app: Express) {
   
   // ========== TAG ROUTES ==========
   
-  app.get("/api/tags", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/tags", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const tags = await storage.getAllTags();
       return res.json(tags);
@@ -1989,7 +1989,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Entity tag routes
-  app.get("/api/:entity/:entityId/tags", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/:entity/:entityId/tags", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity, entityId } = req.params;
       const tags = await storage.getEntityTags(entity, entityId);
@@ -2039,7 +2039,7 @@ export function registerRoutes(app: Express) {
   
   // ========== ADMIN ROUTES ==========
   
-  app.get("/api/admin/users", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/users", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const users = await storage.getAllUsers();
       // Fetch roles for each user
@@ -2128,7 +2128,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/admin/roles", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/roles", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const roles = await storage.getAllRoles();
       return res.json(roles);
@@ -2137,7 +2137,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/admin/id-patterns", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/id-patterns", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const patterns = await storage.getAllIdPatterns();
       return res.json(patterns);
@@ -2167,7 +2167,7 @@ export function registerRoutes(app: Express) {
   
   // ========== ACCOUNT CATEGORIES ROUTES ==========
   
-  app.get("/api/admin/categories", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/categories", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const categories = await storage.getAllAccountCategories();
       return res.json(categories);
@@ -2845,7 +2845,7 @@ export function registerRoutes(app: Express) {
   
   // ========== DATABASE DIAGNOSTICS ENDPOINT ==========
   
-  app.get("/api/admin/diagnostics/database", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/diagnostics/database", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       console.log('\n=== DATABASE DIAGNOSTICS ===');
       console.log('[DB-DIAGNOSTIC] Starting database diagnostics');
@@ -3036,7 +3036,7 @@ export function registerRoutes(app: Express) {
     return csvRows.join("\n");
   }
   
-  app.get("/api/export/accounts", authenticate, requirePermission("Account", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/export/accounts", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const accounts = await storage.getAllAccounts();
       
@@ -3056,7 +3056,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/export/contacts", authenticate, requirePermission("Contact", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/export/contacts", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const contacts = await storage.getAllContacts();
       
@@ -3082,7 +3082,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/export/leads", authenticate, requirePermission("Lead", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/export/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leads = await storage.getAllLeads();
       
@@ -3098,7 +3098,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/export/opportunities", authenticate, requirePermission("Opportunity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/export/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const opportunities = await storage.getAllOpportunities();
       
@@ -3124,7 +3124,7 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/export/activities", authenticate, requirePermission("Activity", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/export/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activities = await storage.getAllActivities();
       
@@ -3659,7 +3659,7 @@ export function registerRoutes(app: Express) {
   // ========== COMMENTS SYSTEM ENDPOINTS ==========
 
   // List comments for an entity
-  app.get("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "read"), async (req: AuthRequest, res) => {
+  app.get("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity, id } = req.params;
       const page = parseInt(req.query.page as string) || 1;
@@ -4121,7 +4121,7 @@ export function registerRoutes(app: Express) {
   // ========== ANALYTICS & FORECASTING ROUTES ==========
 
   // Get comprehensive forecast
-  app.get("/api/analytics/forecast", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/forecast", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const targetDate = req.query.targetDate 
         ? new Date(req.query.targetDate as string)
@@ -4136,7 +4136,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get historical performance metrics
-  app.get("/api/analytics/historical", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/historical", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
@@ -4152,7 +4152,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get pipeline velocity metrics
-  app.get("/api/analytics/velocity", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/velocity", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
@@ -4168,7 +4168,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get stage conversion rates
-  app.get("/api/analytics/conversions", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/conversions", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
@@ -4184,7 +4184,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get deal closing predictions
-  app.get("/api/analytics/predictions", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/predictions", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysAhead = parseInt(req.query.days as string) || 30;
       const predictions = await analyticsService.predictDealClosing(daysAhead);
@@ -4196,7 +4196,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get rep performance metrics
-  app.get("/api/analytics/rep-performance", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/rep-performance", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
@@ -4212,7 +4212,7 @@ export function registerRoutes(app: Express) {
   });
 
   // Get pipeline health score
-  app.get("/api/analytics/pipeline-health", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/pipeline-health", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const health = await analyticsService.calculatePipelineHealth();
       return res.json(health);
@@ -4224,7 +4224,7 @@ export function registerRoutes(app: Express) {
 
   // ========== SALES FORECAST REPORT ==========
   
-  app.get("/api/reports/sales-forecast", authenticate, async (req: AuthRequest, res) => {
+  app.get("/api/reports/sales-forecast", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { accountId, rating, startDate, endDate } = req.query;
       
@@ -4368,7 +4368,7 @@ export function registerRoutes(app: Express) {
   // ========== API KEY MANAGEMENT ROUTES ==========
   
   // Get all API keys (admin only)
-  app.get("/api/admin/api-keys", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-keys", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const keys = await storage.getAllApiKeys();
       
@@ -4439,7 +4439,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Get API access logs (admin only) - for debugging external API calls
-  app.get("/api/admin/api-access-logs", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-access-logs", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { 
         startDate, 
@@ -4513,7 +4513,7 @@ export function registerRoutes(app: Express) {
   });
   
   // Export API access logs to CSV (admin only) - server-side processing for large datasets
-  app.get("/api/admin/api-access-logs/export", authenticate, requireRole("Admin"), async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-access-logs/export", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { startDate, endDate, apiKeyId, status, action } = req.query;
       

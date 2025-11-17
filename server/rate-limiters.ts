@@ -21,10 +21,7 @@ export const authRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Use IP address for rate limiting
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || "unknown";
-  },
+  // Default keyGenerator handles IPv4 and IPv6 properly
 });
 
 /**
@@ -43,9 +40,7 @@ export const sensitiveRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || "unknown";
-  },
+  // Default keyGenerator handles IPv4 and IPv6 properly
 });
 
 /**
@@ -64,9 +59,7 @@ export const crudRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || "unknown";
-  },
+  // Default keyGenerator handles IPv4 and IPv6 properly
 });
 
 /**
@@ -85,9 +78,7 @@ export const readRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    return req.ip || req.socket.remoteAddress || "unknown";
-  },
+  // Default keyGenerator handles IPv4 and IPv6 properly
   skip: (req) => {
     // Skip rate limiting for CSRF token endpoint (needed before auth)
     return req.path === '/api/csrf-token';
