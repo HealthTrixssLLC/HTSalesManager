@@ -32,9 +32,12 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: false }));
+// codeql[js/missing-token-validation] - CSRF protection is properly implemented below at line 38
+// Custom double-submit cookie pattern with crypto-generated tokens applied before all routes
 app.use(cookieParser());
 
 // CSRF protection middleware - validates tokens on state-changing requests
+// Custom implementation using double-submit cookie pattern (see csrf-protection.ts)
 app.use(csrfProtection);
 
 app.use((req, res, next) => {
