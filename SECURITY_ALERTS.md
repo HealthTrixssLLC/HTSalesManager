@@ -153,6 +153,117 @@ Add this to `package.json` (requires manual edit):
 
 ---
 
+## 3. Clear Text Storage of Sensitive Data (CodeQL)
+
+**Alert Status**: ✅ False Positive - Suppressed
+
+### Summary
+- **Tool**: CodeQL Static Analysis
+- **Alert**: JWT token stored in cookie flagged as "clear text storage"
+- **Rule ID**: `js/clear-text-storage-of-sensitive-data`
+- **Locations**: `server/routes.ts:166` (register), `server/routes.ts:214` (login)
+
+### Why This is a False Positive
+
+**1. JWT Tokens Are Designed for Cookie Storage**
+```typescript
+// This is the industry-standard authentication pattern
+res.cookie("token", jwtToken, {
+  httpOnly: true,    // JavaScript cannot access (XSS protection)
+  secure: true,      // HTTPS only in production
+  sameSite: "lax"    // CSRF protection
+});
+```
+
+**2. No Sensitive Data in Token**
+```javascript
+// JWT payload contains only user identity, NOT passwords
+{
+  userId: "abc123",
+  email: "user@example.com"
+  // NO passwords, NO secrets
+}
+```
+
+**3. Token is Cryptographically Signed**
+- JWT is signed with `JWT_SECRET` environment variable
+- Tampering detection ensures token integrity
+- Password is bcrypt-hashed in database, never in token
+
+**4. Multiple Layers of Protection**
+- httpOnly flag prevents XSS attacks from accessing cookie
+- secure flag ensures HTTPS-only transmission in production
+- sameSite flag prevents CSRF attacks
+- 7-day expiration limits exposure window
+
+### Mitigation Status
+
+**Status**: ✅ Suppressed with Documentation
+
+**Suppression Added**:
+```typescript
+// codeql[js/clear-text-storage-of-sensitive-data] - JWT tokens in httpOnly cookies is industry standard
+// Token is cryptographically signed with JWT_SECRET. Cookie protection: httpOnly (XSS), secure (HTTPS), sameSite (CSRF)
+res.cookie("token", token, { ... });
+```
+
+**References**:
+- [OWASP: JWT Security Best Practices](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
+- [RFC 6265: HTTP State Management Mechanism](https://tools.ietf.org/html/rfc6265)
+
+---
+
+## 4. Missing CSRF Middleware (CodeQL)
+
+**Alert Status**: ✅ False Positive - Suppressed
+
+### Summary
+- **Tool**: CodeQL Static Analysis
+- **Alert**: cookieParser middleware flagged as missing CSRF protection
+- **Rule ID**: `js/missing-token-validation`
+- **Location**: `server/index.ts:42` (cookieParser)
+
+### Why This is a False Positive
+
+**1. CSRF Protection IS Implemented**
+```typescript
+// Line 42: cookieParser (flagged by CodeQL)
+app.use(cookieParser());
+
+// Line 46: CSRF protection applied immediately after
+app.use(csrfProtection);  // ← Protection is here!
+```
+
+**2. Custom Double-Submit Cookie Pattern**
+- Implementation: `server/csrf-protection.ts`
+- Uses crypto-generated tokens (32 bytes, base64-encoded)
+- Validates tokens on all state-changing requests (POST/PUT/PATCH/DELETE)
+- Timing-safe comparison prevents timing attacks
+
+**3. Comprehensive Coverage**
+- CSRF validation on all mutating operations
+- Exemptions only for: login, register, external API (has API key auth)
+- Token endpoint (`/api/csrf-token`) generates tokens for frontend
+
+### Mitigation Status
+
+**Status**: ✅ Suppressed with Documentation
+
+**Suppression Added**:
+```typescript
+// codeql[js/missing-token-validation] - cookieParser is secured by custom double-submit cookie pattern
+// CSRF validation applied to all state-changing requests on line 46
+app.use(cookieParser());
+```
+
+**Implementation Details**:
+- Token Generation: `crypto.randomBytes(32).toString('base64')`
+- Storage: Double-submit pattern (cookie + header)
+- Validation: Timing-safe comparison on every mutating request
+- See: `server/csrf-protection.ts` for full implementation
+
+---
+
 ## Security Posture Summary
 
 ### Active Security Measures
@@ -165,14 +276,20 @@ Add this to `package.json` (requires manual edit):
 ✅ **SQL Injection Protection**: Drizzle ORM with parameterized queries  
 ✅ **API Key Security**: Bcrypt hashing, per-key rate limiting  
 
-### Accepted Development Risks
+### Accepted Development Risks (Dependabot)
 ⚠️ **esbuild CORS**: Dev-only, not used for serving  
 ⚠️ **glob CLI injection**: CLI not used, library API safe  
 
-### Recommendation
-These vulnerabilities pose **zero actual risk** to the Health Trixss CRM application based on our usage patterns. They are development-only dependencies used in ways that don't expose the vulnerable code paths.
+### Suppressed CodeQL False Positives
+✅ **JWT Cookie Storage**: Industry-standard authentication pattern with httpOnly/secure/sameSite protection  
+✅ **CSRF Middleware**: Custom double-submit cookie pattern properly implemented  
 
-**No action required** unless organizational security policies mandate resolving all Dependabot alerts regardless of actual risk.
+### Recommendation
+All security alerts have been properly addressed:
+
+**Dependabot Alerts**: These vulnerabilities pose **zero actual risk** to the Health Trixss CRM application based on our usage patterns. They are development-only dependencies used in ways that don't expose the vulnerable code paths. No action required unless organizational security policies mandate resolving all alerts regardless of actual risk.
+
+**CodeQL Alerts**: False positives have been suppressed with clear documentation explaining why the flagged code is secure. Both JWT cookie storage and CSRF protection follow industry best practices.
 
 ---
 
