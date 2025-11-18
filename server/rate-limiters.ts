@@ -21,7 +21,11 @@ export const authRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Default keyGenerator handles IPv4 and IPv6 properly
+  // Use proxy-aware configuration for cloud/edge deployments (Replit, etc.)
+  // Trust the X-Forwarded-For header to get real client IP
+  validate: {
+    trustProxy: false, // Disable validation - we manually configure trust proxy in index.ts
+  },
 });
 
 /**
@@ -40,7 +44,9 @@ export const sensitiveRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Default keyGenerator handles IPv4 and IPv6 properly
+  validate: {
+    trustProxy: false,
+  },
 });
 
 /**
@@ -59,7 +65,9 @@ export const crudRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Default keyGenerator handles IPv4 and IPv6 properly
+  validate: {
+    trustProxy: false,
+  },
 });
 
 /**
@@ -78,7 +86,9 @@ export const readRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Default keyGenerator handles IPv4 and IPv6 properly
+  validate: {
+    trustProxy: false,
+  },
   skip: (req) => {
     // Skip rate limiting for CSRF token endpoint (needed before auth)
     return req.path === '/api/csrf-token';

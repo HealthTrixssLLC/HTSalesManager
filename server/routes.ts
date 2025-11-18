@@ -1,14 +1,14 @@
 // API routes for Health Trixss CRM
 // All routes with authentication, RBAC, and audit logging
 //
-// SECURITY NOTE: All 117 routes are protected with tiered rate limiting:
+// SECURITY NOTE: All routes are protected with tiered rate limiting:
 // - authRateLimiter: 5 req/min (login, register, logout)
 // - sensitiveRateLimiter: 20 req/min (admin operations, backups, API keys)
 // - crudRateLimiter: 100 req/min (POST/PUT/PATCH/DELETE operations)
 // - readRateLimiter: 200 req/min (GET operations)
-// codeql[js/missing-rate-limiting] - Rate limiters applied as middleware to all routes
+// Rate limiters are applied as middleware on each route handler
 
-import type { Express } from "express";
+import type { Express} from "express";
 import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
