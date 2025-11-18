@@ -1,0 +1,131 @@
+Missing CSRF middleware
+ Open in main 1 minute ago
+Speed up the remediation of this alert with Copilot Autofix for CodeQL
+
+Code snippet
+server/index.ts:37 
+app.use(express.urlencoded({ extended: false }));
+// codeql[js/missing-token-validation] - CSRF protection is properly implemented below at line 38
+// Custom double-submit cookie pattern with crypto-generated tokens applied before all routes
+app.use(cookieParser());
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a 
+ without CSRF protection.
+This cookie middleware is serving a [r
+CodeQL
+
+// CSRF protection middleware - validates tokens on state-changing requests
+// Custom implementation using double-submit cookie pattern (see csrf-protection.ts)
+Rule
+Tool
+CodeQL
+Rule ID
+js/missing-token-validation
+Query
+View source
+Description
+Websites that rely on cookie-based authentication may be vulnerable to cross-site request forgery (CSRF). Specifically, a state-changing request should include a secret token so the request can't be forged by an attacker. Otherwise, unwanted requests can be submitted on behalf of a user who visits a malicious website.
+
+Activity
+First detected in commit 1 minute ago
+Update dependencies and document security alerts …
+7a1d47b
+server/ index.ts:37 on branch main
+Appeared in branch main 1 minute ago
+ Push on main #31: Commit 7a1d47b8
+( build-mode: none runner: ["ubuntu-latest"] category: /language:javascript-typescript language: javascript-typescript )
