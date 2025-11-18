@@ -1709,7 +1709,7 @@ export function registerRoutes(app: Express) {
       
       // Fetch entity details for each association
       const associationsWithDetails = await Promise.all(
-        associations.map(async (assoc) => {
+        associations.map(async (assoc: any) => {
           let entityDetails: any = null;
           let entityName = "";
           
@@ -2987,7 +2987,7 @@ export function registerRoutes(app: Express) {
         const activitiesData = await db.select({
           id: activities.id,
           subject: activities.subject,
-          activityType: activities.activityType,
+          type: activities.type,
         }).from(activities).limit(3);
         
         diagnostics.entities.activities.count = activitiesData.length;
@@ -3710,7 +3710,7 @@ export function registerRoutes(app: Express) {
           .from(commentAttachments)
           .groupBy(commentAttachments.commentId);
         
-        const commentIds = commentsWithAttachments.map(c => c.commentId);
+        const commentIds = commentsWithAttachments.map((c: any) => c.commentId);
         if (commentIds.length === 0) {
           // No attachments exist, return empty result
           return res.json({
@@ -3760,10 +3760,10 @@ export function registerRoutes(app: Express) {
       const results = await query.limit(pageSize).offset(offset);
       
       // Batch load reactions, attachments, replies, and editors to avoid N+1
-      const commentIds = results.map(r => r.comment.id);
+      const commentIds = results.map((r: any) => r.comment.id);
       const editorIds = results
-        .map(r => r.comment.editedBy)
-        .filter((id): id is string => id !== null);
+        .map((r: any) => r.comment.editedBy)
+        .filter((id: any): id is string => id !== null);
       
       const [allReactions, allAttachments, allReplyCounts, editors] = await Promise.all([
         commentIds.length > 0
@@ -3823,7 +3823,7 @@ export function registerRoutes(app: Express) {
       }
       
       // Enrich comments with loaded data
-      const enrichedComments = results.map((result) => {
+      const enrichedComments = results.map((result: any) => {
         const reactionsData = reactionsByComment.get(result.comment.id) || [];
         
         // Aggregate reactions
@@ -3833,7 +3833,7 @@ export function registerRoutes(app: Express) {
         }
         
         // Find user's reaction
-        const userReaction = reactionsData.find(r => r.userId === req.user!.id)?.emoji || null;
+        const userReaction = reactionsData.find((r: any) => r.userId === req.user!.id)?.emoji || null;
         
         // Get editor info
         const editedByUser = result.comment.editedBy 
@@ -4279,11 +4279,11 @@ export function registerRoutes(app: Express) {
         db.select().from(users)
       ]);
       
-      const accountMap = new Map(allAccounts.map(a => [a.id, a.name]));
-      const userMap = new Map(allUsers.map(u => [u.id, u.name]));
+      const accountMap = new Map(allAccounts.map((a: any) => [a.id, a.name]));
+      const userMap = new Map(allUsers.map((u: any) => [u.id, u.name]));
       
       // Transform opportunities for Excel
-      const oppDetails = opps.map(o => ({
+      const oppDetails = opps.map((o: any) => ({
         "ID": o.id,
         "Name": o.name,
         "Account": accountMap.get(o.accountId) || o.accountId,
@@ -4298,8 +4298,8 @@ export function registerRoutes(app: Express) {
       }));
       
       // Calculate metrics for Executive Summary
-      const totalPipeline = opps.reduce((sum, o) => sum + (o.amount ? parseFloat(o.amount) : 0), 0);
-      const weightedForecast = opps.reduce((sum, o) => {
+      const totalPipeline = opps.reduce((sum: number, o: any) => sum + (o.amount ? parseFloat(o.amount) : 0), 0);
+      const weightedForecast = opps.reduce((sum: number, o: any) => {
         const amount = o.amount ? parseFloat(o.amount) : 0;
         const prob = o.probability || 0;
         return sum + (amount * prob / 100);
@@ -4308,7 +4308,7 @@ export function registerRoutes(app: Express) {
       const avgDealSize = totalOpps > 0 ? totalPipeline / totalOpps : 0;
       
       // Pipeline by stage
-      const byStage = opps.reduce((acc, o) => {
+      const byStage = opps.reduce((acc: any, o: any) => {
         const stage = o.stage;
         if (!acc[stage]) {
           acc[stage] = { count: 0, amount: 0 };
@@ -4318,7 +4318,7 @@ export function registerRoutes(app: Express) {
         return acc;
       }, {} as Record<string, { count: number; amount: number }>);
       
-      const stageData = Object.entries(byStage).map(([stage, data]) => ({
+      const stageData = Object.entries(byStage).map(([stage, data]: [string, any]) => ({
         "Stage": stage,
         "Count": data.count,
         "Total Amount": data.amount,
@@ -4327,7 +4327,7 @@ export function registerRoutes(app: Express) {
       
       // Monthly forecast
       const monthlyForecast: Record<string, { count: number; weighted: number; total: number }> = {};
-      opps.forEach(o => {
+      opps.forEach((o: any) => {
         if (o.closeDate) {
           const month = new Date(o.closeDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
           if (!monthlyForecast[month]) {
@@ -4342,7 +4342,7 @@ export function registerRoutes(app: Express) {
       });
       
       const forecastData = Object.entries(monthlyForecast)
-        .map(([month, data]) => ({
+        .map(([month, data]: [string, any]) => ({
           "Month": month,
           "Expected Contracts": data.count,
           "Weighted Revenue": data.weighted,

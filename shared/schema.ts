@@ -110,12 +110,18 @@ export const contacts = pgTable("contacts", {
   mailingCountry: text("mailing_country"),
   description: text("description"),
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
+  externalId: text("external_id"), // External system ID (e.g., Dynamics GUID)
+  sourceSystem: text("source_system"), // Origin system (e.g., "Dynamics 365")
+  sourceRecordId: text("source_record_id"), // Original record ID in source system
+  importStatus: text("import_status"), // Import status
+  importNotes: text("import_notes"), // Import notes
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   accountIdIdx: index("contacts_account_id_idx").on(table.accountId),
   ownerIdIdx: index("contacts_owner_id_idx").on(table.ownerId),
   emailIdx: index("contacts_email_idx").on(table.email),
+  externalIdIdx: index("contacts_external_id_idx").on(table.externalId),
 }));
 
 export const leads = pgTable("leads", {
