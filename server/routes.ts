@@ -40,6 +40,18 @@ import externalApiRoutes from "./external-api-routes";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
+import {
+  accountCsvRowSchema,
+  contactCsvRowSchema,
+  leadCsvRowSchema,
+  opportunityCsvRowSchema,
+  activityCsvRowSchema,
+  type AccountCsvRow,
+  type ContactCsvRow,
+  type LeadCsvRow,
+  type OpportunityCsvRow,
+  type ActivityCsvRow,
+} from "./csv-schemas";
 
 // Configure multer for file uploads (memory storage)
 const upload = multer({ storage: multer.memoryStorage() });
@@ -3154,7 +3166,7 @@ export function registerRoutes(app: Express) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-      });
+      }) as unknown[];
       
       const results = {
         total: records.length,
@@ -3166,11 +3178,14 @@ export function registerRoutes(app: Express) {
       
       // Process each record
       for (let i = 0; i < records.length; i++) {
-        const row = records[i];
+        const rawRow = records[i];
         try {
-          // Prepare account data (use empty strings for optional fields to match schema validation)
+          // Validate and parse CSV row with Zod schema
+          const row = accountCsvRowSchema.parse(rawRow);
+          
+          // Prepare account data
           const accountData: any = {
-            id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
+            id: row.id,
             name: row.name,
             accountNumber: row.accountNumber || "",
             type: row.type || null,
@@ -3225,7 +3240,7 @@ export function registerRoutes(app: Express) {
           results.errors.push({
             row: i + 2, // +2 because CSV has header row and arrays are 0-indexed
             error: error.message,
-            data: row,
+            data: rawRow,
           });
         }
       }
@@ -3248,7 +3263,7 @@ export function registerRoutes(app: Express) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-      });
+      }) as unknown[];
       
       const results = {
         total: records.length,
@@ -3259,21 +3274,24 @@ export function registerRoutes(app: Express) {
       };
       
       for (let i = 0; i < records.length; i++) {
-        const row = records[i];
+        const rawRow = records[i];
         try {
+          // Validate and parse CSV row with Zod schema
+          const row = contactCsvRowSchema.parse(rawRow);
+          
           const contactData: any = {
-            id: row.id && row.id.trim() !== "" ? row.id : undefined,
+            id: row.id,
             firstName: row.firstName,
             lastName: row.lastName,
-            email: row.email || null,
-            phone: row.phone || null,
-            title: row.title || null,
-            accountId: row.accountId || null,
-            externalId: row.externalId || null,
-            sourceSystem: row.sourceSystem || null,
-            sourceRecordId: row.sourceRecordId || null,
-            importStatus: row.importStatus || null,
-            importNotes: row.importNotes || null,
+            email: row.email,
+            phone: row.phone,
+            title: row.title,
+            accountId: row.accountId,
+            externalId: row.externalId,
+            sourceSystem: row.sourceSystem,
+            sourceRecordId: row.sourceRecordId,
+            importStatus: row.importStatus,
+            importNotes: row.importNotes,
             ownerId: req.user!.id,
           };
           
@@ -3317,7 +3335,7 @@ export function registerRoutes(app: Express) {
           results.errors.push({
             row: i + 2,
             error: error.message,
-            data: row,
+            data: rawRow,
           });
         }
       }
@@ -3340,7 +3358,7 @@ export function registerRoutes(app: Express) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-      });
+      }) as unknown[];
       
       const results = {
         total: records.length,
@@ -3351,8 +3369,11 @@ export function registerRoutes(app: Express) {
       };
       
       for (let i = 0; i < records.length; i++) {
-        const row = records[i];
+        const rawRow = records[i];
         try {
+          // Validate and parse CSV row with Zod schema
+          const row = leadCsvRowSchema.parse(rawRow);
+          
           // Validate enum values before parsing
           const validStatuses = ["new", "contacted", "qualified", "unqualified", "converted"];
           const validSources = ["website", "referral", "phone", "email", "event", "partner", "other"];
@@ -3366,21 +3387,21 @@ export function registerRoutes(app: Express) {
           }
           
           const leadData: any = {
-            id: row.id && row.id.trim() !== "" ? row.id : undefined,
+            id: row.id,
             firstName: row.firstName,
             lastName: row.lastName,
-            company: row.company || null,
-            email: row.email || null,
-            phone: row.phone || null,
-            topic: row.topic || null,
+            company: row.company,
+            email: row.email,
+            phone: row.phone,
+            topic: row.topic,
             status: row.status?.toLowerCase() || "new",
             source: row.source?.toLowerCase() || "other",
             ownerId: req.user!.id,
-            externalId: row.externalId || null,
-            sourceSystem: row.sourceSystem || null,
-            sourceRecordId: row.sourceRecordId || null,
-            importStatus: row.importStatus || null,
-            importNotes: row.importNotes || null,
+            externalId: row.externalId,
+            sourceSystem: row.sourceSystem,
+            sourceRecordId: row.sourceRecordId,
+            importStatus: row.importStatus,
+            importNotes: row.importNotes,
           };
           
           // Check for duplicate by externalId
@@ -3415,7 +3436,7 @@ export function registerRoutes(app: Express) {
           results.errors.push({
             row: i + 2,
             error: error.message,
-            data: row,
+            data: rawRow,
           });
         }
       }
@@ -3438,7 +3459,7 @@ export function registerRoutes(app: Express) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-      });
+      }) as unknown[];
       
       const results = {
         total: records.length,
@@ -3449,8 +3470,11 @@ export function registerRoutes(app: Express) {
       };
       
       for (let i = 0; i < records.length; i++) {
-        const row = records[i];
+        const rawRow = records[i];
         try {
+          // Validate and parse CSV row with Zod schema
+          const row = opportunityCsvRowSchema.parse(rawRow);
+          
           const parseDate = (dateStr: string | null | undefined): Date | null => {
             if (!dateStr || dateStr.trim() === "") return null;
             const parsed = new Date(dateStr);
@@ -3472,7 +3496,7 @@ export function registerRoutes(app: Express) {
           }
           
           const oppData: any = {
-            id: row.id && row.id.trim() !== "" ? row.id : undefined,
+            id: row.id,
             name: row.name,
             accountId: row.accountId,
             stage: stage,
@@ -3480,17 +3504,17 @@ export function registerRoutes(app: Express) {
             probability: row.probability ? Number(row.probability) : 0,
             closeDate: parseDate(row.closeDate),
             ownerId: req.user!.id,
-            status: row.status || null,
+            status: row.status,
             actualCloseDate: parseDate(row.actualCloseDate),
             actualRevenue: row.actualRevenue ? String(row.actualRevenue) : null,
             estCloseDate: parseDate(row.estCloseDate),
             estRevenue: row.estRevenue ? String(row.estRevenue) : null,
-            rating: row.rating || null,
-            externalId: row.externalId || null,
-            sourceSystem: row.sourceSystem || null,
-            sourceRecordId: row.sourceRecordId || null,
-            importStatus: row.importStatus || null,
-            importNotes: row.importNotes || null,
+            rating: row.rating,
+            externalId: row.externalId,
+            sourceSystem: row.sourceSystem,
+            sourceRecordId: row.sourceRecordId,
+            importStatus: row.importStatus,
+            importNotes: row.importNotes,
           };
           
           // Check for duplicate by externalId
@@ -3525,7 +3549,7 @@ export function registerRoutes(app: Express) {
           results.errors.push({
             row: i + 2,
             error: error.message,
-            data: row,
+            data: rawRow,
           });
         }
       }
@@ -3548,7 +3572,7 @@ export function registerRoutes(app: Express) {
         columns: true,
         skip_empty_lines: true,
         trim: true,
-      });
+      }) as unknown[];
       
       const results = {
         total: records.length,
@@ -3588,26 +3612,29 @@ export function registerRoutes(app: Express) {
       };
       
       for (let i = 0; i < records.length; i++) {
-        const row = records[i];
+        const rawRow = records[i];
         try {
+          // Validate and parse CSV row with Zod schema
+          const row = activityCsvRowSchema.parse(rawRow);
+          
           const completedAtDate = parseDynamicsDate(row.completedAt);
           
           const activityData: any = {
-            id: row.id && row.id.trim() !== "" ? row.id : undefined, // Let database generate ID if not provided
+            id: row.id,
             type: row.type || "task",
             subject: row.subject,
             status: "completed", // Default to completed for imported activities
             priority: "medium", // Default priority
             dueAt: completedAtDate, // Pass Date object directly to database
             completedAt: completedAtDate, // Pass Date object directly to database
-            relatedType: row.relatedType || null,
-            relatedId: row.relatedId || null,
-            notes: row.notes || null,
-            externalId: row.externalId || null,
-            sourceSystem: row.sourceSystem || null,
-            sourceRecordId: row.sourceRecordId || null,
-            importStatus: row.importStatus || null,
-            importNotes: row.importNotes || null,
+            relatedType: row.relatedType,
+            relatedId: row.relatedId,
+            notes: row.notes,
+            externalId: row.externalId,
+            sourceSystem: row.sourceSystem,
+            sourceRecordId: row.sourceRecordId,
+            importStatus: row.importStatus,
+            importNotes: row.importNotes,
             ownerId: req.user!.id,
           };
           
@@ -3644,7 +3671,7 @@ export function registerRoutes(app: Express) {
           results.errors.push({
             row: i + 2,
             error: error.message,
-            data: row,
+            data: rawRow,
           });
         }
       }
