@@ -35,12 +35,28 @@ export default function ImportPage() {
 
   const importMutation = useMutation({
     mutationFn: async ({ file, entity }: { file: File; entity: EntityType }) => {
+      // Fetch CSRF token before making the import request
+      const csrfRes = await fetch("/api/csrf-token", {
+        credentials: "include",
+      });
+      
+      if (!csrfRes.ok) {
+        throw new Error("Failed to get CSRF token");
+      }
+      
+      const { csrfToken } = await csrfRes.json();
+      
+      // Prepare FormData with file
       const formData = new FormData();
       formData.append("file", file);
       
+      // Make import request with CSRF token in header
       const res = await fetch(`/api/import/${entity}`, {
         method: "POST",
         credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
         body: formData,
       });
       

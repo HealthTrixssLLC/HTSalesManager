@@ -1,0 +1,132 @@
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 20.7s (21/21) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.2s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 7.67kB                                                                                             0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 8.2s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            7.1s
+ => [builder 5/8] COPY . .                                                                                                      0.0s
+ => [builder 6/8] RUN npm run build                                                                                             5.7s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.5s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.2s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.3s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:ec43dfb82ea454afd9fff9b425fc017ab668ca242ec34809035cbd579c807bd9                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                11.3s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | error: column "close_date" of relation "opportunities" contains null values
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async Object.query (/app/node_modules/drizzle-kit/bin.cjs:80622:26)
+healthtrixss-crm-app  |     at async pgPush (/app/node_modules/drizzle-kit/bin.cjs:84432:13)
+healthtrixss-crm-app  |     at async Object.handler (/app/node_modules/drizzle-kit/bin.cjs:93871:9)
+healthtrixss-crm-app  |     at async run (/app/node_modules/drizzle-kit/bin.cjs:93117:7) {
+healthtrixss-crm-app  |   length: 166,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '23502',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: undefined,
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: 'public',
+healthtrixss-crm-app  |   table: 'opportunities',
+healthtrixss-crm-app  |   column: 'close_date',
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'tablecmds.c',
+healthtrixss-crm-app  |   line: '6111',
+healthtrixss-crm-app  |   routine: 'ATRewriteTable'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 7:15:41 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 7:15:44 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/user 304 in 8ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/dashboard/sales-waterfall/2025 200 in 18ms :: [{"name":"2025 Contracte…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/dashboard/stats 200 in 27ms :: {"totalAccounts":"41","totalContacts":"…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/accounts 304 in 29ms :: [{"id":"ACT-1019","name":"Allied Behavioral He…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/activities/pending 304 in 7ms :: [{"id":"ACV-2511-00007","type":"call"…
+healthtrixss-crm-app  | 7:15:57 PM [express] GET /api/opportunities 304 in 8ms :: [{"id":"Opp-1024","accountId":"ACT-1002","…
+healthtrixss-crm-app  | 7:15:57 PM [express] GET /api/users 304 in 5ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","nam…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/users 304 in 12ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/roles 304 in 11ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/id-patterns 304 in 10ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b79…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/categories 304 in 21ms :: []
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/api-keys 200 in 19ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb879…
+healthtrixss-crm-app  | 7:16:06 PM [express] GET /api/csrf-token 200 in 1ms :: {"csrfToken":"nw5Al8ol7R5P6J1K1AlXsC5-"}
+healthtrixss-crm-app  | Backup error: error: column "external_id" does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+healthtrixss-crm-app  |     at async Promise.all (index 1)
+healthtrixss-crm-app  |     at async BackupService.createBackup (file:///app/dist/index.js:1812:60)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:5529:42 {
+healthtrixss-crm-app  |   length: 112,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '226',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | 7:16:06 PM [express] POST /api/admin/backup 500 in 31ms :: {"error":"Failed to create backup"}
+healthtrixss-crm-app  | 7:16:14 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
