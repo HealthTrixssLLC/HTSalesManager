@@ -24,6 +24,9 @@ export interface BackupData {
     auditLogs: any[];
     idPatterns: any[];
     apiKeys: any[];
+    tags: any[];
+    entityTags: any[];
+    accountCategories: any[];
   };
 }
 
@@ -105,6 +108,9 @@ export class BackupService {
       auditLogs,
       idPatterns,
       apiKeys,
+      tags,
+      entityTags,
+      accountCategories,
     ] = await Promise.all([
       db.select().from(schema.users),
       db.select().from(schema.roles),
@@ -119,6 +125,9 @@ export class BackupService {
       db.select().from(schema.auditLogs),
       db.select().from(schema.idPatterns),
       db.select().from(schema.apiKeys),
+      db.select().from(schema.tags),
+      db.select().from(schema.entityTags),
+      db.select().from(schema.accountCategories),
     ]);
 
     const backupData: BackupData = {
@@ -138,6 +147,9 @@ export class BackupService {
         auditLogs,
         idPatterns,
         apiKeys,
+        tags,
+        entityTags,
+        accountCategories,
       },
     };
 
@@ -228,6 +240,8 @@ export class BackupService {
         await tx.delete(schema.comments);
         // Audit logs reference various entities
         await tx.delete(schema.auditLogs);
+        // Entity tags reference tags and users
+        await tx.delete(schema.entityTags);
         // Activities reference accounts, contacts, leads, opportunities
         await tx.delete(schema.activities);
         // Backup jobs are independent
@@ -248,11 +262,13 @@ export class BackupService {
         await tx.delete(schema.userRoles);
         // API keys reference users (created_by foreign key)
         await tx.delete(schema.apiKeys);
+        // Tags reference users (created_by foreign key)
+        await tx.delete(schema.tags);
         // Permissions are independent
         await tx.delete(schema.permissions);
         // Roles are independent  
         await tx.delete(schema.roles);
-        // Users are independent (but must be deleted AFTER api_keys)
+        // Users are independent (but must be deleted AFTER api_keys and tags)
         await tx.delete(schema.users);
         // ID patterns are independent
         await tx.delete(schema.idPatterns);
@@ -290,6 +306,18 @@ export class BackupService {
             .insert(schema.rolePermissions)
             .values(backupData.data.rolePermissions.map(rp => this.convertDates(rp)));
           recordsRestored += backupData.data.rolePermissions.length;
+        }
+
+        // Restore account categories (before accounts that reference them)
+        if (backupData.data.accountCategories && backupData.data.accountCategories.length > 0) {
+          await tx.insert(schema.accountCategories).values(backupData.data.accountCategories.map(c => this.convertDates(c)));
+          recordsRestored += backupData.data.accountCategories.length;
+        }
+
+        // Restore tags (after users, before entity_tags)
+        if (backupData.data.tags && backupData.data.tags.length > 0) {
+          await tx.insert(schema.tags).values(backupData.data.tags.map(t => this.convertDates(t)));
+          recordsRestored += backupData.data.tags.length;
         }
 
         // Restore CRM entities
@@ -337,6 +365,12 @@ export class BackupService {
         if (backupData.data.auditLogs.length > 0) {
           await tx.insert(schema.auditLogs).values(backupData.data.auditLogs.map(log => this.convertDates(log)));
           recordsRestored += backupData.data.auditLogs.length;
+        }
+
+        // Restore entity tags (after all entities and tags are restored)
+        if (backupData.data.entityTags && backupData.data.entityTags.length > 0) {
+          await tx.insert(schema.entityTags).values(backupData.data.entityTags.map(et => this.convertDates(et)));
+          recordsRestored += backupData.data.entityTags.length;
         }
       });
 
