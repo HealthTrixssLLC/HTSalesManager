@@ -1,0 +1,325 @@
+healthtrixss-crm-app  | error: column "close_date" of relation "opportunities" contains null values
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async Object.query (/app/node_modules/drizzle-kit/bin.cjs:80622:26)
+healthtrixss-crm-app  |     at async pgPush (/app/node_modules/drizzle-kit/bin.cjs:84432:13)
+healthtrixss-crm-app  |     at async Object.handler (/app/node_modules/drizzle-kit/bin.cjs:93871:9)
+healthtrixss-crm-app  |     at async run (/app/node_modules/drizzle-kit/bin.cjs:93117:7) {
+healthtrixss-crm-app  |   length: 166,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '23502',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: undefined,
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: 'public',
+healthtrixss-crm-app  |   table: 'opportunities',
+healthtrixss-crm-app  |   column: 'close_date',
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'tablecmds.c',
+healthtrixss-crm-app  |   line: '6111',
+healthtrixss-crm-app  |   routine: 'ATRewriteTable'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 7:15:41 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 7:15:44 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/user 304 in 8ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/dashboard/sales-waterfall/2025 200 in 18ms :: [{"name":"2025 Contracte…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/dashboard/stats 200 in 27ms :: {"totalAccounts":"41","totalContacts":"…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/accounts 304 in 29ms :: [{"id":"ACT-1019","name":"Allied Behavioral He…
+healthtrixss-crm-app  | 7:15:54 PM [express] GET /api/activities/pending 304 in 7ms :: [{"id":"ACV-2511-00007","type":"call"…
+healthtrixss-crm-app  | 7:15:57 PM [express] GET /api/opportunities 304 in 8ms :: [{"id":"Opp-1024","accountId":"ACT-1002","…
+healthtrixss-crm-app  | 7:15:57 PM [express] GET /api/users 304 in 5ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","nam…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/users 304 in 12ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/roles 304 in 11ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/id-patterns 304 in 10ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b79…
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/categories 304 in 21ms :: []
+healthtrixss-crm-app  | 7:16:03 PM [express] GET /api/admin/api-keys 200 in 19ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb879…
+healthtrixss-crm-app  | 7:16:06 PM [express] GET /api/csrf-token 200 in 1ms :: {"csrfToken":"nw5Al8ol7R5P6J1K1AlXsC5-"}
+healthtrixss-crm-app  | Backup error: error: column "external_id" does not exist
+healthtrixss-crm-app  |     at /app/node_modules/pg-pool/index.js:45:11
+healthtrixss-crm-app  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+healthtrixss-crm-app  |     at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+healthtrixss-crm-app  |     at async Promise.all (index 1)
+healthtrixss-crm-app  |     at async BackupService.createBackup (file:///app/dist/index.js:1812:60)
+healthtrixss-crm-app  |     at async file:///app/dist/index.js:5529:42 {
+healthtrixss-crm-app  |   length: 112,
+healthtrixss-crm-app  |   severity: 'ERROR',
+healthtrixss-crm-app  |   code: '42703',
+healthtrixss-crm-app  |   detail: undefined,
+healthtrixss-crm-app  |   hint: undefined,
+healthtrixss-crm-app  |   position: '226',
+healthtrixss-crm-app  |   internalPosition: undefined,
+healthtrixss-crm-app  |   internalQuery: undefined,
+healthtrixss-crm-app  |   where: undefined,
+healthtrixss-crm-app  |   schema: undefined,
+healthtrixss-crm-app  |   table: undefined,
+healthtrixss-crm-app  |   column: undefined,
+healthtrixss-crm-app  |   dataType: undefined,
+healthtrixss-crm-app  |   constraint: undefined,
+healthtrixss-crm-app  |   file: 'parse_relation.c',
+healthtrixss-crm-app  |   line: '3722',
+healthtrixss-crm-app  |   routine: 'errorMissingColumn'
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | 7:16:06 PM [express] POST /api/admin/backup 500 in 31ms :: {"error":"Failed to create backup"}
+healthtrixss-crm-app  | 7:16:14 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:16:44 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:17:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:17:45 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:18:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:18:45 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:19:15 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:19:45 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:20:15 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:20:45 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:21:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:21:45 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:22:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:22:45 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:23:15 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:23:45 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:24:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:24:45 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:25:15 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:25:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:26:16 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:26:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:27:16 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:27:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:28:16 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:28:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:29:16 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:29:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:30:16 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:30:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:31:16 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:31:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:32:16 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:32:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:33:16 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:33:46 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:34:17 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:34:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:35:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:35:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:36:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:36:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:37:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:37:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:38:17 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:38:47 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:39:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:39:47 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:40:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:40:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:41:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:41:47 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:42:05 PM [express] GET /api/admin/roles 304 in 28ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92…
+healthtrixss-crm-app  | 7:42:05 PM [express] GET /api/admin/categories 304 in 25ms :: []
+healthtrixss-crm-app  | 7:42:05 PM [express] GET /api/admin/users 304 in 33ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 7:42:05 PM [express] GET /api/admin/id-patterns 304 in 29ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b79…
+healthtrixss-crm-app  | 7:42:05 PM [express] GET /api/admin/api-keys 304 in 26ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb879…
+healthtrixss-crm-app  | CSRF token missing {
+healthtrixss-crm-app  |   path: '/api/admin/backup',
+healthtrixss-crm-app  |   method: 'POST',
+healthtrixss-crm-app  |   hasCookieToken: true,
+healthtrixss-crm-app  |   hasHeaderToken: false
+healthtrixss-crm-app  | }
+healthtrixss-crm-app  | 7:42:17 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:42:48 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:43:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:43:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:44:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:44:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:45:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:45:48 PM [express] GET /api/users 304 in 17ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","na…
+healthtrixss-crm-app  | 7:45:48 PM [express] GET /api/opportunities 200 in 24ms :: [{"id":"Opp-1024","accountId":"ACT-1002",…
+healthtrixss-crm-app  | 7:45:48 PM [express] GET /api/accounts 304 in 22ms :: [{"id":"ACT-1019","name":"Allied Behavioral He…
+healthtrixss-crm-app  | 7:45:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:46:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:46:48 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:47:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:47:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:48:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:48:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:49:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:49:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:50:18 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:50:48 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:51:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:51:49 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:52:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:52:49 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:53:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:53:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:54:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:54:49 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:55:19 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:55:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:56:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:56:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:57:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:57:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:58:19 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:58:49 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:59:19 PM [express] GET /api/user 401 in 2ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 7:59:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:00:20 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:00:50 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:01:20 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:01:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:02:20 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:02:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:03:20 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:03:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:04:20 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:04:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:05:20 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:05:50 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:06:20 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:06:50 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:07:20 PM [express] GET /api/user 401 in 1ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:07:27 PM [express] GET /api/admin/id-patterns 304 in 26ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b79…
+healthtrixss-crm-app  | 8:07:27 PM [express] GET /api/admin/roles 304 in 27ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92…
+healthtrixss-crm-app  | 8:07:27 PM [express] GET /api/admin/users 304 in 31ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c7…
+healthtrixss-crm-app  | 8:07:27 PM [express] GET /api/admin/categories 304 in 26ms :: []
+healthtrixss-crm-app  | 8:07:27 PM [express] GET /api/admin/api-keys 304 in 26ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb879…
+healthtrixss-crm-app  | 8:07:34 PM [express] POST /api/admin/reset-database 200 in 27ms :: {"success":true,"message":"Databa…
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/user 304 in 3ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/admin/users 304 in 9ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76…
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/admin/roles 304 in 7ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92d…
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/admin/id-patterns 200 in 7ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b799…
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/admin/categories 304 in 7ms :: []
+healthtrixss-crm-app  | 8:07:34 PM [express] GET /api/admin/api-keys 304 in 6ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb8795…
+healthtrixss-crm-app  | Restore failed with errors: [ 'Unsupported state or unable to authenticate data' ]
+healthtrixss-crm-app  | 8:07:39 PM [express] POST /api/admin/restore 400 in 30ms :: {"success":false,"error":"Restore failed…
+healthtrixss-crm-app  | 8:07:50 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app exited with code 137
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>git pull origin main
+remote: Enumerating objects: 18, done.
+remote: Counting objects: 100% (18/18), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 11 (delta 9), reused 11 (delta 9), pack-reused 0 (from 0)
+Unpacking objects: 100% (11/11), 3.78 KiB | 215.00 KiB/s, done.
+From https://github.com/HealthTrixssLLC/HTSalesManager
+ * branch            main       -> FETCH_HEAD
+   1e5d455..3f1e52f  main       -> origin/main
+Updating 1e5d455..3f1e52f
+Fast-forward
+ ...-no-cache-Build-1764011808052_1764011808052.txt | 132 +++++++++++++++++++++
+ client/src/pages/import-page.tsx                   |  16 +++
+ 2 files changed, 148 insertions(+)
+ create mode 100644 attached_assets/Pasted--AutogenStudio-C-Projects-HTSalesManager-HTSalesManager-docker-compose-build-no-cache-Build-1764011808052_1764011808052.txt
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose build --no-cache
+[+] Building 22.5s (22/22) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 568B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.0s
+ => => transferring dockerfile: 4.44kB                                                                                          0.0s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               0.5s
+ => [auth] library/node:pull token for registry-1.docker.io                                                                     0.0s
+ => [internal] load .dockerignore                                                                                               0.0s
+ => => transferring context: 870B                                                                                               0.0s
+ => [builder 1/8] FROM docker.io/library/node:20-alpine@sha256:6178e78b972f79c335df281f4b7674a2d85071aae2af020ffa39f0a77026543  0.0s
+ => [internal] load build context                                                                                               0.0s
+ => => transferring context: 22.09kB                                                                                            0.0s
+ => CACHED [builder 2/8] WORKDIR /app                                                                                           0.0s
+ => [builder 3/8] COPY package*.json ./                                                                                         0.0s
+ => [builder 4/8] RUN npm ci --legacy-peer-deps                                                                                 9.0s
+ => [production 4/9] RUN npm ci --legacy-peer-deps --only=production                                                            8.9s
+ => [builder 5/8] COPY . .                                                                                                      0.1s
+ => [builder 6/8] RUN npm run build                                                                                             6.0s
+ => [builder 7/8] RUN ls -lah /app/dist/index.js && echo "✓ Backend built successfully"                                         0.4s
+ => [builder 8/8] RUN ls -lah /app/dist/public/ && echo "✓ Frontend built successfully"                                         0.4s
+ => [production 5/9] COPY --from=builder /app/dist ./dist                                                                       0.0s
+ => [production 6/9] COPY --from=builder /app/shared ./shared                                                                   0.0s
+ => [production 7/9] COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts                                             0.0s
+ => [production 8/9] RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps                                                     3.7s
+ => [production 9/9] RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh &&     echo 'set -e' >> /usr/local/bin/docker-  0.2s
+ => exporting to image                                                                                                          1.5s
+ => => exporting layers                                                                                                         1.5s
+ => => writing image sha256:9097e60d9b92df41a5d177efeaf237102272adb40b0faf3b188eca8369d1de75                                    0.0s
+ => => naming to docker.io/library/htsalesmanager-app                                                                           0.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ htsalesmanager-app  Built                                                                                                    0.0s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose up -d
+[+] Running 2/2
+ ✔ Container healthtrixss-crm-app       Started                                                                                11.0s
+ ✔ Container healthtrixss-crm-postgres  Healthy                                                                                10.7s
+
+(AutogenStudio) C:\Projects\HTSalesManager\HTSalesManager>docker-compose logs -f app
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Health Trixss CRM - Docker Entrypoint
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Waiting for PostgreSQL to be ready...
+healthtrixss-crm-app  | PostgreSQL is ready!
+healthtrixss-crm-app  | Running database migrations...
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | > rest-express@1.0.0 db:push
+healthtrixss-crm-app  | > drizzle-kit push
+healthtrixss-crm-app  |
+healthtrixss-crm-app  | No config path provided, using default 'drizzle.config.ts'
+healthtrixss-crm-app  | Reading config file '/app/drizzle.config.ts'
+healthtrixss-crm-app  | Using 'pg' driver for database querying
+healthtrixss-crm-app  | [⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[✓] Pulling schema from database...
+healthtrixss-crm-app  | [✓] Changes applied
+healthtrixss-crm-app  | Database initialized successfully!
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Starting Health Trixss CRM...
+healthtrixss-crm-app  | ========================================
+healthtrixss-crm-app  | Using standard PostgreSQL driver
+healthtrixss-crm-app  | Roles already initialized
+healthtrixss-crm-app  | ID patterns initialized
+healthtrixss-crm-app  | 8:09:26 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+healthtrixss-crm-app  | 8:09:29 PM [express] GET /api/user 401 in 3ms :: {"error":"Not authenticated"}
+healthtrixss-crm-app  | 8:09:31 PM [express] GET /api/user 304 in 8ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","email…
+healthtrixss-crm-app  | 8:09:31 PM [express] GET /api/dashboard/sales-waterfall/2025 200 in 19ms :: []
+healthtrixss-crm-app  | 8:09:31 PM [express] GET /api/dashboard/stats 200 in 27ms :: {"totalAccounts":"0","totalContacts":"0…
+healthtrixss-crm-app  | 8:09:31 PM [express] GET /api/accounts 200 in 23ms :: []
+healthtrixss-crm-app  | 8:09:31 PM [express] GET /api/activities/pending 200 in 6ms :: []
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/velocity 200 in 8ms :: {"totalValue":0,"days":90,"velocityPe…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/historical 200 in 15ms :: {"wonCount":0,"lostCount":0,"total…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/pipeline-health 200 in 7ms :: {"score":0,"components":{"pipe…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/forecast 200 in 19ms :: {"targetDate":"2025-11-30T00:00:00.0…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/predictions 200 in 12ms :: {"predictions":[],"summary":{"tot…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/rep-performance 200 in 21ms :: [{"rep":{"id":"a86349f0-a2c7-…
+healthtrixss-crm-app  | 8:09:37 PM [express] GET /api/analytics/conversions 200 in 49ms :: {"conversions":{"prospecting_to_q…
+healthtrixss-crm-app  | 8:09:38 PM [express] GET /api/users 304 in 5ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","nam…
+healthtrixss-crm-app  | 8:09:38 PM [express] GET /api/accounts 200 in 7ms :: []
+healthtrixss-crm-app  | 8:09:38 PM [express] GET /api/admin/categories 304 in 8ms :: []
+healthtrixss-crm-app  | 8:09:38 PM [express] GET /api/tags 304 in 4ms :: []
+healthtrixss-crm-app  | 8:09:38 PM [express] GET /api/opportunities 200 in 3ms :: []
+healthtrixss-crm-app  | 8:09:39 PM [express] GET /api/contacts 200 in 5ms :: []
+healthtrixss-crm-app  | 8:09:39 PM [express] GET /api/contacts 200 in 4ms :: []
+healthtrixss-crm-app  | 8:09:39 PM [express] GET /api/leads 200 in 4ms :: []
+healthtrixss-crm-app  | 8:09:39 PM [express] GET /api/leads 200 in 3ms :: []
+healthtrixss-crm-app  | 8:09:40 PM [express] GET /api/leads/summary 200 in 3ms :: {"totalCount":0,"byStatus":{"new":0,"conta…
+healthtrixss-crm-app  | 8:09:41 PM [express] GET /api/activities 200 in 4ms :: []
+healthtrixss-crm-app  | 8:09:41 PM [express] GET /api/activities/summary 200 in 4ms :: {"totalCount":0,"byStatus":{"pending"…
+healthtrixss-crm-app  | 8:09:44 PM [express] GET /api/admin/users 304 in 7ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76…
+healthtrixss-crm-app  | 8:09:44 PM [express] GET /api/admin/roles 304 in 6ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c92d…
+healthtrixss-crm-app  | 8:09:44 PM [express] GET /api/admin/id-patterns 304 in 8ms :: [{"id":"00bc072f-fd68-49e4-a8af-e7b799…
+healthtrixss-crm-app  | 8:09:44 PM [express] GET /api/admin/api-keys 304 in 6ms :: [{"id":"f6a5b3e3-b45a-4125-a28f-084fb8795…
+healthtrixss-crm-app  | 8:09:49 PM [express] GET /api/csrf-token 304 in 1ms :: {"csrfToken":"nw5Al8ol7R5P6J1K1AlXsC5-"}
+healthtrixss-crm-app  | Restore failed with errors: [ 'Unsupported state or unable to authenticate data' ]
+healthtrixss-crm-app  | 8:09:49 PM [express] POST /api/admin/restore 400 in 33ms :: {"success":false,"error":"Restore failed…
+healthtrixss-crm-app  | 8:09:59 PM [express] GET /api/user 401 in 0ms :: {"error":"Not authenticated"}

@@ -33,6 +33,7 @@ RUN npm ci --legacy-peer-deps --only=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/db ./db
 
 # Install drizzle-kit for migrations (needed at runtime for db:push)
 RUN npm install drizzle-kit@^0.31.4 --legacy-peer-deps
@@ -59,6 +60,23 @@ RUN echo '#!/bin/sh' > /usr/local/bin/docker-entrypoint.sh && \
     echo 'done' >> /usr/local/bin/docker-entrypoint.sh && \
     echo '' >> /usr/local/bin/docker-entrypoint.sh && \
     echo 'echo "PostgreSQL is ready!"' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '# Run pre-migration fixes' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'echo "Running pre-migration fixes..."' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'if [ -f "/app/db/pre-migration-fixes.sql" ]; then' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  node -e "' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  const { Client } = require('"'"'pg'"'"');' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  const fs = require('"'"'fs'"'"');' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  const sql = fs.readFileSync('"'"'/app/db/pre-migration-fixes.sql'"'"', '"'"'utf8'"'"');' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  const client = new Client({ connectionString: process.env.DATABASE_URL });' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  client.connect()' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '    .then(() => client.query(sql))' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '    .then(() => { console.log('"'"'✓ Pre-migration fixes applied'"'"'); return client.end(); })' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '    .catch(err => { console.error('"'"'Pre-migration fix error:'"'"', err); process.exit(1); });' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  " || exit 1' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'else' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo '  echo "No pre-migration fixes found, skipping..."' >> /usr/local/bin/docker-entrypoint.sh && \
+    echo 'fi' >> /usr/local/bin/docker-entrypoint.sh && \
     echo '' >> /usr/local/bin/docker-entrypoint.sh && \
     echo '# Run database migrations' >> /usr/local/bin/docker-entrypoint.sh && \
     echo 'echo "Running database migrations..."' >> /usr/local/bin/docker-entrypoint.sh && \
