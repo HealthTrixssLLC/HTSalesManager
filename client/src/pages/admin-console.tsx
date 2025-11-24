@@ -62,7 +62,24 @@ export default function AdminConsole() {
   const { data: apiKeys } = useQuery<ApiKey[]>({ queryKey: ["/api/admin/api-keys"] });
   
   // Fetch database diagnostics when activities entity type is selected
-  const { data: dbDiagnostics } = useQuery({
+  type DbDiagnostics = {
+    timestamp: string;
+    database: {
+      connected: boolean;
+      connectionTest: any;
+      error?: string;
+    };
+    entities: {
+      accounts: { count: number; sample: any; error: string | null; totalCount: number };
+      contacts: { count: number; sample: any; error: string | null; totalCount: number };
+      leads: { count: number; sample: any; error: string | null; totalCount: number };
+      opportunities: { count: number; sample: any; error: string | null; totalCount: number };
+      activities: { count: number; sample: any; error: string | null; totalCount: number };
+    };
+    queryTimes: Record<string, number>;
+  };
+  
+  const { data: dbDiagnostics } = useQuery<DbDiagnostics>({
     queryKey: ["/api/admin/diagnostics/database"],
     enabled: dynamicsEntityType === "activities", // Only fetch when activities is selected
     staleTime: 30000, // Cache for 30 seconds
@@ -196,10 +213,26 @@ export default function AdminConsole() {
       
       if (!res.ok) {
         const error = await res.json();
-        // Include detailed error information
-        const errorMessage = error.details 
-          ? `${error.error}: ${Array.isArray(error.details) ? error.details.join(', ') : error.details}`
-          : error.error || "Restore failed";
+        console.error("Restore failed - Full error:", error);
+        
+        // Build a readable error message
+        let errorMessage = error.error || "Restore failed";
+        
+        // If there are details, show the first one (truncated if too long)
+        if (error.details && Array.isArray(error.details) && error.details.length > 0) {
+          const firstDetail = String(error.details[0]);
+          // Truncate very long error messages (like stack traces)
+          const truncatedDetail = firstDetail.length > 200 
+            ? firstDetail.substring(0, 200) + "..." 
+            : firstDetail;
+          errorMessage = `${errorMessage}: ${truncatedDetail}`;
+        } else if (error.details && typeof error.details === 'string') {
+          const truncatedDetail = error.details.length > 200 
+            ? error.details.substring(0, 200) + "..." 
+            : error.details;
+          errorMessage = `${errorMessage}: ${truncatedDetail}`;
+        }
+        
         throw new Error(errorMessage);
       }
       
@@ -213,6 +246,7 @@ export default function AdminConsole() {
       queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
+      console.error("Restore mutation error:", error);
       toast({ 
         title: "Restore failed", 
         description: error.message,

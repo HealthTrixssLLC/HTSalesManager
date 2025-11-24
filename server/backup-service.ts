@@ -219,7 +219,7 @@ export class BackupService {
       // Use transaction for atomic restore
       let recordsRestored = 0;
       
-      await db.transaction(async (tx) => {
+      await db.transaction(async (tx: typeof db) => {
         // Clear ALL existing data (in reverse dependency order - child tables before parent tables)
         // Comments reference users, accounts, contacts, leads, opportunities
         await tx.delete(schema.commentReactions);
