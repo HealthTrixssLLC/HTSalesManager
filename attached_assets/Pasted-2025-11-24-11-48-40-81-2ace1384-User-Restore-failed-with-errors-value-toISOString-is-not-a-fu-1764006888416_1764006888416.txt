@@ -1,0 +1,93 @@
+2025-11-24 11:48:40.81
+2ace1384
+User
+Restore failed with errors: [ 'value.toISOString is not a function' ]
+2025-11-24 11:48:40.81
+2ace1384
+User
+5:48:40 PM [express] POST /api/admin/restore 400 in 1004ms :: {"success":false,"error":"Restore fail…
+2025-11-24 11:52:46.17
+2ace1384
+User
+Restore failed with errors: [ 'value.toISOString is not a function' ]
+2025-11-24 11:52:46.17
+2ace1384
+User
+5:52:46 PM [express] POST /api/admin/restore 400 in 1016ms :: {"success":false,"error":"Restore fail…
+2025-11-24 11:53:49.96
+8d1d772a
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2025-11-24 11:53:49.96
+8d1d772a
+System
+starting up user application
+2025-11-24 11:53:49.96
+8d1d772a
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2025-11-24 11:53:50.75
+8d1d772a
+User
+> NODE_ENV=production node dist/index.js
+2025-11-24 11:53:50.75
+8d1d772a
+User
+> rest-express@1.0.0 start
+2025-11-24 11:53:51.55
+8d1d772a
+User
+Using Neon serverless database driver
+2025-11-24 11:53:51.56
+8d1d772a
+User
+Using default BACKUP_ENCRYPTION_KEY for development
+2025-11-24 11:53:51.74
+8d1d772a
+User
+Roles already initialized
+2025-11-24 11:53:51.85
+8d1d772a
+User
+ID patterns initialized
+2025-11-24 11:53:51.90
+8d1d772a
+User
+5:53:51 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+2025-11-24 11:54:24.87
+8d1d772a
+User
+[Backup] Deleting existing data...
+2025-11-24 11:54:25.34
+8d1d772a
+User
+[Backup] Restoring 4 roles...
+2025-11-24 11:54:25.34
+8d1d772a
+User
+[Backup] All existing data deleted successfully
+2025-11-24 11:54:25.34
+8d1d772a
+User
+[Backup] Starting data restoration...
+
+2025-11-24 11:54:25.37
+8d1d772a
+User
+[Backup] Restoring 34 permissions...
+2025-11-24 11:54:25.39
+8d1d772a
+User
+[Backup] Restoring 18 users...
+2025-11-24 11:54:25.42
+8d1d772a
+User
+[Backup] Restoring 3 API keys...
+2025-11-24 11:54:25.44
+8d1d772a
+User
+Restore failed with errors: [ 'Failed to restore API keys: value.toISOString is not a function' ]
+2025-11-24 11:54:25.44
+8d1d772a
+User
+5:54:25 PM [express] POST /api/admin/restore 400 in 855ms :: {"success":false,"error":"Restore faile…

@@ -47,14 +47,17 @@ export class BackupService {
   /**
    * Helper function to convert ISO date strings back to Date objects
    * and normalize enum values to lowercase for Postgres strict enum matching
+   * 
+   * Uses pattern matching to automatically handle all timestamp fields:
+   * - Any field ending in "At" (createdAt, updatedAt, lastUsedAt, etc.)
+   * - Specific date fields (closeDate, actualCloseDate, estCloseDate)
    */
   private convertDates(obj: any): any {
     if (!obj) return obj;
     
-    const dateFields = [
-      'createdAt', 'updatedAt', 'assignedAt', 'closeDate', 
-      'actualCloseDate', 'estCloseDate', 'dueAt', 'completedAt',
-      'convertedAt', 'startedAt'
+    // Specific date field names (not ending in "At")
+    const specificDateFields = [
+      'closeDate', 'actualCloseDate', 'estCloseDate'
     ];
     
     const enumFields = [
@@ -63,22 +66,25 @@ export class BackupService {
     
     const converted = { ...obj };
     
-    // Convert date strings to Date objects (safely handle invalid dates)
-    for (const field of dateFields) {
-      if (converted[field]) {
+    // Convert date strings to Date objects (pattern-based approach)
+    for (const [key, value] of Object.entries(converted)) {
+      // Check if this field is a timestamp (ends with "At" or is in specific list)
+      const isTimestampField = key.endsWith('At') || specificDateFields.includes(key);
+      
+      if (isTimestampField && value) {
         // If already a Date object, keep it
-        if (converted[field] instanceof Date) {
+        if (value instanceof Date) {
           continue;
         }
         // If it's a string, try to convert it
-        if (typeof converted[field] === 'string') {
-          const parsedDate = new Date(converted[field]);
+        if (typeof value === 'string') {
+          const parsedDate = new Date(value);
           // Only assign if the date is valid
           if (!isNaN(parsedDate.getTime())) {
-            converted[field] = parsedDate;
+            converted[key] = parsedDate;
           } else {
             // Invalid date string - set to null
-            converted[field] = null;
+            converted[key] = null;
           }
         }
       }
