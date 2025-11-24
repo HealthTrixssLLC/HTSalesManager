@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
 
 type UserWithRoles = User & { roles: Role[] };
 
@@ -132,9 +132,15 @@ export default function AdminConsole() {
 
   const createBackupMutation = useMutation({
     mutationFn: async () => {
+      // Get CSRF token for the request
+      const csrfToken = await fetchCsrfToken();
+      
       const res = await fetch("/api/admin/backup", {
         method: "POST",
         credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
       });
       
       if (!res.ok) {
@@ -174,12 +180,16 @@ export default function AdminConsole() {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
       
+      // Get CSRF token for the request
+      const csrfToken = await fetchCsrfToken();
+      
       // Checksum is embedded in the file, no need to send separately
       const res = await fetch("/api/admin/restore", {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/octet-stream",
+          "X-CSRF-Token": csrfToken,
         },
         body: buffer,
       });

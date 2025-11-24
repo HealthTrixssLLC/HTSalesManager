@@ -6,7 +6,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  */
 let csrfToken: string | null = null;
 
-async function fetchCsrfToken(): Promise<string> {
+export async function fetchCsrfToken(): Promise<string> {
   // Return cached token if available
   if (csrfToken) {
     return csrfToken;
@@ -23,6 +23,11 @@ async function fetchCsrfToken(): Promise<string> {
 
     const data = await res.json();
     csrfToken = data.csrfToken;
+    
+    if (!csrfToken) {
+      throw new Error('CSRF token not returned from server');
+    }
+    
     return csrfToken;
   } catch (error) {
     console.error('Error fetching CSRF token:', error);
