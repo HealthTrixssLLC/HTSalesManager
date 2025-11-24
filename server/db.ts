@@ -42,12 +42,25 @@ if (isNeonDatabase) {
   // Use Neon serverless driver (WebSocket-based) for Replit
   console.log('Using Neon serverless database driver');
   neonConfig.webSocketConstructor = ws;
-  const pool = new NeonPool({ connectionString: process.env.DATABASE_URL });
+  
+  // Configure connection pooling for better reliability
+  const pool = new NeonPool({ 
+    connectionString: process.env.DATABASE_URL,
+    max: 10,                    // Maximum 10 connections in pool
+    idleTimeoutMillis: 30000,   // Close idle connections after 30s
+    connectionTimeoutMillis: 60000, // 60s timeout for new connections
+  });
+  
   db = neonDrizzle(pool, { schema });
 } else {
   // Use standard pg driver for Docker/local PostgreSQL
   console.log('Using standard PostgreSQL driver');
-  const pool = new PgPool({ connectionString: process.env.DATABASE_URL });
+  const pool = new PgPool({ 
+    connectionString: process.env.DATABASE_URL,
+    max: 20,                    // Maximum 20 connections in pool
+    idleTimeoutMillis: 30000,   // Close idle connections after 30s
+    connectionTimeoutMillis: 10000, // 10s timeout for new connections
+  });
   db = pgDrizzle(pool, { schema });
 }
 

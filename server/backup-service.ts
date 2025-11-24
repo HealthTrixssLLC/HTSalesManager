@@ -113,41 +113,34 @@ export class BackupService {
     if (!encryptionKey) {
       throw new Error("BACKUP_ENCRYPTION_KEY is required for secure backups");
     }
-    // Export all data from database
-    const [
-      users,
-      roles,
-      permissions,
-      userRoles,
-      rolePermissions,
-      accounts,
-      contacts,
-      leads,
-      opportunities,
-      activities,
-      auditLogs,
-      idPatterns,
-      apiKeys,
-      tags,
-      entityTags,
-      accountCategories,
-    ] = await Promise.all([
+    
+    // Export all data from database in batches to avoid overwhelming Neon serverless
+    // Batch 1: Auth & RBAC (smaller tables)
+    const [users, roles, permissions, userRoles, rolePermissions, idPatterns, apiKeys, accountCategories] = await Promise.all([
       db.select().from(schema.users),
       db.select().from(schema.roles),
       db.select().from(schema.permissions),
       db.select().from(schema.userRoles),
       db.select().from(schema.rolePermissions),
+      db.select().from(schema.idPatterns),
+      db.select().from(schema.apiKeys),
+      db.select().from(schema.accountCategories),
+    ]);
+    
+    // Batch 2: CRM entities (potentially larger tables)
+    const [accounts, contacts, leads, opportunities] = await Promise.all([
       db.select().from(schema.accounts),
       db.select().from(schema.contacts),
       db.select().from(schema.leads),
       db.select().from(schema.opportunities),
+    ]);
+    
+    // Batch 3: Activities, tags, and audit logs (potentially largest tables)
+    const [activities, tags, entityTags, auditLogs] = await Promise.all([
       db.select().from(schema.activities),
-      db.select().from(schema.auditLogs),
-      db.select().from(schema.idPatterns),
-      db.select().from(schema.apiKeys),
       db.select().from(schema.tags),
       db.select().from(schema.entityTags),
-      db.select().from(schema.accountCategories),
+      db.select().from(schema.auditLogs),
     ]);
 
     const backupData: BackupData = {

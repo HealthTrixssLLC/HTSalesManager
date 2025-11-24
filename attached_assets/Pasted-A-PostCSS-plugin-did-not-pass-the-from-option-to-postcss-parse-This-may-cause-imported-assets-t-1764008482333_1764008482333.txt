@@ -1,0 +1,38 @@
+A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+6:14:42 PM [express] GET /api/user 304 in 44ms :: {"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070c76","emai…
+6:14:42 PM [express] GET /api/dashboard/sales-waterfall/2025 304 in 117ms :: [{"name":"Advisory Serv…
+6:14:42 PM [express] GET /api/accounts 304 in 155ms :: [{"id":"ACT-1019","name":"Allied Behavioral H…
+6:14:42 PM [express] GET /api/dashboard/stats 304 in 197ms :: {"totalAccounts":"41","totalContacts":…
+6:14:42 PM [express] GET /api/activities/pending 304 in 36ms :: [{"id":"Email Dave","type":"email","…
+6:20:29 PM [express] GET /api/csrf-token 304 in 1ms :: {"csrfToken":"934fe4244dbe91ba986c440a4552512…
+6:20:50 PM [express] GET /api/admin/id-patterns 304 in 22860ms :: [{"id":"9e2e0422-dcca-47ea-9c09-07…
+6:20:52 PM [express] GET /api/admin/roles 304 in 24865ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49…
+6:20:52 PM [express] GET /api/admin/api-keys 304 in 24864ms :: [{"id":"fbbf86d3-1fe5-4418-b472-e4547…
+Backup error: error: Couldn't connect to compute node
+    at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NeonPreparedQuery.execute (/home/runner/workspace/node_modules/src/neon-serverless/session.ts:102:18)
+    at async Promise.all (index 3)
+    at async BackupService.createBackup (/home/runner/workspace/server/backup-service.ts:134:9)
+    at async <anonymous> (/home/runner/workspace/server/routes.ts:2288:42) {
+  length: 53,
+  severity: 'ERROR',
+  code: 'XX000',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: undefined,
+  line: undefined,
+  routine: undefined
+}
+6:20:57 PM [express] POST /api/admin/backup 500 in 28091ms :: {"error":"Failed to create backup"}
+6:20:59 PM [express] GET /api/admin/categories 304 in 32272ms :: []
+6:20:59 PM [express] GET /api/admin/users 304 in 32375ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b07…
