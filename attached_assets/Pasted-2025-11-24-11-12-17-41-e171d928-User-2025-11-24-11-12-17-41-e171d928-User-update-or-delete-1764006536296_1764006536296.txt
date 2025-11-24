@@ -1,0 +1,117 @@
+2025-11-24 11:12:17.41
+e171d928
+User
+]
+2025-11-24 11:12:17.41
+e171d928
+User
+'update or delete on table "users" violates foreign key constraint "tags_created_by_users_id_fk" on table "tags"'
+2025-11-24 11:12:17.41
+e171d928
+User
+Restore failed with errors: [
+2025-11-24 11:12:17.41
+e171d928
+User
+5:12:17 PM [express] POST /api/admin/restore 400 in 840ms :: {"success":false,"error":"Restore faile…
+2025-11-24 11:12:44.08
+e171d928
+User
+'update or delete on table "users" violates foreign key constraint "tags_created_by_users_id_fk" on table "tags"'
+2025-11-24 11:12:44.08
+e171d928
+User
+Restore failed with errors: [
+2025-11-24 11:12:44.08
+e171d928
+User
+]
+2025-11-24 11:12:44.08
+e171d928
+User
+5:12:44 PM [express] POST /api/admin/restore 400 in 855ms :: {"success":false,"error":"Restore faile…
+2025-11-24 11:13:04.07
+3623995d
+System
+system: received signal terminated
+2025-11-24 11:14:20.88
+e171d928
+User
+5:14:20 PM [express] GET /api/audit-logs 200 in 2902ms :: [{"id":"73c430cf-d18d-45c9-beb5-a056e4d2ca…
+2025-11-24 11:14:28.71
+e171d928
+User
+5:14:28 PM [express] GET /api/tags 304 in 58ms :: [{"id":"af57ba83-5e4d-465d-a603-1bc792f50021","nam…
+2025-11-24 11:14:28.81
+e171d928
+User
+5:14:28 PM [express] GET /api/opportunities 304 in 136ms :: []
+2025-11-24 11:29:37.26
+e171d928
+System
+system: received signal terminated
+2025-11-24 11:47:29.39
+2ace1384
+System
+starting up user application
+2025-11-24 11:47:29.39
+2ace1384
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2025-11-24 11:47:29.39
+2ace1384
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2025-11-24 11:47:30.59
+2ace1384
+User
+> rest-express@1.0.0 start
+2025-11-24 11:47:30.59
+2ace1384
+User
+> NODE_ENV=production node dist/index.js
+2025-11-24 11:47:31.79
+2ace1384
+User
+Using Neon serverless database driver
+2025-11-24 11:47:31.80
+2ace1384
+User
+Using default BACKUP_ENCRYPTION_KEY for development
+2025-11-24 11:47:34.26
+2ace1384
+User
+Roles already initialized
+
+2025-11-24 11:47:34.40
+2ace1384
+User
+ID patterns initialized
+2025-11-24 11:47:34.47
+2ace1384
+User
+5:47:34 PM [express] Health Trixss CRM serving on http://0.0.0.0:5000
+2025-11-24 11:48:22.35
+2ace1384
+User
+5:48:22 PM [express] GET /api/admin/roles 304 in 2193ms :: [{"id":"dbbb9887-2301-4a00-bb82-e8d40d49c…
+2025-11-24 11:48:22.36
+2ace1384
+User
+5:48:22 PM [express] GET /api/admin/id-patterns 304 in 2197ms :: [{"id":"295b419a-bcd9-4cdb-a37a-ddc…
+2025-11-24 11:48:22.37
+2ace1384
+User
+5:48:22 PM [express] GET /api/admin/api-keys 304 in 2202ms :: [{"id":"82cfc7fa-7c18-4274-aa62-0b397a…
+2025-11-24 11:48:22.50
+2ace1384
+User
+5:48:22 PM [express] GET /api/admin/users 304 in 2353ms :: [{"id":"a86349f0-a2c7-42b3-a5c1-4f8b9b070…
+2025-11-24 11:48:40.81
+2ace1384
+User
+Restore failed with errors: [ 'value.toISOString is not a function' ]
+2025-11-24 11:48:40.81
+2ace1384
+User
+5:48:40 PM [express] POST /api/admin/restore 400 in 1004ms :: {"success":false,"error":"Restore fail…

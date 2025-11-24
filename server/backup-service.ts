@@ -63,10 +63,24 @@ export class BackupService {
     
     const converted = { ...obj };
     
-    // Convert date strings to Date objects
+    // Convert date strings to Date objects (safely handle invalid dates)
     for (const field of dateFields) {
-      if (converted[field] && typeof converted[field] === 'string') {
-        converted[field] = new Date(converted[field]);
+      if (converted[field]) {
+        // If already a Date object, keep it
+        if (converted[field] instanceof Date) {
+          continue;
+        }
+        // If it's a string, try to convert it
+        if (typeof converted[field] === 'string') {
+          const parsedDate = new Date(converted[field]);
+          // Only assign if the date is valid
+          if (!isNaN(parsedDate.getTime())) {
+            converted[field] = parsedDate;
+          } else {
+            // Invalid date string - set to null
+            converted[field] = null;
+          }
+        }
       }
     }
     
@@ -233,91 +247,140 @@ export class BackupService {
       
       await db.transaction(async (tx: typeof db) => {
         // Clear ALL existing data (in reverse dependency order - child tables before parent tables)
-        // Comments reference users, accounts, contacts, leads, opportunities
-        await tx.delete(schema.commentReactions);
-        await tx.delete(schema.commentAttachments);
-        await tx.delete(schema.commentSubscriptions);
-        await tx.delete(schema.comments);
-        // Audit logs reference various entities
-        await tx.delete(schema.auditLogs);
-        // Entity tags reference tags and users
-        await tx.delete(schema.entityTags);
-        // Activities reference accounts, contacts, leads, opportunities
-        await tx.delete(schema.activities);
-        // Backup jobs are independent
-        await tx.delete(schema.backupJobs);
-        // Leads are independent
-        await tx.delete(schema.leads);
-        // Opportunities reference accounts
-        await tx.delete(schema.opportunities);
-        // Contacts reference accounts
-        await tx.delete(schema.contacts);
-        // Accounts reference accountCategories, so delete accounts BEFORE categories
-        await tx.delete(schema.accounts);
-        // Now safe to delete accountCategories
-        await tx.delete(schema.accountCategories);
-        // Role permissions reference roles and permissions
-        await tx.delete(schema.rolePermissions);
-        // User roles reference users and roles
-        await tx.delete(schema.userRoles);
-        // API keys reference users (created_by foreign key)
-        await tx.delete(schema.apiKeys);
-        // Tags reference users (created_by foreign key)
-        await tx.delete(schema.tags);
-        // Permissions are independent
-        await tx.delete(schema.permissions);
-        // Roles are independent  
-        await tx.delete(schema.roles);
-        // Users are independent (but must be deleted AFTER api_keys and tags)
-        await tx.delete(schema.users);
-        // ID patterns are independent
-        await tx.delete(schema.idPatterns);
+        try {
+          console.log("[Backup] Deleting existing data...");
+          // Comments reference users, accounts, contacts, leads, opportunities
+          await tx.delete(schema.commentReactions);
+          await tx.delete(schema.commentAttachments);
+          await tx.delete(schema.commentSubscriptions);
+          await tx.delete(schema.comments);
+          // Audit logs reference various entities
+          await tx.delete(schema.auditLogs);
+          // Entity tags reference tags and users
+          await tx.delete(schema.entityTags);
+          // Activities reference accounts, contacts, leads, opportunities
+          await tx.delete(schema.activities);
+          // Backup jobs are independent
+          await tx.delete(schema.backupJobs);
+          // Leads are independent
+          await tx.delete(schema.leads);
+          // Opportunities reference accounts
+          await tx.delete(schema.opportunities);
+          // Contacts reference accounts
+          await tx.delete(schema.contacts);
+          // Accounts reference accountCategories, so delete accounts BEFORE categories
+          await tx.delete(schema.accounts);
+          // Now safe to delete accountCategories
+          await tx.delete(schema.accountCategories);
+          // Role permissions reference roles and permissions
+          await tx.delete(schema.rolePermissions);
+          // User roles reference users and roles
+          await tx.delete(schema.userRoles);
+          // API keys reference users (created_by foreign key)
+          await tx.delete(schema.apiKeys);
+          // Tags reference users (created_by foreign key)
+          await tx.delete(schema.tags);
+          // Permissions are independent
+          await tx.delete(schema.permissions);
+          // Roles are independent  
+          await tx.delete(schema.roles);
+          // Users are independent (but must be deleted AFTER api_keys and tags)
+          await tx.delete(schema.users);
+          // ID patterns are independent
+          await tx.delete(schema.idPatterns);
+          console.log("[Backup] All existing data deleted successfully");
+        } catch (deleteError) {
+          console.error("[Backup] Error during deletion:", deleteError);
+          throw new Error(`Failed to clear existing data: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
+        }
 
         // Restore data (in dependency order)
+        console.log("[Backup] Starting data restoration...");
+        
         // Restore auth/RBAC tables
-        if (backupData.data.roles.length > 0) {
-          await tx.insert(schema.roles).values(backupData.data.roles.map(r => this.convertDates(r)));
-          recordsRestored += backupData.data.roles.length;
+        try {
+          if (backupData.data.roles.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.roles.length} roles...`);
+            await tx.insert(schema.roles).values(backupData.data.roles.map(r => this.convertDates(r)));
+            recordsRestored += backupData.data.roles.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore roles: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.permissions.length > 0) {
-          await tx.insert(schema.permissions).values(backupData.data.permissions.map(p => this.convertDates(p)));
-          recordsRestored += backupData.data.permissions.length;
+        try {
+          if (backupData.data.permissions.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.permissions.length} permissions...`);
+            await tx.insert(schema.permissions).values(backupData.data.permissions.map(p => this.convertDates(p)));
+            recordsRestored += backupData.data.permissions.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore permissions: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.users.length > 0) {
-          await tx.insert(schema.users).values(backupData.data.users.map(u => this.convertDates(u)));
-          recordsRestored += backupData.data.users.length;
+        try {
+          if (backupData.data.users.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.users.length} users...`);
+            await tx.insert(schema.users).values(backupData.data.users.map(u => this.convertDates(u)));
+            recordsRestored += backupData.data.users.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore users: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore API keys (depends on users)
-        if (backupData.data.apiKeys && backupData.data.apiKeys.length > 0) {
-          await tx.insert(schema.apiKeys).values(backupData.data.apiKeys.map(k => this.convertDates(k)));
-          recordsRestored += backupData.data.apiKeys.length;
+        try {
+          if (backupData.data.apiKeys && backupData.data.apiKeys.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.apiKeys.length} API keys...`);
+            await tx.insert(schema.apiKeys).values(backupData.data.apiKeys.map(k => this.convertDates(k)));
+            recordsRestored += backupData.data.apiKeys.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore API keys: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.userRoles.length > 0) {
-          await tx.insert(schema.userRoles).values(backupData.data.userRoles.map(ur => this.convertDates(ur)));
-          recordsRestored += backupData.data.userRoles.length;
+        try {
+          if (backupData.data.userRoles.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.userRoles.length} user roles...`);
+            await tx.insert(schema.userRoles).values(backupData.data.userRoles.map(ur => this.convertDates(ur)));
+            recordsRestored += backupData.data.userRoles.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore user roles: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.rolePermissions.length > 0) {
-          await tx
-            .insert(schema.rolePermissions)
-            .values(backupData.data.rolePermissions.map(rp => this.convertDates(rp)));
-          recordsRestored += backupData.data.rolePermissions.length;
+        try {
+          if (backupData.data.rolePermissions.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.rolePermissions.length} role permissions...`);
+            await tx
+              .insert(schema.rolePermissions)
+              .values(backupData.data.rolePermissions.map(rp => this.convertDates(rp)));
+            recordsRestored += backupData.data.rolePermissions.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore role permissions: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore account categories (before accounts that reference them)
-        if (backupData.data.accountCategories && backupData.data.accountCategories.length > 0) {
-          await tx.insert(schema.accountCategories).values(backupData.data.accountCategories.map(c => this.convertDates(c)));
-          recordsRestored += backupData.data.accountCategories.length;
+        try {
+          if (backupData.data.accountCategories && backupData.data.accountCategories.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.accountCategories.length} account categories...`);
+            await tx.insert(schema.accountCategories).values(backupData.data.accountCategories.map(c => this.convertDates(c)));
+            recordsRestored += backupData.data.accountCategories.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore account categories: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore tags (after users, before entity_tags)
-        if (backupData.data.tags && backupData.data.tags.length > 0) {
-          await tx.insert(schema.tags).values(backupData.data.tags.map(t => this.convertDates(t)));
-          recordsRestored += backupData.data.tags.length;
+        try {
+          if (backupData.data.tags && backupData.data.tags.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.tags.length} tags...`);
+            await tx.insert(schema.tags).values(backupData.data.tags.map(t => this.convertDates(t)));
+            recordsRestored += backupData.data.tags.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore tags: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore CRM entities
