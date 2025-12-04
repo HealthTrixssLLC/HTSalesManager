@@ -33,6 +33,29 @@ export interface BackupData {
 export class BackupService {
   private readonly ENCRYPTION_ALGORITHM = "aes-256-gcm";
   private readonly BACKUP_VERSION = "1.0.0";
+  private readonly BATCH_SIZE = 50; // Insert records in batches to avoid PostgreSQL parameter limits
+
+  /**
+   * Helper function to insert records in batches to avoid PostgreSQL parameter limit issues.
+   * PostgreSQL has issues with prepared statements that have too many parameters.
+   * This splits large arrays into smaller chunks and inserts them sequentially.
+   */
+  private async batchInsert<T>(
+    tx: typeof db,
+    table: any,
+    records: T[],
+    tableName: string
+  ): Promise<void> {
+    if (!records || records.length === 0) return;
+    
+    console.log(`[Backup] Restoring ${records.length} ${tableName}...`);
+    
+    // Process in batches to avoid parameter limit issues
+    for (let i = 0; i < records.length; i += this.BATCH_SIZE) {
+      const batch = records.slice(i, i + this.BATCH_SIZE);
+      await tx.insert(table).values(batch.map(r => this.convertDates(r)));
+    }
+  }
 
   /**
    * Helper function to normalize enum values to lowercase
@@ -293,146 +316,143 @@ export class BackupService {
           throw new Error(`Failed to clear existing data: ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`);
         }
 
-        // Restore data (in dependency order)
+        // Restore data (in dependency order) using batched inserts
         console.log("[Backup] Starting data restoration...");
         
         // Restore auth/RBAC tables
         try {
-          if (backupData.data.roles.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.roles.length} roles...`);
-            await tx.insert(schema.roles).values(backupData.data.roles.map(r => this.convertDates(r)));
-            recordsRestored += backupData.data.roles.length;
-          }
+          await this.batchInsert(tx, schema.roles, backupData.data.roles, "roles");
+          recordsRestored += backupData.data.roles.length;
         } catch (error) {
           throw new Error(`Failed to restore roles: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          if (backupData.data.permissions.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.permissions.length} permissions...`);
-            await tx.insert(schema.permissions).values(backupData.data.permissions.map(p => this.convertDates(p)));
-            recordsRestored += backupData.data.permissions.length;
-          }
+          await this.batchInsert(tx, schema.permissions, backupData.data.permissions, "permissions");
+          recordsRestored += backupData.data.permissions.length;
         } catch (error) {
           throw new Error(`Failed to restore permissions: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          if (backupData.data.users.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.users.length} users...`);
-            await tx.insert(schema.users).values(backupData.data.users.map(u => this.convertDates(u)));
-            recordsRestored += backupData.data.users.length;
-          }
+          await this.batchInsert(tx, schema.users, backupData.data.users, "users");
+          recordsRestored += backupData.data.users.length;
         } catch (error) {
           throw new Error(`Failed to restore users: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore API keys (depends on users)
         try {
-          if (backupData.data.apiKeys && backupData.data.apiKeys.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.apiKeys.length} API keys...`);
-            await tx.insert(schema.apiKeys).values(backupData.data.apiKeys.map(k => this.convertDates(k)));
-            recordsRestored += backupData.data.apiKeys.length;
-          }
+          await this.batchInsert(tx, schema.apiKeys, backupData.data.apiKeys || [], "API keys");
+          recordsRestored += (backupData.data.apiKeys || []).length;
         } catch (error) {
           throw new Error(`Failed to restore API keys: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          if (backupData.data.userRoles.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.userRoles.length} user roles...`);
-            await tx.insert(schema.userRoles).values(backupData.data.userRoles.map(ur => this.convertDates(ur)));
-            recordsRestored += backupData.data.userRoles.length;
-          }
+          await this.batchInsert(tx, schema.userRoles, backupData.data.userRoles, "user roles");
+          recordsRestored += backupData.data.userRoles.length;
         } catch (error) {
           throw new Error(`Failed to restore user roles: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          if (backupData.data.rolePermissions.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.rolePermissions.length} role permissions...`);
-            await tx
-              .insert(schema.rolePermissions)
-              .values(backupData.data.rolePermissions.map(rp => this.convertDates(rp)));
-            recordsRestored += backupData.data.rolePermissions.length;
-          }
+          await this.batchInsert(tx, schema.rolePermissions, backupData.data.rolePermissions, "role permissions");
+          recordsRestored += backupData.data.rolePermissions.length;
         } catch (error) {
           throw new Error(`Failed to restore role permissions: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore account categories (before accounts that reference them)
         try {
-          if (backupData.data.accountCategories && backupData.data.accountCategories.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.accountCategories.length} account categories...`);
-            await tx.insert(schema.accountCategories).values(backupData.data.accountCategories.map(c => this.convertDates(c)));
-            recordsRestored += backupData.data.accountCategories.length;
-          }
+          await this.batchInsert(tx, schema.accountCategories, backupData.data.accountCategories || [], "account categories");
+          recordsRestored += (backupData.data.accountCategories || []).length;
         } catch (error) {
           throw new Error(`Failed to restore account categories: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore tags (after users, before entity_tags)
         try {
-          if (backupData.data.tags && backupData.data.tags.length > 0) {
-            console.log(`[Backup] Restoring ${backupData.data.tags.length} tags...`);
-            await tx.insert(schema.tags).values(backupData.data.tags.map(t => this.convertDates(t)));
-            recordsRestored += backupData.data.tags.length;
-          }
+          await this.batchInsert(tx, schema.tags, backupData.data.tags || [], "tags");
+          recordsRestored += (backupData.data.tags || []).length;
         } catch (error) {
           throw new Error(`Failed to restore tags: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        // Restore CRM entities
-        if (backupData.data.accounts.length > 0) {
-          await tx.insert(schema.accounts).values(backupData.data.accounts.map(a => this.convertDates(a)));
+        // Restore CRM entities using batched inserts
+        try {
+          await this.batchInsert(tx, schema.accounts, backupData.data.accounts, "accounts");
           recordsRestored += backupData.data.accounts.length;
+        } catch (error) {
+          throw new Error(`Failed to restore accounts: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.contacts.length > 0) {
-          await tx.insert(schema.contacts).values(backupData.data.contacts.map(c => this.convertDates(c)));
+        try {
+          await this.batchInsert(tx, schema.contacts, backupData.data.contacts, "contacts");
           recordsRestored += backupData.data.contacts.length;
+        } catch (error) {
+          throw new Error(`Failed to restore contacts: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.leads.length > 0) {
-          await tx.insert(schema.leads).values(backupData.data.leads.map(l => this.convertDates(l)));
+        try {
+          await this.batchInsert(tx, schema.leads, backupData.data.leads, "leads");
           recordsRestored += backupData.data.leads.length;
+        } catch (error) {
+          throw new Error(`Failed to restore leads: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.opportunities.length > 0) {
-          await tx.insert(schema.opportunities).values(backupData.data.opportunities.map(o => this.convertDates(o)));
+        try {
+          await this.batchInsert(tx, schema.opportunities, backupData.data.opportunities, "opportunities");
           recordsRestored += backupData.data.opportunities.length;
+        } catch (error) {
+          throw new Error(`Failed to restore opportunities: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        if (backupData.data.activities.length > 0) {
-          // Transform activities to ensure status, priority, and dates are properly formatted
-          const activitiesWithDefaults = backupData.data.activities.map((activity: any) => {
-            const withDates = this.convertDates(activity);
-            return {
-              ...withDates,
-              status: activity.status || "pending",
-              priority: activity.priority || "medium",
-            };
-          });
-          await tx.insert(schema.activities).values(activitiesWithDefaults);
-          recordsRestored += backupData.data.activities.length;
+        // Activities need special handling for default values
+        try {
+          if (backupData.data.activities.length > 0) {
+            console.log(`[Backup] Restoring ${backupData.data.activities.length} activities...`);
+            const activitiesWithDefaults = backupData.data.activities.map((activity: any) => {
+              const withDates = this.convertDates(activity);
+              return {
+                ...withDates,
+                status: activity.status || "pending",
+                priority: activity.priority || "medium",
+              };
+            });
+            // Batch insert activities
+            for (let i = 0; i < activitiesWithDefaults.length; i += this.BATCH_SIZE) {
+              const batch = activitiesWithDefaults.slice(i, i + this.BATCH_SIZE);
+              await tx.insert(schema.activities).values(batch);
+            }
+            recordsRestored += backupData.data.activities.length;
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore activities: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore ID patterns
-        if (backupData.data.idPatterns.length > 0) {
-          await tx.insert(schema.idPatterns).values(backupData.data.idPatterns.map(p => this.convertDates(p)));
+        try {
+          await this.batchInsert(tx, schema.idPatterns, backupData.data.idPatterns, "ID patterns");
           recordsRestored += backupData.data.idPatterns.length;
+        } catch (error) {
+          throw new Error(`Failed to restore ID patterns: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore audit logs
-        if (backupData.data.auditLogs.length > 0) {
-          await tx.insert(schema.auditLogs).values(backupData.data.auditLogs.map(log => this.convertDates(log)));
+        try {
+          await this.batchInsert(tx, schema.auditLogs, backupData.data.auditLogs, "audit logs");
           recordsRestored += backupData.data.auditLogs.length;
+        } catch (error) {
+          throw new Error(`Failed to restore audit logs: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Restore entity tags (after all entities and tags are restored)
-        if (backupData.data.entityTags && backupData.data.entityTags.length > 0) {
-          await tx.insert(schema.entityTags).values(backupData.data.entityTags.map(et => this.convertDates(et)));
-          recordsRestored += backupData.data.entityTags.length;
+        try {
+          await this.batchInsert(tx, schema.entityTags, backupData.data.entityTags || [], "entity tags");
+          recordsRestored += (backupData.data.entityTags || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore entity tags: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
 
