@@ -504,8 +504,27 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
 
-// Opportunities
-export const insertOpportunitySchema = createInsertSchema(opportunities).omit({ createdAt: true, updatedAt: true });
+// Opportunities - handle date string conversion for closeDate, actualCloseDate, estCloseDate
+const datePreprocessor = (val: unknown) => {
+  if (val === null || val === undefined || val === "") return null;
+  if (val instanceof Date) return val;
+  if (typeof val === "string") {
+    const parsed = new Date(val);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+};
+
+export const insertOpportunitySchema = createInsertSchema(opportunities)
+  .omit({ createdAt: true, updatedAt: true })
+  .extend({
+    closeDate: z.preprocess(
+      datePreprocessor,
+      z.date({ required_error: "Close date is required" })
+    ),
+    actualCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
+    estCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
+  });
 export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
 export type Opportunity = typeof opportunities.$inferSelect;
 
