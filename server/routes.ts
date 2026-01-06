@@ -2193,6 +2193,18 @@ export function registerRoutes(app: Express) {
   
   // ========== ACCOUNT CATEGORIES ROUTES ==========
   
+  // Public endpoint for account categories (used in account edit forms by all users)
+  app.get("/api/account-categories", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const categories = await storage.getAllAccountCategories();
+      return res.json(categories);
+    } catch (error) {
+      console.error("Error fetching account categories:", error);
+      return res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+  
+  // Admin-only endpoint for category management
   app.get("/api/admin/categories", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const categories = await storage.getAllAccountCategories();
