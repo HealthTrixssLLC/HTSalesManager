@@ -38,11 +38,11 @@ The design adheres to a clean, professional enterprise SaaS aesthetic inspired b
 *   **Error Logging & Debugging**: Comprehensive error logging across all API routes and database methods for rapid diagnosis.
 *   **Security Hardening**: Production-grade security features protecting all 117 API endpoints:
     *   **CSRF Protection**: Double-submit cookie pattern with crypto-generated tokens, timing-safe comparison, and automatic frontend token management. Exempts login/register and external API routes.
-    *   **Tiered Rate Limiting**: IPv4/IPv6 compatible throttling across all routes:
-        - Authentication routes: 5 req/min (login, register, logout, password reset)
-        - Sensitive admin routes: 20 req/min (user management, backups, API keys, database operations)
-        - CRUD operations: 100 req/min (all POST/PUT/PATCH/DELETE endpoints)
-        - Read operations: 200 req/min (all GET endpoints including dashboards, analytics, exports)
+    *   **Tiered Rate Limiting**: IPv4/IPv6 compatible throttling across all routes (configurable via `DISABLE_RATE_LIMITING=true` environment variable for self-hosted/Docker deployments):
+        - Authentication routes: 10 req/min (login, register, logout, password reset)
+        - Sensitive admin routes: 50 req/min (user management, backups, API keys, database operations)
+        - CRUD operations: 300 req/min (all POST/PUT/PATCH/DELETE endpoints)
+        - Read operations: 600 req/min (all GET endpoints including dashboards, analytics, exports)
     *   **CSV Security**: Header length validation (10KB max) prevents loop bound injection DoS attacks in Dynamics 365 migration tools
     *   All security measures validated against CodeQL static analysis findings
 
