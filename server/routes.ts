@@ -22,6 +22,7 @@ import {
   insertAccountSchema,
   insertContactSchema,
   insertLeadSchema,
+  type InsertLead,
   insertOpportunitySchema,
   insertActivitySchema,
   insertActivityAssociationSchema,
@@ -3459,9 +3460,8 @@ export function registerRoutes(app: Express) {
             }
           }
           
-          const validated = insertLeadSchema.parse(leadData);
-          await storage.createLead(validated);
-          await createAudit(req, "import", "Lead", validated.id, null, validated);
+          await storage.createLead(leadData as InsertLead);
+          await createAudit(req, "import", "Lead", leadData.id, null, leadData);
           
           results.success++;
         } catch (error: any) {
