@@ -3209,9 +3209,12 @@ export function registerRoutes(app: Express) {
           // Validate and parse CSV row with Zod schema
           const row = accountCsvRowSchema.parse(rawRow);
           
+          // Auto-generate ID if not provided
+          const generatedAccountId = (!row.id || row.id.trim() === "") ? await storage.generateId("Account") : row.id;
+          
           // Prepare account data
           const accountData: any = {
-            id: row.id,
+            id: generatedAccountId,
             name: row.name,
             accountNumber: row.accountNumber || "",
             type: row.type || null,
@@ -3305,8 +3308,10 @@ export function registerRoutes(app: Express) {
           // Validate and parse CSV row with Zod schema
           const row = contactCsvRowSchema.parse(rawRow);
           
+          const generatedContactId = (!row.id || row.id.trim() === "") ? await storage.generateId("Contact") : row.id;
+          
           const contactData: any = {
-            id: row.id,
+            id: generatedContactId,
             firstName: row.firstName,
             lastName: row.lastName,
             email: row.email,
@@ -3412,8 +3417,10 @@ export function registerRoutes(app: Express) {
             throw new Error(`Invalid source: "${row.source}". Expected one of: ${validSources.join(", ")}. Note: values must be lowercase.`);
           }
           
+          const generatedId = (!row.id || row.id.trim() === "") ? await storage.generateId("Lead") : row.id;
+          
           const leadData: any = {
-            id: row.id,
+            id: generatedId,
             firstName: row.firstName,
             lastName: row.lastName,
             company: row.company,
@@ -3521,8 +3528,10 @@ export function registerRoutes(app: Express) {
             stage = row.stage.toLowerCase();
           }
           
+          const generatedOppId = (!row.id || row.id.trim() === "") ? await storage.generateId("Opportunity") : row.id;
+          
           const oppData: any = {
-            id: row.id,
+            id: generatedOppId,
             name: row.name,
             accountId: row.accountId,
             stage: stage,
@@ -3645,8 +3654,10 @@ export function registerRoutes(app: Express) {
           
           const completedAtDate = parseDynamicsDate(row.completedAt);
           
+          const generatedActivityId = (!row.id || row.id.trim() === "") ? await storage.generateId("Activity") : row.id;
+          
           const activityData: any = {
-            id: row.id,
+            id: generatedActivityId,
             type: row.type || "task",
             subject: row.subject,
             status: "completed", // Default to completed for imported activities
