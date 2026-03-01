@@ -4319,7 +4319,29 @@ export function registerRoutes(app: Express) {
       const accountMap = new Map(allAccounts.map((a: any) => [a.id, a.name]));
       const userMap = new Map(allUsers.map((u: any) => [u.id, u.name]));
       
-      // Transform opportunities for Excel
+      // Helper: find column index by header name in a worksheet
+      const getColIndex = (ws: any, headerName: string): number => {
+        const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        for (let col = range.s.c; col <= range.e.c; col++) {
+          const addr = XLSX.utils.encode_cell({ r: range.s.r, c: col });
+          if (ws[addr] && ws[addr].v === headerName) return col;
+        }
+        return -1;
+      };
+
+      // Helper: apply a number format string to all data cells in a column
+      const applyColFormat = (ws: any, colIndex: number, fmt: string) => {
+        if (colIndex < 0) return;
+        const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        for (let row = range.s.r + 1; row <= range.e.r; row++) {
+          const addr = XLSX.utils.encode_cell({ r: row, c: colIndex });
+          if (ws[addr] && ws[addr].v !== "" && ws[addr].v != null) {
+            ws[addr].z = fmt;
+          }
+        }
+      };
+
+      // Transform opportunities for Excel — use Date objects for date columns
       const oppDetails = opps.map((o: any) => ({
         "ID": o.id,
         "Name": o.name,
@@ -4327,11 +4349,11 @@ export function registerRoutes(app: Express) {
         "Stage": o.stage,
         "Amount": o.amount ? parseFloat(o.amount) : 0,
         "Probability": o.probability || 0,
-        "Close Date": o.closeDate ? new Date(o.closeDate).toLocaleDateString() : "",
+        "Close Date": o.closeDate ? new Date(o.closeDate) : null,
         "Owner": o.ownerId ? (userMap.get(o.ownerId) || o.ownerId) : "",
         "Status": o.status || "",
         "Rating": o.rating || "",
-        "Created": new Date(o.createdAt).toLocaleDateString()
+        "Created": o.createdAt ? new Date(o.createdAt) : null
       }));
       
       // Calculate metrics for Executive Summary
@@ -4388,35 +4410,56 @@ export function registerRoutes(app: Express) {
         }))
         .sort((a, b) => new Date(a.Month).getTime() - new Date(b.Month).getTime());
       
+      const USD_FMT = '"$"#,##0.00';
+      const DATE_FMT = "yyyy-mm-dd";
+
       // Create workbook
       const wb = XLSX.utils.book_new();
       
-      // Tab 1: Opportunity Details
-      const ws1 = XLSX.utils.json_to_sheet(oppDetails);
+      // Tab 1: Opportunity Details — cellDates:true so Date objects become Excel date cells
+      const ws1 = XLSX.utils.json_to_sheet(oppDetails, { cellDates: true });
+      applyColFormat(ws1, getColIndex(ws1, "Amount"), USD_FMT);
+      applyColFormat(ws1, getColIndex(ws1, "Close Date"), DATE_FMT);
+      applyColFormat(ws1, getColIndex(ws1, "Created"), DATE_FMT);
       XLSX.utils.book_append_sheet(wb, ws1, "Opportunity Details");
       
-      // Tab 2: Executive Summary
+      // Tab 2: Executive Summary — currency rows use actual numbers, not strings
       const summaryData = [
-        { "Metric": "Total Pipeline Value", "Value": totalPipeline.toFixed(2) },
-        { "Metric": "Weighted Forecast", "Value": weightedForecast.toFixed(2) },
+        { "Metric": "Total Pipeline Value", "Value": totalPipeline },
+        { "Metric": "Weighted Forecast", "Value": weightedForecast },
         { "Metric": "Total Opportunities", "Value": totalOpps },
-        { "Metric": "Average Deal Size", "Value": avgDealSize.toFixed(2) },
-        { "Metric": "", "Value": "" }, // Spacer
+        { "Metric": "Average Deal Size", "Value": avgDealSize },
+        { "Metric": "", "Value": "" },
         { "Metric": "Pipeline by Stage", "Value": "" },
         ...stageData.map((d: any) => ({ "Metric": d.Stage, "Value": `${d.Count} opps, $${d['Total Amount'].toFixed(2)}` })),
-        { "Metric": "", "Value": "" }, // Spacer
+        { "Metric": "", "Value": "" },
         { "Metric": "Top 10 Opportunities", "Value": "" },
       ];
-      
       const ws2 = XLSX.utils.json_to_sheet(summaryData);
+      // Apply USD format to the first four numeric value rows (rows 1-4, 0-indexed after header)
+      const valColIdx = getColIndex(ws2, "Value");
+      const currencyRowLabels = new Set(["Total Pipeline Value", "Weighted Forecast", "Average Deal Size"]);
+      if (valColIdx >= 0) {
+        const range2 = XLSX.utils.decode_range(ws2["!ref"] || "A1");
+        const metricColIdx = getColIndex(ws2, "Metric");
+        for (let row = range2.s.r + 1; row <= range2.e.r; row++) {
+          const metricAddr = XLSX.utils.encode_cell({ r: row, c: metricColIdx });
+          const valAddr = XLSX.utils.encode_cell({ r: row, c: valColIdx });
+          if (ws2[metricAddr] && currencyRowLabels.has(ws2[metricAddr].v) && ws2[valAddr] && typeof ws2[valAddr].v === "number") {
+            ws2[valAddr].z = USD_FMT;
+          }
+        }
+      }
       XLSX.utils.book_append_sheet(wb, ws2, "Executive Summary");
       
-      // Tab 3: Forecast Table
+      // Tab 3: Revenue Forecast — currency columns
       const ws3 = XLSX.utils.json_to_sheet(forecastData);
+      applyColFormat(ws3, getColIndex(ws3, "Weighted Revenue"), USD_FMT);
+      applyColFormat(ws3, getColIndex(ws3, "Total Pipeline"), USD_FMT);
       XLSX.utils.book_append_sheet(wb, ws3, "Revenue Forecast");
       
-      // Generate buffer
-      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      // Generate buffer with cellDates so date serial numbers are written correctly
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx", cellDates: true });
       
       // Set headers and send file
       res.setHeader("Content-Disposition", `attachment; filename="sales-forecast-${new Date().toISOString().split('T')[0]}.xlsx"`);
