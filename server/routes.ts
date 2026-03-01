@@ -2349,8 +2349,12 @@ export function registerRoutes(app: Express) {
         backupBuffer = Buffer.from(backupBuffer);
       }
       
-      // Encryption key is required
-      const encryptionKey = process.env.BACKUP_ENCRYPTION_KEY;
+      // Use caller-supplied key (cross-instance restore) or fall back to server env var
+      const headerKey = req.headers["x-backup-encryption-key"];
+      const encryptionKey = (typeof headerKey === "string" && headerKey.trim())
+        ? headerKey.trim()
+        : process.env.BACKUP_ENCRYPTION_KEY;
+
       if (!encryptionKey) {
         return res.status(500).json({ 
           success: false,

@@ -54,6 +54,7 @@ export default function AdminConsole() {
   });
   const [generatedApiKey, setGeneratedApiKey] = useState<{key: string; name: string} | null>(null);
   const [revokeApiKeyId, setRevokeApiKeyId] = useState<string | null>(null);
+  const [restoreEncryptionKey, setRestoreEncryptionKey] = useState("");
 
   const { data: users } = useQuery<UserWithRoles[]>({ queryKey: ["/api/admin/users"] });
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
@@ -193,21 +194,25 @@ export default function AdminConsole() {
   });
 
   const restoreBackupMutation = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, encryptionKey }: { file: File; encryptionKey: string }) => {
       const arrayBuffer = await file.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
       
       // Get CSRF token for the request
       const csrfToken = await fetchCsrfToken();
       
-      // Checksum is embedded in the file, no need to send separately
+      const headers: Record<string, string> = {
+        "Content-Type": "application/octet-stream",
+        "X-CSRF-Token": csrfToken,
+      };
+      if (encryptionKey.trim()) {
+        headers["X-Backup-Encryption-Key"] = encryptionKey.trim();
+      }
+
       const res = await fetch("/api/admin/restore", {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "X-CSRF-Token": csrfToken,
-        },
+        headers,
         body: buffer,
       });
       
@@ -417,7 +422,7 @@ export default function AdminConsole() {
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      restoreBackupMutation.mutate(file);
+      restoreBackupMutation.mutate({ file, encryptionKey: restoreEncryptionKey });
     }
   };
 
@@ -1041,7 +1046,21 @@ export default function AdminConsole() {
                 </CardTitle>
                 <CardDescription>Import database from backup file</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="restore-encryption-key">Source Encryption Key</Label>
+                  <Input
+                    id="restore-encryption-key"
+                    type="password"
+                    placeholder="Leave blank when restoring from this instance"
+                    value={restoreEncryptionKey}
+                    onChange={(e) => setRestoreEncryptionKey(e.target.value)}
+                    data-testid="input-restore-encryption-key"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Only needed when restoring a backup from a different CRM instance. Enter the <code>BACKUP_ENCRYPTION_KEY</code> from the source instance.
+                  </p>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
