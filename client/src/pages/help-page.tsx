@@ -10,9 +10,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function HelpPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-3xl font-semibold text-foreground" data-testid="heading-help">Help & Documentation</h1>
+        <h1 className="text-2xl font-semibold text-foreground" data-testid="heading-help">Help & Documentation</h1>
         <p className="text-muted-foreground">Everything you need to get started with Health Trixss CRM</p>
       </div>
 

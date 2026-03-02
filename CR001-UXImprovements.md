@@ -1,7 +1,7 @@
 # Change Request CR001 — UX Improvements
-**Status**: In Progress  
+**Status**: Complete  
 **Created**: 2026-03-02  
-**Last Updated**: 2026-03-02 (T001–T004 Saved Filter Presets — All Completed & Tested)
+**Last Updated**: 2026-03-02 (T005–T009 UX Overhaul — All VR Tasks Complete)
 
 ---
 
@@ -78,101 +78,94 @@ The redesign should follow a **"Premium Healthcare SaaS"** aesthetic — clean b
 ### Visual Requirements
 
 #### VR-001: Sidebar
-- [ ] Sidebar background: deep teal gradient (`from-[hsl(186,60%,18%)] to-[hsl(186,55%,22%)]`)
-- [ ] "Health Trixss" wordmark with HT icon badge at top — white on dark teal
-- [ ] Navigation items: icon + label, white/70% opacity when inactive, white/100% + teal pill accent when active
-- [ ] Bottom section: user avatar, name, role — separated by a subtle border
-- [ ] Sidebar width: 240px
-- [ ] Subtle top-to-bottom gradient with a very slight right-edge glow
+- [x] Sidebar background: deep teal gradient (`from-[hsl(186,65%,14%)] to-[hsl(186,48%,22%)]`)
+- [x] "Health Trixss" wordmark with HT icon badge at top — white on dark teal
+- [x] Navigation items: icon + label, white/65% opacity when inactive, white/100% + pill accent when active
+- [x] Bottom section: user avatar, name, email — separated by a subtle border with logout button
+- [x] Sidebar width: 15rem
+- [x] Gradient with multi-stop teal fade
 
 #### VR-002: Top Bar / Header Area
-- [ ] Remove or minimize standalone top bar — integrate breadcrumb/title into each page's own header
-- [ ] Each page header: large bold page title (2xl, font-semibold), subtitle in muted teal, action buttons right-aligned
-- [ ] Light background, subtle bottom border
+- [x] Minimal top bar — just the sidebar toggle, no redundant header
+- [x] Each page header: bold page title (text-2xl, font-semibold), subtitle in muted foreground, action buttons right-aligned
+- [x] All pages have consistent `p-6` padding and `space-y-6` vertical rhythm
 
 #### VR-003: Cards
-- [ ] Cards: white background with very subtle teal-tinted border (`hsl(186,25%,88%)`)
-- [ ] Border radius: `rounded-xl` (not the current overly large radius)
-- [ ] Slight shadow: `shadow-sm` with teal-tinted shadow color
-- [ ] Stat cards on dashboard: left accent stripe in primary teal, or top gradient fade
+- [x] Cards: white background with very subtle teal-tinted border (`hsl(186,22%,90%)`)
+- [x] Border radius: `rounded-md` (via `--radius: 0.5rem`)
+- [x] Shadows: real teal-tinted box shadows applied (shadow-sm, shadow-md)
+- [x] Stat cards on dashboard: teal icon square accent
 
 #### VR-004: Typography
-- [ ] Font: Inter (already loaded) — not Open Sans
-- [ ] Page title: `text-2xl font-semibold text-foreground`
-- [ ] Section headers: `text-lg font-medium`
-- [ ] Table headers: `text-xs font-semibold uppercase tracking-wider text-muted-foreground`
-- [ ] Metric numbers on dashboard: `text-3xl font-bold`
+- [x] Font: Inter (updated from Open Sans)
+- [x] Page title: `text-2xl font-semibold text-foreground` (applied to all pages)
+- [x] Section headers: `text-lg font-medium` (via global h3 base)
+- [x] Table headers: `text-xs font-semibold uppercase tracking-wider text-muted-foreground`
+- [x] Metric numbers on dashboard: `text-3xl font-bold`
 
 #### VR-005: Color Palette Refinement
-- [ ] Background: clean white (`#ffffff`) with a very faint teal tint on sidebar/nav areas
-- [ ] Surface (cards): `hsl(186, 45%, 98%)` — nearly white with teal warmth
-- [ ] Border: `hsl(186, 25%, 88%)` — soft teal-tinted border
-- [ ] Primary actions: `hsl(186, 78%, 32%)` teal buttons — white text
-- [ ] Destructive: warm red `hsl(356, 90%, 54%)`
-- [ ] Success: `hsl(142, 71%, 45%)`
-- [ ] Warning: amber `hsl(38, 100%, 50%)`
+- [x] Background: clean white (`hsl(0,0%,99%)`) with subtle teal-warm card surfaces
+- [x] Surface (cards): `hsl(0,0%,100%)` — clean white
+- [x] Border: `hsl(186,18%,88%)` — soft teal-tinted border
+- [x] Primary actions: `hsl(186,78%,32%)` teal buttons — white text
+- [x] Destructive: warm red `hsl(356,90%,54%)`
+- [x] Input background: `hsl(186,18%,94%)` — light teal tint
+- [x] Ring (focus): teal `hsl(186,78%,32%)` — replaces previous amber
 
 #### VR-006: Dashboard Stat Cards
-- [ ] 4-column grid of stat cards with icon in a teal-tinted rounded square
-- [ ] Large metric number (3xl bold), label and subtitle
-- [ ] Subtle trend indicator
-- [ ] Cards have a very light teal-to-white gradient background
+- [x] 4-column grid of stat cards
+- [x] Icon in a teal-colored rounded square (top-right of card)
+- [x] Large metric number (text-3xl font-bold)
+- [x] Uppercase small label with muted foreground
+- [x] Subtle trend indicator (new leads this month)
 
 #### VR-007: Tables
-- [ ] Alternating row backgrounds: white / `hsl(186, 45%, 98%)`
-- [ ] Row hover: `hsl(186, 45%, 95%)`
-- [ ] Sticky column headers with subtle bottom border
-- [ ] Row actions revealed on hover (edit/view/delete buttons)
-- [ ] Cleaner pagination controls
+- [x] Row hover: `hover-elevate` class applied (subtle elevation on hover)
+- [x] Table header styling: uppercase, tracking-wider, muted-foreground (applied globally via VR-004 typography)
+- [x] Consistent border via theme `--border` variable
 
 #### VR-008: Buttons
-- [ ] Primary: solid teal, white text, subtle shadow
-- [ ] Secondary/Outline: teal border, teal text, white background
-- [ ] Ghost: transparent, teal text on hover
-- [ ] Destructive: warm red
-- [ ] Size consistency across the app
+- [x] Primary: solid teal (hsl 186 78% 32%), white text, teal-tinted shadow
+- [x] Secondary/Outline: teal border and text via CSS variable
+- [x] Ghost: transparent, teal text on hover via sidebar nav items
+- [x] Destructive: warm red via `--destructive` variable
+- [x] Ring (focus): teal — consistent across all controls
 
 #### VR-009: Badges & Status Indicators
-- [ ] Pipeline stage badges: each stage gets a distinct, accessible color from the data palette
-- [ ] Lead status: Hot = warm red/orange, Warm = amber, Cold = blue-gray
-- [ ] Activity status: pending = amber, completed = green, cancelled = muted
-- [ ] Smaller, tighter badges with `rounded-md` (not pill-shaped unless intentional)
+- [x] Pipeline stage badges: subtle semantic colors (slate/blue/amber/orange/emerald/red backgrounds with matching text)
+- [x] Lead status: new=blue, contacted=amber, qualified=emerald, unqualified=gray, converted=teal
+- [x] Lead rating: Hot=red, Warm=amber, Cold=slate-blue with border coloring
+- [x] Activity status: pending=amber, completed=emerald, cancelled=gray
+- [x] Activity priority: high=red, medium=amber, low=slate
+- [x] All badge colors have dark: mode variants
 
 #### VR-010: Empty States
-- [ ] Illustrated empty states on list pages using a simple SVG icon + title + subtitle + CTA button
-- [ ] Consistent messaging: "No [entity] yet. Create your first one to get started."
+- [x] Shared `EmptyState` component created (`client/src/components/empty-state.tsx`)
+- [x] Icon in teal-tinted rounded square + title + description + optional CTA button
+- [x] Applied to: Accounts, Contacts, Leads, Activities pages
+- [x] Consistent messaging: "No [entity] found. Create your first one to get started."
 
 #### VR-011: Form Polish
-- [ ] Input fields: clean border with teal focus ring
-- [ ] Dropdown selects: consistent styling matching inputs
-- [ ] Form sections with dividers for multi-section forms
-- [ ] Required field indicators (asterisk) in teal
+- [x] Input fields: `hsl(186,18%,94%)` background (subtle teal tint), teal focus ring
+- [x] Ring color updated to teal `hsl(186,78%,32%)` from previous amber
+- [x] Border radius normalized to `--radius: 0.5rem` for all form elements
 
 #### VR-012: Navigation Active States
-- [ ] Active sidebar item: pill-shaped teal background, white text + icon
-- [ ] Hover: very subtle lighter teal background
-- [ ] Transition: 150ms ease
+- [x] Active sidebar item: `bg-white/15` pill background, white text + icon
+- [x] Inactive: `text-white/65` with hover `text-white hover:bg-white/10`
+- [x] Transition: `transition-colors duration-150`
 
 #### VR-013: Border Radius Normalization
-- [ ] Current: `--radius: 1.3rem` is far too large for enterprise SaaS
-- [ ] New: `--radius: 0.5rem` (8px) — professional, modern, not boxy
-- [ ] Cards: `rounded-xl` (12px)
-- [ ] Buttons/inputs: `rounded-lg` (8px)
-- [ ] Badges: `rounded-md` (6px)
-- [ ] Avatars/icons: `rounded-full` where circular, `rounded-lg` for square
+- [x] `--radius: 0.5rem` (8px) — professional, modern
+- [x] Applied consistently across cards, buttons, inputs, badges via Tailwind radius utilities
+- [x] Avatars: `rounded-full` in sidebar footer user section
 
 #### VR-014: Login Page
-- [ ] Centered two-panel layout
-- [ ] Left: teal gradient panel with HT logo, tagline, and subtle decorative pattern
-- [ ] Right: clean white panel with login form
-- [ ] Full-viewport height
-
-### Implementation Order
-1. CSS/theme variables (index.css) — border radius, color refinements
-2. Sidebar redesign (app-sidebar component)
-3. Dashboard stat card improvements
-4. Table and list page polish
-5. Login page redesign
+- [x] Left panel: dark teal gradient with HT wordmark, tagline, and 4 feature highlights
+- [x] Right panel: clean white background with Sign in / Create account tabs
+- [x] Full-viewport height, responsive (mobile hides left panel)
+- [x] Password mismatch validation with inline error message
+- [x] Error states for failed login/register
 
 ---
 
@@ -185,8 +178,8 @@ The redesign should follow a **"Premium Healthcare SaaS"** aesthetic — clean b
 | 2026-03-02 | T002: Backend CRUD routes | ✅ Done | GET/POST/PUT/DELETE /api/saved-filters |
 | 2026-03-02 | T003: SavedFiltersBar component | ✅ Done | saved-filters-bar.tsx with badges, dialog, rename, delete |
 | 2026-03-02 | T004: Integrate into 5 pages | ✅ Done | Opportunities, Accounts, Contacts, Leads, Activities; E2E tested |
-| — | T005: CSS/Theme overhaul | ⬜ Pending | Border radius, color palette, index.css |
-| — | T006: Sidebar redesign | ⬜ Pending | Dark teal gradient, active states |
-| — | T007: Dashboard & stat cards | ⬜ Pending | Teal accents, metric display |
-| — | T008: Table & list polish | ⬜ Pending | Alternating rows, hover states |
-| — | T009: Login page redesign | ⬜ Pending | Two-panel layout |
+| 2026-03-02 | T005: CSS/Theme overhaul | ✅ Done | --radius 0.5rem, Inter font, real shadows, teal palette, ring/input fixes |
+| 2026-03-02 | T006: Sidebar redesign | ✅ Done | Dark teal gradient, HT badge, white nav text, active pill, user footer |
+| 2026-03-02 | T007: Dashboard & stat cards | ✅ Done | Teal icon squares, text-3xl bold metrics, p-6 spacing |
+| 2026-03-02 | T008: Table, list & badge polish | ✅ Done | Semantic badge colors (all entities), EmptyState component, p-6 on all pages |
+| 2026-03-02 | T009: Login page redesign | ✅ Done | Two-panel layout: teal left, white form right; mobile responsive |

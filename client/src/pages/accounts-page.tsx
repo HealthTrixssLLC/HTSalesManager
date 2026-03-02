@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree, Building2 } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
+import { EmptyState } from "@/components/empty-state";
 
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
@@ -380,11 +381,11 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Accounts</h1>
-          <p className="text-muted-foreground">Manage your customer accounts and organizations</p>
+          <h1 className="text-2xl font-semibold text-foreground">Accounts</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your customer accounts and organizations</p>
         </div>
         <div className="flex gap-2">
           <ColumnVisibility
@@ -806,8 +807,13 @@ export default function AccountsPage() {
             <TableBody>
               {displayedAccounts?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={AVAILABLE_COLUMNS.length + 1} className="text-center py-8 text-muted-foreground">
-                    No accounts found. {filters.search || filters.type || filters.category || filters.ownerId || filters.tagIds.length > 0 ? "Try adjusting your filters." : "Create your first account to get started."}
+                  <TableCell colSpan={AVAILABLE_COLUMNS.length + 1}>
+                    <EmptyState
+                      icon={Building2}
+                      title="No accounts found"
+                      description={hasActiveFilters ? "Try adjusting your filters to see more results." : "Create your first account to get started."}
+                      action={!hasActiveFilters ? { label: "New Account", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-account" } : undefined}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

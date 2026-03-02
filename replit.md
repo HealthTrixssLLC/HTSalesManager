@@ -13,7 +13,17 @@ I want iterative development. Ask before making major changes. I prefer detailed
 The system uses a full-stack JavaScript architecture: Node.js with Express for the backend, PostgreSQL with Drizzle ORM for the database, and React with Vite for the frontend.
 
 **UI/UX Decisions:**
-The design adheres to a clean, professional enterprise SaaS aesthetic inspired by Linear, featuring consistent spacing, Inter font typography, subtle interactions, and balanced information density. The primary brand color is Health Trixss Teal (`hsl(186, 78%, 32%)`), accented by a lighter teal (`hsl(186, 45%, 95%)`) and a multi-color palette for data visualization.
+The design follows a "Premium Healthcare SaaS" aesthetic inspired by Linear and Salesforce Lightning — clean but not cold, data-rich but not cluttered. Key design decisions:
+- **Primary brand color**: Health Trixss Teal `hsl(186, 78%, 32%)` — used for primary actions, icon squares, focus rings
+- **Font**: Inter (variable weight, loaded from Google Fonts)
+- **Border radius**: `--radius: 0.5rem` (8px) — professional, not boxy
+- **Sidebar**: Dark teal gradient (`hsl(186,65%,14%)` → `hsl(186,48%,22%)`), white text with 65% opacity on inactive items, `bg-white/15` pill on active
+- **Cards**: White background, teal-tinted borders `hsl(186,22%,90%)`, real teal-tinted box shadows
+- **Login page**: Two-panel layout — left: dark teal gradient with HT brand + features, right: white form
+- **Badge colors**: Semantic per-entity color coding (lead status/rating, opportunity stage, activity status/priority) with dark mode variants
+- **Empty states**: Shared `EmptyState` component with teal icon square, title, description, CTA button
+- **Shadows**: Real teal-tinted box shadows (previously all zero/transparent)
+- **Page headers**: Consistent `text-2xl font-semibold` with `p-6` padding and `space-y-6` rhythm across all pages
 
 **Technical Implementations & Feature Specifications:**
 

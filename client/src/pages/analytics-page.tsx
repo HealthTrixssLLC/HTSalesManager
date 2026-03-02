@@ -48,7 +48,7 @@ export default function AnalyticsPage() {
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="analytics-page">
       <div>
-        <h1 className="text-3xl font-bold mb-2" data-testid="text-analytics-title">Analytics & Forecasting</h1>
+        <h1 className="text-2xl font-semibold mb-2" data-testid="text-analytics-title">Analytics & Forecasting</h1>
         <p className="text-muted-foreground">
           OKR-driven insights measuring outcomes and drivers, not activities
         </p>

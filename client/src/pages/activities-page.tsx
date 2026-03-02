@@ -29,6 +29,7 @@ import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
+import { EmptyState } from "@/components/empty-state";
 
 const activityIcons = {
   call: Phone,
@@ -36,6 +37,18 @@ const activityIcons = {
   meeting: Calendar,
   task: CheckSquare,
   note: FileText,
+};
+
+const activityStatusColors: Record<string, string> = {
+  pending:   "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
+  completed: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
+  cancelled: "bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700",
+};
+
+const activityPriorityColors: Record<string, string> = {
+  high:   "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
+  medium: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
+  low:    "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
 };
 
 interface Filters {
@@ -396,10 +409,10 @@ export default function ActivitiesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Activities</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Activities</h1>
           <p className="text-muted-foreground">Track calls, meetings, tasks, and notes</p>
         </div>
         <div className="flex gap-2">
@@ -998,8 +1011,16 @@ export default function ActivitiesPage() {
                             <h4 className="font-medium">{activity.subject}</h4>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               {visibleColumns.type && <Badge variant="outline" className="capitalize">{activity.type}</Badge>}
-                              {visibleColumns.status && <Badge variant="outline" className="capitalize">{activity.status}</Badge>}
-                              {visibleColumns.priority && <Badge variant="outline" className="capitalize">{activity.priority}</Badge>}
+                              {visibleColumns.status && (
+                                <Badge className={`capitalize border ${activityStatusColors[activity.status] ?? "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                                  {activity.status}
+                                </Badge>
+                              )}
+                              {visibleColumns.priority && (
+                                <Badge className={`capitalize border ${activityPriorityColors[activity.priority] ?? "bg-slate-100 text-slate-500 border-slate-200"}`}>
+                                  {activity.priority}
+                                </Badge>
+                              )}
                               {activity.ownerId && (
                                 <Badge variant="secondary" className="text-xs">
                                   {users.find(u => u.id === activity.ownerId)?.name || "Unassigned"}
@@ -1055,10 +1076,12 @@ export default function ActivitiesPage() {
               })}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No activities found. Create your first activity to get started.</p>
-            </div>
+            <EmptyState
+              icon={Calendar}
+              title="No activities found"
+              description={hasActiveFilters ? "Try adjusting your filters to see more results." : "Create your first activity to get started."}
+              action={!hasActiveFilters ? { label: "New Activity", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-activity" } : undefined}
+            />
           )}
         </CardContent>
       </Card>

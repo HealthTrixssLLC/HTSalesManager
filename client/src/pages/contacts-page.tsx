@@ -27,6 +27,7 @@ import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
+import { EmptyState } from "@/components/empty-state";
 
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
@@ -318,10 +319,10 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Contacts</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Contacts</h1>
           <p className="text-muted-foreground">Manage your business contacts and relationships</p>
         </div>
         <div className="flex gap-2">
@@ -708,8 +709,13 @@ export default function ContactsPage() {
             <TableBody>
               {displayedContacts?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={AVAILABLE_COLUMNS.length + 1} className="text-center py-8 text-muted-foreground">
-                    No contacts found. {filters.search || filters.accountId || filters.ownerId || filters.hasEmail || filters.tagIds.length > 0 ? "Try adjusting your filters." : "Create your first contact to get started."}
+                  <TableCell colSpan={AVAILABLE_COLUMNS.length + 1}>
+                    <EmptyState
+                      icon={Users}
+                      title="No contacts found"
+                      description={hasActiveFilters ? "Try adjusting your filters to see more results." : "Create your first contact to get started."}
+                      action={!hasActiveFilters ? { label: "New Contact", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-contact" } : undefined}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (

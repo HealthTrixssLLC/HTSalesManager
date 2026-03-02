@@ -575,9 +575,9 @@ export default function AdminConsole() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-3xl font-semibold text-foreground">Admin Console</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Admin Console</h1>
         <p className="text-muted-foreground">System administration and configuration</p>
       </div>
 

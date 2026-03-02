@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone, X, Users, Building2, Star } from "lucide-react";
+import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone, X, Users, Building2, Star, UserPlus } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -27,13 +27,20 @@ import { LeadsFilterBar } from "@/components/leads-filter-bar";
 import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
+import { EmptyState } from "@/components/empty-state";
 
 const statusColors: Record<string, string> = {
-  new: "bg-blue-500",
-  contacted: "bg-yellow-500",
-  qualified: "bg-green-500",
-  unqualified: "bg-gray-500",
-  converted: "bg-primary",
+  new:         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  contacted:   "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  qualified:   "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+  unqualified: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
+  converted:   "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+};
+
+const ratingColors: Record<string, string> = {
+  hot:  "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800",
+  warm: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800",
+  cold: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
 };
 
 // Define available columns
@@ -329,10 +336,10 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Leads</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Leads</h1>
           <p className="text-muted-foreground">Capture and convert leads into opportunities</p>
         </div>
         <div className="flex gap-2">
@@ -821,8 +828,13 @@ export default function LeadsPage() {
             <TableBody>
               {displayedLeads?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={AVAILABLE_COLUMNS.length} className="text-center py-8 text-muted-foreground">
-                    No leads found. {filters.search || filters.status || filters.source || filters.ownerId ? "Try adjusting your filters." : "Create your first lead to get started."}
+                  <TableCell colSpan={AVAILABLE_COLUMNS.length}>
+                    <EmptyState
+                      icon={UserPlus}
+                      title="No leads found"
+                      description={hasActiveFilters ? "Try adjusting your filters to see more results." : "Create your first lead to get started."}
+                      action={!hasActiveFilters ? { label: "New Lead", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-lead" } : undefined}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -890,7 +902,7 @@ export default function LeadsPage() {
                     {isColumnVisible("rating") && (
                       <TableCell data-testid={`cell-rating-${lead.id}`}>
                         {lead.rating ? (
-                          <Badge variant="outline" className="capitalize">
+                          <Badge className={`capitalize border ${ratingColors[lead.rating] ?? ""}`}>
                             {lead.rating}
                           </Badge>
                         ) : "-"}

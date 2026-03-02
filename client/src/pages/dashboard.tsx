@@ -206,11 +206,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-6">
+      {/* VR-002: Page header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your sales pipeline and activities</p>
+          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Overview of your sales pipeline and activities</p>
         </div>
         <Button onClick={() => setIsReportDialogOpen(true)} data-testid="button-download-forecast">
           <Download className="h-4 w-4 mr-2" />
@@ -218,53 +219,63 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      {/* Stat Cards */}
+      {/* VR-006: Stat Cards — teal icon squares, bold metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Accounts</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="stat-total-accounts">{stats?.totalAccounts || 0}</div>
-            <p className="text-xs text-muted-foreground">Active customer accounts</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Contacts</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="stat-total-contacts">{stats?.totalContacts || 0}</div>
-            <p className="text-xs text-muted-foreground">Across all accounts</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Leads</CardTitle>
-            <TargetIcon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="stat-total-leads">{stats?.totalLeads || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-primary font-medium">+{stats?.newLeadsThisMonth || 0}</span> this month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-semibold" data-testid="stat-win-rate">{stats?.winRate || 0}%</div>
-            <p className="text-xs text-muted-foreground">{stats?.totalOpportunities || 0} opportunities</p>
-          </CardContent>
-        </Card>
+        {[
+          {
+            label: "Total Accounts",
+            sublabel: "Active customer accounts",
+            value: stats?.totalAccounts ?? 0,
+            icon: Building2,
+            testId: "stat-total-accounts",
+          },
+          {
+            label: "Total Contacts",
+            sublabel: "Across all accounts",
+            value: stats?.totalContacts ?? 0,
+            icon: Users,
+            testId: "stat-total-contacts",
+          },
+          {
+            label: "Active Leads",
+            sublabel: null,
+            value: stats?.totalLeads ?? 0,
+            icon: TargetIcon,
+            testId: "stat-total-leads",
+            extra: (
+              <span className="text-xs text-muted-foreground">
+                <span className="text-primary font-semibold">+{stats?.newLeadsThisMonth ?? 0}</span> this month
+              </span>
+            ),
+          },
+          {
+            label: "Win Rate",
+            sublabel: `${stats?.totalOpportunities ?? 0} opportunities`,
+            value: `${stats?.winRate ?? 0}%`,
+            icon: TrendingUp,
+            testId: "stat-win-rate",
+          },
+        ].map(({ label, sublabel, value, icon: Icon, testId, extra }) => (
+          <Card key={label} className="shadow-sm">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+                  <p className="text-3xl font-bold text-foreground leading-none" data-testid={testId}>{value}</p>
+                  <div className="mt-1.5">
+                    {extra ?? <p className="text-xs text-muted-foreground">{sublabel}</p>}
+                  </div>
+                </div>
+                <div
+                  className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
+                  style={{ background: "hsl(186, 78%, 32%)", opacity: 0.9 }}
+                >
+                  <Icon className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Charts */}
