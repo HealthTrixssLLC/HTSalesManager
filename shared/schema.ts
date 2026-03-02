@@ -383,6 +383,21 @@ export const entityTags = pgTable("entity_tags", {
   uniqueTag: uniqueIndex("entity_tags_unique_idx").on(table.entity, table.entityId, table.tagId),
 }));
 
+// ========== SAVED FILTER PRESETS ==========
+
+export const savedFilters = pgTable("saved_filters", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  pageName: varchar("page_name", { length: 50 }).notNull(), // e.g. "opportunities", "accounts"
+  name: text("name").notNull(),
+  filters: jsonb("filters").notNull(), // Stored filter state as JSON
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userPageIdx: index("saved_filters_user_page_idx").on(table.userId, table.pageName),
+}));
+
 // ========== RELATIONS ==========
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -588,6 +603,11 @@ export type Tag = typeof tags.$inferSelect;
 export const insertEntityTagSchema = createInsertSchema(entityTags).omit({ id: true, createdAt: true });
 export type InsertEntityTag = z.infer<typeof insertEntityTagSchema>;
 export type EntityTag = typeof entityTags.$inferSelect;
+
+// SavedFilters
+export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertSavedFilter = z.infer<typeof insertSavedFilterSchema>;
+export type SavedFilter = typeof savedFilters.$inferSelect;
 
 // ========== API RESPONSE TYPES ==========
 

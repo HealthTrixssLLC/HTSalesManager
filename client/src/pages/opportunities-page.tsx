@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 const stages = [
   { id: "prospecting", label: "Prospecting", color: "bg-gray-500" },
@@ -70,6 +71,30 @@ export default function OpportunitiesPage() {
   const [filterRating, setFilterRating] = useState<string>("");
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [filterIncludeInForecast, setFilterIncludeInForecast] = useState<string>("all");
+
+  const hasActiveFilters = !!(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all");
+
+  const currentOpportunityFilters = {
+    filterAccount,
+    filterCloseDateFrom,
+    filterCloseDateTo,
+    filterProbabilityMin,
+    filterProbabilityMax,
+    filterRating,
+    filterTagIds,
+    filterIncludeInForecast,
+  };
+
+  const handleApplySavedFilter = (saved: Record<string, any>) => {
+    setFilterAccount(saved.filterAccount ?? "");
+    setFilterCloseDateFrom(saved.filterCloseDateFrom ?? "");
+    setFilterCloseDateTo(saved.filterCloseDateTo ?? "");
+    setFilterProbabilityMin(saved.filterProbabilityMin ?? "");
+    setFilterProbabilityMax(saved.filterProbabilityMax ?? "");
+    setFilterRating(saved.filterRating ?? "");
+    setFilterTagIds(Array.isArray(saved.filterTagIds) ? saved.filterTagIds : []);
+    setFilterIncludeInForecast(saved.filterIncludeInForecast ?? "all");
+  };
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
   const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
@@ -654,6 +679,13 @@ export default function OpportunitiesPage() {
           </Dialog>
         </div>
       </div>
+
+      <SavedFiltersBar
+        pageName="opportunities"
+        currentFilters={currentOpportunityFilters}
+        onApply={handleApplySavedFilter}
+        hasActiveFilters={hasActiveFilters}
+      />
 
       {/* Filters */}
       {showFilters && (

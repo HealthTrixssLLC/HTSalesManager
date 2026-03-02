@@ -26,6 +26,7 @@ import { AccountsFilterBar } from "@/components/accounts-filter-bar";
 import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
@@ -68,6 +69,23 @@ export default function AccountsPage() {
     ownerId: "",
     tagIds: [] as string[],
   });
+  const [filterKey, setFilterKey] = useState(0);
+  const [savedFilterInitial, setSavedFilterInitial] = useState<typeof filters | undefined>(undefined);
+  const hasActiveFilters = !!(filters.search || filters.type || filters.category || filters.ownerId || filters.tagIds.length > 0);
+
+  const handleApplySavedFilter = (saved: Record<string, any>) => {
+    const newFilters = {
+      search: saved.search ?? "",
+      type: saved.type ?? "",
+      category: saved.category ?? "",
+      ownerId: saved.ownerId ?? "",
+      tagIds: Array.isArray(saved.tagIds) ? saved.tagIds : [],
+    };
+    setSavedFilterInitial(newFilters);
+    setFilters(newFilters);
+    setFilterKey(k => k + 1);
+  };
+
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -545,10 +563,19 @@ export default function AccountsPage() {
 
       <AccountsSummaryCards onCardClick={handleCardClick} />
 
+      <SavedFiltersBar
+        pageName="accounts"
+        currentFilters={filters}
+        onApply={handleApplySavedFilter}
+        hasActiveFilters={hasActiveFilters}
+      />
+
       <AccountsFilterBar
+        key={filterKey}
         onFilterChange={handleFilterChange}
         totalCount={allAccounts?.length || 0}
         filteredCount={displayedAccounts?.length || 0}
+        initialFilters={savedFilterInitial}
       />
 
       {selectedAccountIds.size > 0 && (

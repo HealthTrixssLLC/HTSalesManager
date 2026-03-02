@@ -19,26 +19,29 @@ interface Account {
   name: string;
 }
 
-interface ContactsFilterBarProps {
-  onFilterChange: (filters: {
-    search: string;
-    accountId: string;
-    ownerId: string;
-    hasEmail: string;
-    tagIds: string[];
-  }) => void;
-  totalCount: number;
-  filteredCount: number;
+interface ContactFilters {
+  search: string;
+  accountId: string;
+  ownerId: string;
+  hasEmail: string;
+  tagIds: string[];
 }
 
-export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount }: ContactsFilterBarProps) {
+interface ContactsFilterBarProps {
+  onFilterChange: (filters: ContactFilters) => void;
+  totalCount: number;
+  filteredCount: number;
+  initialFilters?: Partial<ContactFilters>;
+}
+
+export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, initialFilters }: ContactsFilterBarProps) {
   const { user } = useAuth();
-  const [search, setSearch] = useState("");
-  const [accountId, setAccountId] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [hasEmail, setHasEmail] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
+  const [accountId, setAccountId] = useState(initialFilters?.accountId ?? "");
+  const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
+  const [hasEmail, setHasEmail] = useState(initialFilters?.hasEmail ?? "");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],

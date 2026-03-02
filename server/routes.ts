@@ -30,6 +30,8 @@ import {
   insertCommentReactionSchema,
   insertCommentAttachmentSchema,
   insertApiKeySchema,
+  savedFilters,
+  insertSavedFilterSchema,
   comments,
   commentReactions,
   commentAttachments,
@@ -4719,6 +4721,99 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // ========== SAVED FILTER PRESETS ==========
+
+  // GET /api/saved-filters?page=<pageName> — list user's saved filters for a page
+  app.get("/api/saved-filters", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const pageName = req.query.page as string;
+      if (!pageName) return res.status(400).json({ error: "page query parameter is required" });
+
+      const filters = await db
+        .select()
+        .from(savedFilters)
+        .where(and(eq(savedFilters.userId, userId), eq(savedFilters.pageName, pageName)))
+        .orderBy(desc(savedFilters.isDefault), asc(savedFilters.createdAt));
+
+      return res.json(filters);
+    } catch (error) {
+      console.error("Error fetching saved filters:", error);
+      return res.status(500).json({ error: "Failed to fetch saved filters" });
+    }
+  });
+
+  // POST /api/saved-filters — create a new saved filter preset
+  app.post("/api/saved-filters", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const parsed = insertSavedFilterSchema.parse({ ...req.body, userId });
+
+      // If this is being set as default, clear existing defaults for same user+page
+      if (parsed.isDefault) {
+        await db
+          .update(savedFilters)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(and(eq(savedFilters.userId, userId), eq(savedFilters.pageName, parsed.pageName)));
+      }
+
+      const [created] = await db.insert(savedFilters).values(parsed).returning();
+      return res.status(201).json(created);
+    } catch (error) {
+      console.error("Error creating saved filter:", error);
+      return res.status(500).json({ error: "Failed to create saved filter" });
+    }
+  });
+
+  // PUT /api/saved-filters/:id — update name and/or isDefault
+  app.put("/api/saved-filters/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const { id } = req.params;
+
+      // Ownership check
+      const [existing] = await db.select().from(savedFilters).where(and(eq(savedFilters.id, id), eq(savedFilters.userId, userId)));
+      if (!existing) return res.status(404).json({ error: "Saved filter not found" });
+
+      const { name, isDefault } = req.body;
+      const updates: any = { updatedAt: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (isDefault !== undefined) updates.isDefault = isDefault;
+
+      // If setting as default, clear existing defaults for same user+page
+      if (isDefault === true) {
+        await db
+          .update(savedFilters)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(and(eq(savedFilters.userId, userId), eq(savedFilters.pageName, existing.pageName)));
+      }
+
+      const [updated] = await db.update(savedFilters).set(updates).where(eq(savedFilters.id, id)).returning();
+      return res.json(updated);
+    } catch (error) {
+      console.error("Error updating saved filter:", error);
+      return res.status(500).json({ error: "Failed to update saved filter" });
+    }
+  });
+
+  // DELETE /api/saved-filters/:id — delete own saved filter
+  app.delete("/api/saved-filters/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.user!.id;
+      const { id } = req.params;
+
+      // Ownership check
+      const [existing] = await db.select().from(savedFilters).where(and(eq(savedFilters.id, id), eq(savedFilters.userId, userId)));
+      if (!existing) return res.status(404).json({ error: "Saved filter not found" });
+
+      await db.delete(savedFilters).where(eq(savedFilters.id, id));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting saved filter:", error);
+      return res.status(500).json({ error: "Failed to delete saved filter" });
+    }
+  });
+
   // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);

@@ -14,28 +14,31 @@ interface User {
   email: string;
 }
 
-interface LeadsFilterBarProps {
-  onFilterChange: (filters: {
-    search: string;
-    status: string;
-    source: string;
-    rating: string;
-    ownerId: string;
-    tagIds: string[];
-  }) => void;
-  totalCount: number;
-  filteredCount: number;
+interface LeadFilters {
+  search: string;
+  status: string;
+  source: string;
+  rating: string;
+  ownerId: string;
+  tagIds: string[];
 }
 
-export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount }: LeadsFilterBarProps) {
+interface LeadsFilterBarProps {
+  onFilterChange: (filters: LeadFilters) => void;
+  totalCount: number;
+  filteredCount: number;
+  initialFilters?: Partial<LeadFilters>;
+}
+
+export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, initialFilters }: LeadsFilterBarProps) {
   const { user } = useAuth();
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [source, setSource] = useState("");
-  const [rating, setRating] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
+  const [status, setStatus] = useState(initialFilters?.status ?? "");
+  const [source, setSource] = useState(initialFilters?.source ?? "");
+  const [rating, setRating] = useState(initialFilters?.rating ?? "");
+  const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],

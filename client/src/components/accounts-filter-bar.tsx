@@ -15,26 +15,29 @@ interface User {
   email: string;
 }
 
-interface AccountsFilterBarProps {
-  onFilterChange: (filters: {
-    search: string;
-    type: string;
-    category: string;
-    ownerId: string;
-    tagIds: string[];
-  }) => void;
-  totalCount: number;
-  filteredCount: number;
+interface AccountFilters {
+  search: string;
+  type: string;
+  category: string;
+  ownerId: string;
+  tagIds: string[];
 }
 
-export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount }: AccountsFilterBarProps) {
+interface AccountsFilterBarProps {
+  onFilterChange: (filters: AccountFilters) => void;
+  totalCount: number;
+  filteredCount: number;
+  initialFilters?: Partial<AccountFilters>;
+}
+
+export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, initialFilters }: AccountsFilterBarProps) {
   const { user } = useAuth();
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState("");
-  const [category, setCategory] = useState("");
-  const [ownerId, setOwnerId] = useState("");
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(initialFilters?.search ?? "");
+  const [type, setType] = useState(initialFilters?.type ?? "");
+  const [category, setCategory] = useState(initialFilters?.category ?? "");
+  const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],

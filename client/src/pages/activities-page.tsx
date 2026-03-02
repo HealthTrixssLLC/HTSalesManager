@@ -28,6 +28,7 @@ import { TagFilterButton } from "@/components/tag-filter-button";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 const activityIcons = {
   call: Phone,
@@ -78,6 +79,20 @@ export default function ActivitiesPage() {
     dateTo: "",
     tagIds: [],
   });
+
+  const hasActiveFilters = !!(filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo || filters.tagIds.length > 0);
+
+  const handleApplySavedFilter = (saved: Record<string, any>) => {
+    setFilters({
+      type: Array.isArray(saved.type) ? saved.type : [],
+      status: Array.isArray(saved.status) ? saved.status : [],
+      priority: Array.isArray(saved.priority) ? saved.priority : [],
+      ownerId: saved.ownerId ?? "",
+      dateFrom: saved.dateFrom ?? "",
+      dateTo: saved.dateTo ?? "",
+      tagIds: Array.isArray(saved.tagIds) ? saved.tagIds : [],
+    });
+  };
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: "createdAt", direction: "desc" });
   const [visibleColumns, setVisibleColumns] = useState({
     type: true,
@@ -345,8 +360,6 @@ export default function ActivitiesPage() {
       tagIds: [],
     });
   };
-
-  const hasActiveFilters = filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo || filters.tagIds.length > 0;
 
   const handleExport = async () => {
     try {
@@ -743,6 +756,13 @@ export default function ActivitiesPage() {
           </CardContent>
         </Card>
       )}
+
+      <SavedFiltersBar
+        pageName="activities"
+        currentFilters={filters}
+        onApply={handleApplySavedFilter}
+        hasActiveFilters={hasActiveFilters}
+      />
 
       {/* Summary Statistics */}
       <ActivitiesSummaryCards onCardClick={(filter) => {

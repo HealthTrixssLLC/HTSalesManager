@@ -26,6 +26,7 @@ import { ContactsFilterBar } from "@/components/contacts-filter-bar";
 import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
@@ -65,6 +66,23 @@ export default function ContactsPage() {
     hasEmail: "",
     tagIds: [] as string[],
   });
+  const [filterKey, setFilterKey] = useState(0);
+  const [savedFilterInitial, setSavedFilterInitial] = useState<typeof filters | undefined>(undefined);
+  const hasActiveFilters = !!(filters.search || filters.accountId || filters.ownerId || filters.hasEmail || filters.tagIds.length > 0);
+
+  const handleApplySavedFilter = (saved: Record<string, any>) => {
+    const newFilters = {
+      search: saved.search ?? "",
+      accountId: saved.accountId ?? "",
+      ownerId: saved.ownerId ?? "",
+      hasEmail: saved.hasEmail ?? "",
+      tagIds: Array.isArray(saved.tagIds) ? saved.tagIds : [],
+    };
+    setSavedFilterInitial(newFilters);
+    setFilters(newFilters);
+    setFilterKey(k => k + 1);
+  };
+
   const [sortBy, setSortBy] = useState("firstName");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -455,10 +473,19 @@ export default function ContactsPage() {
 
       <ContactsSummaryCards onCardClick={handleCardClick} />
 
+      <SavedFiltersBar
+        pageName="contacts"
+        currentFilters={filters}
+        onApply={handleApplySavedFilter}
+        hasActiveFilters={hasActiveFilters}
+      />
+
       <ContactsFilterBar
+        key={filterKey}
         onFilterChange={handleFilterChange}
         totalCount={allContacts?.length || 0}
         filteredCount={displayedContacts?.length || 0}
+        initialFilters={savedFilterInitial}
       />
 
       {selectedContactIds.size > 0 && (

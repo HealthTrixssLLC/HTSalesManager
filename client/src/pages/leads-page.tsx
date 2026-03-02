@@ -26,6 +26,7 @@ import { LeadsSummaryCards } from "@/components/leads-summary-cards";
 import { LeadsFilterBar } from "@/components/leads-filter-bar";
 import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
+import { SavedFiltersBar } from "@/components/saved-filters-bar";
 
 const statusColors: Record<string, string> = {
   new: "bg-blue-500",
@@ -78,6 +79,23 @@ export default function LeadsPage() {
     ownerId: "",
     tagIds: [] as string[],
   });
+  const [filterKey, setFilterKey] = useState(0);
+  const [savedFilterInitial, setSavedFilterInitial] = useState<typeof filters | undefined>(undefined);
+  const hasActiveFilters = !!(filters.search || filters.status || filters.source || filters.rating || filters.ownerId || filters.tagIds.length > 0);
+
+  const handleApplySavedFilter = (saved: Record<string, any>) => {
+    const newFilters = {
+      search: saved.search ?? "",
+      status: saved.status ?? "",
+      source: saved.source ?? "",
+      rating: saved.rating ?? "",
+      ownerId: saved.ownerId ?? "",
+      tagIds: Array.isArray(saved.tagIds) ? saved.tagIds : [],
+    };
+    setSavedFilterInitial(newFilters);
+    setFilters(newFilters);
+    setFilterKey(k => k + 1);
+  };
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
@@ -526,10 +544,19 @@ export default function LeadsPage() {
 
       <LeadsSummaryCards onCardClick={handleSummaryCardClick} />
 
+      <SavedFiltersBar
+        pageName="leads"
+        currentFilters={filters}
+        onApply={handleApplySavedFilter}
+        hasActiveFilters={hasActiveFilters}
+      />
+
       <LeadsFilterBar
+        key={filterKey}
         onFilterChange={handleFilterChange}
         totalCount={allLeads?.length || 0}
         filteredCount={displayedLeads?.length || 0}
+        initialFilters={savedFilterInitial}
       />
 
       {selectedLeadIds.size > 0 && (
