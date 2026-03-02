@@ -13,33 +13,33 @@ Users on all list pages (Opportunities, Accounts, Contacts, Leads, Activities) c
 ### Requirements
 
 #### FR-001: Save Filter Preset
-- Users can save the current filter state on any page that has filters
-- Saving opens a dialog asking for a preset name
-- A "Set as default" checkbox is available in the save dialog
-- Saved presets are **per user** — each user has their own presets
+- [x] Users can save the current filter state on any page that has filters
+- [x] Saving opens a dialog asking for a preset name
+- [x] A "Set as default" checkbox is available in the save dialog
+- [x] Saved presets are **per user** — each user has their own presets
 
 #### FR-002: Default Preset Auto-Apply
-- One preset per user per page can be marked as **Default**
-- When a page loads and the user has no active filters set, the default preset is automatically applied
-- Setting a new default clears the previous default for that page
-- The default preset is visually distinguished with a "Default" badge
+- [x] One preset per user per page can be marked as **Default**
+- [x] When a page loads and the user has no active filters set, the default preset is automatically applied
+- [x] Setting a new default clears the previous default for that page
+- [x] The default preset is visually distinguished with a star icon
 
 #### FR-003: Apply Saved Presets
-- Saved presets appear as clickable chips/badges in a bar below the page header
-- Clicking a preset chip immediately applies all those filter values
-- The currently active preset (if any) is highlighted
+- [x] Saved presets appear as clickable chips/badges in a bar below the page header
+- [x] Clicking a preset chip immediately applies all those filter values
+- [x] The currently active preset (if any) is highlighted
 
 #### FR-004: Manage Presets
-- Users can rename a preset via a context menu on the chip
-- Users can change which preset is the default via context menu
-- Users can delete a preset via context menu
+- [x] Users can rename a preset via a context menu on the chip
+- [x] Users can change which preset is the default via context menu
+- [x] Users can delete a preset via context menu
 
 #### FR-005: Pages Covered
-- Opportunities (filterAccount, closeDateFrom, closeDateTo, probabilityMin, probabilityMax, rating, tagIds, includeInForecast)
-- Accounts (search, type, category, ownerId, tagIds)
-- Contacts (search, accountId, ownerId, hasEmail, tagIds)
-- Leads (search, status, rating, ownerId, tagIds)
-- Activities (type, status, priority, ownerId, dateFrom, dateTo, tagIds)
+- [x] Opportunities (filterAccount, closeDateFrom, closeDateTo, probabilityMin, probabilityMax, rating, tagIds, includeInForecast)
+- [x] Accounts (search, type, category, ownerId, tagIds)
+- [x] Contacts (search, accountId, ownerId, hasEmail, tagIds)
+- [x] Leads (search, status, rating, ownerId, tagIds)
+- [x] Activities (type, status, priority, ownerId, dateFrom, dateTo, tagIds)
 
 ### Database
 New table: `saved_filters`
@@ -78,96 +78,94 @@ The redesign should follow a **"Premium Healthcare SaaS"** aesthetic — clean b
 ### Visual Requirements
 
 #### VR-001: Sidebar
-- Sidebar background: deep teal gradient (`from-[hsl(186,60%,18%)] to-[hsl(186,55%,22%)]`)
-- "Health Trixss" wordmark with HT icon badge at top — white on dark teal
-- Navigation items: icon + label, white/70% opacity when inactive, white/100% + teal pill accent when active
-- Bottom section: user avatar, name, role — separated by a subtle border
-- Sidebar width: 240px
-- Subtle top-to-bottom gradient with a very slight right-edge glow
+- [ ] Sidebar background: deep teal gradient (`from-[hsl(186,60%,18%)] to-[hsl(186,55%,22%)]`)
+- [ ] "Health Trixss" wordmark with HT icon badge at top — white on dark teal
+- [ ] Navigation items: icon + label, white/70% opacity when inactive, white/100% + teal pill accent when active
+- [ ] Bottom section: user avatar, name, role — separated by a subtle border
+- [ ] Sidebar width: 240px
+- [ ] Subtle top-to-bottom gradient with a very slight right-edge glow
 
 #### VR-002: Top Bar / Header Area
-- Remove or minimize standalone top bar — integrate breadcrumb/title into each page's own header
-- Each page header: large bold page title (2xl, font-semibold), subtitle in muted teal, action buttons right-aligned
-- Light background, subtle bottom border
+- [ ] Remove or minimize standalone top bar — integrate breadcrumb/title into each page's own header
+- [ ] Each page header: large bold page title (2xl, font-semibold), subtitle in muted teal, action buttons right-aligned
+- [ ] Light background, subtle bottom border
 
 #### VR-003: Cards
-- Cards: white background with very subtle teal-tinted border (`hsl(186,25%,88%)`)
-- Border radius: `rounded-xl` (not the current overly large radius)
-- Slight shadow: `shadow-sm` with teal-tinted shadow color
-- Stat cards on dashboard: left accent stripe in primary teal, or top gradient fade
+- [ ] Cards: white background with very subtle teal-tinted border (`hsl(186,25%,88%)`)
+- [ ] Border radius: `rounded-xl` (not the current overly large radius)
+- [ ] Slight shadow: `shadow-sm` with teal-tinted shadow color
+- [ ] Stat cards on dashboard: left accent stripe in primary teal, or top gradient fade
 
 #### VR-004: Typography
-- Font: Inter (already loaded) — not Open Sans
-- Page title: `text-2xl font-semibold text-foreground`
-- Section headers: `text-lg font-medium`
-- Table headers: `text-xs font-semibold uppercase tracking-wider text-muted-foreground`
-- Metric numbers on dashboard: `text-3xl font-bold`
+- [ ] Font: Inter (already loaded) — not Open Sans
+- [ ] Page title: `text-2xl font-semibold text-foreground`
+- [ ] Section headers: `text-lg font-medium`
+- [ ] Table headers: `text-xs font-semibold uppercase tracking-wider text-muted-foreground`
+- [ ] Metric numbers on dashboard: `text-3xl font-bold`
 
 #### VR-005: Color Palette Refinement
-- Background: clean white (`#ffffff`) with a very faint teal tint on sidebar/nav areas
-- Surface (cards): `hsl(186, 45%, 98%)` — nearly white with teal warmth
-- Border: `hsl(186, 25%, 88%)` — soft teal-tinted border
-- Primary actions: `hsl(186, 78%, 32%)` teal buttons — white text
-- Destructive: warm red `hsl(356, 90%, 54%)`
-- Success: `hsl(142, 71%, 45%)`
-- Warning: amber `hsl(38, 100%, 50%)`
+- [ ] Background: clean white (`#ffffff`) with a very faint teal tint on sidebar/nav areas
+- [ ] Surface (cards): `hsl(186, 45%, 98%)` — nearly white with teal warmth
+- [ ] Border: `hsl(186, 25%, 88%)` — soft teal-tinted border
+- [ ] Primary actions: `hsl(186, 78%, 32%)` teal buttons — white text
+- [ ] Destructive: warm red `hsl(356, 90%, 54%)`
+- [ ] Success: `hsl(142, 71%, 45%)`
+- [ ] Warning: amber `hsl(38, 100%, 50%)`
 
 #### VR-006: Dashboard Stat Cards
-- 4-column grid of stat cards with:
-  - Icon in a teal-tinted rounded square
-  - Large metric number (3xl bold)
-  - Label and subtitle
-  - Subtle trend indicator
-- Cards have a very light teal-to-white gradient background
+- [ ] 4-column grid of stat cards with icon in a teal-tinted rounded square
+- [ ] Large metric number (3xl bold), label and subtitle
+- [ ] Subtle trend indicator
+- [ ] Cards have a very light teal-to-white gradient background
 
 #### VR-007: Tables
-- Alternating row backgrounds: white / `hsl(186, 45%, 98%)`
-- Row hover: `hsl(186, 45%, 95%)`
-- Sticky column headers with subtle bottom border
-- Row actions revealed on hover (edit/view/delete buttons)
-- Cleaner pagination controls
+- [ ] Alternating row backgrounds: white / `hsl(186, 45%, 98%)`
+- [ ] Row hover: `hsl(186, 45%, 95%)`
+- [ ] Sticky column headers with subtle bottom border
+- [ ] Row actions revealed on hover (edit/view/delete buttons)
+- [ ] Cleaner pagination controls
 
 #### VR-008: Buttons
-- Primary: solid teal, white text, subtle shadow
-- Secondary/Outline: teal border, teal text, white background
-- Ghost: transparent, teal text on hover
-- Destructive: warm red
-- Size consistency across the app
+- [ ] Primary: solid teal, white text, subtle shadow
+- [ ] Secondary/Outline: teal border, teal text, white background
+- [ ] Ghost: transparent, teal text on hover
+- [ ] Destructive: warm red
+- [ ] Size consistency across the app
 
 #### VR-009: Badges & Status Indicators
-- Pipeline stage badges: each stage gets a distinct, accessible color from the data palette
-- Lead status: Hot = warm red/orange, Warm = amber, Cold = blue-gray
-- Activity status: pending = amber, completed = green, cancelled = muted
-- Smaller, tighter badges with `rounded-md` (not pill-shaped unless intentional)
+- [ ] Pipeline stage badges: each stage gets a distinct, accessible color from the data palette
+- [ ] Lead status: Hot = warm red/orange, Warm = amber, Cold = blue-gray
+- [ ] Activity status: pending = amber, completed = green, cancelled = muted
+- [ ] Smaller, tighter badges with `rounded-md` (not pill-shaped unless intentional)
 
 #### VR-010: Empty States
-- Illustrated empty states on list pages using a simple SVG icon + title + subtitle + CTA button
-- Consistent messaging: "No [entity] yet. Create your first one to get started."
+- [ ] Illustrated empty states on list pages using a simple SVG icon + title + subtitle + CTA button
+- [ ] Consistent messaging: "No [entity] yet. Create your first one to get started."
 
 #### VR-011: Form Polish
-- Input fields: clean border with teal focus ring
-- Dropdown selects: consistent styling matching inputs
-- Form sections with dividers for multi-section forms
-- Required field indicators (asterisk) in teal
+- [ ] Input fields: clean border with teal focus ring
+- [ ] Dropdown selects: consistent styling matching inputs
+- [ ] Form sections with dividers for multi-section forms
+- [ ] Required field indicators (asterisk) in teal
 
 #### VR-012: Navigation Active States
-- Active sidebar item: pill-shaped teal background, white text + icon
-- Hover: very subtle lighter teal background
-- Transition: 150ms ease
+- [ ] Active sidebar item: pill-shaped teal background, white text + icon
+- [ ] Hover: very subtle lighter teal background
+- [ ] Transition: 150ms ease
 
 #### VR-013: Border Radius Normalization
-- Current: `--radius: 1.3rem` is far too large for enterprise SaaS
-- New: `--radius: 0.5rem` (8px) — professional, modern, not boxy
-- Cards: `rounded-xl` (12px)
-- Buttons/inputs: `rounded-lg` (8px)  
-- Badges: `rounded-md` (6px)
-- Avatars/icons: `rounded-full` where circular, `rounded-lg` for square
+- [ ] Current: `--radius: 1.3rem` is far too large for enterprise SaaS
+- [ ] New: `--radius: 0.5rem` (8px) — professional, modern, not boxy
+- [ ] Cards: `rounded-xl` (12px)
+- [ ] Buttons/inputs: `rounded-lg` (8px)
+- [ ] Badges: `rounded-md` (6px)
+- [ ] Avatars/icons: `rounded-full` where circular, `rounded-lg` for square
 
 #### VR-014: Login Page
-- Centered two-panel layout
-- Left: teal gradient panel with HT logo, tagline, and subtle decorative pattern
-- Right: clean white panel with login form
-- Full-viewport height
+- [ ] Centered two-panel layout
+- [ ] Left: teal gradient panel with HT logo, tagline, and subtle decorative pattern
+- [ ] Right: clean white panel with login form
+- [ ] Full-viewport height
 
 ### Implementation Order
 1. CSS/theme variables (index.css) — border radius, color refinements
@@ -182,13 +180,13 @@ The redesign should follow a **"Premium Healthcare SaaS"** aesthetic — clean b
 
 | Date | Task | Status | Notes |
 |------|------|--------|-------|
-| 2026-03-02 | CR001 document created | Done | — |
-| 2026-03-02 | T001: Schema — savedFilters table | Done | Table created, db:push run |
-| — | T002: Backend CRUD routes | Pending | — |
-| — | T003: SavedFiltersBar component | Pending | — |
-| — | T004: Integrate into 5 pages | Pending | — |
-| — | T005: CSS/Theme overhaul | Pending | — |
-| — | T006: Sidebar redesign | Pending | — |
-| — | T007: Dashboard & stat cards | Pending | — |
-| — | T008: Table & list polish | Pending | — |
-| — | T009: Login page redesign | Pending | — |
+| 2026-03-02 | CR001 document created | ✅ Done | — |
+| 2026-03-02 | T001: Schema — savedFilters table | ✅ Done | Table created, db:push run |
+| 2026-03-02 | T002: Backend CRUD routes | ✅ Done | GET/POST/PUT/DELETE /api/saved-filters |
+| 2026-03-02 | T003: SavedFiltersBar component | ✅ Done | saved-filters-bar.tsx with badges, dialog, rename, delete |
+| 2026-03-02 | T004: Integrate into 5 pages | ✅ Done | Opportunities, Accounts, Contacts, Leads, Activities; E2E tested |
+| — | T005: CSS/Theme overhaul | ⬜ Pending | Border radius, color palette, index.css |
+| — | T006: Sidebar redesign | ⬜ Pending | Dark teal gradient, active states |
+| — | T007: Dashboard & stat cards | ⬜ Pending | Teal accents, metric display |
+| — | T008: Table & list polish | ⬜ Pending | Alternating rows, hover states |
+| — | T009: Login page redesign | ⬜ Pending | Two-panel layout |
