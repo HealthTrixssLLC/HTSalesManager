@@ -44,19 +44,17 @@ export function AppSidebar() {
     url === "/" ? location === "/" : location.startsWith(url);
 
   return (
-    <Sidebar
-      style={{ background: "linear-gradient(160deg, hsl(186,65%,14%) 0%, hsl(186,55%,19%) 60%, hsl(186,48%,22%) 100%)" }}
-      className="border-r-0"
-    >
-      {/* Logo / Brand */}
+    <Sidebar className="border-r-0" style={{ background: "linear-gradient(160deg, hsl(216,42%,18%) 0%, hsl(216,40%,22%) 60%, hsl(216,38%,26%) 100%)" }}>
+      {/* BR-002 / BR-009: Official H+ logo + HealthTrixss wordmark */}
       <SidebarHeader className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0"
-               style={{ background: "hsl(186, 78%, 42%)" }}>
-            <span className="text-white font-bold text-sm tracking-tight">HT</span>
-          </div>
+          <img
+            src="/ht-logo.png"
+            alt="HealthTrixss"
+            className="h-9 w-9 rounded-md shrink-0 object-contain bg-white"
+          />
           <div>
-            <p className="text-white font-semibold text-sm leading-none">Health Trixss</p>
+            <p className="text-white font-semibold text-sm leading-none">HealthTrixss</p>
             <p className="text-white/50 text-xs mt-0.5">CRM Platform</p>
           </div>
         </div>
@@ -79,12 +77,13 @@ export function AppSidebar() {
                       isActive={active}
                       className={
                         active
-                          ? "bg-white/15 text-white font-medium rounded-md"
+                          ? "text-white font-medium rounded-md"
                           : "text-white/65 hover:text-white hover:bg-white/10 rounded-md transition-colors duration-150"
                       }
+                      style={active ? { backgroundColor: "rgba(254,160,2,0.22)" } : undefined}
                     >
                       <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <item.icon className="h-4 w-4 shrink-0" style={active ? { color: "hsl(39,99%,60%)" } : undefined} />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -111,12 +110,13 @@ export function AppSidebar() {
                       isActive={active}
                       className={
                         active
-                          ? "bg-white/15 text-white font-medium rounded-md"
+                          ? "text-white font-medium rounded-md"
                           : "text-white/65 hover:text-white hover:bg-white/10 rounded-md transition-colors duration-150"
                       }
+                      style={active ? { backgroundColor: "rgba(254,160,2,0.22)" } : undefined}
                     >
                       <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <item.icon className="h-4 w-4 shrink-0" style={active ? { color: "hsl(39,99%,60%)" } : undefined} />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -134,7 +134,7 @@ export function AppSidebar() {
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarFallback
               className="text-xs font-semibold"
-              style={{ background: "hsl(186, 60%, 38%)", color: "white" }}
+              style={{ background: "hsl(216, 45%, 40%)", color: "white" }}
             >
               {user ? getInitials(user.name) : "?"}
             </AvatarFallback>

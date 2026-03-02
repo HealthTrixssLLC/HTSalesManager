@@ -13,7 +13,7 @@ export default function HelpPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground" data-testid="heading-help">Help & Documentation</h1>
-        <p className="text-muted-foreground">Everything you need to get started with Health Trixss CRM</p>
+        <p className="text-muted-foreground">Everything you need to get started with HealthTrixss CRM</p>
       </div>
 
       <Tabs defaultValue="getting-started" className="w-full">
@@ -30,17 +30,17 @@ export default function HelpPage() {
         <TabsContent value="getting-started" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Welcome to Health Trixss CRM</CardTitle>
+              <CardTitle>Welcome to HealthTrixss CRM</CardTitle>
               <CardDescription>Your lightweight Salesforce alternative built for healthcare professionals</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-primary" />
-                  What is Health Trixss CRM?
+                  What is HealthTrixss CRM?
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Health Trixss CRM is a comprehensive, self-hosted CRM platform designed specifically for healthcare sales teams. 
+                  HealthTrixss CRM is a comprehensive, self-hosted CRM platform designed specifically for healthcare sales teams. 
                   It provides powerful pipeline management, automation, and insights without the complexity and cost of enterprise solutions.
                 </p>
               </div>
@@ -819,7 +819,7 @@ console.log(\`Account: \${opportunity.account?.name}\`);`}
             <Database className="h-4 w-4" />
             <AlertTitle>Migrating from Microsoft Dynamics 365?</AlertTitle>
             <AlertDescription>
-              Follow this step-by-step guide to migrate your data from Dynamics 365 to Health Trixss CRM
+              Follow this step-by-step guide to migrate your data from Dynamics 365 to HealthTrixss CRM
             </AlertDescription>
           </Alert>
 
@@ -854,7 +854,7 @@ console.log(\`Account: \${opportunity.account?.name}\`);`}
                   <Database className="h-4 w-4" />
                   <AlertTitle>Preserve Existing IDs for Downstream Systems</AlertTitle>
                   <AlertDescription>
-                    If you have downstream systems (APIs, integrations, reports) that reference your Dynamics 365 record IDs, <strong>include the original IDs in your CSV exports</strong>. Health Trixss CRM will preserve these exact IDs during import, ensuring all your external systems continue to work without changes.
+                    If you have downstream systems (APIs, integrations, reports) that reference your Dynamics 365 record IDs, <strong>include the original IDs in your CSV exports</strong>. HealthTrixss CRM will preserve these exact IDs during import, ensuring all your external systems continue to work without changes.
                   </AlertDescription>
                 </Alert>
                 <div className="bg-muted p-4 rounded-md">
@@ -883,7 +883,7 @@ ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
                       <thead>
                         <tr className="border-b">
                           <th className="text-left py-1">Dynamics 365</th>
-                          <th className="text-left py-1">Health Trixss CRM</th>
+                          <th className="text-left py-1">HealthTrixss CRM</th>
                         </tr>
                       </thead>
                       <tbody className="text-muted-foreground">
@@ -904,7 +904,7 @@ ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
                       <thead>
                         <tr className="border-b">
                           <th className="text-left py-1">Dynamics 365</th>
-                          <th className="text-left py-1">Health Trixss CRM</th>
+                          <th className="text-left py-1">HealthTrixss CRM</th>
                         </tr>
                       </thead>
                       <tbody className="text-muted-foreground">
@@ -924,7 +924,7 @@ ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
                       <thead>
                         <tr className="border-b">
                           <th className="text-left py-1">Dynamics 365</th>
-                          <th className="text-left py-1">Health Trixss CRM</th>
+                          <th className="text-left py-1">HealthTrixss CRM</th>
                         </tr>
                       </thead>
                       <tbody className="text-muted-foreground">
@@ -942,12 +942,12 @@ ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
               <div className="space-y-2">
                 <h3 className="text-lg font-semibold">Step 4: Stage Conversion</h3>
                 <div className="bg-muted p-4 rounded-md">
-                  <p className="text-sm font-medium mb-2">Map Dynamics stages to Health Trixss stages:</p>
+                  <p className="text-sm font-medium mb-2">Map Dynamics stages to HealthTrixss stages:</p>
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left py-1">Dynamics 365 Stage</th>
-                        <th className="text-left py-1">Health Trixss Stage</th>
+                        <th className="text-left py-1">HealthTrixss Stage</th>
                       </tr>
                     </thead>
                     <tbody className="text-muted-foreground">
@@ -1164,7 +1164,7 @@ ACCT-D365-67890,Regional Clinic,prospect,Healthcare`}
               <div className="space-y-2">
                 <h3 className="font-semibold">How is this different from Salesforce?</h3>
                 <p className="text-sm text-muted-foreground">
-                  Health Trixss CRM is self-hosted, lightweight, and built specifically for healthcare sales teams. It focuses on core CRM features without the complexity and cost of enterprise solutions. You own your data and infrastructure.
+                  HealthTrixss CRM is self-hosted, lightweight, and built specifically for healthcare sales teams. It focuses on core CRM features without the complexity and cost of enterprise solutions. You own your data and infrastructure.
                 </p>
               </div>
             </CardContent>

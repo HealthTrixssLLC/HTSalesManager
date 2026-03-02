@@ -1089,7 +1089,7 @@ export default function AdminConsole() {
             <CardHeader>
               <CardTitle>Dynamics 365 Import</CardTitle>
               <CardDescription>
-                Transform Dynamics 365 Excel exports into Health Trixss CRM-aligned CSV format
+                Transform Dynamics 365 Excel exports into HealthTrixss CRM-aligned CSV format
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1314,7 +1314,7 @@ export default function AdminConsole() {
                       <li>Maps "Regarding" field to multiple entity types (Account, Contact, Lead, Opportunity)</li>
                     )}
                     <li>Adds governance metadata (Source System, Import Status)</li>
-                    <li>Outputs CSV aligned with Health Trixss CRM template</li>
+                    <li>Outputs CSV aligned with HealthTrixss CRM template</li>
                   </ul>
                 </div>
               </div>

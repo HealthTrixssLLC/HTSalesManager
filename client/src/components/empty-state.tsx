@@ -17,9 +17,9 @@ export function EmptyState({ icon: Icon, title, description, action }: EmptyStat
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center" data-testid="empty-state">
       <div
         className="h-14 w-14 rounded-xl flex items-center justify-center mb-4"
-        style={{ background: "hsl(186, 45%, 94%)" }}
+        style={{ background: "hsl(216, 40%, 94%)" }}
       >
-        <Icon className="h-7 w-7" style={{ color: "hsl(186, 78%, 32%)" }} />
+        <Icon className="h-7 w-7" style={{ color: "hsl(216, 40%, 30%)" }} />
       </div>
       <h3 className="text-base font-semibold text-foreground mb-1">{title}</h3>
       {description && (

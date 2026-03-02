@@ -12,17 +12,23 @@ I want iterative development. Ask before making major changes. I prefer detailed
 
 The system uses a full-stack JavaScript architecture: Node.js with Express for the backend, PostgreSQL with Drizzle ORM for the database, and React with Vite for the frontend.
 
-**UI/UX Decisions:**
-The design follows a "Premium Healthcare SaaS" aesthetic inspired by Linear and Salesforce Lightning — clean but not cold, data-rich but not cluttered. Key design decisions:
-- **Primary brand color**: Health Trixss Teal `hsl(186, 78%, 32%)` — used for primary actions, icon squares, focus rings
-- **Font**: Inter (variable weight, loaded from Google Fonts)
+**UI/UX Decisions (CR002 Brand-aligned):**
+The design follows the official HealthTrixss Design System (https://healthtrixss-style-guide.replit.app/). Key design decisions:
+- **Logo**: Official H+ mark (`/ht-logo.png`) — "H" in charcoal, "+" in orange — used in sidebar header and login page
+- **Brand name**: "HealthTrixss" (single word, no space)
+- **Primary brand color**: Dark Blue `#2E456B` / `hsl(216, 40%, 30%)` — used for primary buttons, icon squares, sidebar
+- **Accent/CTA color**: Orange `#FEA002` / `hsl(39, 99%, 50%)` — focus ring, sidebar active items, secondary buttons, CTA highlights
+- **Secondary/info color**: Dark Teal `#277493` / `hsl(195, 57%, 37%)` — demoted to chart-3, info states
+- **Background**: Warm cream `#FAF7F2` / `hsl(38, 27%, 97%)` — the HealthTrixss brand "Background Light"
+- **Font**: Inter + IBM Plex Sans, with JetBrains Mono for codes/IDs
 - **Border radius**: `--radius: 0.5rem` (8px) — professional, not boxy
-- **Sidebar**: Dark teal gradient (`hsl(186,65%,14%)` → `hsl(186,48%,22%)`), white text with 65% opacity on inactive items, `bg-white/15` pill on active
-- **Cards**: White background, teal-tinted borders `hsl(186,22%,90%)`, real teal-tinted box shadows
-- **Login page**: Two-panel layout — left: dark teal gradient with HT brand + features, right: white form
-- **Badge colors**: Semantic per-entity color coding (lead status/rating, opportunity stage, activity status/priority) with dark mode variants
-- **Empty states**: Shared `EmptyState` component with teal icon square, title, description, CTA button
-- **Shadows**: Real teal-tinted box shadows (previously all zero/transparent)
+- **Sidebar**: Dark Blue gradient (`hsl(216,42%,18%)` → `hsl(216,38%,26%)`), white text 65% opacity inactive, orange-tinted pill on active
+- **Cards**: White background, blue-tinted borders `hsl(216,20%,90%)`, blue-tinted box shadows
+- **Login page**: Two-panel — left: dark blue gradient with H+ logo + feature highlights (orange icon boxes), right: white form
+- **Typography scale**: H1=`text-3xl font-bold`, H2=`text-2xl font-semibold`, H3=`text-xl font-semibold` (style guide spec)
+- **Badge colors**: Semantic per-entity (lead status/rating, opportunity stage, activity status/priority) with dark mode variants
+- **Empty states**: Shared `EmptyState` component with blue icon square, title, description, CTA button
+- **Shadows**: Blue-tinted box shadows `hsl(216 30% 20% / ...)`
 - **Page headers**: Consistent `text-2xl font-semibold` with `p-6` padding and `space-y-6` rhythm across all pages
 
 **Technical Implementations & Feature Specifications:**

@@ -112,6 +112,6 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   const port = parseInt(process.env.PORT || '5000', 10);
   httpServer.listen(port, "0.0.0.0", () => {
-    log(`Health Trixss CRM serving on http://0.0.0.0:${port}`);
+    log(`HealthTrixss CRM serving on http://0.0.0.0:${port}`);
   });
 })();

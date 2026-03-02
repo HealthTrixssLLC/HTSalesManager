@@ -14,86 +14,100 @@
   --elevate-1: rgba(0,0,0, .05);
   --elevate-2: rgba(0,0,0, .12);
 
-  --background: 0 0% 99%;
+  /* BR-007: Warm cream background — HealthTrixss brand "Background Light" #FAF7F2 */
+  --background: 38 27% 97%;
 
-  --foreground: 215 28% 10%;
+  /* BR-001: Dark Blue foreground text — closer to brand #2E456B */
+  --foreground: 216 40% 14%;
 
-  --border: 186 18% 88%;
+  /* BR-001: Blue-tinted borders */
+  --border: 216 18% 88%;
 
   --card: 0 0% 100%;
 
-  --card-foreground: 215 28% 10%;
+  --card-foreground: 216 40% 14%;
 
-  --card-border: 186 22% 90%;
+  --card-border: 216 20% 90%;
 
-  /* Sidebar is now dark teal — vars below control its colors */
-  --sidebar: 186 62% 16%;
+  /* BR-003: Sidebar → Dark Blue #2E456B */
+  --sidebar: 216 40% 22%;
 
   --sidebar-foreground: 0 0% 93%;
 
-  --sidebar-border: 186 45% 22%;
+  --sidebar-border: 216 35% 28%;
 
-  --sidebar-primary: 186 78% 42%;
+  /* BR-003: Orange active accent — brand primary CTA #FEA002 */
+  --sidebar-primary: 39 99% 50%;
 
-  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary-foreground: 216 40% 12%;
 
-  --sidebar-accent: 186 50% 24%;
+  /* BR-003: Slightly lighter blue for hover */
+  --sidebar-accent: 216 35% 30%;
 
   --sidebar-accent-foreground: 0 0% 100%;
 
-  --sidebar-ring: 186 78% 42%;
+  --sidebar-ring: 39 99% 50%;
 
   --popover: 0 0% 100%;
 
-  --popover-foreground: 215 28% 10%;
+  --popover-foreground: 216 40% 14%;
 
-  --popover-border: 186 18% 88%;
+  --popover-border: 216 18% 88%;
 
-  --primary: 186 78% 32%;
+  /* BR-001 / BR-005: Primary → Dark Blue #2E456B hsl(216 40% 30%) */
+  --primary: 216 40% 30%;
 
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 38 100% 50%;
+  /* BR-001: Secondary → Orange #FEA002 — used for accent CTAs */
+  --secondary: 39 99% 50%;
 
-  --secondary-foreground: 0 0% 100%;
+  --secondary-foreground: 216 40% 10%;
 
-  --muted: 186 20% 94%;
+  /* BR-007: Warm muted surface */
+  --muted: 38 25% 95%;
 
-  --muted-foreground: 215 14% 42%;
+  /* BR-001: Standard neutral muted text #6B7280 */
+  --muted-foreground: 220 9% 46%;
 
-  --accent: 186 45% 95%;
+  /* Subtle warm surface for dropdown/select hover states */
+  --accent: 38 35% 93%;
 
-  --accent-foreground: 186 78% 25%;
+  --accent-foreground: 216 40% 25%;
 
-  --destructive: 356 90% 54%;
+  /* BR-001: Destructive → #D94E41 hsl(4 59% 55%) */
+  --destructive: 4 59% 55%;
 
   --destructive-foreground: 0 0% 100%;
 
-  --input: 186 18% 94%;
-  --ring: 186 78% 32%;
+  /* BR-001: Blue-tinted input background */
+  --input: 216 15% 95%;
 
-  --chart-1: 186 78% 32%;
-  --chart-2: 38 100% 50%;
-  --chart-3: 164 60% 38%;
+  /* BR-001: Orange focus ring — draws attention on brand orange */
+  --ring: 39 99% 50%;
+
+  /* BR-001: Chart palette — Dark Blue, Orange, Teal, Purple, Red */
+  --chart-1: 216 40% 30%;
+  --chart-2: 39 99% 50%;
+  --chart-3: 195 57% 37%;
   --chart-4: 270 60% 55%;
-  --chart-5: 356 90% 54%;
+  --chart-5: 4 59% 55%;
 
-  --font-sans: Inter, sans-serif;
+  --font-sans: Inter, "IBM Plex Sans", system-ui, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
 
-  /* VR-013: Professional 8px border radius — not the previous 1.3rem */
   --radius: 0.5rem;
 
-  /* Subtle teal-tinted shadows */
-  --shadow-2xs: 0px 1px 2px 0px hsl(186 30% 20% / 0.06);
-  --shadow-xs:  0px 1px 3px 0px hsl(186 30% 20% / 0.08);
-  --shadow-sm:  0px 1px 3px 0px hsl(186 30% 20% / 0.08), 0px 1px 2px -1px hsl(186 30% 20% / 0.06);
-  --shadow:     0px 2px 6px 0px hsl(186 30% 20% / 0.08), 0px 1px 2px -1px hsl(186 30% 20% / 0.06);
-  --shadow-md:  0px 4px 8px -1px hsl(186 30% 20% / 0.10), 0px 2px 4px -1px hsl(186 30% 20% / 0.06);
-  --shadow-lg:  0px 8px 16px -2px hsl(186 30% 20% / 0.10), 0px 4px 6px -1px hsl(186 30% 20% / 0.06);
-  --shadow-xl:  0px 16px 24px -4px hsl(186 30% 20% / 0.12), 0px 6px 10px -2px hsl(186 30% 20% / 0.08);
-  --shadow-2xl: 0px 24px 40px -8px hsl(186 30% 20% / 0.16);
+  /* BR-001: Blue-tinted shadows */
+  --shadow-2xs: 0px 1px 2px 0px hsl(216 30% 20% / 0.06);
+  --shadow-xs:  0px 1px 3px 0px hsl(216 30% 20% / 0.08);
+  --shadow-sm:  0px 1px 3px 0px hsl(216 30% 20% / 0.08), 0px 1px 2px -1px hsl(216 30% 20% / 0.06);
+  --shadow:     0px 2px 6px 0px hsl(216 30% 20% / 0.08), 0px 1px 2px -1px hsl(216 30% 20% / 0.06);
+  --shadow-md:  0px 4px 8px -1px hsl(216 30% 20% / 0.10), 0px 2px 4px -1px hsl(216 30% 20% / 0.06);
+  --shadow-lg:  0px 8px 16px -2px hsl(216 30% 20% / 0.10), 0px 4px 6px -1px hsl(216 30% 20% / 0.06);
+  --shadow-xl:  0px 16px 24px -4px hsl(216 30% 20% / 0.12), 0px 6px 10px -2px hsl(216 30% 20% / 0.08);
+  --shadow-2xl: 0px 24px 40px -8px hsl(216 30% 20% / 0.16);
 
   --tracking-normal: 0em;
   --spacing: 0.25rem;
@@ -130,83 +144,90 @@
   --elevate-1: rgba(255,255,255, .06);
   --elevate-2: rgba(255,255,255, .14);
 
-  --background: 210 20% 8%;
+  /* Dark mode — deep navy base */
+  --background: 216 35% 8%;
 
-  --foreground: 0 0% 95%;
+  --foreground: 0 0% 92%;
 
-  --border: 186 20% 22%;
+  --border: 216 25% 22%;
 
-  --card: 210 18% 12%;
+  --card: 216 30% 12%;
 
-  --card-foreground: 0 0% 95%;
+  --card-foreground: 0 0% 92%;
 
-  --card-border: 186 18% 20%;
+  --card-border: 216 25% 20%;
 
-  --sidebar: 186 55% 12%;
+  /* Dark mode sidebar — deeper navy */
+  --sidebar: 216 42% 16%;
 
   --sidebar-foreground: 0 0% 92%;
 
-  --sidebar-border: 186 40% 18%;
+  --sidebar-border: 216 35% 22%;
 
-  --sidebar-primary: 186 78% 44%;
+  /* Orange active accent stays in dark mode */
+  --sidebar-primary: 39 99% 50%;
 
-  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-primary-foreground: 216 40% 12%;
 
-  --sidebar-accent: 186 45% 20%;
+  --sidebar-accent: 216 35% 22%;
 
   --sidebar-accent-foreground: 0 0% 100%;
 
-  --sidebar-ring: 186 78% 44%;
+  --sidebar-ring: 39 99% 50%;
 
-  --popover: 210 18% 12%;
+  --popover: 216 30% 12%;
 
-  --popover-foreground: 0 0% 95%;
+  --popover-foreground: 0 0% 92%;
 
-  --popover-border: 186 18% 22%;
+  --popover-border: 216 25% 22%;
 
-  --primary: 186 78% 44%;
+  /* Dark mode primary → lighter blue to contrast against dark bg */
+  --primary: 216 50% 55%;
 
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 38 100% 50%;
+  /* Orange stays as secondary CTA in dark mode */
+  --secondary: 39 99% 50%;
 
-  --secondary-foreground: 0 0% 100%;
+  --secondary-foreground: 216 40% 10%;
 
-  --muted: 210 15% 18%;
+  --muted: 216 25% 18%;
 
-  --muted-foreground: 0 0% 60%;
+  --muted-foreground: 0 0% 58%;
 
-  --accent: 186 30% 18%;
+  --accent: 216 28% 20%;
 
-  --accent-foreground: 186 70% 80%;
+  --accent-foreground: 39 95% 65%;
 
-  --destructive: 356 90% 54%;
+  --destructive: 4 65% 58%;
 
   --destructive-foreground: 0 0% 100%;
 
-  --input: 210 18% 16%;
-  --ring: 186 78% 44%;
+  --input: 216 25% 18%;
 
-  --chart-1: 186 70% 44%;
-  --chart-2: 38 100% 50%;
-  --chart-3: 164 60% 42%;
+  /* Orange ring in dark mode for brand consistency */
+  --ring: 39 99% 50%;
+
+  --chart-1: 216 50% 55%;
+  --chart-2: 39 99% 50%;
+  --chart-3: 195 57% 45%;
   --chart-4: 270 60% 62%;
-  --chart-5: 356 90% 58%;
+  --chart-5: 4 65% 58%;
 
-  --shadow-2xs: 0px 1px 2px 0px hsl(210 30% 5% / 0.20);
-  --shadow-xs:  0px 1px 3px 0px hsl(210 30% 5% / 0.24);
-  --shadow-sm:  0px 1px 3px 0px hsl(210 30% 5% / 0.24), 0px 1px 2px -1px hsl(210 30% 5% / 0.16);
-  --shadow:     0px 2px 6px 0px hsl(210 30% 5% / 0.24), 0px 1px 2px -1px hsl(210 30% 5% / 0.16);
-  --shadow-md:  0px 4px 8px -1px hsl(210 30% 5% / 0.28), 0px 2px 4px -1px hsl(210 30% 5% / 0.16);
-  --shadow-lg:  0px 8px 16px -2px hsl(210 30% 5% / 0.32), 0px 4px 6px -1px hsl(210 30% 5% / 0.16);
-  --shadow-xl:  0px 16px 24px -4px hsl(210 30% 5% / 0.36), 0px 6px 10px -2px hsl(210 30% 5% / 0.20);
-  --shadow-2xl: 0px 24px 40px -8px hsl(210 30% 5% / 0.44);
+  --shadow-2xs: 0px 1px 2px 0px hsl(216 40% 5% / 0.20);
+  --shadow-xs:  0px 1px 3px 0px hsl(216 40% 5% / 0.24);
+  --shadow-sm:  0px 1px 3px 0px hsl(216 40% 5% / 0.24), 0px 1px 2px -1px hsl(216 40% 5% / 0.16);
+  --shadow:     0px 2px 6px 0px hsl(216 40% 5% / 0.24), 0px 1px 2px -1px hsl(216 40% 5% / 0.16);
+  --shadow-md:  0px 4px 8px -1px hsl(216 40% 5% / 0.28), 0px 2px 4px -1px hsl(216 40% 5% / 0.16);
+  --shadow-lg:  0px 8px 16px -2px hsl(216 40% 5% / 0.32), 0px 4px 6px -1px hsl(216 40% 5% / 0.16);
+  --shadow-xl:  0px 16px 24px -4px hsl(216 40% 5% / 0.36), 0px 6px 10px -2px hsl(216 40% 5% / 0.20);
+  --shadow-2xl: 0px 24px 40px -8px hsl(216 40% 5% / 0.44);
 
   --radius: 0.5rem;
   --spacing: 0.25rem;
-  --font-sans: Inter, sans-serif;
+  --font-sans: Inter, "IBM Plex Sans", system-ui, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", monospace;
   --tracking-normal: 0em;
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -227,10 +248,10 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 
-  /* VR-004: Typography — clean Inter hierarchy */
-  h1 { @apply text-2xl font-semibold tracking-tight; }
-  h2 { @apply text-xl font-semibold tracking-tight; }
-  h3 { @apply text-lg font-medium; }
+  /* BR-009 / Style guide typography scale */
+  h1 { @apply text-3xl font-bold tracking-tight; }
+  h2 { @apply text-2xl font-semibold tracking-tight; }
+  h3 { @apply text-xl font-semibold; }
 }
 
 /**
@@ -308,8 +329,8 @@
     inset: -1px;
   }
 
-  /* VR-007: Table row hover */
+  /* Table row hover */
   .table-row-hover:hover {
-    background-color: hsl(var(--accent));
+    background-color: hsl(var(--muted));
   }
 }

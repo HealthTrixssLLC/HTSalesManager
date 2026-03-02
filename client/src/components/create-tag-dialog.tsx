@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const PRESET_COLORS = [
-  { name: "Health Trixss Teal", value: "#0D7C7C" },
+  { name: "HealthTrixss Blue", value: "#2E456B" },
   { name: "Sky Blue", value: "#0ea5e9" },
   { name: "Blue", value: "#3b82f6" },
   { name: "Indigo", value: "#6366f1" },

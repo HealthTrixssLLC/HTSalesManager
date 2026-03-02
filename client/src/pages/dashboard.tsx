@@ -63,7 +63,7 @@ const STAGE_COLORS = [
   "hsl(var(--chart-3))",
   "hsl(var(--chart-4))",
   "hsl(var(--chart-5))",
-  "hsl(186, 78%, 32%)", // Health Trixss primary teal
+  "hsl(216 45% 45%)", // extra — deep blue fallback
 ];
 
 export default function Dashboard() {
@@ -268,7 +268,7 @@ export default function Dashboard() {
                 </div>
                 <div
                   className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: "hsl(186, 78%, 32%)", opacity: 0.9 }}
+                  style={{ background: "hsl(216, 40%, 30%)" }}
                 >
                   <Icon className="h-5 w-5 text-white" />
                 </div>
