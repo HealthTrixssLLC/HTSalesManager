@@ -115,8 +115,9 @@ export default function AccountsPage() {
   // Fetch filtered accounts
   const { data: filteredAccounts, isLoading } = useQuery<Account[]>({
     queryKey: ["/api/accounts", queryString],
-    queryFn: async () => {
-      const res = await fetch(`/api/accounts?${queryString}`, {
+    queryFn: async ({ queryKey }) => {
+      const params = queryKey[1] as string;
+      const res = await fetch(`/api/accounts?${params}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch accounts");

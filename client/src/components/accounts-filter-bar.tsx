@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,19 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
   const [category, setCategory] = useState(initialFilters?.category ?? "");
   const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onFilterChangeRef = useRef(onFilterChange);
+  onFilterChangeRef.current = onFilterChange;
+
+  const typeRef = useRef(type);
+  typeRef.current = type;
+  const categoryRef = useRef(category);
+  categoryRef.current = category;
+  const ownerIdRef = useRef(ownerId);
+  ownerIdRef.current = ownerId;
+  const selectedTagIdsRef = useRef(selectedTagIds);
+  selectedTagIdsRef.current = selectedTagIds;
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -47,38 +59,68 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
     queryKey: ["/api/admin/categories"],
   });
 
-  // Debounce search input
+  // Notify parent on mount with initial values
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  // Notify parent of filter changes
-  useEffect(() => {
-    onFilterChange({
-      search: debouncedSearch,
-      type,
-      category,
-      ownerId,
-      tagIds: selectedTagIds,
+    onFilterChangeRef.current({
+      search: initialFilters?.search ?? "",
+      type: initialFilters?.type ?? "",
+      category: initialFilters?.category ?? "",
+      ownerId: initialFilters?.ownerId ?? "",
+      tagIds: initialFilters?.tagIds ?? [],
     });
-  }, [debouncedSearch, type, category, ownerId, selectedTagIds, onFilterChange]);
+  }, []);
+
+  const notify = (newSearch: string, newType: string, newCategory: string, newOwnerId: string, newTagIds: string[]) => {
+    onFilterChangeRef.current({ search: newSearch, type: newType, category: newCategory, ownerId: newOwnerId, tagIds: newTagIds });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      notify(value, typeRef.current, categoryRef.current, ownerIdRef.current, selectedTagIdsRef.current);
+    }, 300);
+  };
+
+  const handleTypeChange = (value: string) => {
+    const newType = value === "all" ? "" : value;
+    setType(newType);
+    notify(search, newType, category, ownerId, selectedTagIds);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    const newCategory = value === "all" ? "" : value;
+    setCategory(newCategory);
+    notify(search, type, newCategory, ownerId, selectedTagIds);
+  };
+
+  const handleOwnerChange = (value: string) => {
+    const newOwner = value === "all" ? "" : value;
+    setOwnerId(newOwner);
+    notify(search, type, category, newOwner, selectedTagIds);
+  };
+
+  const handleTagIdsChange = (newTagIds: string[]) => {
+    setSelectedTagIds(newTagIds);
+    notify(search, type, category, ownerId, newTagIds);
+  };
 
   const handleClearFilters = () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setSearch("");
     setType("");
     setCategory("");
     setOwnerId("");
     setSelectedTagIds([]);
+    notify("", "", "", "", []);
   };
 
   const handleMyAccounts = () => {
-    setOwnerId(user?.id || "");
+    const newOwner = user?.id || "";
+    setOwnerId(newOwner);
     setType("");
     setCategory("");
+    notify(search, "", "", newOwner, selectedTagIds);
   };
 
   const handleAllAccounts = () => {
@@ -86,6 +128,7 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
     setType("");
     setCategory("");
     setSelectedTagIds([]);
+    notify(search, "", "", "", []);
   };
 
   const hasActiveFilters = search || type || category || ownerId || selectedTagIds.length > 0;
@@ -99,14 +142,14 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
             <Input
               placeholder="Search accounts by name, number, industry, or website..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
               data-testid="input-search-accounts"
             />
           </div>
         </div>
 
-        <Select value={type || "all"} onValueChange={(value) => setType(value === "all" ? "" : value)}>
+        <Select value={type || "all"} onValueChange={handleTypeChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-type">
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
@@ -120,7 +163,7 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
           </SelectContent>
         </Select>
 
-        <Select value={category || "all"} onValueChange={(value) => setCategory(value === "all" ? "" : value)}>
+        <Select value={category || "all"} onValueChange={handleCategoryChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-category">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
@@ -134,7 +177,7 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
           </SelectContent>
         </Select>
 
-        <Select value={ownerId || "all"} onValueChange={(value) => setOwnerId(value === "all" ? "" : value)}>
+        <Select value={ownerId || "all"} onValueChange={handleOwnerChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-owner">
             <SelectValue placeholder="All Owners" />
           </SelectTrigger>
@@ -150,7 +193,7 @@ export function AccountsFilterBar({ onFilterChange, totalCount, filteredCount, i
 
         <TagFilterButton
           selectedTagIds={selectedTagIds}
-          onTagIdsChange={setSelectedTagIds}
+          onTagIdsChange={handleTagIdsChange}
         />
 
         {hasActiveFilters && (

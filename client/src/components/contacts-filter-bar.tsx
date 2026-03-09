@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,19 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
   const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
   const [hasEmail, setHasEmail] = useState(initialFilters?.hasEmail ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onFilterChangeRef = useRef(onFilterChange);
+  onFilterChangeRef.current = onFilterChange;
+
+  const accountIdRef = useRef(accountId);
+  accountIdRef.current = accountId;
+  const ownerIdRef = useRef(ownerId);
+  ownerIdRef.current = ownerId;
+  const hasEmailRef = useRef(hasEmail);
+  hasEmailRef.current = hasEmail;
+  const selectedTagIdsRef = useRef(selectedTagIds);
+  selectedTagIdsRef.current = selectedTagIds;
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -51,44 +63,75 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
     queryKey: ["/api/accounts"],
   });
 
-  // Debounce search input
+  // Notify parent on mount with initial values
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  // Notify parent of filter changes
-  useEffect(() => {
-    onFilterChange({
-      search: debouncedSearch,
-      accountId: accountId === "all" ? "" : accountId,
-      ownerId: ownerId === "all" ? "" : ownerId,
-      hasEmail: hasEmail === "all" ? "" : hasEmail,
-      tagIds: selectedTagIds,
+    onFilterChangeRef.current({
+      search: initialFilters?.search ?? "",
+      accountId: initialFilters?.accountId ?? "",
+      ownerId: initialFilters?.ownerId ?? "",
+      hasEmail: initialFilters?.hasEmail ?? "",
+      tagIds: initialFilters?.tagIds ?? [],
     });
-  }, [debouncedSearch, accountId, ownerId, hasEmail, selectedTagIds, onFilterChange]);
+  }, []);
+
+  const notify = (newSearch: string, newAccountId: string, newOwnerId: string, newHasEmail: string, newTagIds: string[]) => {
+    onFilterChangeRef.current({ search: newSearch, accountId: newAccountId, ownerId: newOwnerId, hasEmail: newHasEmail, tagIds: newTagIds });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      notify(value, accountIdRef.current, ownerIdRef.current, hasEmailRef.current, selectedTagIdsRef.current);
+    }, 300);
+  };
+
+  const handleAccountChange = (value: string) => {
+    const newAccountId = value === "all" ? "" : value;
+    setAccountId(newAccountId);
+    notify(search, newAccountId, ownerId, hasEmail, selectedTagIds);
+  };
+
+  const handleOwnerChange = (value: string) => {
+    const newOwner = value === "all" ? "" : value;
+    setOwnerId(newOwner);
+    notify(search, accountId, newOwner, hasEmail, selectedTagIds);
+  };
+
+  const handleHasEmailChange = (value: string) => {
+    const newHasEmail = value === "all" ? "" : value;
+    setHasEmail(newHasEmail);
+    notify(search, accountId, ownerId, newHasEmail, selectedTagIds);
+  };
+
+  const handleTagIdsChange = (newTagIds: string[]) => {
+    setSelectedTagIds(newTagIds);
+    notify(search, accountId, ownerId, hasEmail, newTagIds);
+  };
 
   const handleClearFilters = () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setSearch("");
     setAccountId("");
     setOwnerId("");
     setHasEmail("");
     setSelectedTagIds([]);
+    notify("", "", "", "", []);
   };
 
   const handleMyContacts = () => {
-    setOwnerId(user?.id || "");
+    const newOwner = user?.id || "";
+    setOwnerId(newOwner);
     setAccountId("");
     setHasEmail("");
+    notify(search, "", newOwner, "", selectedTagIds);
   };
 
   const handleWithEmail = () => {
     setHasEmail("true");
     setOwnerId("");
     setAccountId("");
+    notify(search, "", "", "true", selectedTagIds);
   };
 
   const handleAllContacts = () => {
@@ -96,6 +139,7 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
     setAccountId("");
     setHasEmail("");
     setSelectedTagIds([]);
+    notify(search, "", "", "", []);
   };
 
   const hasActiveFilters = search || accountId || ownerId || hasEmail || selectedTagIds.length > 0;
@@ -109,14 +153,14 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
             <Input
               placeholder="Search contacts by name, email, phone, or title..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
               data-testid="input-search-contacts"
             />
           </div>
         </div>
 
-        <Select value={accountId || undefined} onValueChange={setAccountId}>
+        <Select value={accountId || undefined} onValueChange={handleAccountChange}>
           <SelectTrigger className="w-[180px]" data-testid="select-filter-account">
             <SelectValue placeholder="All Accounts" />
           </SelectTrigger>
@@ -130,7 +174,7 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
           </SelectContent>
         </Select>
 
-        <Select value={ownerId || undefined} onValueChange={setOwnerId}>
+        <Select value={ownerId || undefined} onValueChange={handleOwnerChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-owner">
             <SelectValue placeholder="All Owners" />
           </SelectTrigger>
@@ -144,7 +188,7 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
           </SelectContent>
         </Select>
 
-        <Select value={hasEmail || undefined} onValueChange={setHasEmail}>
+        <Select value={hasEmail || undefined} onValueChange={handleHasEmailChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-email">
             <SelectValue placeholder="Email Status" />
           </SelectTrigger>
@@ -157,7 +201,7 @@ export function ContactsFilterBar({ onFilterChange, totalCount, filteredCount, i
 
         <TagFilterButton
           selectedTagIds={selectedTagIds}
-          onTagIdsChange={setSelectedTagIds}
+          onTagIdsChange={handleTagIdsChange}
         />
 
         {hasActiveFilters && (

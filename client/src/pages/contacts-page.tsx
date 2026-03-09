@@ -112,8 +112,9 @@ export default function ContactsPage() {
   // Fetch filtered contacts
   const { data: filteredContacts, isLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts", queryString],
-    queryFn: async () => {
-      const res = await fetch(`/api/contacts?${queryString}`, {
+    queryFn: async ({ queryKey }) => {
+      const params = queryKey[1] as string;
+      const res = await fetch(`/api/contacts?${params}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch contacts");

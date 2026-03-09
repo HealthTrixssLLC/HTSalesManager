@@ -132,8 +132,9 @@ export default function LeadsPage() {
   // Fetch filtered leads
   const { data: filteredLeads, isLoading } = useQuery<Lead[]>({
     queryKey: ["/api/leads", queryString],
-    queryFn: async () => {
-      const res = await fetch(`/api/leads?${queryString}`, {
+    queryFn: async ({ queryKey }) => {
+      const params = queryKey[1] as string;
+      const res = await fetch(`/api/leads?${params}`, {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch leads");

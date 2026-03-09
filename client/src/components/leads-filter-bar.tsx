@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -38,47 +38,97 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
   const [rating, setRating] = useState(initialFilters?.rating ?? "");
   const [ownerId, setOwnerId] = useState(initialFilters?.ownerId ?? "");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
-  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters?.search ?? "");
+
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onFilterChangeRef = useRef(onFilterChange);
+  onFilterChangeRef.current = onFilterChange;
+
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
+  const ratingRef = useRef(rating);
+  ratingRef.current = rating;
+  const ownerIdRef = useRef(ownerId);
+  ownerIdRef.current = ownerId;
+  const selectedTagIdsRef = useRef(selectedTagIds);
+  selectedTagIdsRef.current = selectedTagIds;
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
-  // Debounce search input
+  // Notify parent on mount with initial values
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  // Notify parent of filter changes
-  useEffect(() => {
-    onFilterChange({
-      search: debouncedSearch,
-      status: status === "all" ? "" : status,
-      source: source === "all" ? "" : source,
-      rating: rating === "all" ? "" : rating,
-      ownerId: ownerId === "all" ? "" : ownerId,
-      tagIds: selectedTagIds,
+    onFilterChangeRef.current({
+      search: initialFilters?.search ?? "",
+      status: initialFilters?.status ?? "",
+      source: initialFilters?.source ?? "",
+      rating: initialFilters?.rating ?? "",
+      ownerId: initialFilters?.ownerId ?? "",
+      tagIds: initialFilters?.tagIds ?? [],
     });
-  }, [debouncedSearch, status, source, rating, ownerId, selectedTagIds, onFilterChange]);
+  }, []);
+
+  const notify = (newSearch: string, newStatus: string, newSource: string, newRating: string, newOwnerId: string, newTagIds: string[]) => {
+    onFilterChangeRef.current({ search: newSearch, status: newStatus, source: newSource, rating: newRating, ownerId: newOwnerId, tagIds: newTagIds });
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      notify(value, statusRef.current, sourceRef.current, ratingRef.current, ownerIdRef.current, selectedTagIdsRef.current);
+    }, 300);
+  };
+
+  const handleStatusChange = (value: string) => {
+    const newStatus = value === "all" ? "" : value;
+    setStatus(newStatus);
+    notify(search, newStatus, source, rating, ownerId, selectedTagIds);
+  };
+
+  const handleSourceChange = (value: string) => {
+    const newSource = value === "all" ? "" : value;
+    setSource(newSource);
+    notify(search, status, newSource, rating, ownerId, selectedTagIds);
+  };
+
+  const handleRatingChange = (value: string) => {
+    const newRating = value === "all" ? "" : value;
+    setRating(newRating);
+    notify(search, status, source, newRating, ownerId, selectedTagIds);
+  };
+
+  const handleOwnerChange = (value: string) => {
+    const newOwner = value === "all" ? "" : value;
+    setOwnerId(newOwner);
+    notify(search, status, source, rating, newOwner, selectedTagIds);
+  };
+
+  const handleTagIdsChange = (newTagIds: string[]) => {
+    setSelectedTagIds(newTagIds);
+    notify(search, status, source, rating, ownerId, newTagIds);
+  };
 
   const handleClearFilters = () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setSearch("");
     setStatus("");
     setSource("");
     setRating("");
     setOwnerId("");
     setSelectedTagIds([]);
+    notify("", "", "", "", "", []);
   };
 
   const handleMyLeads = () => {
-    setOwnerId(user?.id || "");
+    const newOwner = user?.id || "";
+    setOwnerId(newOwner);
     setStatus("");
     setSource("");
     setRating("");
+    notify(search, "", "", "", newOwner, selectedTagIds);
   };
 
   const handleHotLeads = () => {
@@ -86,6 +136,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
     setOwnerId("");
     setStatus("");
     setSource("");
+    notify(search, "", "", "hot", "", selectedTagIds);
   };
 
   const handleQualified = () => {
@@ -93,6 +144,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
     setOwnerId("");
     setSource("");
     setRating("");
+    notify(search, "qualified", "", "", "", selectedTagIds);
   };
 
   const handleAllLeads = () => {
@@ -101,6 +153,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
     setSource("");
     setRating("");
     setSelectedTagIds([]);
+    notify(search, "", "", "", "", []);
   };
 
   const hasActiveFilters = search || status || source || rating || ownerId || selectedTagIds.length > 0;
@@ -114,14 +167,14 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
             <Input
               placeholder="Search leads by name, email, phone, company, or topic..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
               data-testid="input-search-leads"
             />
           </div>
         </div>
 
-        <Select value={status || undefined} onValueChange={setStatus}>
+        <Select value={status || undefined} onValueChange={handleStatusChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-status">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
@@ -135,7 +188,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
           </SelectContent>
         </Select>
 
-        <Select value={source || undefined} onValueChange={setSource}>
+        <Select value={source || undefined} onValueChange={handleSourceChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-source">
             <SelectValue placeholder="All Sources" />
           </SelectTrigger>
@@ -151,7 +204,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
           </SelectContent>
         </Select>
 
-        <Select value={rating || undefined} onValueChange={setRating}>
+        <Select value={rating || undefined} onValueChange={handleRatingChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-rating">
             <SelectValue placeholder="All Ratings" />
           </SelectTrigger>
@@ -163,7 +216,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
           </SelectContent>
         </Select>
 
-        <Select value={ownerId || undefined} onValueChange={setOwnerId}>
+        <Select value={ownerId || undefined} onValueChange={handleOwnerChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-owner">
             <SelectValue placeholder="All Owners" />
           </SelectTrigger>
@@ -179,7 +232,7 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
 
         <TagFilterButton
           selectedTagIds={selectedTagIds}
-          onTagIdsChange={setSelectedTagIds}
+          onTagIdsChange={handleTagIdsChange}
         />
 
         {hasActiveFilters && (
