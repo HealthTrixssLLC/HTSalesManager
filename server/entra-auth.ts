@@ -1,13 +1,19 @@
 /**
  * Microsoft Entra ID (Azure AD) SSO — OAuth 2.0 Authorization Code Flow
  * Routes: GET /api/auth/entra/login, /callback, /me
+ *
+ * Access control policy:
+ *  - Auto-provisioning is DISABLED. Only pre-existing CRM accounts can sign in via SSO.
+ *  - User account must have status = "active".
+ *  - User must have at least one CRM role assigned.
+ * CRM admins control who can log in by managing user accounts in the Admin Console.
  */
 
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { storage } from "./db";
-import { hashPassword, authenticate, type AuthRequest } from "./auth";
+import { authenticate, type AuthRequest } from "./auth";
 import type { Express } from "express";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "health-trixss-crm-secret-key";
@@ -24,6 +30,37 @@ function buildRedirectUri(req: Request): string {
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/api/auth/entra/callback`;
+}
+
+function getClientIp(req: Request): string | null {
+  return (
+    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+    req.ip ||
+    null
+  );
+}
+
+async function logSsoEvent(
+  action: string,
+  userId: string | null,
+  email: string,
+  detail: Record<string, unknown>,
+  req: Request
+) {
+  try {
+    await storage.createAuditLog({
+      actorId: userId,
+      action,
+      resource: "User",
+      resourceId: userId,
+      before: null,
+      after: { email, authProvider: "entra_sso", ...detail },
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"] || null,
+    });
+  } catch (err) {
+    console.error("[Entra] Failed to write audit log:", err);
+  }
 }
 
 export function registerEntraRoutes(app: Express): void {
@@ -57,19 +94,20 @@ export function registerEntraRoutes(app: Express): void {
   });
 
   /**
-   * Step 2: Exchange the authorization code for tokens, then find/create a local
-   * CRM user and issue a JWT. Redirect to /auth?token=<jwt> so the frontend can
-   * store the token in localStorage per spec.
+   * Step 2: Microsoft redirects back here with an authorization code.
+   * Validate the code, check CRM access, issue a JWT, and redirect to /auth?token=<jwt>.
    */
   app.get("/api/auth/entra/callback", async (req: Request, res: Response) => {
     try {
       const { code, state, error, error_description } = req.query as Record<string, string>;
 
+      // Microsoft returned an error (e.g. user cancelled)
       if (error) {
         console.error("[Entra] OAuth error:", error, error_description);
         return res.redirect(`/auth?sso_error=${encodeURIComponent(error_description || error)}`);
       }
 
+      // CSRF state validation
       const storedState = req.cookies?.entra_state;
       if (!state || !storedState || state !== storedState) {
         console.error("[Entra] State mismatch — possible CSRF");
@@ -80,7 +118,7 @@ export function registerEntraRoutes(app: Express): void {
 
       const redirectUri = buildRedirectUri(req);
 
-      // Exchange code for tokens
+      // Exchange authorization code for tokens
       const tokenRes = await fetch(MICROSOFT_TOKEN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -109,42 +147,61 @@ export function registerEntraRoutes(app: Express): void {
         displayName?: string;
         mail?: string;
         userPrincipalName?: string;
-        jobTitle?: string;
       };
 
       const email = profile.mail || profile.userPrincipalName;
-      const name = profile.displayName;
 
-      if (!email || !name) {
-        console.error("[Entra] Missing email/name in profile:", profile);
+      if (!email) {
+        console.error("[Entra] Missing email in Microsoft profile:", profile);
         return res.redirect("/auth?sso_error=missing_profile");
       }
 
-      // Find or create local CRM user
-      let user = await storage.getUserByEmail(email);
+      // ── Access Control Check 1: Account must exist in the CRM ──────────────
+      const userWithPassword = await storage.getUserByEmail(email);
 
-      if (!user) {
-        // Auto-provision new user with a random unusable password
-        const randomPassword = await hashPassword(crypto.randomBytes(32).toString("hex"));
-        user = await storage.createUser({ email, name, password: randomPassword });
-
-        // Assign default SalesRep role
-        try {
-          const roles = await storage.getAllRoles();
-          const defaultRole = roles.find((r) => r.name === "SalesRep");
-          if (defaultRole) {
-            await storage.assignRoleToUser(user.id, defaultRole.id);
-          }
-        } catch (roleErr) {
-          console.error("[Entra] Error assigning role:", roleErr);
-        }
-
-        console.log(`[Entra] Auto-provisioned new user: ${email}`);
-      } else {
-        console.log(`[Entra] Existing user signed in via Entra: ${email}`);
+      if (!userWithPassword) {
+        console.warn(`[Entra] SSO login rejected — no CRM account for: ${email}`);
+        await logSsoEvent("sso_login_rejected", null, email, { reason: "account_not_found" }, req);
+        return res.redirect(
+          "/auth?sso_error=" +
+            encodeURIComponent(
+              "Your account has not been set up in the CRM. Contact your administrator."
+            )
+        );
       }
 
-      // Issue an 8-hour JWT signed with the same SESSION_SECRET
+      const user = await storage.getUserById(userWithPassword.id);
+      if (!user) {
+        return res.redirect("/auth?sso_error=server_error");
+      }
+
+      // ── Access Control Check 2: Account must be active ─────────────────────
+      if (user.status !== "active") {
+        console.warn(`[Entra] SSO login rejected — account inactive/suspended: ${email} (status: ${user.status})`);
+        await logSsoEvent("sso_login_rejected", user.id, email, { reason: "account_not_active", status: user.status }, req);
+        return res.redirect(
+          "/auth?sso_error=" +
+            encodeURIComponent(
+              "Your account has been suspended. Contact your administrator."
+            )
+        );
+      }
+
+      // ── Access Control Check 3: Must have at least one CRM role ────────────
+      const userRoles = await storage.getUserRoles(user.id);
+
+      if (!userRoles || userRoles.length === 0) {
+        console.warn(`[Entra] SSO login rejected — no roles assigned: ${email}`);
+        await logSsoEvent("sso_login_rejected", user.id, email, { reason: "no_roles_assigned" }, req);
+        return res.redirect(
+          "/auth?sso_error=" +
+            encodeURIComponent(
+              "Your account has no permissions assigned. Contact your administrator."
+            )
+        );
+      }
+
+      // ── All checks passed — issue JWT ───────────────────────────────────────
       const token = jwt.sign(
         { id: user.id, email: user.email },
         JWT_SECRET,
@@ -159,7 +216,14 @@ export function registerEntraRoutes(app: Express): void {
         maxAge: 8 * 60 * 60 * 1000, // 8 hours
       });
 
-      // Redirect to /auth with token param — frontend will store in localStorage
+      // Audit log the successful SSO login
+      await logSsoEvent("sso_login_success", user.id, email, {
+        roles: userRoles.map((r) => r.name),
+      }, req);
+
+      console.log(`[Entra] SSO login success: ${email} (roles: ${userRoles.map((r) => r.name).join(", ")})`);
+
+      // Redirect to /auth with token param — frontend stores in localStorage
       return res.redirect(`/auth?token=${encodeURIComponent(token)}`);
     } catch (err) {
       console.error("[Entra] Callback error:", err);
@@ -169,7 +233,7 @@ export function registerEntraRoutes(app: Express): void {
 
   /**
    * GET /api/auth/entra/me — Return the currently authenticated user profile.
-   * Works for both SSO and password-based users (uses existing authenticate middleware).
+   * Works for both SSO and password-based sessions (uses existing authenticate middleware).
    */
   app.get("/api/auth/entra/me", authenticate, (req: AuthRequest, res: Response) => {
     const user = req.user!;

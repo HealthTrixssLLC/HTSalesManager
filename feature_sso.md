@@ -1,39 +1,38 @@
-# Microsoft Entra ID SSO — Implementation Plan
+# Microsoft Entra ID SSO — COMPLETE
 
-## Overview
+All tasks implemented and E2E verified.
 
-Add Microsoft Entra ID (formerly Azure AD) SSO authentication alongside the existing username/password system. Uses OAuth 2.0 authorization code flow. Env vars `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` are already configured.
+## Access Control Policy (CRM Admin-controlled)
 
-**Architecture decision**: The Entra callback finds-or-creates a local CRM user by email, then issues a standard 8-hour JWT as an HTTP-only cookie (same pattern as existing login). It also redirects to `/auth?token=<jwt>` so the frontend can store the token in `localStorage` per spec. This avoids modifying the dozens of custom `fetch` calls scattered across list and detail pages — they all work automatically with the existing cookie-based auth.
+Auto-provisioning is **disabled**. The callback enforces three checks in sequence:
 
----
+1. **Email must exist in the CRM** — if not, rejected with "Your account has not been set up. Contact your administrator."
+2. **Account must be active** — status `inactive` or `suspended` → rejected with "Your account has been suspended."
+3. **At least one CRM role must be assigned** — no roles → rejected with "Your account has no permissions assigned."
 
-## Tasks
+CRM admins pre-create user accounts (with the user's Microsoft email) in the Admin Console. The user's CRM role assignments determine what they can do — Microsoft only verifies *who* they are.
 
-- [x] **T1 — Backend: Entra auth route module** (`server/entra-auth.ts`)
-  - `GET /api/auth/entra/login` — builds Microsoft authorize URL using `x-forwarded-proto` / `x-forwarded-host` headers, generates a random CSRF `state`, stores it in a short-lived cookie, redirects to `https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/authorize` with scopes `openid profile email User.Read`
-  - `GET /api/auth/entra/callback` — validates state, exchanges authorization code for tokens at the Microsoft token endpoint, fetches user profile from `https://graph.microsoft.com/v1.0/me`, finds or creates a local CRM user by email (default role: SalesRep), generates an 8-hour JWT with SESSION_SECRET, sets it as an HTTP-only cookie, then redirects to `/auth?token=<jwt>`
-  - `GET /api/auth/entra/me` — verifies the Bearer token and returns the user profile (uses existing `authenticate` middleware)
+## Audit Logging
 
-- [x] **T2 — Backend: Register Entra routes** (`server/routes.ts`)
-  - Import and mount the 3 Entra routes before any catch-all handlers
-  - Exempt callback from CSRF middleware (it's a GET redirect from Microsoft, not a state-changing API call)
+All SSO events are written to the audit log (`storage.createAuditLog`):
+- `sso_login_success` — includes roles list, IP, user agent
+- `sso_login_rejected` — includes reason (`account_not_found` | `account_not_active` | `no_roles_assigned`), IP, user agent
 
-- [x] **T3 — Frontend: Auth page — token handling + Microsoft button** (`client/src/pages/auth-page.tsx`)
-  - On mount, read `?token=` query parameter; if present, store in `localStorage` as `entra_token` and redirect to `/`
-  - Add a "Sign in with Microsoft" button that navigates to `/api/auth/entra/login`
-  - Show the button below the existing login form with a visual separator
+## Account Merging
 
-- [x] **T4 — Frontend: Logout clears localStorage token** (`client/src/hooks/use-auth.tsx`)
-  - In `logoutMutation.onSuccess`, also call `localStorage.removeItem('entra_token')` so the SSO token is cleared on sign-out
-  - Reset CSRF token cache to force re-fetch after re-login
+A user with both a local password account and an Entra ID account using the **same email** signs into the **same CRM user record**. No duplicate accounts are created. They can log in via either method interchangeably.
 
-## QA Checklist
+## Azure Portal Setup
 
-- [x] Clicking "Sign in with Microsoft" redirects to Microsoft login page (correct tenant, client_id, redirect_uri, scopes)
-- [x] After completing Microsoft login, user is redirected to `/auth?token=xxx`, then immediately to `/` (dashboard)
-- [x] `localStorage.getItem('entra_token')` contains a valid JWT after the flow
-- [x] The logged-in user's name appears in the sidebar
-- [x] Clicking "Log out" clears both the cookie and localStorage token and returns to `/auth`
-- [x] Direct navigation to a protected route while unauthenticated redirects to `/auth`
-- [x] Existing username/password login still works unchanged
+Two redirect URIs must be registered in Azure App Registration → Authentication → Web:
+- Dev: `https://<replit-dev-url>/api/auth/entra/callback`
+- Production: `https://htsalesmanager.healthtrixss.com/api/auth/entra/callback`
+
+## Completed Tasks
+
+- [x] T1 — Backend Entra auth module (`server/entra-auth.ts`)
+- [x] T2 — Backend route registration (`server/routes.ts`)
+- [x] T3 — Frontend: token handling + Microsoft button (`client/src/pages/auth-page.tsx`)
+- [x] T4 — Frontend: logout clears localStorage token (`client/src/hooks/use-auth.tsx`)
+- [x] T5 — Access control: remove auto-provisioning, add status + role checks
+- [x] T6 — Audit logging for SSO login success and rejection events
