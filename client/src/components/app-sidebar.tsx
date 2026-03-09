@@ -1,4 +1,4 @@
-import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3 } from "lucide-react";
+import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, LayoutGrid } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
