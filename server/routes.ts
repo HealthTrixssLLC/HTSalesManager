@@ -50,6 +50,7 @@ import * as analyticsService from "./analytics-service";
 import { DynamicsMapper, type DynamicsMappingConfig } from "./dynamics-mapper";
 import { generateApiKey } from "./api-key-utils";
 import externalApiRoutes from "./external-api-routes";
+import { registerEntraRoutes } from "./entra-auth";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
@@ -88,7 +89,10 @@ async function createAudit(req: AuthRequest, action: string, resource: string, r
 }
 
 export function registerRoutes(app: Express) {
-  
+
+  // ========== MICROSOFT ENTRA ID SSO ROUTES ==========
+  registerEntraRoutes(app);
+
   // ========== AUTHENTICATION ROUTES ==========
   
   app.post("/api/register", authRateLimiter, async (req, res) => {

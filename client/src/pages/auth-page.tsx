@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,17 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, LineChart, Users, Shield } from "lucide-react";
 
+function MicrosoftLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}
+
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
@@ -14,6 +25,27 @@ export default function AuthPage() {
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [registerData, setRegisterData] = useState({ email: "", name: "", password: "", confirmPassword: "" });
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [ssoError, setSsoError] = useState<string | null>(null);
+
+  // Handle Entra SSO token from redirect param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const ssoErr = params.get("sso_error");
+
+    if (token) {
+      localStorage.setItem("entra_token", token);
+      // Clean the URL then navigate to the app
+      window.history.replaceState({}, "", "/auth");
+      setLocation("/");
+      return;
+    }
+
+    if (ssoErr) {
+      setSsoError(decodeURIComponent(ssoErr));
+      window.history.replaceState({}, "", "/auth");
+    }
+  }, [setLocation]);
 
   if (user) {
     setLocation("/");
@@ -36,15 +68,19 @@ export default function AuthPage() {
     registerMutation.mutate(data);
   };
 
+  const handleMicrosoftSignIn = () => {
+    window.location.href = "/api/auth/entra/login";
+  };
+
   return (
     <div className="flex min-h-screen">
 
-      {/* BR-004: Left panel — Dark Blue gradient hero */}
+      {/* Left panel — Dark Blue gradient hero */}
       <div
         className="hidden lg:flex flex-1 flex-col justify-between p-12 text-white"
         style={{ background: "linear-gradient(160deg, hsl(216,42%,18%) 0%, hsl(216,40%,22%) 55%, hsl(216,38%,28%) 100%)" }}
       >
-        {/* BR-002 / BR-009: Official H+ logo + HealthTrixss wordmark */}
+        {/* Official H+ logo + HealthTrixss wordmark */}
         <div className="flex items-center gap-3">
           <img
             src="/ht-logo.png"
@@ -53,7 +89,7 @@ export default function AuthPage() {
           />
           <div>
             <p className="font-semibold text-white text-sm leading-none">HealthTrixss</p>
-            <p className="text-white/50 text-xs mt-0.5">Healthcare Innovation & Analytics</p>
+            <p className="text-white/50 text-xs mt-0.5">Healthcare Innovation &amp; Analytics</p>
           </div>
         </div>
 
@@ -113,6 +149,37 @@ export default function AuthPage() {
           <div className="mb-7">
             <h1 className="text-2xl font-semibold text-foreground mb-1">Welcome back</h1>
             <p className="text-sm text-muted-foreground">Sign in to your CRM account to continue</p>
+          </div>
+
+          {/* SSO error */}
+          {ssoError && (
+            <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3">
+              <p className="text-sm text-destructive" data-testid="text-sso-error">
+                Microsoft sign-in failed: {ssoError}
+              </p>
+            </div>
+          )}
+
+          {/* Microsoft SSO */}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full mb-5 gap-2"
+            onClick={handleMicrosoftSignIn}
+            data-testid="button-sign-in-microsoft"
+          >
+            <MicrosoftLogo className="h-4 w-4" />
+            Sign in with Microsoft
+          </Button>
+
+          {/* Divider */}
+          <div className="relative mb-5">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-background px-2 text-muted-foreground">or sign in with email</span>
+            </div>
           </div>
 
           <Tabs defaultValue="login" className="w-full">

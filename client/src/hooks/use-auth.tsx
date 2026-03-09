@@ -78,7 +78,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout", {});
     },
     onSuccess: () => {
+      localStorage.removeItem("entra_token");
       queryClient.setQueryData(["/api/user"], null);
+      queryClient.clear();
     },
     onError: (error: Error) => {
       toast({
