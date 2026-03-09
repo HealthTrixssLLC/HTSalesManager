@@ -25,7 +25,6 @@ import AdminConsole from "@/pages/admin-console";
 import AuditLogPage from "@/pages/audit-log-page";
 import HelpPage from "@/pages/help-page";
 import AnalyticsPage from "@/pages/analytics-page";
-import AppsPage from "@/pages/apps-page";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -77,7 +76,6 @@ function Router() {
       <ProtectedRoute path="/activities/:id" component={ActivityDetailPage} />
       <ProtectedRoute path="/activities" component={ActivitiesPage} />
       <ProtectedRoute path="/analytics" component={AnalyticsPage} />
-      <ProtectedRoute path="/apps" component={AppsPage} />
       <ProtectedRoute path="/import" component={ImportPage} />
       <ProtectedRoute path="/help" component={HelpPage} />
       <ProtectedRoute path="/admin" component={AdminConsole} />
