@@ -383,6 +383,7 @@ export class PostgresStorage implements IStorage {
           o.include_in_forecast as "includeInForecast",
           o.created_at as "createdAt",
           o.updated_at as "updatedAt",
+          a.name as "accountName",
           COALESCE(
             json_agg(
               json_build_object(
@@ -397,9 +398,10 @@ export class PostgresStorage implements IStorage {
             '[]'::json
           ) as tags
         FROM opportunities o
+        LEFT JOIN accounts a ON a.id = o.account_id
         LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity = 'Opportunity'
         LEFT JOIN tags t ON t.id = et.tag_id
-        GROUP BY o.id
+        GROUP BY o.id, a.name
         ORDER BY o.created_at DESC
       `);
       
@@ -948,3 +950,21 @@ export class PostgresStorage implements IStorage {
 
 export const storage = new PostgresStorage();
 export { eq, sql, and, gte, lte, ne, asc, desc, inArray };
+
+export async function fixEntityTagsEntityNames(): Promise<void> {
+  const mappings: [string, string][] = [
+    ["opportunities", "Opportunity"],
+    ["accounts", "Account"],
+    ["contacts", "Contact"],
+    ["leads", "Lead"],
+    ["activities", "Activity"],
+  ];
+
+  for (const [wrong, correct] of mappings) {
+    await db.execute(
+      sql`UPDATE entity_tags SET entity = ${correct} WHERE entity = ${wrong}`
+    );
+  }
+
+  console.log("Entity tags entity names normalized");
+}

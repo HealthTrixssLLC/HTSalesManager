@@ -34,7 +34,7 @@ export default function ContactDetailPage() {
   });
 
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
-    queryKey: ["tags", "contacts", contactId],
+    queryKey: ["/api/contacts", contactId, "tags"],
     queryFn: async () => {
       const res = await fetch(`/api/contacts/${contactId}/tags`);
       if (!res.ok) throw new Error("Failed to fetch tags");

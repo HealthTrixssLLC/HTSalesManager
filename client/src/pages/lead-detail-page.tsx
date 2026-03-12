@@ -36,7 +36,7 @@ export default function LeadDetailPage() {
   });
 
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
-    queryKey: ["tags", "leads", leadId],
+    queryKey: ["/api/leads", leadId, "tags"],
     queryFn: async () => {
       const res = await fetch(`/api/leads/${leadId}/tags`);
       if (!res.ok) throw new Error("Failed to fetch tags");

@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
-import { storage } from "./db";
+import { storage, fixEntityTagsEntityNames } from "./db";
 import { csrfProtection, generateCsrfToken } from "./csrf-protection";
 
 // Set default BACKUP_ENCRYPTION_KEY for development if not already set
@@ -79,6 +79,9 @@ app.use((req, res, next) => {
   // Initialize default ID patterns
   await storage.initializeIdPatterns();
   console.log("ID patterns initialized");
+  
+  // Fix any entity_tags rows with wrong entity name format
+  await fixEntityTagsEntityNames();
   
   // CSRF token endpoint - generates and returns token for frontend
   app.get("/api/csrf-token", (req, res) => {

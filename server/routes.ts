@@ -1192,37 +1192,8 @@ export function registerRoutes(app: Express) {
   
   app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      // Fetch opportunities with account information
-      const opportunitiesWithAccounts = await db
-        .select({
-          id: opportunities.id,
-          accountId: opportunities.accountId,
-          name: opportunities.name,
-          stage: opportunities.stage,
-          amount: opportunities.amount,
-          closeDate: opportunities.closeDate,
-          ownerId: opportunities.ownerId,
-          probability: opportunities.probability,
-          status: opportunities.status,
-          actualCloseDate: opportunities.actualCloseDate,
-          actualRevenue: opportunities.actualRevenue,
-          estCloseDate: opportunities.estCloseDate,
-          estRevenue: opportunities.estRevenue,
-          rating: opportunities.rating,
-          externalId: opportunities.externalId,
-          sourceSystem: opportunities.sourceSystem,
-          sourceRecordId: opportunities.sourceRecordId,
-          importStatus: opportunities.importStatus,
-          importNotes: opportunities.importNotes,
-          includeInForecast: opportunities.includeInForecast,
-          createdAt: opportunities.createdAt,
-          updatedAt: opportunities.updatedAt,
-          accountName: accounts.name,
-        })
-        .from(opportunities)
-        .leftJoin(accounts, eq(opportunities.accountId, accounts.id));
-      
-      return res.json(opportunitiesWithAccounts);
+      const allOpportunities = await storage.getAllOpportunities();
+      return res.json(allOpportunities);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunities" });
     }
@@ -2022,9 +1993,22 @@ export function registerRoutes(app: Express) {
   });
   
   // Entity tag routes
+  const entityNameMap: Record<string, string> = {
+    opportunities: "Opportunity",
+    accounts: "Account",
+    contacts: "Contact",
+    leads: "Lead",
+    activities: "Activity",
+  };
+
+  function normalizeEntityName(entity: string): string {
+    return entityNameMap[entity.toLowerCase()] || entity;
+  }
+
   app.get("/api/:entity/:entityId/tags", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { entity, entityId } = req.params;
+      const { entityId } = req.params;
+      const entity = normalizeEntityName(req.params.entity);
       const tags = await storage.getEntityTags(entity, entityId);
       return res.json(tags);
     } catch (error) {
@@ -2034,7 +2018,8 @@ export function registerRoutes(app: Express) {
   
   app.post("/api/:entity/:entityId/tags", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { entity, entityId } = req.params;
+      const { entityId } = req.params;
+      const entity = normalizeEntityName(req.params.entity);
       const { tagIds } = req.body;
       await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
       return res.json({ success: true });
@@ -2045,7 +2030,8 @@ export function registerRoutes(app: Express) {
   
   app.delete("/api/:entity/:entityId/tags/:tagId", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { entity, entityId, tagId } = req.params;
+      const { entityId, tagId } = req.params;
+      const entity = normalizeEntityName(req.params.entity);
       await storage.removeEntityTag(entity, entityId, tagId);
       return res.json({ success: true });
     } catch (error) {
@@ -2056,7 +2042,7 @@ export function registerRoutes(app: Express) {
   // Bulk tag operations
   app.post("/api/:entity/bulk-tags", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { entity } = req.params;
+      const entity = normalizeEntityName(req.params.entity);
       const { entityIds, tagIds } = req.body;
       
       for (const entityId of entityIds) {

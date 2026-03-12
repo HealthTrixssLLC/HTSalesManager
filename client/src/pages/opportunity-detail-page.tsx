@@ -41,7 +41,7 @@ export default function OpportunityDetailPage() {
   });
 
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
-    queryKey: ["tags", "opportunities", opportunityId],
+    queryKey: ["/api/opportunities", opportunityId, "tags"],
     queryFn: async () => {
       const res = await fetch(`/api/opportunities/${opportunityId}/tags`);
       if (!res.ok) throw new Error("Failed to fetch tags");

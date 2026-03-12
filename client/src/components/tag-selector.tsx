@@ -25,6 +25,12 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
     queryKey: ["/api/tags"],
   });
 
+  const invalidateTagQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
+    queryClient.invalidateQueries({ queryKey: [`/api/${entity}`, entityId, "tags"] });
+    queryClient.invalidateQueries({ queryKey: [`/api/${entity}`] });
+  };
+
   const addEntityTagMutation = useMutation({
     mutationFn: async (tagId: string) => {
       if (!entityId) throw new Error("Entity ID is required");
@@ -37,10 +43,7 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
       const data = await res.json();
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/${entity}/${entityId}/tags`] });
-    },
+    onSuccess: invalidateTagQueries,
     onError: (error: Error) => {
       toast({
         title: "Failed to add tag",
@@ -60,10 +63,7 @@ export function TagSelector({ selectedTags, onTagsChange, entity, entityId }: Ta
       const data = await res.json();
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/${entity}/${entityId}/tags`] });
-    },
+    onSuccess: invalidateTagQueries,
     onError: (error: Error) => {
       toast({
         title: "Failed to remove tag",

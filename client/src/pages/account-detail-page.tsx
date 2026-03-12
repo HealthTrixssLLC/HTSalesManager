@@ -35,7 +35,7 @@ export default function AccountDetailPage() {
   });
 
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
-    queryKey: ["tags", "accounts", accountId],
+    queryKey: ["/api/accounts", accountId, "tags"],
     queryFn: async () => {
       const res = await fetch(`/api/accounts/${accountId}/tags`);
       if (!res.ok) throw new Error("Failed to fetch tags");
