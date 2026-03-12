@@ -50,3 +50,7 @@ integrations = ["javascript_auth_all_persistance:1.0.0", "javascript_database:1.
 
 [userenv.shared]
 BACKUP_ENCRYPTION_KEY = "qgvZCSMiorcxfGYYFJGIkxSOQZdvpkrGhvwdFH1QIh94eZ5cVqmAJ12lcwTKpo+u"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
