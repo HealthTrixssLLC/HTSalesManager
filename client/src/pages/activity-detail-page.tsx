@@ -161,8 +161,6 @@ export default function ActivityDetailPage() {
       dueAt: activity?.dueAt ? new Date(activity.dueAt).toISOString().split('T')[0] : null,
       completedAt: activity?.completedAt ? new Date(activity.completedAt).toISOString().split('T')[0] : null,
       ownerId: activity?.ownerId || "",
-      relatedType: activity?.relatedType || "",
-      relatedId: activity?.relatedId || "",
       notes: activity?.notes || "",
     },
   });
@@ -255,8 +253,6 @@ export default function ActivityDetailPage() {
           dueAt: activity.dueAt ? new Date(activity.dueAt).toISOString().split('T')[0] : null,
           completedAt: activity.completedAt ? new Date(activity.completedAt).toISOString().split('T')[0] : null,
           ownerId: activity.ownerId,
-          relatedType: activity.relatedType || "",
-          relatedId: activity.relatedId || "",
           notes: activity.notes || "",
         } as any);
         setEditAssociations(
@@ -508,44 +504,6 @@ export default function ActivityDetailPage() {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="relatedType"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Related To</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || undefined}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-related-type">
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Account">Account</SelectItem>
-                          <SelectItem value="Contact">Contact</SelectItem>
-                          <SelectItem value="Lead">Lead</SelectItem>
-                          <SelectItem value="Opportunity">Opportunity</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="relatedId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Related ID</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ACCT-2025-00001" {...field} value={field.value || ""} data-testid="input-edit-related-id" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <FormField
                 control={form.control}
                 name="notes"

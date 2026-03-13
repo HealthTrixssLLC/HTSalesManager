@@ -209,8 +209,6 @@ export default function AccountsPage() {
       industry: "",
       website: "",
       phone: "",
-      primaryContactName: "",
-      primaryContactEmail: "",
       billingAddress: "",
       shippingAddress: "",
     },
@@ -236,8 +234,6 @@ export default function AccountsPage() {
       industry: account.industry || "",
       website: account.website || "",
       phone: account.phone || "",
-      primaryContactName: account.primaryContactName || "",
-      primaryContactEmail: account.primaryContactEmail || "",
       billingAddress: account.billingAddress || "",
       shippingAddress: account.shippingAddress || "",
     });
@@ -256,8 +252,6 @@ export default function AccountsPage() {
       industry: "",
       website: "",
       phone: "",
-      primaryContactName: "",
-      primaryContactEmail: "",
       billingAddress: "",
       shippingAddress: "",
     });

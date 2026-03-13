@@ -76,8 +76,6 @@ export default function AccountDetailPage() {
       phone: "",
       billingAddress: "",
       shippingAddress: "",
-      primaryContactName: "",
-      primaryContactEmail: "",
     },
   });
 
@@ -126,8 +124,6 @@ export default function AccountDetailPage() {
         phone: account.phone || "",
         billingAddress: account.billingAddress || "",
         shippingAddress: account.shippingAddress || "",
-        primaryContactName: account.primaryContactName || "",
-        primaryContactEmail: account.primaryContactEmail || "",
       });
     }
   }, [account, isEditDialogOpen, form]);
@@ -184,11 +180,6 @@ export default function AccountDetailPage() {
             <DetailField label="Industry" value={account.industry} />
             <DetailField label="Website" value={account.website} type="url" />
             <DetailField label="Phone" value={account.phone} type="phone" />
-          </DetailSection>
-
-          <DetailSection title="Primary Contact Information">
-            <DetailField label="Primary Contact Name" value={account.primaryContactName} />
-            <DetailField label="Primary Contact Email" value={account.primaryContactEmail} type="email" />
           </DetailSection>
 
           <DetailSection title="Address Information">
@@ -423,34 +414,6 @@ export default function AccountDetailPage() {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="primaryContactName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Primary Contact Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John Doe" {...field} value={field.value || ""} data-testid="input-edit-account-contact-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="primaryContactEmail"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Primary Contact Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="john@example.com" {...field} value={field.value || ""} data-testid="input-edit-account-contact-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel

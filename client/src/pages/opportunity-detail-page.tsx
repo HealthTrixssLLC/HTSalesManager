@@ -343,20 +343,6 @@ export default function OpportunityDetailPage() {
             </div>
           </DetailSection>
 
-          {(opportunity.externalId || opportunity.sourceSystem) && (
-            <DetailSection title="Import Information">
-              <DetailField label="External ID" value={opportunity.externalId} />
-              <DetailField label="Source System" value={opportunity.sourceSystem} />
-              <DetailField label="Source Record ID" value={opportunity.sourceRecordId} />
-              <DetailField label="Import Status" value={opportunity.importStatus} />
-              {opportunity.importNotes && (
-                <div className="col-span-full">
-                  <p className="text-sm text-muted-foreground">{opportunity.importNotes}</p>
-                </div>
-              )}
-            </DetailSection>
-          )}
-
           <Card data-testid="section-tags">
             <CardHeader>
               <CardTitle>Tags</CardTitle>

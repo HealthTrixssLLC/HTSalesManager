@@ -4,8 +4,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X, Check, ChevronsUpDown } from "lucide-react";
-import { Activity, InsertActivity, insertActivitySchema, Account, Contact, Lead, Opportunity } from "@shared/schema";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X } from "lucide-react";
+import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,8 +26,6 @@ import { Label } from "@/components/ui/label";
 import { ActivitiesSummaryCards } from "@/components/activities-summary-cards";
 import { TagFilterButton } from "@/components/tag-filter-button";
 import { BulkTagDialog } from "@/components/bulk-tag-dialog";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
 import { EmptyState } from "@/components/empty-state";
 
@@ -72,7 +70,6 @@ export default function ActivitiesPage() {
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [associations, setAssociations] = useState<Association[]>([]);
-  const [relatedEntitySearchOpen, setRelatedEntitySearchOpen] = useState(false);
   
   // Bulk operations state
   const [selectedActivityIds, setSelectedActivityIds] = useState<Set<string>>(new Set());
@@ -124,21 +121,35 @@ export default function ActivitiesPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch all entities for Related ID autocomplete
-  const { data: accounts = [] } = useQuery<Account[]>({
-    queryKey: ["/api/accounts"],
-  });
-
-  const { data: contacts = [] } = useQuery<Contact[]>({
-    queryKey: ["/api/contacts"],
-  });
-
-  const { data: leads = [] } = useQuery<Lead[]>({
-    queryKey: ["/api/leads"],
-  });
-
-  const { data: opportunities = [] } = useQuery<Opportunity[]>({
-    queryKey: ["/api/opportunities"],
+  // Fetch all activity associations for list display
+  const { data: allActivityAssociations } = useQuery<Array<{ activityId: string; entityType: string; entityId: string; entityName: string }>>({
+    queryKey: ["/api/activity-associations-all"],
+    queryFn: async () => {
+      interface AssociationResponse {
+        id: string;
+        activityId: string;
+        entityType: string;
+        entityId: string;
+        entityName: string;
+        createdAt: string;
+      }
+      const assocPromises = (activities || []).map(async (activity) => {
+        const res = await fetch(`/api/activities/${activity.id}/associations`, {
+          credentials: "include",
+        });
+        if (!res.ok) return [];
+        const assocs: AssociationResponse[] = await res.json();
+        return assocs.map((a) => ({
+          activityId: activity.id,
+          entityType: a.entityType,
+          entityId: a.entityId,
+          entityName: a.entityName,
+        }));
+      });
+      const results = await Promise.all(assocPromises);
+      return results.flat();
+    },
+    enabled: !!activities && activities.length > 0,
   });
 
   // Fetch all tags for display
@@ -185,6 +196,7 @@ export default function ActivitiesPage() {
       
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity-associations-all"] });
       toast({ title: "Activity created successfully" });
       setIsCreateDialogOpen(false);
       setAssociations([]);
@@ -269,8 +281,6 @@ export default function ActivitiesPage() {
       dueAt: null,
       completedAt: null,
       ownerId: user?.id || "",
-      relatedType: "",
-      relatedId: "",
       notes: "",
     },
   });
@@ -571,113 +581,6 @@ export default function ActivitiesPage() {
                         <FormMessage />
                       </FormItem>
                     )}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="relatedType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Related To</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-related-type">
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Account">Account</SelectItem>
-                            <SelectItem value="Contact">Contact</SelectItem>
-                            <SelectItem value="Lead">Lead</SelectItem>
-                            <SelectItem value="Opportunity">Opportunity</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="relatedId"
-                    render={({ field }) => {
-                      const relatedType = form.watch("relatedType");
-                      
-                      // Get the appropriate entity list based on relatedType
-                      let entities: Array<{ id: string; name: string }> = [];
-                      if (relatedType === "Account") {
-                        entities = accounts.map(a => ({ id: a.id, name: a.name }));
-                      } else if (relatedType === "Contact") {
-                        entities = contacts.map(c => ({ id: c.id, name: `${c.firstName} ${c.lastName}` }));
-                      } else if (relatedType === "Lead") {
-                        entities = leads.map(l => ({ id: l.id, name: `${l.firstName} ${l.lastName}` }));
-                      } else if (relatedType === "Opportunity") {
-                        entities = opportunities.map(o => ({ id: o.id, name: o.name }));
-                      }
-                      
-                      return (
-                        <FormItem className="flex flex-col">
-                          <FormLabel>Related ID</FormLabel>
-                          <Popover open={relatedEntitySearchOpen} onOpenChange={setRelatedEntitySearchOpen}>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  aria-expanded={relatedEntitySearchOpen}
-                                  className={cn(
-                                    "w-full justify-between",
-                                    !field.value && "text-muted-foreground"
-                                  )}
-                                  data-testid="input-related-id"
-                                  disabled={!relatedType}
-                                >
-                                  {field.value
-                                    ? entities.find((entity) => entity.id === field.value)?.name || field.value
-                                    : relatedType 
-                                      ? `Search for a ${relatedType.toLowerCase()}...` 
-                                      : "Select Related To first"}
-                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[400px] p-0" align="start">
-                              <Command>
-                                <CommandInput placeholder={`Search by ${relatedType?.toLowerCase()} name or ID...`} />
-                                <CommandList>
-                                  <CommandEmpty>No {relatedType?.toLowerCase()} found.</CommandEmpty>
-                                  <CommandGroup>
-                                    {entities.map((entity) => (
-                                      <CommandItem
-                                        key={entity.id}
-                                        value={`${entity.name} ${entity.id}`}
-                                        onSelect={() => {
-                                          form.setValue("relatedId", entity.id);
-                                          setRelatedEntitySearchOpen(false);
-                                        }}
-                                        data-testid={`related-entity-option-${entity.id}`}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            field.value === entity.id ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        <div className="flex flex-col">
-                                          <span className="font-medium">{entity.name}</span>
-                                          <span className="text-sm text-muted-foreground">{entity.id}</span>
-                                        </div>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
                   />
                 </div>
                 <FormField
@@ -1031,16 +934,24 @@ export default function ActivitiesPage() {
                                   Due: {new Date(activity.dueAt).toLocaleDateString()}
                                 </span>
                               )}
-                              {activity.relatedType && (
-                                <span className="text-xs text-muted-foreground">
-                                  Related to: {activity.relatedType} {activity.relatedId}
-                                </span>
-                              )}
                               {visibleColumns.owner && activity.ownerId && (
                                 <span className="text-xs text-muted-foreground">
                                   Owner: {users.find(u => u.id === activity.ownerId)?.name || "Unknown"}
                                 </span>
                               )}
+                              {(() => {
+                                const activityAssocs = allActivityAssociations?.filter(a => a.activityId === activity.id) || [];
+                                return activityAssocs.map((assoc, idx) => (
+                                  <Badge
+                                    key={`${assoc.entityType}-${assoc.entityId}-${idx}`}
+                                    variant="outline"
+                                    className="text-xs"
+                                    data-testid={`association-badge-${assoc.entityType}-${assoc.entityId}`}
+                                  >
+                                    {assoc.entityType}: {assoc.entityName}
+                                  </Badge>
+                                ));
+                              })()}
                               {(() => {
                                 const activityTags = allEntityTags?.filter(et => et.entityId === activity.id).map(et => et.tagId) || [];
                                 const tagObjects = activityTags.map(tagId => allTags?.find(t => t.id === tagId)).filter(Boolean);

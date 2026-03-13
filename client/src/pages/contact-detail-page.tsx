@@ -91,11 +91,6 @@ export default function ContactDetailPage() {
       mobile: "",
       title: "",
       department: "",
-      mailingStreet: "",
-      mailingCity: "",
-      mailingState: "",
-      mailingPostalCode: "",
-      mailingCountry: "",
       description: "",
       accountId: null,
       ownerId: "",
@@ -116,11 +111,6 @@ export default function ContactDetailPage() {
         mobile: contact.mobile || "",
         title: contact.title || "",
         department: contact.department || "",
-        mailingStreet: contact.mailingStreet || "",
-        mailingCity: contact.mailingCity || "",
-        mailingState: contact.mailingState || "",
-        mailingPostalCode: contact.mailingPostalCode || "",
-        mailingCountry: contact.mailingCountry || "",
         description: contact.description || "",
         accountId: contact.accountId || null,
         ownerId: contact.ownerId || "",
@@ -171,14 +161,6 @@ export default function ContactDetailPage() {
             <DetailField label="Phone" value={contact.phone} type="phone" />
             <DetailField label="Mobile" value={contact.mobile} type="phone" />
             <DetailField label="Department" value={contact.department} />
-          </DetailSection>
-
-          <DetailSection title="Address Information">
-            <DetailField label="Mailing Street" value={contact.mailingStreet} />
-            <DetailField label="Mailing City" value={contact.mailingCity} />
-            <DetailField label="Mailing State" value={contact.mailingState} />
-            <DetailField label="Mailing Postal Code" value={contact.mailingPostalCode} />
-            <DetailField label="Mailing Country" value={contact.mailingCountry} />
           </DetailSection>
 
           {contact.description && (
@@ -416,77 +398,6 @@ export default function ContactDetailPage() {
                 </FormItem>
               )}
             />
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Mailing Address</h3>
-              <FormField
-                control={form.control}
-                name="mailingStreet"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Street</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} data-testid="input-edit-mailing-street" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="grid grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="mailingCity"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>City</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} data-testid="input-edit-mailing-city" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="mailingState"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} data-testid="input-edit-mailing-state" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="mailingPostalCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Postal Code</FormLabel>
-                      <FormControl>
-                        <Input {...field} value={field.value || ""} data-testid="input-edit-mailing-postal-code" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <FormField
-                control={form.control}
-                name="mailingCountry"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Country</FormLabel>
-                    <FormControl>
-                      <Input {...field} value={field.value || ""} data-testid="input-edit-mailing-country" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
             <FormField
               control={form.control}
