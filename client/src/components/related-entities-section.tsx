@@ -22,6 +22,14 @@ const typeIcons: Record<string, typeof Building2> = {
   activities: Calendar,
 };
 
+const singularLabels: Record<string, string> = {
+  accounts: "Account",
+  contacts: "Contact",
+  opportunities: "Opportunity",
+  leads: "Lead",
+  activities: "Activity",
+};
+
 const typeAvatarColors: Record<string, { bg: string; text: string }> = {
   accounts: { bg: "hsl(216, 40%, 92%)", text: "hsl(216, 40%, 30%)" },
   contacts: { bg: "hsl(195, 45%, 90%)", text: "hsl(195, 57%, 37%)" },
@@ -46,7 +54,7 @@ export function RelatedEntitiesSection({
         {onAdd && (
           <Button size="sm" variant="outline" onClick={onAdd} data-testid={`button-add-${entityType}`}>
             <Plus className="h-3 w-3 mr-1" />
-            Add {entityType.charAt(0).toUpperCase() + entityType.slice(1)}
+            Add {singularLabels[entityType] || entityType}
           </Button>
         )}
       </CardHeader>
