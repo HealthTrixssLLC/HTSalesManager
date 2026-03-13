@@ -156,7 +156,6 @@ export default function ContactDetailPage() {
       backLink="/contacts"
       backLabel="Contacts"
       onEdit={openEditDialog}
-      onDelete={() => {}}
       onLogActivity={() => setIsLogActivityOpen(true)}
       entityType="contact"
       entityId={contactId || ""}
