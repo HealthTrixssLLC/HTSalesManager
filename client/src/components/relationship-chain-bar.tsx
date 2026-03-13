@@ -71,14 +71,6 @@ const typeColors: Record<EntityType, string> = {
   activity: "hsl(262, 52%, 47%)",
 };
 
-const apiPathMap: Record<EntityType, string> = {
-  account: "accounts",
-  contact: "contacts",
-  lead: "leads",
-  opportunity: "opportunities",
-  activity: "activities",
-};
-
 function useAccountChain(entityId: string) {
   const { data } = useQuery<AccountRelatedData>({
     queryKey: ["/api/accounts", entityId, "related"],
@@ -87,9 +79,21 @@ function useAccountChain(entityId: string) {
   const chain: ChainLink[] = [];
   const counts: CountChip[] = [];
   if (data) {
-    if (data.contacts.total > 0) counts.push({ label: "Contacts", count: data.contacts.total, href: `/accounts/${entityId}`, type: "contact" });
-    if (data.opportunities.total > 0) counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/accounts/${entityId}`, type: "opportunity" });
-    if (data.activities.total > 0) counts.push({ label: "Activities", count: data.activities.total, href: `/accounts/${entityId}`, type: "activity" });
+    if (data.contacts.total > 0) {
+      data.contacts.items.slice(0, 3).forEach((c) => {
+        chain.push({ label: `${c.firstName} ${c.lastName}`, href: `/contacts/${c.id}`, type: "contact" });
+      });
+      counts.push({ label: "Contacts", count: data.contacts.total, href: `/accounts/${entityId}`, type: "contact" });
+    }
+    if (data.opportunities.total > 0) {
+      data.opportunities.items.slice(0, 2).forEach((o) => {
+        chain.push({ label: o.name, href: `/opportunities/${o.id}`, type: "opportunity" });
+      });
+      counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/accounts/${entityId}`, type: "opportunity" });
+    }
+    if (data.activities.total > 0) {
+      counts.push({ label: "Activities", count: data.activities.total, href: `/accounts/${entityId}`, type: "activity" });
+    }
   }
   return { chain, counts };
 }
@@ -104,8 +108,15 @@ function useContactChain(entityId: string) {
   if (data) {
     const account = data.account.items[0];
     if (account) chain.push({ label: account.name, href: `/accounts/${account.id}`, type: "account" });
-    if (data.opportunities.total > 0) counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/contacts/${entityId}`, type: "opportunity" });
-    if (data.activities.total > 0) counts.push({ label: "Activities", count: data.activities.total, href: `/contacts/${entityId}`, type: "activity" });
+    if (data.opportunities.total > 0) {
+      data.opportunities.items.slice(0, 2).forEach((o) => {
+        chain.push({ label: o.name, href: `/opportunities/${o.id}`, type: "opportunity" });
+      });
+      counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/contacts/${entityId}`, type: "opportunity" });
+    }
+    if (data.activities.total > 0) {
+      counts.push({ label: "Activities", count: data.activities.total, href: `/contacts/${entityId}`, type: "activity" });
+    }
   }
   return { chain, counts };
 }
@@ -118,10 +129,22 @@ function useLeadChain(entityId: string) {
   const chain: ChainLink[] = [];
   const counts: CountChip[] = [];
   if (data) {
-    if (data.activities.total > 0) counts.push({ label: "Activities", count: data.activities.total, href: `/leads/${entityId}`, type: "activity" });
-    if (data.convertedAccount) counts.push({ label: "Converted Account", count: 1, href: `/accounts/${data.convertedAccount.id}`, type: "account" });
-    if (data.convertedContact) counts.push({ label: "Converted Contact", count: 1, href: `/contacts/${data.convertedContact.id}`, type: "contact" });
-    if (data.convertedOpportunity) counts.push({ label: "Converted Opp", count: 1, href: `/opportunities/${data.convertedOpportunity.id}`, type: "opportunity" });
+    if (data.convertedAccount) {
+      chain.push({ label: data.convertedAccount.name, href: `/accounts/${data.convertedAccount.id}`, type: "account" });
+    }
+    if (data.convertedContact) {
+      chain.push({
+        label: `${data.convertedContact.firstName} ${data.convertedContact.lastName}`,
+        href: `/contacts/${data.convertedContact.id}`,
+        type: "contact",
+      });
+    }
+    if (data.convertedOpportunity) {
+      chain.push({ label: data.convertedOpportunity.name, href: `/opportunities/${data.convertedOpportunity.id}`, type: "opportunity" });
+    }
+    if (data.activities.total > 0) {
+      counts.push({ label: "Activities", count: data.activities.total, href: `/leads/${entityId}`, type: "activity" });
+    }
   }
   return { chain, counts };
 }
@@ -136,8 +159,15 @@ function useOpportunityChain(entityId: string) {
   if (data) {
     const account = data.account.items[0];
     if (account) chain.push({ label: account.name, href: `/accounts/${account.id}`, type: "account" });
-    if (data.contacts.total > 0) counts.push({ label: "Contacts", count: data.contacts.total, href: `/opportunities/${entityId}`, type: "contact" });
-    if (data.activities.total > 0) counts.push({ label: "Activities", count: data.activities.total, href: `/opportunities/${entityId}`, type: "activity" });
+    if (data.contacts.total > 0) {
+      data.contacts.items.slice(0, 2).forEach((c) => {
+        chain.push({ label: `${c.firstName} ${c.lastName}`, href: `/contacts/${c.id}`, type: "contact" });
+      });
+      counts.push({ label: "Contacts", count: data.contacts.total, href: `/opportunities/${entityId}`, type: "contact" });
+    }
+    if (data.activities.total > 0) {
+      counts.push({ label: "Activities", count: data.activities.total, href: `/opportunities/${entityId}`, type: "activity" });
+    }
   }
   return { chain, counts };
 }
@@ -166,40 +196,46 @@ export function RelationshipChainBar({ entityType, entityId, entityName }: Relat
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap text-sm" data-testid="relationship-chain-bar">
-      {chain.map((link, index) => {
-        const Icon = typeIcons[link.type];
-        return (
-          <span key={index} className="flex items-center gap-1">
-            <Link href={link.href}>
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover-elevate cursor-pointer text-muted-foreground hover:text-foreground transition-colors" data-testid={`chain-link-${link.type}`}>
-                <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: typeColors[link.type] }} />
-                <span className="truncate max-w-[140px]">{link.label}</span>
-              </span>
-            </Link>
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-          </span>
-        );
-      })}
       <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md font-medium">
         <CurrentIcon className="h-3.5 w-3.5 shrink-0" style={{ color: typeColors[entityType] }} />
         <span className="truncate max-w-[160px]">{entityName}</span>
       </span>
+      {chain.length > 0 && (
+        <>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+          {chain.map((link, index) => {
+            const Icon = typeIcons[link.type];
+            return (
+              <span key={`${link.type}-${index}`} className="flex items-center gap-1">
+                <Link href={link.href}>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover-elevate cursor-pointer text-muted-foreground hover:text-foreground transition-colors" data-testid={`chain-link-${link.type}-${index}`}>
+                    <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: typeColors[link.type] }} />
+                    <span className="truncate max-w-[140px]">{link.label}</span>
+                  </span>
+                </Link>
+                {index < chain.length - 1 && (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                )}
+              </span>
+            );
+          })}
+        </>
+      )}
       {counts.length > 0 && (
         <>
           <span className="text-muted-foreground/30 mx-1">|</span>
           {counts.map((chip, index) => {
             const ChipIcon = typeIcons[chip.type];
             return (
-              <Link key={index} href={chip.href}>
-                <Badge
-                  variant="secondary"
-                  className="cursor-pointer gap-1.5 text-xs font-normal"
-                  data-testid={`chain-count-${chip.type}`}
-                >
-                  <ChipIcon className="h-3 w-3 shrink-0" style={{ color: typeColors[chip.type] }} />
-                  {chip.count} {chip.label}
-                </Badge>
-              </Link>
+              <Badge
+                key={`count-${chip.type}-${index}`}
+                variant="secondary"
+                className="gap-1.5 text-xs font-normal"
+                data-testid={`chain-count-${chip.type}`}
+              >
+                <ChipIcon className="h-3 w-3 shrink-0" style={{ color: typeColors[chip.type] }} />
+                {chip.count} {chip.label}
+              </Badge>
             );
           })}
         </>

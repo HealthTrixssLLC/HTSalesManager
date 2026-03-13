@@ -36,15 +36,6 @@ export function DetailPageLayout({
 }: DetailPageLayoutProps) {
   return (
     <div className="space-y-6 p-6">
-      {entityType && entityId && (
-        <div className="pb-0">
-          <RelationshipChainBar
-            entityType={entityType}
-            entityId={entityId}
-            entityName={title}
-          />
-        </div>
-      )}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href={backLink}>
@@ -85,6 +76,13 @@ export function DetailPageLayout({
           )}
         </div>
       </div>
+      {entityType && entityId && (
+        <RelationshipChainBar
+          entityType={entityType}
+          entityId={entityId}
+          entityName={title}
+        />
+      )}
       {children}
     </div>
   );

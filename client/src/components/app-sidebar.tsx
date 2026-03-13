@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Sidebar,
@@ -17,6 +18,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
+import type { Account, Contact } from "@shared/schema";
 
 const menuItems = [
   { title: "Dashboard",     url: "/",             icon: Home },
@@ -40,21 +42,49 @@ export function AppSidebar() {
   const { user, logoutMutation } = useAuth();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
-  const routeContext = useMemo((): QuickAddContext | undefined => {
-    const patterns: Array<{ pattern: RegExp; contextKey: keyof QuickAddContext }> = [
-      { pattern: /^\/accounts\/([^/]+)$/, contextKey: "accountId" },
-      { pattern: /^\/contacts\/([^/]+)$/, contextKey: "contactId" },
-      { pattern: /^\/leads\/([^/]+)$/, contextKey: "leadId" },
-      { pattern: /^\/opportunities\/([^/]+)$/, contextKey: "opportunityId" },
+  const routeMatch = useMemo(() => {
+    const patterns = [
+      { pattern: /^\/accounts\/([^/]+)$/, type: "account" as const },
+      { pattern: /^\/contacts\/([^/]+)$/, type: "contact" as const },
+      { pattern: /^\/leads\/([^/]+)$/, type: "lead" as const },
+      { pattern: /^\/opportunities\/([^/]+)$/, type: "opportunity" as const },
     ];
-    for (const { pattern, contextKey } of patterns) {
+    for (const { pattern, type } of patterns) {
       const match = location.match(pattern);
-      if (match && match[1]) {
-        return { [contextKey]: match[1] } as QuickAddContext;
-      }
+      if (match && match[1]) return { type, id: match[1] };
     }
-    return undefined;
+    return null;
   }, [location]);
+
+  const { data: contextAccount } = useQuery<Account>({
+    queryKey: ["/api/accounts", routeMatch?.id],
+    enabled: routeMatch?.type === "account" && !!routeMatch.id,
+  });
+
+  const { data: contextContact } = useQuery<Contact>({
+    queryKey: ["/api/contacts", routeMatch?.id],
+    enabled: routeMatch?.type === "contact" && !!routeMatch.id,
+  });
+
+  const routeContext = useMemo((): QuickAddContext | undefined => {
+    if (!routeMatch) return undefined;
+    switch (routeMatch.type) {
+      case "account":
+        return { accountId: routeMatch.id, accountName: contextAccount?.name };
+      case "contact":
+        return {
+          contactId: routeMatch.id,
+          contactName: contextContact ? `${contextContact.firstName} ${contextContact.lastName}` : undefined,
+          accountId: contextContact?.accountId || undefined,
+        };
+      case "lead":
+        return { leadId: routeMatch.id };
+      case "opportunity":
+        return { opportunityId: routeMatch.id };
+      default:
+        return undefined;
+    }
+  }, [routeMatch, contextAccount, contextContact]);
 
   const getInitials = (name: string) =>
     name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
