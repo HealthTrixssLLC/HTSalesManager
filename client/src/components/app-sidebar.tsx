@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { GlobalQuickAdd } from "@/components/global-quick-add";
+import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
 
 const menuItems = [
   { title: "Dashboard",     url: "/",             icon: Home },
@@ -39,6 +39,22 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  const routeContext = useMemo((): QuickAddContext | undefined => {
+    const patterns: Array<{ pattern: RegExp; contextKey: keyof QuickAddContext }> = [
+      { pattern: /^\/accounts\/([^/]+)$/, contextKey: "accountId" },
+      { pattern: /^\/contacts\/([^/]+)$/, contextKey: "contactId" },
+      { pattern: /^\/leads\/([^/]+)$/, contextKey: "leadId" },
+      { pattern: /^\/opportunities\/([^/]+)$/, contextKey: "opportunityId" },
+    ];
+    for (const { pattern, contextKey } of patterns) {
+      const match = location.match(pattern);
+      if (match && match[1]) {
+        return { [contextKey]: match[1] } as QuickAddContext;
+      }
+    }
+    return undefined;
+  }, [location]);
 
   const getInitials = (name: string) =>
     name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
@@ -167,7 +183,7 @@ export function AppSidebar() {
         </SidebarFooter>
       </Sidebar>
 
-      <GlobalQuickAdd open={quickAddOpen} onOpenChange={setQuickAddOpen} />
+      <GlobalQuickAdd open={quickAddOpen} onOpenChange={setQuickAddOpen} context={routeContext} />
     </>
   );
 }
