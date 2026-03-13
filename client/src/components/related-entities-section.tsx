@@ -46,7 +46,7 @@ export function RelatedEntitiesSection({
         {onAdd && (
           <Button size="sm" variant="outline" onClick={onAdd} data-testid={`button-add-${entityType}`}>
             <Plus className="h-3 w-3 mr-1" />
-            Add
+            Add {entityType.charAt(0).toUpperCase() + entityType.slice(1)}
           </Button>
         )}
       </CardHeader>
