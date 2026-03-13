@@ -6,7 +6,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
+import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
+import { QuickLogActivity } from "@/components/quick-log-activity";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +29,7 @@ export default function AccountDetailPage() {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: account, isLoading: accountLoading } = useQuery<Account>({
@@ -154,6 +157,13 @@ export default function AccountDetailPage() {
     return "outline";
   };
 
+  const chainBar = (
+    <RelationshipChainBar
+      chain={[]}
+      current={{ label: account.name, type: "account" }}
+    />
+  );
+
   return (
     <DetailPageLayout
       title={account.name}
@@ -164,6 +174,8 @@ export default function AccountDetailPage() {
       statusVariant={getStatusVariant(account.type)}
       onEdit={() => setIsEditDialogOpen(true)}
       onDelete={() => setIsDeleteDialogOpen(true)}
+      onLogActivity={() => setIsLogActivityOpen(true)}
+      chainBar={chainBar}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -244,7 +256,16 @@ export default function AccountDetailPage() {
         </div>
       </div>
 
-      {/* Edit Dialog */}
+      {accountId && (
+        <QuickLogActivity
+          open={isLogActivityOpen}
+          onOpenChange={setIsLogActivityOpen}
+          relatedType="Account"
+          relatedId={accountId}
+          relatedName={account.name}
+        />
+      )}
+
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -437,7 +458,6 @@ export default function AccountDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,8 @@ interface DetailPageLayoutProps {
   statusVariant?: "default" | "secondary" | "destructive" | "outline";
   onEdit?: () => void;
   onDelete?: () => void;
+  onLogActivity?: () => void;
+  chainBar?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -25,10 +27,17 @@ export function DetailPageLayout({
   statusVariant = "default",
   onEdit,
   onDelete,
+  onLogActivity,
+  chainBar,
   children,
 }: DetailPageLayoutProps) {
   return (
     <div className="space-y-6 p-6">
+      {chainBar && (
+        <div className="pb-0">
+          {chainBar}
+        </div>
+      )}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link href={backLink}>
@@ -37,7 +46,7 @@ export function DetailPageLayout({
             </Button>
           </Link>
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-2xl font-semibold">{title}</h1>
               {status && (
                 <Badge variant={statusVariant} data-testid={`badge-status-${status.toLowerCase()}`}>
@@ -49,6 +58,12 @@ export function DetailPageLayout({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {onLogActivity && (
+            <Button variant="outline" onClick={onLogActivity} data-testid="button-log-activity">
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Log Activity
+            </Button>
+          )}
           {onEdit && (
             <Button variant="outline" onClick={onEdit} data-testid="button-edit">
               <Pencil className="h-4 w-4 mr-2" />

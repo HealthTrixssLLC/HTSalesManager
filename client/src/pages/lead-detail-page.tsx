@@ -4,7 +4,10 @@ import { useRoute, useLocation } from "wouter";
 import { Loader2, ArrowRight } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
+import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
+import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
+import { QuickLogActivity } from "@/components/quick-log-activity";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,6 +31,8 @@ export default function LeadDetailPage() {
   const { toast } = useToast();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isConversionOpen, setIsConversionOpen] = useState(false);
+  const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: lead, isLoading: leadLoading } = useQuery<Lead>({
@@ -55,7 +60,6 @@ export default function LeadDetailPage() {
     enabled: !!leadId,
   });
 
-  // Edit mutation
   const editMutation = useMutation({
     mutationFn: async (data: InsertLead) => {
       const res = await apiRequest("PATCH", `/api/leads/${leadId}`, data);
@@ -72,7 +76,6 @@ export default function LeadDetailPage() {
     },
   });
 
-  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", `/api/leads/${leadId}`);
@@ -88,7 +91,6 @@ export default function LeadDetailPage() {
     },
   });
 
-  // Form for editing
   const form = useForm<InsertLead>({
     resolver: zodResolver(insertLeadSchema),
     defaultValues: {
@@ -106,7 +108,6 @@ export default function LeadDetailPage() {
     },
   });
 
-  // Update form when lead data loads or dialog opens
   useEffect(() => {
     if (lead && isEditDialogOpen) {
       form.reset({
@@ -158,6 +159,13 @@ export default function LeadDetailPage() {
     return "outline";
   };
 
+  const chainBar = (
+    <RelationshipChainBar
+      chain={[]}
+      current={{ label: fullName, type: "lead" }}
+    />
+  );
+
   return (
     <>
       <DetailPageLayout
@@ -169,6 +177,8 @@ export default function LeadDetailPage() {
         statusVariant={getStatusVariant(lead.status)}
         onEdit={() => setIsEditDialogOpen(true)}
         onDelete={() => setIsDeleteDialogOpen(true)}
+        onLogActivity={() => setIsLogActivityOpen(true)}
+        chainBar={chainBar}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -210,7 +220,7 @@ export default function LeadDetailPage() {
                 <CardContent>
                   <Button
                     className="w-full"
-                    onClick={() => setLocation(`/lead-conversion?leadId=${lead.id}`)}
+                    onClick={() => setIsConversionOpen(true)}
                     data-testid="button-convert-lead"
                   >
                     Convert Lead
@@ -282,7 +292,24 @@ export default function LeadDetailPage() {
         </div>
       </DetailPageLayout>
 
-    {/* Edit Dialog */}
+    {leadId && (
+      <LeadConversionWizard
+        leadId={leadId}
+        open={isConversionOpen}
+        onClose={() => setIsConversionOpen(false)}
+      />
+    )}
+
+    {leadId && (
+      <QuickLogActivity
+        open={isLogActivityOpen}
+        onOpenChange={setIsLogActivityOpen}
+        relatedType="Lead"
+        relatedId={leadId}
+        relatedName={fullName}
+      />
+    )}
+
     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -459,7 +486,6 @@ export default function LeadDetailPage() {
       </DialogContent>
     </Dialog>
 
-    {/* Delete Confirmation Dialog */}
     <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
       <AlertDialogContent>
         <AlertDialogHeader>

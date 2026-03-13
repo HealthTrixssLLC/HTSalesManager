@@ -1,19 +1,16 @@
-// Lead conversion wizard component
-// Multi-step wizard for converting leads to accounts/contacts/opportunities
-
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Lead } from "@shared/schema";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, CheckCircle2, Building2, Users, Target } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Loader2, CheckCircle2, Building2, Users, Target, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-
-type ConversionStep = "review" | "duplicate-check" | "confirm" | "success";
 
 type ConversionData = {
   createAccount: boolean;
@@ -34,7 +31,8 @@ export function LeadConversionWizard({
   onClose: () => void;
 }) {
   const { toast } = useToast();
-  const [step, setStep] = useState<ConversionStep>("review");
+  const [, setLocation] = useLocation();
+  const [isSuccess, setIsSuccess] = useState(false);
   const [conversionData, setConversionData] = useState<ConversionData>({
     createAccount: true,
     accountName: "",
@@ -56,10 +54,11 @@ export function LeadConversionWizard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
-      setStep("success");
+      setIsSuccess(true);
     },
     onError: (error: Error) => {
       toast({
@@ -70,18 +69,8 @@ export function LeadConversionWizard({
     },
   });
 
-  const handleNext = () => {
-    if (step === "review") {
-      setStep("duplicate-check");
-    } else if (step === "duplicate-check") {
-      setStep("confirm");
-    } else if (step === "confirm") {
-      convertMutation.mutate(conversionData);
-    }
-  };
-
   const handleClose = () => {
-    setStep("review");
+    setIsSuccess(false);
     setConversionData({
       createAccount: true,
       accountName: "",
@@ -93,241 +82,200 @@ export function LeadConversionWizard({
     onClose();
   };
 
-  if (isLoading) {
-    return (
-      <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent>
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  const handleConvert = () => {
+    convertMutation.mutate(conversionData);
+  };
 
-  if (!lead) return null;
-
-  // Set default values on first load
-  if (conversionData.accountName === "" && lead.company) {
+  if (lead && conversionData.accountName === "" && lead.company) {
     setConversionData((prev) => ({ ...prev, accountName: lead.company || "" }));
   }
 
+  const atLeastOneSelected = conversionData.createAccount || conversionData.createContact || conversionData.createOpportunity;
+
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
-        {step === "review" && (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <SheetContent className="sm:max-w-lg overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : isSuccess ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="rounded-full p-3 mb-4" style={{ backgroundColor: "hsl(142, 40%, 92%)" }}>
+              <CheckCircle2 className="h-10 w-10" style={{ color: "hsl(142, 50%, 36%)" }} />
+            </div>
+            <h2 className="text-xl font-semibold mb-2">Lead Converted</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              The lead has been successfully converted and new records have been created.
+            </p>
+            <Button onClick={handleClose} data-testid="button-conversion-done">
+              Done
+            </Button>
+          </div>
+        ) : lead ? (
           <>
-            <DialogHeader>
-              <DialogTitle>Convert Lead</DialogTitle>
-              <DialogDescription>Review lead information and select what to create</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <h3 className="font-medium">Lead Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+            <SheetHeader>
+              <SheetTitle>Convert Lead</SheetTitle>
+              <SheetDescription>
+                Convert {lead.firstName} {lead.lastName} to CRM records
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-6">
+              <div className="rounded-md border p-4 space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Lead Summary</h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-muted-foreground">Name:</span>
+                    <span className="text-muted-foreground">Name</span>
                     <p className="font-medium">{lead.firstName} {lead.lastName}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Company:</span>
-                    <p className="font-medium">{lead.company || "N/A"}</p>
+                    <span className="text-muted-foreground">Company</span>
+                    <p className="font-medium">{lead.company || "—"}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Email:</span>
-                    <p className="font-medium">{lead.email || "N/A"}</p>
+                    <span className="text-muted-foreground">Email</span>
+                    <p className="font-medium">{lead.email || "—"}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Phone:</span>
-                    <p className="font-medium">{lead.phone || "N/A"}</p>
+                    <span className="text-muted-foreground">Phone</span>
+                    <p className="font-medium">{lead.phone || "—"}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="create-account"
-                    checked={conversionData.createAccount}
-                    onCheckedChange={(checked) =>
-                      setConversionData({ ...conversionData, createAccount: checked as boolean })
-                    }
-                    data-testid="checkbox-create-account"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="create-account" className="flex items-center gap-2 font-medium cursor-pointer">
-                      <Building2 className="h-4 w-4" />
-                      Create Account
-                    </Label>
-                    {conversionData.createAccount && (
+              <Separator />
+
+              <div className="space-y-5">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Create Records</h3>
+
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(216, 40%, 92%)" }}>
+                        <Building2 className="h-4 w-4" style={{ color: "hsl(216, 40%, 30%)" }} />
+                      </div>
+                      <div>
+                        <Label className="font-medium">Account</Label>
+                        <p className="text-xs text-muted-foreground">Create a new account record</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={conversionData.createAccount}
+                      onCheckedChange={(checked) =>
+                        setConversionData({ ...conversionData, createAccount: checked })
+                      }
+                      data-testid="switch-create-account"
+                    />
+                  </div>
+                  {conversionData.createAccount && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Account Name</Label>
                       <Input
-                        className="mt-2"
-                        placeholder="Account name"
+                        className="mt-1"
                         value={conversionData.accountName}
-                        onChange={(e) =>
-                          setConversionData({ ...conversionData, accountName: e.target.value })
-                        }
-                        data-testid="input-account-name"
+                        onChange={(e) => setConversionData({ ...conversionData, accountName: e.target.value })}
+                        placeholder="Account name"
+                        data-testid="input-conversion-account-name"
                       />
-                    )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-md border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(195, 45%, 90%)" }}>
+                        <Users className="h-4 w-4" style={{ color: "hsl(195, 57%, 37%)" }} />
+                      </div>
+                      <div>
+                        <Label className="font-medium">Contact</Label>
+                        <p className="text-xs text-muted-foreground">{lead.firstName} {lead.lastName}</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={conversionData.createContact}
+                      onCheckedChange={(checked) =>
+                        setConversionData({ ...conversionData, createContact: checked })
+                      }
+                      data-testid="switch-create-contact"
+                    />
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  <Checkbox
-                    id="create-contact"
-                    checked={conversionData.createContact}
-                    onCheckedChange={(checked) =>
-                      setConversionData({ ...conversionData, createContact: checked as boolean })
-                    }
-                    data-testid="checkbox-create-contact"
-                  />
-                  <Label htmlFor="create-contact" className="flex items-center gap-2 font-medium cursor-pointer">
-                    <Users className="h-4 w-4" />
-                    Create Contact
-                  </Label>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <Checkbox
-                    id="create-opportunity"
-                    checked={conversionData.createOpportunity}
-                    onCheckedChange={(checked) =>
-                      setConversionData({ ...conversionData, createOpportunity: checked as boolean })
-                    }
-                    data-testid="checkbox-create-opportunity"
-                  />
-                  <div className="flex-1">
-                    <Label htmlFor="create-opportunity" className="flex items-center gap-2 font-medium cursor-pointer">
-                      <Target className="h-4 w-4" />
-                      Create Opportunity
-                    </Label>
-                    {conversionData.createOpportunity && (
-                      <div className="mt-2 space-y-2">
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(142, 40%, 90%)" }}>
+                        <Target className="h-4 w-4" style={{ color: "hsl(142, 50%, 36%)" }} />
+                      </div>
+                      <div>
+                        <Label className="font-medium">Opportunity</Label>
+                        <p className="text-xs text-muted-foreground">Create a new opportunity</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={conversionData.createOpportunity}
+                      onCheckedChange={(checked) =>
+                        setConversionData({ ...conversionData, createOpportunity: checked })
+                      }
+                      data-testid="switch-create-opportunity"
+                    />
+                  </div>
+                  {conversionData.createOpportunity && (
+                    <div className="space-y-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Opportunity Name</Label>
                         <Input
-                          placeholder="Opportunity name"
+                          className="mt-1"
                           value={conversionData.opportunityName}
-                          onChange={(e) =>
-                            setConversionData({ ...conversionData, opportunityName: e.target.value })
-                          }
-                          data-testid="input-opportunity-name"
-                        />
-                        <Input
-                          type="number"
-                          placeholder="Amount"
-                          value={conversionData.opportunityAmount}
-                          onChange={(e) =>
-                            setConversionData({ ...conversionData, opportunityAmount: e.target.value })
-                          }
-                          data-testid="input-opportunity-amount"
+                          onChange={(e) => setConversionData({ ...conversionData, opportunityName: e.target.value })}
+                          placeholder={`${lead.firstName} ${lead.lastName} - Opportunity`}
+                          data-testid="input-conversion-opp-name"
                         />
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Amount</Label>
+                        <Input
+                          type="number"
+                          className="mt-1"
+                          value={conversionData.opportunityAmount}
+                          onChange={(e) => setConversionData({ ...conversionData, opportunityAmount: e.target.value })}
+                          placeholder="0"
+                          data-testid="input-conversion-opp-amount"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button onClick={handleNext} data-testid="button-next">
-                Next
-              </Button>
-            </DialogFooter>
-          </>
-        )}
 
-        {step === "duplicate-check" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Duplicate Check</DialogTitle>
-              <DialogDescription>Checking for potential duplicate records</DialogDescription>
-            </DialogHeader>
-            <div className="py-8 text-center">
-              <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-              <p className="text-lg font-medium mb-2">No duplicates found</p>
-              <p className="text-sm text-muted-foreground">Safe to proceed with conversion</p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setStep("review")}>
-                Back
-              </Button>
-              <Button onClick={handleNext} data-testid="button-confirm">
-                Confirm
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-
-        {step === "confirm" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Confirm Conversion</DialogTitle>
-              <DialogDescription>Review the records that will be created</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <p className="text-sm text-muted-foreground">The following records will be created:</p>
-              <div className="space-y-2">
-                {conversionData.createAccount && (
-                  <div className="flex items-center gap-2 p-3 bg-accent rounded-md">
-                    <Building2 className="h-4 w-4 text-accent-foreground" />
-                    <span className="font-medium">Account:</span>
-                    <span>{conversionData.accountName || lead.company}</span>
-                  </div>
-                )}
-                {conversionData.createContact && (
-                  <div className="flex items-center gap-2 p-3 bg-accent rounded-md">
-                    <Users className="h-4 w-4 text-accent-foreground" />
-                    <span className="font-medium">Contact:</span>
-                    <span>{lead.firstName} {lead.lastName}</span>
-                  </div>
-                )}
-                {conversionData.createOpportunity && (
-                  <div className="flex items-center gap-2 p-3 bg-accent rounded-md">
-                    <Target className="h-4 w-4 text-accent-foreground" />
-                    <span className="font-medium">Opportunity:</span>
-                    <span>{conversionData.opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`}</span>
-                  </div>
-                )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConvert}
+                  disabled={!atLeastOneSelected || convertMutation.isPending}
+                  data-testid="button-convert-lead-submit"
+                >
+                  {convertMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Converting...
+                    </>
+                  ) : (
+                    <>
+                      Convert Lead
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setStep("duplicate-check")}>
-                Back
-              </Button>
-              <Button
-                onClick={handleNext}
-                disabled={convertMutation.isPending}
-                data-testid="button-convert-lead"
-              >
-                {convertMutation.isPending ? "Converting..." : "Convert Lead"}
-              </Button>
-            </DialogFooter>
           </>
-        )}
-
-        {step === "success" && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Conversion Complete</DialogTitle>
-              <DialogDescription>Lead has been successfully converted</DialogDescription>
-            </DialogHeader>
-            <div className="py-8 text-center">
-              <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-              <p className="text-lg font-medium mb-2">Lead converted successfully!</p>
-              <p className="text-sm text-muted-foreground">
-                The lead has been converted and new records have been created.
-              </p>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleClose} data-testid="button-done">
-                Done
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+        ) : null}
+      </SheetContent>
+    </Sheet>
   );
 }

@@ -34,7 +34,7 @@ The design follows the official HealthTrixss Design System (https://healthtrixss
 **Technical Implementations & Feature Specifications:**
 
 *   **Core CRM Entities**: Comprehensive CRUD operations and detail views for Accounts, Contacts, Leads, Opportunities, and Activities, including related entities and a comments system.
-*   **Lead Management**: Features a lead rating system (Hot/Warm/Cold), multi-step conversion wizard with duplicate detection.
+*   **Lead Management**: Features a lead rating system (Hot/Warm/Cold), streamlined lead conversion via slide-out Sheet panel (replaces multi-step wizard dialog).
 *   **Activity Management**: Supports bulk operations (reassignment, due date changes), real-time summary statistics, and a pending activities dashboard card with list/calendar views.
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and a Role-Based Access Control (RBAC) framework (Admin, SalesManager, SalesRep, ReadOnly).
 *   **Opportunity Management**: Kanban board for pipeline visualization and a Sales Waterfall Dashboard for annual target tracking. **All opportunities require a close date** (NOT NULL constraint enforced at database level).
@@ -63,6 +63,13 @@ The design follows the official HealthTrixss Design System (https://healthtrixss
         - Read operations: 600 req/min (all GET endpoints including dashboards, analytics, exports)
     *   **CSV Security**: Header length validation (10KB max) prevents loop bound injection DoS attacks in Dynamics 365 migration tools
     *   All security measures validated against CodeQL static analysis findings
+
+*   **CRM Workflow UX Overhaul**: Apple-inspired workflow improvements across all detail pages:
+    *   **Global Quick-Add**: "+" button in sidebar header opens a Sheet with tabs for creating Account, Contact, Lead, Opportunity, or Activity from anywhere. Component: `client/src/components/global-quick-add.tsx`
+    *   **Relationship Chain Bar**: Breadcrumb-style bar on detail pages showing entity hierarchy (e.g., Account > Contact > Opportunity). Component: `client/src/components/relationship-chain-bar.tsx`
+    *   **Streamlined Lead Conversion**: Single-panel Sheet with toggle switches replaces 4-step wizard dialog. Opens inline from lead detail page instead of navigating away. Component: `client/src/components/lead-conversion-wizard.tsx`
+    *   **Rich Related Object Cards**: Related entity items show avatar initials with entity-type colors, subtitle info, badges, and chevron-right navigation. Component: `client/src/components/related-entities-section.tsx`
+    *   **Quick-Log Activity**: "Log Activity" button in detail page header opens compact Sheet form for fast activity creation, pre-linked to the current entity. Component: `client/src/components/quick-log-activity.tsx`
 
 **System Design Choices:**
 

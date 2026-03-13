@@ -4,7 +4,9 @@ import { useRoute, useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
+import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
+import { QuickLogActivity } from "@/components/quick-log-activity";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,7 @@ export default function OpportunityDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
+  const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
@@ -292,6 +295,22 @@ export default function OpportunityDetailPage() {
 
   const account = relatedData?.account.items[0];
 
+  const chainLinks = [];
+  if (account) {
+    chainLinks.push({
+      label: account.name,
+      href: `/accounts/${account.id}`,
+      type: "account" as const,
+    });
+  }
+
+  const chainBar = (
+    <RelationshipChainBar
+      chain={chainLinks}
+      current={{ label: opportunity.name, type: "opportunity" }}
+    />
+  );
+
   return (
     <DetailPageLayout
       title={opportunity.name}
@@ -302,6 +321,8 @@ export default function OpportunityDetailPage() {
       statusVariant={getStageVariant(opportunity.stage)}
       onEdit={handleEdit}
       onDelete={() => setIsDeleteDialogOpen(true)}
+      onLogActivity={() => setIsLogActivityOpen(true)}
+      chainBar={chainBar}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -769,6 +790,16 @@ export default function OpportunityDetailPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {opportunityId && (
+        <QuickLogActivity
+          open={isLogActivityOpen}
+          onOpenChange={setIsLogActivityOpen}
+          relatedType="Opportunity"
+          relatedId={opportunityId}
+          relatedName={opportunity.name}
+        />
+      )}
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
