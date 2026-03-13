@@ -114,23 +114,18 @@ export async function initializeDefaultRolesAndPermissions() {
   try {
     const existingRoles = await storage.getAllRoles();
     
-    // Only initialize if no roles exist
-    if (existingRoles.length > 0) {
+    if (existingRoles.length === 0) {
+      console.log("Initializing default roles and permissions...");
+      const { seedRolesAndPermissions } = await import("./seed");
+      await seedRolesAndPermissions();
+      console.log("✓ Default roles and permissions initialized successfully");
+    } else {
       console.log("Roles already initialized");
-      return;
+      const { ensureProductDeveloperRole } = await import("./seed");
+      await ensureProductDeveloperRole();
     }
-    
-    console.log("Initializing default roles and permissions...");
-    
-    // Import and run the seed script
-    const { seedRolesAndPermissions } = await import("./seed");
-    await seedRolesAndPermissions();
-    
-    console.log("✓ Default roles and permissions initialized successfully");
     
   } catch (error) {
     console.error("Error initializing roles and permissions:", error);
-    // Don't throw - allow the app to start even if seeding fails
-    // Users can manually run the seed script if needed
   }
 }

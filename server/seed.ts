@@ -53,6 +53,7 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Comment", action: "pin" },
       { resource: "Comment", action: "resolve" },
       { resource: "Comment", action: "react" },
+      { resource: "ResourceAllocation", action: "read" },
     ],
   },
   {
@@ -79,6 +80,7 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Comment", action: "create" },
       { resource: "Comment", action: "update" },
       { resource: "Comment", action: "react" },
+      { resource: "ResourceAllocation", action: "read" },
     ],
   },
   {
@@ -91,6 +93,15 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Opportunity", action: "read" },
       { resource: "Activity", action: "read" },
       { resource: "Comment", action: "read" },
+      { resource: "ResourceAllocation", action: "read" },
+    ],
+  },
+  {
+    name: "ProductDeveloper",
+    description: "View resource allocation timeline and assigned opportunities only",
+    permissions: [
+      { resource: "ResourceAllocation", action: "read" },
+      { resource: "Opportunity", action: "readOwn" },
     ],
   },
 ];
@@ -183,6 +194,69 @@ export async function seedTestAdminUser() {
   } else {
     console.error("Admin role not found, cannot assign to test user");
   }
+}
+
+export async function ensureProductDeveloperRole() {
+  const existingRoles = await db.select().from(roles);
+  const pdRole = existingRoles.find(r => r.name === "ProductDeveloper");
+  if (pdRole) {
+    return;
+  }
+
+  console.log("Adding ProductDeveloper role to existing database...");
+
+  const [createdRole] = await db.insert(roles).values({
+    name: "ProductDeveloper",
+    description: "View resource allocation timeline and assigned opportunities only",
+  }).returning();
+
+  const pdPerms = [
+    { resource: "ResourceAllocation", action: "read" },
+    { resource: "Opportunity", action: "readOwn" },
+  ];
+
+  for (const permDef of pdPerms) {
+    const existing = await db.select().from(permissions)
+      .where(eq(permissions.resource, permDef.resource));
+    const match = existing.find(p => p.action === permDef.action);
+
+    let permissionId: string;
+    if (match) {
+      permissionId = match.id;
+    } else {
+      const [created] = await db.insert(permissions).values({
+        resource: permDef.resource,
+        action: permDef.action,
+        description: `Permission to ${permDef.action} ${permDef.resource}`,
+      }).returning();
+      permissionId = created.id;
+    }
+
+    await db.insert(rolePermissions).values({
+      roleId: createdRole.id,
+      permissionId,
+    });
+  }
+
+  const raReadPerm = await db.select().from(permissions)
+    .where(eq(permissions.resource, "ResourceAllocation"));
+  const raReadId = raReadPerm.find(p => p.action === "read")?.id;
+  if (raReadId) {
+    for (const role of existingRoles) {
+      if (["SalesManager", "SalesRep", "ReadOnly"].includes(role.name)) {
+        const existingRP = await db.select().from(rolePermissions)
+          .where(eq(rolePermissions.roleId, role.id));
+        if (!existingRP.some(rp => rp.permissionId === raReadId)) {
+          await db.insert(rolePermissions).values({
+            roleId: role.id,
+            permissionId: raReadId,
+          });
+        }
+      }
+    }
+  }
+
+  console.log("✓ ProductDeveloper role added successfully");
 }
 
 async function seed() {

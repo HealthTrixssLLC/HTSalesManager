@@ -188,17 +188,6 @@ export const opportunities = pgTable("opportunities", {
   includeInForecastIdx: index("opportunities_include_in_forecast_idx").on(table.includeInForecast),
 }));
 
-export const opportunityResources = pgTable("opportunity_resources", {
-  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  opportunityId: varchar("opportunity_id", { length: 100 }).notNull().references(() => opportunities.id, { onDelete: "cascade" }),
-  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
-  role: text("role").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  opportunityIdIdx: index("opportunity_resources_opportunity_id_idx").on(table.opportunityId),
-  userIdIdx: index("opportunity_resources_user_id_idx").on(table.userId),
-}));
-
 export const activities = pgTable("activities", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACV-2501-00001
   type: activityTypeEnum("type").notNull(),
@@ -394,6 +383,25 @@ export const entityTags = pgTable("entity_tags", {
   uniqueTag: uniqueIndex("entity_tags_unique_idx").on(table.entity, table.entityId, table.tagId),
 }));
 
+// ========== OPPORTUNITY RESOURCES (Workforce/Resource Planning) ==========
+
+export const opportunityResources = pgTable("opportunity_resources", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  opportunityId: varchar("opportunity_id", { length: 100 }).notNull().references(() => opportunities.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role"),
+  allocation: integer("allocation").default(100),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  opportunityIdIdx: index("opportunity_resources_opportunity_id_idx").on(table.opportunityId),
+  userIdIdx: index("opportunity_resources_user_id_idx").on(table.userId),
+  uniqueAssignment: uniqueIndex("opportunity_resources_unique_idx").on(table.opportunityId, table.userId),
+}));
+
 // ========== SAVED FILTER PRESETS ==========
 
 export const savedFilters = pgTable("saved_filters", {
@@ -560,10 +568,6 @@ export const insertOpportunitySchema = createInsertSchema(opportunities)
 export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
 export type Opportunity = typeof opportunities.$inferSelect;
 
-export const insertOpportunityResourceSchema = createInsertSchema(opportunityResources).omit({ id: true, createdAt: true });
-export type InsertOpportunityResource = z.infer<typeof insertOpportunityResourceSchema>;
-export type OpportunityResource = typeof opportunityResources.$inferSelect;
-
 // Activities
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   dueAt: z.string().nullable(),
@@ -624,6 +628,14 @@ export type Tag = typeof tags.$inferSelect;
 export const insertEntityTagSchema = createInsertSchema(entityTags).omit({ id: true, createdAt: true });
 export type InsertEntityTag = z.infer<typeof insertEntityTagSchema>;
 export type EntityTag = typeof entityTags.$inferSelect;
+
+// OpportunityResources
+export const insertOpportunityResourceSchema = createInsertSchema(opportunityResources).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  startDate: z.preprocess(datePreprocessor, z.date().nullable()).optional(),
+  endDate: z.preprocess(datePreprocessor, z.date().nullable()).optional(),
+});
+export type InsertOpportunityResource = z.infer<typeof insertOpportunityResourceSchema>;
+export type OpportunityResource = typeof opportunityResources.$inferSelect;
 
 // SavedFilters
 export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({ id: true, createdAt: true, updatedAt: true });

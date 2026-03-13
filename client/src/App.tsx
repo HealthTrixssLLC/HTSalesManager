@@ -26,6 +26,7 @@ import AuditLogPage from "@/pages/audit-log-page";
 import HelpPage from "@/pages/help-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import ResourceAllocationPage from "@/pages/resource-allocation-page";
+import { Redirect } from "wouter";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -60,28 +61,68 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function CrmGuardedRoute({
+  path,
+  component: Component,
+}: {
+  path: string;
+  component: () => React.JSX.Element;
+}) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <Route path={path}>
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </Route>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Route path={path}>
+        <Redirect to="/auth" />
+      </Route>
+    );
+  }
+
+  const isProductDeveloper = user.roles?.some(r => r.name === "ProductDeveloper") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
+
+  if (isProductDeveloper) {
+    return (
+      <Route path={path}>
+        <Redirect to="/resource-allocation" />
+      </Route>
+    );
+  }
+
+  return <Route path={path} component={Component} />;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
 
-      <ProtectedRoute path="/" component={Dashboard} />
-      <ProtectedRoute path="/accounts/:id" component={AccountDetailPage} />
-      <ProtectedRoute path="/accounts" component={AccountsPage} />
-      <ProtectedRoute path="/contacts/:id" component={ContactDetailPage} />
-      <ProtectedRoute path="/contacts" component={ContactsPage} />
-      <ProtectedRoute path="/leads/:id" component={LeadDetailPage} />
-      <ProtectedRoute path="/leads" component={LeadsPage} />
+      <CrmGuardedRoute path="/" component={Dashboard} />
+      <CrmGuardedRoute path="/accounts/:id" component={AccountDetailPage} />
+      <CrmGuardedRoute path="/accounts" component={AccountsPage} />
+      <CrmGuardedRoute path="/contacts/:id" component={ContactDetailPage} />
+      <CrmGuardedRoute path="/contacts" component={ContactsPage} />
+      <CrmGuardedRoute path="/leads/:id" component={LeadDetailPage} />
+      <CrmGuardedRoute path="/leads" component={LeadsPage} />
       <ProtectedRoute path="/opportunities/:id" component={OpportunityDetailPage} />
-      <ProtectedRoute path="/opportunities" component={OpportunitiesPage} />
-      <ProtectedRoute path="/activities/:id" component={ActivityDetailPage} />
-      <ProtectedRoute path="/activities" component={ActivitiesPage} />
+      <CrmGuardedRoute path="/opportunities" component={OpportunitiesPage} />
+      <CrmGuardedRoute path="/activities/:id" component={ActivityDetailPage} />
+      <CrmGuardedRoute path="/activities" component={ActivitiesPage} />
+      <CrmGuardedRoute path="/analytics" component={AnalyticsPage} />
+      <CrmGuardedRoute path="/import" component={ImportPage} />
+      <CrmGuardedRoute path="/help" component={HelpPage} />
+      <CrmGuardedRoute path="/admin" component={AdminConsole} />
+      <CrmGuardedRoute path="/audit-log" component={AuditLogPage} />
       <ProtectedRoute path="/resource-allocation" component={ResourceAllocationPage} />
-      <ProtectedRoute path="/analytics" component={AnalyticsPage} />
-      <ProtectedRoute path="/import" component={ImportPage} />
-      <ProtectedRoute path="/help" component={HelpPage} />
-      <ProtectedRoute path="/admin" component={AdminConsole} />
-      <ProtectedRoute path="/audit-log" component={AuditLogPage} />
 
       <Route>
         <div className="flex items-center justify-center min-h-screen">

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 type ResourceAllocationData = {
   opportunities: Array<{
@@ -105,9 +106,12 @@ function getBarPosition(
 
 export default function ResourceAllocationPage() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const [showFilters, setShowFilters] = useState(false);
   const [filterUser, setFilterUser] = useState<string>("all");
   const [filterStage, setFilterStage] = useState<string>("all");
+
+  const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
 
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -182,6 +186,11 @@ export default function ResourceAllocationPage() {
     newEnd.setMonth(newEnd.getMonth() + months);
     setDateRangeStart(newStart.toISOString().split("T")[0]);
     setDateRangeEnd(newEnd.toISOString().split("T")[0]);
+  };
+
+  const canNavigateToOpportunity = (opp: { id: string; resources: Array<{ userId: string }> }) => {
+    if (!isProductDeveloper) return true;
+    return opp.resources.some(r => r.userId === user?.id);
   };
 
   const TIMELINE_WIDTH = 900;
@@ -326,17 +335,24 @@ export default function ResourceAllocationPage() {
                   const startDate = new Date((opp.effectiveStartDate || opp.implementationStartDate)!);
                   const endDate = new Date((opp.effectiveEndDate || opp.implementationEndDate)!);
                   const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
+                  const canNavigate = canNavigateToOpportunity(opp);
 
                   return (
                     <div key={opp.id} className="flex items-center mb-1.5 group">
                       <div className="w-[220px] shrink-0 pr-2">
-                        <button
-                          className="text-xs font-medium text-left truncate w-full hover:text-primary transition-colors"
-                          onClick={() => setLocation(`/opportunities/${opp.id}`)}
-                          data-testid={`link-pipeline-opp-${opp.id}`}
-                        >
-                          {opp.name}
-                        </button>
+                        {canNavigate ? (
+                          <button
+                            className="text-xs font-medium text-left truncate w-full hover:text-primary transition-colors"
+                            onClick={() => setLocation(`/opportunities/${opp.id}`)}
+                            data-testid={`link-pipeline-opp-${opp.id}`}
+                          >
+                            {opp.name}
+                          </button>
+                        ) : (
+                          <span className="text-xs font-medium truncate block" data-testid={`text-pipeline-opp-${opp.id}`}>
+                            {opp.name}
+                          </span>
+                        )}
                         {opp.accountName && (
                           <p className="text-[10px] text-muted-foreground truncate">{opp.accountName}</p>
                         )}
@@ -407,21 +423,21 @@ export default function ResourceAllocationPage() {
                   </div>
                 </div>
 
-                {filteredUsers.map(user => (
-                  <div key={user.id} className="mb-3" data-testid={`resource-row-${user.id}`}>
+                {filteredUsers.map(u => (
+                  <div key={u.id} className="mb-3" data-testid={`resource-row-${u.id}`}>
                     <div className="flex items-center mb-1">
                       <div className="w-[220px] shrink-0 pr-2 flex items-center gap-2">
                         <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px]">{getInitials(user.name)}</AvatarFallback>
+                          <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium truncate">{user.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{user.assignments.length} assignment{user.assignments.length !== 1 ? "s" : ""}</p>
+                          <p className="text-xs font-medium truncate">{u.name}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{u.assignments.length} assignment{u.assignments.length !== 1 ? "s" : ""}</p>
                         </div>
                       </div>
                     </div>
 
-                    {user.assignments.map(assignment => {
+                    {u.assignments.map(assignment => {
                       const startDate = new Date((assignment.effectiveStartDate || assignment.implementationStartDate)!);
                       const endDate = new Date((assignment.effectiveEndDate || assignment.implementationEndDate)!);
                       const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);

@@ -38,10 +38,18 @@ const adminItems = [
   { title: "Help & Migration", url: "/help",      icon: HelpCircle },
 ];
 
+const productDeveloperMenuItems = [
+  { title: "Resource Allocation", url: "/resource-allocation", icon: GanttChart },
+];
+
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
+  const visibleMenuItems = isProductDeveloper ? productDeveloperMenuItems : menuItems;
+  const visibleAdminItems = isProductDeveloper ? [] : adminItems;
 
   const routeMatch = useMemo(() => {
     const patterns = [
@@ -119,7 +127,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {menuItems.map(item => {
+                {visibleMenuItems.map(item => {
                   const active = isActive(item.url);
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -145,13 +153,14 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
 
+          {visibleAdminItems.length > 0 && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-white/40 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
               Administration
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
-                {adminItems.map(item => {
+                {visibleAdminItems.map(item => {
                   const active = isActive(item.url);
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -176,9 +185,11 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          )}
         </SidebarContent>
 
         <SidebarFooter className="px-4 py-4 border-t border-white/10">
+          {!isProductDeveloper && (
           <Button
             variant="ghost"
             className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-2 mb-3"
@@ -188,6 +199,7 @@ export function AppSidebar() {
             <Plus className="h-4 w-4" />
             Quick Add
           </Button>
+          )}
           <div className="flex items-center gap-3 mb-3">
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback

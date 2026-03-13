@@ -34,6 +34,8 @@ import {
   insertApiKeySchema,
   savedFilters,
   insertSavedFilterSchema,
+  opportunityResources,
+  insertOpportunityResourceSchema,
   comments,
   commentReactions,
   commentAttachments,
@@ -177,7 +179,8 @@ export function registerRoutes(app: Express) {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
       
-      return res.json(user);
+      const userRolesData = await storage.getUserRoles(user.id);
+      return res.json({ ...user, roles: userRolesData });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
@@ -225,7 +228,8 @@ export function registerRoutes(app: Express) {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       });
       
-      return res.json(user);
+      const userRolesData = await storage.getUserRoles(user.id);
+      return res.json({ ...user, roles: userRolesData });
     } catch (error) {
       return res.status(500).json({ error: "Failed to login" });
     }
@@ -236,11 +240,12 @@ export function registerRoutes(app: Express) {
     return res.json({ success: true });
   });
   
-  app.get("/api/user", optionalAuthenticate, readRateLimiter, (req: AuthRequest, res) => {
+  app.get("/api/user", optionalAuthenticate, readRateLimiter, async (req: AuthRequest, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-    return res.json(req.user);
+    const userRolesData = await storage.getUserRoles(req.user.id);
+    return res.json({ ...req.user, roles: userRolesData });
   });
   
   // Get all users (for dropdowns)
@@ -1215,12 +1220,31 @@ export function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/opportunities/:id", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
+      const canReadAll = await hasPermission(req.user!.id, "Opportunity", "read");
+      const canReadOwn = await hasPermission(req.user!.id, "Opportunity", "readOwn");
+
+      if (!canReadAll && !canReadOwn) {
+        return res.status(403).json({ error: "Forbidden", message: "You do not have permission to read Opportunity" });
+      }
+
       const opportunity = await storage.getOpportunityById(req.params.id);
       if (!opportunity) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
+
+      if (!canReadAll && canReadOwn) {
+        const [assignment] = await db.select().from(opportunityResources)
+          .where(and(
+            eq(opportunityResources.opportunityId, req.params.id),
+            eq(opportunityResources.userId, req.user!.id)
+          ));
+        if (!assignment) {
+          return res.status(403).json({ error: "Forbidden", message: "You are not assigned to this opportunity" });
+        }
+      }
+
       return res.json(opportunity);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunity" });
@@ -2233,6 +2257,67 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // ========== RESOURCE ALLOCATION ROUTES ==========
+
+  app.get("/api/resource-allocation/opportunities", authenticate, requirePermission("ResourceAllocation", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const allOpps = await storage.getAllOpportunities();
+      const allResources = await db.select().from(opportunityResources);
+      const allUsers = await storage.getAllUsers();
+      const allAccounts = await storage.getAllAccounts();
+
+      const oppsWithResources = allOpps.map(opp => {
+        const resources = allResources
+          .filter(r => r.opportunityId === opp.id)
+          .map(r => {
+            const user = allUsers.find(u => u.id === r.userId);
+            return { ...r, userName: user?.name || "Unknown", userEmail: user?.email || "" };
+          });
+        const account = allAccounts.find(a => a.id === opp.accountId);
+        return {
+          ...opp,
+          accountName: account?.name || "Unknown",
+          resources,
+        };
+      });
+
+      return res.json(oppsWithResources);
+    } catch (error) {
+      console.error("Failed to fetch resource allocation opportunities:", error);
+      return res.status(500).json({ error: "Failed to fetch resource allocation data" });
+    }
+  });
+
+  app.post("/api/resource-allocation", authenticate, requirePermission("ResourceAllocation", "write"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const data = insertOpportunityResourceSchema.parse(req.body);
+      const [created] = await db.insert(opportunityResources).values(data).returning();
+      await createAudit(req, "create", "OpportunityResource", created.id, null, created);
+      return res.json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Failed to create resource allocation:", error);
+      return res.status(500).json({ error: "Failed to create resource allocation" });
+    }
+  });
+
+  app.delete("/api/resource-allocation/:id", authenticate, requirePermission("ResourceAllocation", "write"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const [deleted] = await db.delete(opportunityResources)
+        .where(eq(opportunityResources.id, req.params.id))
+        .returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "Resource allocation not found" });
+      }
+      await createAudit(req, "delete", "OpportunityResource", req.params.id, deleted, null);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to delete resource allocation" });
+    }
+  });
+
   // ========== ADMIN ROUTES ==========
   
   app.get("/api/admin/users", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {

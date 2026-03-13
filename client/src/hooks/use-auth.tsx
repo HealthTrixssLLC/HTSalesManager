@@ -7,7 +7,9 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { User, InsertUser } from "@shared/schema";
+import { User, InsertUser, Role } from "@shared/schema";
+
+type UserWithRoles = User & { roles?: Role[] };
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -17,12 +19,12 @@ type LoginData = {
 };
 
 type AuthContextType = {
-  user: User | null;
+  user: UserWithRoles | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: UseMutationResult<User, Error, LoginData>;
+  loginMutation: UseMutationResult<UserWithRoles, Error, LoginData>;
   logoutMutation: UseMutationResult<void, Error, void>;
-  registerMutation: UseMutationResult<User, Error, InsertUser>;
+  registerMutation: UseMutationResult<UserWithRoles, Error, InsertUser>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -34,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     data: user,
     error,
     isLoading,
-  } = useQuery<User | undefined, Error>({
+  } = useQuery<UserWithRoles | undefined, Error>({
     queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
