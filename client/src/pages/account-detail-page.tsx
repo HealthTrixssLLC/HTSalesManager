@@ -269,7 +269,7 @@ export default function AccountDetailPage() {
         open={isQuickAddOpen}
         onOpenChange={setIsQuickAddOpen}
         defaultTab={quickAddTab}
-        context={{ accountId: accountId || undefined, accountName: account.name }}
+        context={{ accountId: accountId || undefined, accountName: account.name, primaryEntityType: "Account", primaryEntityId: accountId || undefined }}
       />
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

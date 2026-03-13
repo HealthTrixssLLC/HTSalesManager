@@ -310,7 +310,7 @@ export default function LeadDetailPage() {
       open={isQuickAddOpen}
       onOpenChange={setIsQuickAddOpen}
       defaultTab="activity"
-      context={{ leadId: leadId || undefined }}
+      context={{ leadId: leadId || undefined, primaryEntityType: "Lead", primaryEntityId: leadId || undefined }}
     />
 
     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

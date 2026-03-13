@@ -778,7 +778,7 @@ export default function OpportunityDetailPage() {
         open={isQuickAddOpen}
         onOpenChange={setIsQuickAddOpen}
         defaultTab={quickAddTab}
-        context={{ opportunityId: opportunityId || undefined, accountId: opportunity.accountId || undefined }}
+        context={{ opportunityId: opportunityId || undefined, accountId: opportunity.accountId || undefined, primaryEntityType: "Opportunity", primaryEntityId: opportunityId || undefined }}
       />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

@@ -83,16 +83,16 @@ function useAccountChain(entityId: string) {
       data.contacts.items.slice(0, 3).forEach((c) => {
         chain.push({ label: `${c.firstName} ${c.lastName}`, href: `/contacts/${c.id}`, type: "contact" });
       });
-      counts.push({ label: "Contacts", count: data.contacts.total, href: `/accounts/${entityId}`, type: "contact" });
+      counts.push({ label: "Contacts", count: data.contacts.total, href: "/contacts", type: "contact" });
     }
     if (data.opportunities.total > 0) {
       data.opportunities.items.slice(0, 2).forEach((o) => {
         chain.push({ label: o.name, href: `/opportunities/${o.id}`, type: "opportunity" });
       });
-      counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/accounts/${entityId}`, type: "opportunity" });
+      counts.push({ label: "Opportunities", count: data.opportunities.total, href: "/opportunities", type: "opportunity" });
     }
     if (data.activities.total > 0) {
-      counts.push({ label: "Activities", count: data.activities.total, href: `/accounts/${entityId}`, type: "activity" });
+      counts.push({ label: "Activities", count: data.activities.total, href: "/activities", type: "activity" });
     }
   }
   return { chain, counts };
@@ -112,10 +112,10 @@ function useContactChain(entityId: string) {
       data.opportunities.items.slice(0, 2).forEach((o) => {
         chain.push({ label: o.name, href: `/opportunities/${o.id}`, type: "opportunity" });
       });
-      counts.push({ label: "Opportunities", count: data.opportunities.total, href: `/contacts/${entityId}`, type: "opportunity" });
+      counts.push({ label: "Opportunities", count: data.opportunities.total, href: "/opportunities", type: "opportunity" });
     }
     if (data.activities.total > 0) {
-      counts.push({ label: "Activities", count: data.activities.total, href: `/contacts/${entityId}`, type: "activity" });
+      counts.push({ label: "Activities", count: data.activities.total, href: "/activities", type: "activity" });
     }
   }
   return { chain, counts };
@@ -143,7 +143,7 @@ function useLeadChain(entityId: string) {
       chain.push({ label: data.convertedOpportunity.name, href: `/opportunities/${data.convertedOpportunity.id}`, type: "opportunity" });
     }
     if (data.activities.total > 0) {
-      counts.push({ label: "Activities", count: data.activities.total, href: `/leads/${entityId}`, type: "activity" });
+      counts.push({ label: "Activities", count: data.activities.total, href: "/activities", type: "activity" });
     }
   }
   return { chain, counts };
@@ -163,10 +163,10 @@ function useOpportunityChain(entityId: string) {
       data.contacts.items.slice(0, 2).forEach((c) => {
         chain.push({ label: `${c.firstName} ${c.lastName}`, href: `/contacts/${c.id}`, type: "contact" });
       });
-      counts.push({ label: "Contacts", count: data.contacts.total, href: `/opportunities/${entityId}`, type: "contact" });
+      counts.push({ label: "Contacts", count: data.contacts.total, href: "/contacts", type: "contact" });
     }
     if (data.activities.total > 0) {
-      counts.push({ label: "Activities", count: data.activities.total, href: `/opportunities/${entityId}`, type: "activity" });
+      counts.push({ label: "Activities", count: data.activities.total, href: "/activities", type: "activity" });
     }
   }
   return { chain, counts };

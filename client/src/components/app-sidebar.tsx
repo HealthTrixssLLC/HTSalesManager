@@ -68,19 +68,21 @@ export function AppSidebar() {
 
   const routeContext = useMemo((): QuickAddContext | undefined => {
     if (!routeMatch) return undefined;
+    const primaryEntityType = routeMatch.type.charAt(0).toUpperCase() + routeMatch.type.slice(1) as QuickAddContext["primaryEntityType"];
     switch (routeMatch.type) {
       case "account":
-        return { accountId: routeMatch.id, accountName: contextAccount?.name };
+        return { accountId: routeMatch.id, accountName: contextAccount?.name, primaryEntityType, primaryEntityId: routeMatch.id };
       case "contact":
         return {
           contactId: routeMatch.id,
           contactName: contextContact ? `${contextContact.firstName} ${contextContact.lastName}` : undefined,
           accountId: contextContact?.accountId || undefined,
+          primaryEntityType, primaryEntityId: routeMatch.id,
         };
       case "lead":
-        return { leadId: routeMatch.id };
+        return { leadId: routeMatch.id, primaryEntityType, primaryEntityId: routeMatch.id };
       case "opportunity":
-        return { opportunityId: routeMatch.id };
+        return { opportunityId: routeMatch.id, primaryEntityType, primaryEntityId: routeMatch.id };
       default:
         return undefined;
     }

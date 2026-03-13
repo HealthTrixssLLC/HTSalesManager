@@ -250,7 +250,7 @@ export default function ContactDetailPage() {
       open={isQuickAddOpen}
       onOpenChange={setIsQuickAddOpen}
       defaultTab={quickAddTab}
-      context={{ contactId: contactId || undefined, accountId: contact?.accountId || undefined }}
+      context={{ contactId: contactId || undefined, accountId: contact?.accountId || undefined, primaryEntityType: "Contact", primaryEntityId: contactId || undefined }}
     />
 
     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>

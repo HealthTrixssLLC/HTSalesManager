@@ -38,6 +38,8 @@ export interface QuickAddContext {
   contactName?: string;
   leadId?: string;
   opportunityId?: string;
+  primaryEntityType?: "Account" | "Contact" | "Lead" | "Opportunity";
+  primaryEntityId?: string;
 }
 
 interface GlobalQuickAddProps {
@@ -430,8 +432,8 @@ function QuickAddActivity({ onSuccess, onCancel, context }: { onSuccess: (id: st
   const [notes, setNotes] = useState("");
   const { toast } = useToast();
 
-  const relatedType = context?.accountId ? "Account" : context?.contactId ? "Contact" : context?.leadId ? "Lead" : context?.opportunityId ? "Opportunity" : undefined;
-  const relatedId = context?.accountId || context?.contactId || context?.leadId || context?.opportunityId || undefined;
+  const relatedType = context?.primaryEntityType || (context?.contactId ? "Contact" : context?.leadId ? "Lead" : context?.opportunityId ? "Opportunity" : context?.accountId ? "Account" : undefined);
+  const relatedId = context?.primaryEntityId || context?.contactId || context?.leadId || context?.opportunityId || context?.accountId || undefined;
 
   const mutation = useMutation({
     mutationFn: async () => {
