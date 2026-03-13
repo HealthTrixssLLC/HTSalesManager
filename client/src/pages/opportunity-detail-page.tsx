@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check, ChevronsUpDown } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
@@ -19,6 +19,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Switch } from "@/components/ui/switch";
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +41,7 @@ export default function OpportunityDetailPage() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
+  const [editRepSearchOpen, setEditRepSearchOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"contact" | "activity">("activity");
 
@@ -322,6 +327,31 @@ export default function OpportunityDetailPage() {
             <DetailField label="Amount" value={opportunity.amount} type="currency" />
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
+            <div className="col-span-1">
+              <label className="text-sm font-medium text-muted-foreground">Assigned Rep</label>
+              <div className="mt-1 flex items-center gap-2" data-testid="field-assigned-rep">
+                {(() => {
+                  const owner = users.find((u) => u.id === opportunity.ownerId);
+                  if (owner) {
+                    const initials = owner.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2);
+                    return (
+                      <>
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{owner.name}</span>
+                      </>
+                    );
+                  }
+                  return <span className="text-sm text-muted-foreground">Unassigned</span>;
+                })()}
+              </div>
+            </div>
             <div className="col-span-full">
               <label className="text-sm font-medium text-muted-foreground">Forecast Status</label>
               <div className="mt-1">
@@ -481,6 +511,66 @@ export default function OpportunityDetailPage() {
                         <SelectItem value="closed_lost">Closed Lost</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="ownerId"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Assigned Rep</FormLabel>
+                    <Popover open={editRepSearchOpen} onOpenChange={setEditRepSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={editRepSearchOpen}
+                            className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            data-testid="input-edit-opportunity-rep"
+                          >
+                            {field.value
+                              ? users.find((u) => u.id === field.value)?.name || field.value
+                              : "Search for a sales rep..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search by name..." />
+                          <CommandList>
+                            <CommandEmpty>No user found.</CommandEmpty>
+                            <CommandGroup>
+                              {users.map((u) => (
+                                <CommandItem
+                                  key={u.id}
+                                  value={`${u.name} ${u.id}`}
+                                  onSelect={() => {
+                                    form.setValue("ownerId", u.id);
+                                    setEditRepSearchOpen(false);
+                                  }}
+                                  data-testid={`edit-rep-option-${u.id}`}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === u.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span>{u.name}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}

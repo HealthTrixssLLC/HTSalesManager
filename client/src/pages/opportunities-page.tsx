@@ -51,6 +51,7 @@ export default function OpportunitiesPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
+  const [repSearchOpen, setRepSearchOpen] = useState(false);
   
   // Bulk operations state
   const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<Set<string>>(new Set());
@@ -536,6 +537,66 @@ export default function OpportunitiesPage() {
                                       <span className="font-medium">{account.name}</span>
                                       <span className="text-sm text-muted-foreground">{account.id}</span>
                                     </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ownerId"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Assigned Rep</FormLabel>
+                      <Popover open={repSearchOpen} onOpenChange={setRepSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={repSearchOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="input-opportunity-rep"
+                            >
+                              {field.value
+                                ? users?.find((u) => u.id === field.value)?.name || field.value
+                                : "Search for a sales rep..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search by name..." />
+                            <CommandList>
+                              <CommandEmpty>No user found.</CommandEmpty>
+                              <CommandGroup>
+                                {users?.map((u) => (
+                                  <CommandItem
+                                    key={u.id}
+                                    value={`${u.name} ${u.id}`}
+                                    onSelect={() => {
+                                      form.setValue("ownerId", u.id);
+                                      setRepSearchOpen(false);
+                                    }}
+                                    data-testid={`rep-option-${u.id}`}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === u.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <span>{u.name}</span>
                                   </CommandItem>
                                 ))}
                               </CommandGroup>
