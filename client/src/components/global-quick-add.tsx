@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Building2, Users, UserPlus, Target, Calendar, Plus } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { ToastAction } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -59,9 +60,16 @@ export function GlobalQuickAdd({ open, onOpenChange, defaultTab = "lead", contex
 
   const handleSuccess = (tab: EntityTab, id: string) => {
     const label = entityTabs.find((t) => t.value === tab)?.label || tab;
-    toast({ title: `${label} created successfully` });
+    const path = `/${routeMap[tab]}/${id}`;
+    toast({
+      title: `${label} created successfully`,
+      action: (
+        <ToastAction altText="Open record" onClick={() => setLocation(path)} data-testid="button-open-created-record">
+          Open
+        </ToastAction>
+      ),
+    });
     onOpenChange(false);
-    setLocation(`/${routeMap[tab]}/${id}`);
   };
 
   return (
@@ -172,6 +180,10 @@ function QuickAddContact({ onSuccess, onCancel, context }: { onSuccess: (id: str
   const [accountId, setAccountId] = useState(context?.accountId || "");
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (context?.accountId && !accountId) setAccountId(context.accountId);
+  }, [context?.accountId]);
+
   const { data: accounts } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/accounts"],
   });
@@ -249,6 +261,10 @@ function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string
   const [rating, setRating] = useState<string>("");
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (context?.accountName && !company) setCompany(context.accountName);
+  }, [context?.accountName]);
+
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/leads", {
@@ -322,6 +338,10 @@ function QuickAddOpportunity({ onSuccess, onCancel, context }: { onSuccess: (id:
   const [stage, setStage] = useState("prospecting");
   const [closeDate, setCloseDate] = useState("");
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (context?.accountId && !accountId) setAccountId(context.accountId);
+  }, [context?.accountId]);
 
   const { data: accounts } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/accounts"],

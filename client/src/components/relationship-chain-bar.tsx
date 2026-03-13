@@ -227,15 +227,16 @@ export function RelationshipChainBar({ entityType, entityId, entityName }: Relat
           {counts.map((chip, index) => {
             const ChipIcon = typeIcons[chip.type];
             return (
-              <Badge
-                key={`count-${chip.type}-${index}`}
-                variant="secondary"
-                className="gap-1.5 text-xs font-normal"
-                data-testid={`chain-count-${chip.type}`}
-              >
-                <ChipIcon className="h-3 w-3 shrink-0" style={{ color: typeColors[chip.type] }} />
-                {chip.count} {chip.label}
-              </Badge>
+              <Link key={`count-${chip.type}-${index}`} href={chip.href}>
+                <Badge
+                  variant="secondary"
+                  className="gap-1.5 text-xs font-normal cursor-pointer"
+                  data-testid={`chain-count-${chip.type}`}
+                >
+                  <ChipIcon className="h-3 w-3 shrink-0" style={{ color: typeColors[chip.type] }} />
+                  {chip.count} {chip.label}
+                </Badge>
+              </Link>
             );
           })}
         </>
