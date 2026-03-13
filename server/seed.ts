@@ -274,16 +274,3 @@ async function seed() {
 }
 
 export { seed };
-
-// Run seed if called directly (ES modules check)
-if (import.meta.url === `file://${process.argv[1]}`) {
-  seed()
-    .then(() => {
-      console.log("Seed completed");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("Seed failed:", error);
-      process.exit(1);
-    });
-}
