@@ -248,7 +248,7 @@ export default function AdminConsole() {
         title: "Restore completed successfully",
         description: `Restored ${data.recordsRestored} records`,
       });
-      queryClient.invalidateQueries();
+      queryClient.clear();
     },
     onError: (error: Error) => {
       console.error("Restore mutation error:", error);

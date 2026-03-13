@@ -24,6 +24,7 @@ import {
   insertLeadSchema,
   type InsertLead,
   insertOpportunitySchema,
+  type Opportunity,
   insertActivitySchema,
   insertActivityAssociationSchema,
   insertCommentSchema,
@@ -1192,7 +1193,20 @@ export function registerRoutes(app: Express) {
   
   app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allOpportunities = await storage.getAllOpportunities();
+      let allOpportunities = await storage.getAllOpportunities();
+      
+      const search = req.query.search as string | undefined;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        allOpportunities = allOpportunities.filter((opp) => {
+          const oppRecord = opp as Opportunity & { accountName?: string | null };
+          return (
+            oppRecord.name?.toLowerCase().includes(searchLower) ||
+            oppRecord.accountName?.toLowerCase().includes(searchLower)
+          );
+        });
+      }
+      
       return res.json(allOpportunities);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunities" });
@@ -1367,8 +1381,18 @@ export function registerRoutes(app: Express) {
   
   app.get("/api/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const activities = await storage.getAllActivities();
-      return res.json(activities);
+      let allActivities = await storage.getAllActivities();
+      
+      const search = req.query.search as string | undefined;
+      if (search) {
+        const searchLower = search.toLowerCase();
+        allActivities = allActivities.filter(a =>
+          a.subject?.toLowerCase().includes(searchLower) ||
+          a.notes?.toLowerCase().includes(searchLower)
+        );
+      }
+      
+      return res.json(allActivities);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch activities" });
     }

@@ -2,7 +2,7 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree, Building2 } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
@@ -123,6 +123,7 @@ export default function AccountsPage() {
       if (!res.ok) throw new Error("Failed to fetch accounts");
       return res.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: categories } = useQuery<AccountCategory[]>({

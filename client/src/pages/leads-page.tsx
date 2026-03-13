@@ -2,7 +2,7 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone, X, Users, Building2, Star, UserPlus } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
@@ -140,6 +140,7 @@ export default function LeadsPage() {
       if (!res.ok) throw new Error("Failed to fetch leads");
       return res.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({

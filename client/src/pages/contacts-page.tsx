@@ -2,7 +2,7 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Plus, Loader2, Users, Mail, Phone, Download, MessageSquare, X, Building2, Tags } from "lucide-react";
 import { Contact, InsertContact, insertContactSchema } from "@shared/schema";
@@ -120,6 +120,7 @@ export default function ContactsPage() {
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: accounts } = useQuery<Array<{ id: string; name: string }>>({

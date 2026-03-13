@@ -2,9 +2,9 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema, Account } from "@shared/schema";
 
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
@@ -64,6 +64,7 @@ export default function OpportunitiesPage() {
   const [bulkProbability, setBulkProbability] = useState("");
 
   // Filter states
+  const [searchText, setSearchText] = useState<string>("");
   const [filterAccount, setFilterAccount] = useState<string>("");
   const [filterCloseDateFrom, setFilterCloseDateFrom] = useState<string>("");
   const [filterCloseDateTo, setFilterCloseDateTo] = useState<string>("");
@@ -73,9 +74,10 @@ export default function OpportunitiesPage() {
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [filterIncludeInForecast, setFilterIncludeInForecast] = useState<string>("all");
 
-  const hasActiveFilters = !!(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all");
+  const hasActiveFilters = !!(searchText || filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all");
 
   const currentOpportunityFilters = {
+    searchText,
     filterAccount,
     filterCloseDateFrom,
     filterCloseDateTo,
@@ -87,6 +89,7 @@ export default function OpportunitiesPage() {
   };
 
   const handleApplySavedFilter = (saved: Record<string, any>) => {
+    setSearchText(saved.searchText ?? "");
     setFilterAccount(saved.filterAccount ?? "");
     setFilterCloseDateFrom(saved.filterCloseDateFrom ?? "");
     setFilterCloseDateTo(saved.filterCloseDateTo ?? "");
@@ -98,9 +101,30 @@ export default function OpportunitiesPage() {
   };
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
-  const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
+  const opportunityQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (searchText) params.append("search", searchText);
+    return params.toString();
+  }, [searchText]);
+
+  const { data: allOpportunities } = useQuery<OpportunityWithAccount[]>({
     queryKey: ["/api/opportunities"],
+    enabled: !!opportunityQueryString,
   });
+
+  const { data: opportunities, isLoading } = useQuery<OpportunityWithAccount[]>({
+    queryKey: ["/api/opportunities", opportunityQueryString],
+    queryFn: async ({ queryKey }) => {
+      const params = queryKey[1] as string;
+      const url = params ? `/api/opportunities?${params}` : "/api/opportunities";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch opportunities");
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const totalOpportunityCount = opportunityQueryString ? allOpportunities?.length : opportunities?.length;
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/users"],
@@ -741,6 +765,25 @@ export default function OpportunitiesPage() {
         </div>
       </div>
 
+      {/* Search Input */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search opportunities by name or account..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-opportunities"
+            />
+          </div>
+        </div>
+        <Badge variant="secondary" data-testid="badge-filter-count">
+          {filteredOpportunities.length} of {totalOpportunityCount || 0} opportunities
+        </Badge>
+      </div>
+
       <SavedFiltersBar
         pageName="opportunities"
         currentFilters={currentOpportunityFilters}
@@ -863,6 +906,7 @@ export default function OpportunitiesPage() {
                   variant="outline" 
                   size="sm"
                   onClick={() => {
+                    setSearchText("");
                     setFilterAccount("");
                     setFilterCloseDateFrom("");
                     setFilterCloseDateTo("");
@@ -877,7 +921,7 @@ export default function OpportunitiesPage() {
                   Clear All Filters
                 </Button>
                 <Badge variant="secondary">
-                  {filteredOpportunities.length} of {opportunities?.length || 0} opportunities
+                  {filteredOpportunities.length} of {totalOpportunityCount || 0} opportunities
                 </Badge>
               </div>
             )}

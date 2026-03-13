@@ -2,9 +2,9 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X } from "lucide-react";
+import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X, Search } from "lucide-react";
 import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ const activityPriorityColors: Record<string, string> = {
 };
 
 interface Filters {
+  search: string;
   type: string[];
   status: string[];
   priority: string[];
@@ -81,6 +82,7 @@ export default function ActivitiesPage() {
   
   // Filter and sort state
   const [filters, setFilters] = useState<Filters>({
+    search: "",
     type: [],
     status: [],
     priority: [],
@@ -90,10 +92,11 @@ export default function ActivitiesPage() {
     tagIds: [],
   });
 
-  const hasActiveFilters = !!(filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo || filters.tagIds.length > 0);
+  const hasActiveFilters = !!(filters.search || filters.type.length > 0 || filters.status.length > 0 || filters.priority.length > 0 || filters.ownerId || filters.dateFrom || filters.dateTo || filters.tagIds.length > 0);
 
   const handleApplySavedFilter = (saved: Record<string, any>) => {
     setFilters({
+      search: saved.search ?? "",
       type: Array.isArray(saved.type) ? saved.type : [],
       status: Array.isArray(saved.status) ? saved.status : [],
       priority: Array.isArray(saved.priority) ? saved.priority : [],
@@ -113,9 +116,30 @@ export default function ActivitiesPage() {
     notes: true,
   });
 
-  const { data: activities, isLoading } = useQuery<Activity[]>({
+  const activityQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    if (filters.search) params.append("search", filters.search);
+    return params.toString();
+  }, [filters.search]);
+
+  const { data: allActivitiesUnfiltered } = useQuery<Activity[]>({
     queryKey: ["/api/activities"],
+    enabled: !!activityQueryString,
   });
+
+  const { data: activities, isLoading } = useQuery<Activity[]>({
+    queryKey: ["/api/activities", activityQueryString],
+    queryFn: async ({ queryKey }) => {
+      const params = queryKey[1] as string;
+      const url = params ? `/api/activities?${params}` : "/api/activities";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch activities");
+      return res.json();
+    },
+    placeholderData: keepPreviousData,
+  });
+
+  const totalActivityCount = activityQueryString ? allActivitiesUnfiltered?.length : activities?.length;
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
@@ -355,7 +379,7 @@ export default function ActivitiesPage() {
     return filtered;
   }, [activities, filters, sortConfig, allEntityTags]);
 
-  const toggleFilter = (filterType: keyof Omit<Filters, "dateFrom" | "dateTo" | "ownerId">, value: string) => {
+  const toggleFilter = (filterType: keyof Omit<Filters, "search" | "dateFrom" | "dateTo" | "ownerId">, value: string) => {
     setFilters((prev) => {
       const currentValues = prev[filterType];
       const newValues = currentValues.includes(value)
@@ -374,6 +398,7 @@ export default function ActivitiesPage() {
 
   const clearFilters = () => {
     setFilters({
+      search: "",
       type: [],
       status: [],
       priority: [],
@@ -705,6 +730,25 @@ export default function ActivitiesPage() {
         }
       }} />
 
+      {/* Search Input */}
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[200px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search activities by subject or notes..."
+              value={filters.search}
+              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              className="pl-9"
+              data-testid="input-search-activities"
+            />
+          </div>
+        </div>
+        <Badge variant="secondary" data-testid="badge-filter-count">
+          {filteredAndSortedActivities.length} of {totalActivityCount || 0} activities
+        </Badge>
+      </div>
+
       {/* Filter, Sort, and Column Controls */}
       <div className="flex gap-2 flex-wrap">
         {/* Filter Controls */}
@@ -878,7 +922,7 @@ export default function ActivitiesPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            Activity Timeline ({filteredAndSortedActivities.length} of {activities?.length || 0})
+            Activity Timeline ({filteredAndSortedActivities.length} of {totalActivityCount || 0})
           </CardTitle>
         </CardHeader>
         <CardContent>
