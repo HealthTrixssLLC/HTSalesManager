@@ -7,6 +7,7 @@ import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { QuickLogActivity } from "@/components/quick-log-activity";
+import { GlobalQuickAdd } from "@/components/global-quick-add";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,8 @@ export default function OpportunityDetailPage() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<"contact" | "activity">("activity");
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
@@ -402,6 +405,7 @@ export default function OpportunityDetailPage() {
             entities={relatedData?.contacts.items || []}
             entityType="contacts"
             emptyMessage="No contacts found"
+            onAdd={() => { setQuickAddTab("contact"); setIsQuickAddOpen(true); }}
           />
 
           <RelatedEntitiesSection
@@ -409,22 +413,7 @@ export default function OpportunityDetailPage() {
             entities={relatedData?.activities.items || []}
             entityType="activities"
             emptyMessage="No activities logged"
-            onAdd={() => {
-              // Reset form with opportunity pre-filled
-              activityForm.reset({
-                type: "task",
-                subject: "",
-                status: "pending",
-                priority: "medium",
-                dueAt: null,
-                completedAt: null,
-                ownerId: null,
-                relatedType: "Opportunity",
-                relatedId: opportunityId || "",
-                notes: null,
-              });
-              setIsCreateActivityDialogOpen(true);
-            }}
+            onAdd={() => { setQuickAddTab("activity"); setIsQuickAddOpen(true); }}
           />
         </div>
       </div>
@@ -800,6 +789,13 @@ export default function OpportunityDetailPage() {
           relatedName={opportunity.name}
         />
       )}
+
+      <GlobalQuickAdd
+        open={isQuickAddOpen}
+        onOpenChange={setIsQuickAddOpen}
+        defaultTab={quickAddTab}
+        context={{ opportunityId: opportunityId || undefined, accountId: opportunity.accountId || undefined }}
+      />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>

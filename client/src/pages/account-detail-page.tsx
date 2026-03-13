@@ -9,6 +9,7 @@ import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { QuickLogActivity } from "@/components/quick-log-activity";
+import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,8 @@ export default function AccountDetailPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<"contact" | "opportunity" | "activity">("contact");
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: account, isLoading: accountLoading } = useQuery<Account>({
@@ -238,6 +241,7 @@ export default function AccountDetailPage() {
             entities={relatedData?.contacts.items || []}
             entityType="contacts"
             emptyMessage="No contacts associated with this account"
+            onAdd={() => { setQuickAddTab("contact"); setIsQuickAddOpen(true); }}
           />
 
           <RelatedEntitiesSection
@@ -245,6 +249,7 @@ export default function AccountDetailPage() {
             entities={relatedData?.opportunities.items || []}
             entityType="opportunities"
             emptyMessage="No opportunities for this account"
+            onAdd={() => { setQuickAddTab("opportunity"); setIsQuickAddOpen(true); }}
           />
 
           <RelatedEntitiesSection
@@ -252,6 +257,7 @@ export default function AccountDetailPage() {
             entities={relatedData?.activities.items || []}
             entityType="activities"
             emptyMessage="No activities logged for this account"
+            onAdd={() => { setQuickAddTab("activity"); setIsQuickAddOpen(true); }}
           />
         </div>
       </div>
@@ -265,6 +271,13 @@ export default function AccountDetailPage() {
           relatedName={account.name}
         />
       )}
+
+      <GlobalQuickAdd
+        open={isQuickAddOpen}
+        onOpenChange={setIsQuickAddOpen}
+        defaultTab={quickAddTab}
+        context={{ accountId: accountId || undefined, accountName: account.name }}
+      />
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

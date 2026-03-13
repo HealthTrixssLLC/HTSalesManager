@@ -7,6 +7,7 @@ import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { QuickLogActivity } from "@/components/quick-log-activity";
+import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
@@ -29,6 +30,8 @@ export default function ContactDetailPage() {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<"opportunity" | "activity">("activity");
   const { toast } = useToast();
 
   const { data: contact, isLoading: contactLoading } = useQuery<Contact>({
@@ -235,6 +238,7 @@ export default function ContactDetailPage() {
             entities={relatedData?.opportunities.items || []}
             entityType="opportunities"
             emptyMessage="No opportunities found"
+            onAdd={() => { setQuickAddTab("opportunity"); setIsQuickAddOpen(true); }}
           />
 
           <RelatedEntitiesSection
@@ -242,6 +246,7 @@ export default function ContactDetailPage() {
             entities={relatedData?.activities.items || []}
             entityType="activities"
             emptyMessage="No activities logged"
+            onAdd={() => { setQuickAddTab("activity"); setIsQuickAddOpen(true); }}
           />
         </div>
       </div>
@@ -256,6 +261,13 @@ export default function ContactDetailPage() {
         relatedName={fullName}
       />
     )}
+
+    <GlobalQuickAdd
+      open={isQuickAddOpen}
+      onOpenChange={setIsQuickAddOpen}
+      defaultTab={quickAddTab}
+      context={{ contactId: contactId || undefined, accountId: contact?.accountId || undefined }}
+    />
 
     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

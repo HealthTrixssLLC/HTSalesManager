@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, CheckCircle2, Building2, Users, Target, ChevronRight } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, CheckCircle2, Building2, Users, Target, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 type ConversionData = {
   createAccount: boolean;
@@ -19,6 +21,12 @@ type ConversionData = {
   createOpportunity: boolean;
   opportunityName: string;
   opportunityAmount: string;
+};
+
+type ConversionResult = {
+  accountId?: string;
+  contactId?: string;
+  opportunityId?: string;
 };
 
 export function LeadConversionWizard({
@@ -33,6 +41,10 @@ export function LeadConversionWizard({
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isSuccess, setIsSuccess] = useState(false);
+  const [conversionResult, setConversionResult] = useState<ConversionResult>({});
+  const [accountOpen, setAccountOpen] = useState(true);
+  const [contactOpen, setContactOpen] = useState(true);
+  const [opportunityOpen, setOpportunityOpen] = useState(true);
   const [conversionData, setConversionData] = useState<ConversionData>({
     createAccount: true,
     accountName: "",
@@ -52,12 +64,17 @@ export function LeadConversionWizard({
       const res = await apiRequest("POST", `/api/leads/${leadId}/convert`, data);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads", leadId] });
       queryClient.invalidateQueries({ queryKey: ["/api/accounts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
+      setConversionResult({
+        accountId: data?.accountId || data?.account?.id,
+        contactId: data?.contactId || data?.contact?.id,
+        opportunityId: data?.opportunityId || data?.opportunity?.id,
+      });
       setIsSuccess(true);
     },
     onError: (error: Error) => {
@@ -71,6 +88,7 @@ export function LeadConversionWizard({
 
   const handleClose = () => {
     setIsSuccess(false);
+    setConversionResult({});
     setConversionData({
       createAccount: true,
       accountName: "",
@@ -79,6 +97,9 @@ export function LeadConversionWizard({
       opportunityName: "",
       opportunityAmount: "",
     });
+    setAccountOpen(true);
+    setContactOpen(true);
+    setOpportunityOpen(true);
     onClose();
   };
 
@@ -106,8 +127,43 @@ export function LeadConversionWizard({
             </div>
             <h2 className="text-xl font-semibold mb-2">Lead Converted</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              The lead has been successfully converted and new records have been created.
+              The lead has been successfully converted. View the created records below.
             </p>
+            <div className="w-full space-y-2 mb-6">
+              {conversionResult.accountId && (
+                <Link href={`/accounts/${conversionResult.accountId}`}>
+                  <div className="flex items-center gap-3 p-3 rounded-md border hover-elevate cursor-pointer" data-testid="link-created-account">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(216, 40%, 92%)" }}>
+                      <Building2 className="h-4 w-4" style={{ color: "hsl(216, 40%, 30%)" }} />
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-left">View Account</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </Link>
+              )}
+              {conversionResult.contactId && (
+                <Link href={`/contacts/${conversionResult.contactId}`}>
+                  <div className="flex items-center gap-3 p-3 rounded-md border hover-elevate cursor-pointer" data-testid="link-created-contact">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(195, 45%, 90%)" }}>
+                      <Users className="h-4 w-4" style={{ color: "hsl(195, 57%, 37%)" }} />
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-left">View Contact</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </Link>
+              )}
+              {conversionResult.opportunityId && (
+                <Link href={`/opportunities/${conversionResult.opportunityId}`}>
+                  <div className="flex items-center gap-3 p-3 rounded-md border hover-elevate cursor-pointer" data-testid="link-created-opportunity">
+                    <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(142, 40%, 90%)" }}>
+                      <Target className="h-4 w-4" style={{ color: "hsl(142, 50%, 36%)" }} />
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-left">View Opportunity</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                  </div>
+                </Link>
+              )}
+            </div>
             <Button onClick={handleClose} data-testid="button-conversion-done">
               Done
             </Button>
@@ -146,108 +202,147 @@ export function LeadConversionWizard({
 
               <Separator />
 
-              <div className="space-y-5">
+              <div className="space-y-3">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Create Records</h3>
 
-                <div className="rounded-md border p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(216, 40%, 92%)" }}>
-                        <Building2 className="h-4 w-4" style={{ color: "hsl(216, 40%, 30%)" }} />
+                <Collapsible open={accountOpen} onOpenChange={setAccountOpen}>
+                  <div className="rounded-md border">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between gap-3 p-4 cursor-pointer hover-elevate rounded-md" data-testid="collapsible-account">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(216, 40%, 92%)" }}>
+                            <Building2 className="h-4 w-4" style={{ color: "hsl(216, 40%, 30%)" }} />
+                          </div>
+                          <div>
+                            <Label className="font-medium cursor-pointer">Account</Label>
+                            <p className="text-xs text-muted-foreground">Create a new account record</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={conversionData.createAccount}
+                            onCheckedChange={(checked) => {
+                              setConversionData({ ...conversionData, createAccount: checked });
+                              if (checked) setAccountOpen(true);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid="switch-create-account"
+                          />
+                          {accountOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </div>
                       </div>
-                      <div>
-                        <Label className="font-medium">Account</Label>
-                        <p className="text-xs text-muted-foreground">Create a new account record</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={conversionData.createAccount}
-                      onCheckedChange={(checked) =>
-                        setConversionData({ ...conversionData, createAccount: checked })
-                      }
-                      data-testid="switch-create-account"
-                    />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {conversionData.createAccount && (
+                        <div className="px-4 pb-4 pt-1">
+                          <Label className="text-xs text-muted-foreground">Account Name</Label>
+                          <Input
+                            className="mt-1"
+                            value={conversionData.accountName}
+                            onChange={(e) => setConversionData({ ...conversionData, accountName: e.target.value })}
+                            placeholder="Account name"
+                            data-testid="input-conversion-account-name"
+                          />
+                        </div>
+                      )}
+                    </CollapsibleContent>
                   </div>
-                  {conversionData.createAccount && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Account Name</Label>
-                      <Input
-                        className="mt-1"
-                        value={conversionData.accountName}
-                        onChange={(e) => setConversionData({ ...conversionData, accountName: e.target.value })}
-                        placeholder="Account name"
-                        data-testid="input-conversion-account-name"
-                      />
-                    </div>
-                  )}
-                </div>
+                </Collapsible>
 
-                <div className="rounded-md border p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(195, 45%, 90%)" }}>
-                        <Users className="h-4 w-4" style={{ color: "hsl(195, 57%, 37%)" }} />
+                <Collapsible open={contactOpen} onOpenChange={setContactOpen}>
+                  <div className="rounded-md border">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between gap-3 p-4 cursor-pointer hover-elevate rounded-md" data-testid="collapsible-contact">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(195, 45%, 90%)" }}>
+                            <Users className="h-4 w-4" style={{ color: "hsl(195, 57%, 37%)" }} />
+                          </div>
+                          <div>
+                            <Label className="font-medium cursor-pointer">Contact</Label>
+                            <p className="text-xs text-muted-foreground">{lead.firstName} {lead.lastName}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={conversionData.createContact}
+                            onCheckedChange={(checked) => {
+                              setConversionData({ ...conversionData, createContact: checked });
+                              if (checked) setContactOpen(true);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid="switch-create-contact"
+                          />
+                          {contactOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </div>
                       </div>
-                      <div>
-                        <Label className="font-medium">Contact</Label>
-                        <p className="text-xs text-muted-foreground">{lead.firstName} {lead.lastName}</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={conversionData.createContact}
-                      onCheckedChange={(checked) =>
-                        setConversionData({ ...conversionData, createContact: checked })
-                      }
-                      data-testid="switch-create-contact"
-                    />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {conversionData.createContact && (
+                        <div className="px-4 pb-4 pt-1 text-sm text-muted-foreground">
+                          Contact will be created from lead details: {lead.firstName} {lead.lastName}
+                          {lead.email && ` (${lead.email})`}
+                        </div>
+                      )}
+                    </CollapsibleContent>
                   </div>
-                </div>
+                </Collapsible>
 
-                <div className="rounded-md border p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(142, 40%, 90%)" }}>
-                        <Target className="h-4 w-4" style={{ color: "hsl(142, 50%, 36%)" }} />
+                <Collapsible open={opportunityOpen} onOpenChange={setOpportunityOpen}>
+                  <div className="rounded-md border">
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between gap-3 p-4 cursor-pointer hover-elevate rounded-md" data-testid="collapsible-opportunity">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex items-center justify-center h-8 w-8 rounded-md" style={{ backgroundColor: "hsl(142, 40%, 90%)" }}>
+                            <Target className="h-4 w-4" style={{ color: "hsl(142, 50%, 36%)" }} />
+                          </div>
+                          <div>
+                            <Label className="font-medium cursor-pointer">Opportunity</Label>
+                            <p className="text-xs text-muted-foreground">Create a new opportunity</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={conversionData.createOpportunity}
+                            onCheckedChange={(checked) => {
+                              setConversionData({ ...conversionData, createOpportunity: checked });
+                              if (checked) setOpportunityOpen(true);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid="switch-create-opportunity"
+                          />
+                          {opportunityOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </div>
                       </div>
-                      <div>
-                        <Label className="font-medium">Opportunity</Label>
-                        <p className="text-xs text-muted-foreground">Create a new opportunity</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={conversionData.createOpportunity}
-                      onCheckedChange={(checked) =>
-                        setConversionData({ ...conversionData, createOpportunity: checked })
-                      }
-                      data-testid="switch-create-opportunity"
-                    />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      {conversionData.createOpportunity && (
+                        <div className="px-4 pb-4 pt-1 space-y-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Opportunity Name</Label>
+                            <Input
+                              className="mt-1"
+                              value={conversionData.opportunityName}
+                              onChange={(e) => setConversionData({ ...conversionData, opportunityName: e.target.value })}
+                              placeholder={`${lead.firstName} ${lead.lastName} - Opportunity`}
+                              data-testid="input-conversion-opp-name"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Amount</Label>
+                            <Input
+                              type="number"
+                              className="mt-1"
+                              value={conversionData.opportunityAmount}
+                              onChange={(e) => setConversionData({ ...conversionData, opportunityAmount: e.target.value })}
+                              placeholder="0"
+                              data-testid="input-conversion-opp-amount"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </CollapsibleContent>
                   </div>
-                  {conversionData.createOpportunity && (
-                    <div className="space-y-2">
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Opportunity Name</Label>
-                        <Input
-                          className="mt-1"
-                          value={conversionData.opportunityName}
-                          onChange={(e) => setConversionData({ ...conversionData, opportunityName: e.target.value })}
-                          placeholder={`${lead.firstName} ${lead.lastName} - Opportunity`}
-                          data-testid="input-conversion-opp-name"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Amount</Label>
-                        <Input
-                          type="number"
-                          className="mt-1"
-                          value={conversionData.opportunityAmount}
-                          onChange={(e) => setConversionData({ ...conversionData, opportunityAmount: e.target.value })}
-                          placeholder="0"
-                          data-testid="input-conversion-opp-amount"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                </Collapsible>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

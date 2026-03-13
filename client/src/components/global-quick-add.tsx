@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Building2, Users, UserPlus, Target, Calendar, Plus } from "lucide-react";
@@ -22,21 +22,46 @@ const entityTabs = [
 
 type EntityTab = typeof entityTabs[number]["value"];
 
+const routeMap: Record<EntityTab, string> = {
+  account: "accounts",
+  contact: "contacts",
+  lead: "leads",
+  opportunity: "opportunities",
+  activity: "activities",
+};
+
+export interface QuickAddContext {
+  accountId?: string;
+  accountName?: string;
+  contactId?: string;
+  contactName?: string;
+  leadId?: string;
+  opportunityId?: string;
+}
+
 interface GlobalQuickAddProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTab?: EntityTab;
+  context?: QuickAddContext;
 }
 
-export function GlobalQuickAdd({ open, onOpenChange, defaultTab = "lead" }: GlobalQuickAddProps) {
+export function GlobalQuickAdd({ open, onOpenChange, defaultTab = "lead", context }: GlobalQuickAddProps) {
   const [activeTab, setActiveTab] = useState<EntityTab>(defaultTab);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  const handleSuccess = (entityType: string, id: string) => {
-    toast({ title: `${entityType} created successfully` });
+  useEffect(() => {
+    if (open && defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [open, defaultTab]);
+
+  const handleSuccess = (tab: EntityTab, id: string) => {
+    const label = entityTabs.find((t) => t.value === tab)?.label || tab;
+    toast({ title: `${label} created successfully` });
     onOpenChange(false);
-    setLocation(`/${entityType.toLowerCase()}s/${id}`);
+    setLocation(`/${routeMap[tab]}/${id}`);
   };
 
   return (
@@ -60,19 +85,19 @@ export function GlobalQuickAdd({ open, onOpenChange, defaultTab = "lead" }: Glob
           </TabsList>
 
           <TabsContent value="account" className="mt-4">
-            <QuickAddAccount onSuccess={(id) => handleSuccess("Account", id)} onCancel={() => onOpenChange(false)} />
+            <QuickAddAccount onSuccess={(id) => handleSuccess("account", id)} onCancel={() => onOpenChange(false)} />
           </TabsContent>
           <TabsContent value="contact" className="mt-4">
-            <QuickAddContact onSuccess={(id) => handleSuccess("Contact", id)} onCancel={() => onOpenChange(false)} />
+            <QuickAddContact onSuccess={(id) => handleSuccess("contact", id)} onCancel={() => onOpenChange(false)} context={context} />
           </TabsContent>
           <TabsContent value="lead" className="mt-4">
-            <QuickAddLead onSuccess={(id) => handleSuccess("Lead", id)} onCancel={() => onOpenChange(false)} />
+            <QuickAddLead onSuccess={(id) => handleSuccess("lead", id)} onCancel={() => onOpenChange(false)} context={context} />
           </TabsContent>
           <TabsContent value="opportunity" className="mt-4">
-            <QuickAddOpportunity onSuccess={(id) => handleSuccess("Opportunit", id)} onCancel={() => onOpenChange(false)} />
+            <QuickAddOpportunity onSuccess={(id) => handleSuccess("opportunity", id)} onCancel={() => onOpenChange(false)} context={context} />
           </TabsContent>
           <TabsContent value="activity" className="mt-4">
-            <QuickAddActivity onSuccess={(id) => handleSuccess("Activit", id)} onCancel={() => onOpenChange(false)} />
+            <QuickAddActivity onSuccess={(id) => handleSuccess("activity", id)} onCancel={() => onOpenChange(false)} context={context} />
           </TabsContent>
         </Tabs>
       </SheetContent>
@@ -89,7 +114,7 @@ function QuickAddAccount({ onSuccess, onCancel }: { onSuccess: (id: string) => v
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/accounts", { name, type, industry: industry || null, phone: phone || null });
+      const res = await apiRequest("POST", "/api/accounts", { id: "", name, type, industry: industry || null, phone: phone || null });
       return await res.json();
     },
     onSuccess: (data) => {
@@ -139,20 +164,32 @@ function QuickAddAccount({ onSuccess, onCancel }: { onSuccess: (id: string) => v
   );
 }
 
-function QuickAddContact({ onSuccess, onCancel }: { onSuccess: (id: string) => void; onCancel: () => void }) {
+function QuickAddContact({ onSuccess, onCancel, context }: { onSuccess: (id: string) => void; onCancel: () => void; context?: QuickAddContext }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [accountId, setAccountId] = useState(context?.accountId || "");
   const { toast } = useToast();
+
+  const { data: accounts } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/accounts"],
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/contacts", { firstName, lastName, email: email || null, phone: phone || null });
+      const res = await apiRequest("POST", "/api/contacts", {
+        id: "",
+        firstName, lastName,
+        email: email || null,
+        phone: phone || null,
+        accountId: accountId || null,
+      });
       return await res.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
+      if (accountId) queryClient.invalidateQueries({ queryKey: ["/api/accounts", accountId] });
       onSuccess(data.id);
     },
     onError: (error: Error) => {
@@ -180,6 +217,19 @@ function QuickAddContact({ onSuccess, onCancel }: { onSuccess: (id: string) => v
         <Label>Phone</Label>
         <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 123-4567" className="mt-1.5" data-testid="input-quick-contact-phone" />
       </div>
+      <div>
+        <Label>Account</Label>
+        <Select value={accountId} onValueChange={setAccountId}>
+          <SelectTrigger className="mt-1.5" data-testid="select-quick-contact-account">
+            <SelectValue placeholder="Select account (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts?.map((a) => (
+              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onCancel}>Cancel</Button>
         <Button onClick={() => mutation.mutate()} disabled={!firstName.trim() || !lastName.trim() || mutation.isPending} data-testid="button-quick-create-contact">
@@ -190,18 +240,21 @@ function QuickAddContact({ onSuccess, onCancel }: { onSuccess: (id: string) => v
   );
 }
 
-function QuickAddLead({ onSuccess, onCancel }: { onSuccess: (id: string) => void; onCancel: () => void }) {
+function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string) => void; onCancel: () => void; context?: QuickAddContext }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [company, setCompany] = useState("");
+  const [company, setCompany] = useState(context?.accountName || "");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [rating, setRating] = useState<string>("");
   const { toast } = useToast();
 
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/leads", {
+        id: "",
         firstName, lastName, company: company || null, email: email || null,
+        phone: phone || null,
         status: "new", rating: rating || null,
       });
       return await res.json();
@@ -236,6 +289,10 @@ function QuickAddLead({ onSuccess, onCancel }: { onSuccess: (id: string) => void
         <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" className="mt-1.5" data-testid="input-quick-lead-email" />
       </div>
       <div>
+        <Label>Phone</Label>
+        <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 (555) 123-4567" className="mt-1.5" data-testid="input-quick-lead-phone" />
+      </div>
+      <div>
         <Label>Rating</Label>
         <Select value={rating} onValueChange={setRating}>
           <SelectTrigger className="mt-1.5" data-testid="select-quick-lead-rating">
@@ -258,9 +315,9 @@ function QuickAddLead({ onSuccess, onCancel }: { onSuccess: (id: string) => void
   );
 }
 
-function QuickAddOpportunity({ onSuccess, onCancel }: { onSuccess: (id: string) => void; onCancel: () => void }) {
+function QuickAddOpportunity({ onSuccess, onCancel, context }: { onSuccess: (id: string) => void; onCancel: () => void; context?: QuickAddContext }) {
   const [name, setName] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(context?.accountId || "");
   const [amount, setAmount] = useState("");
   const [stage, setStage] = useState("prospecting");
   const [closeDate, setCloseDate] = useState("");
@@ -273,6 +330,7 @@ function QuickAddOpportunity({ onSuccess, onCancel }: { onSuccess: (id: string) 
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/opportunities", {
+        id: "",
         name, accountId, stage,
         amount: amount || "0",
         closeDate: closeDate ? new Date(closeDate) : new Date(),
@@ -281,6 +339,7 @@ function QuickAddOpportunity({ onSuccess, onCancel }: { onSuccess: (id: string) 
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
+      if (accountId) queryClient.invalidateQueries({ queryKey: ["/api/accounts", accountId] });
       onSuccess(data.id);
     },
     onError: (error: Error) => {
@@ -343,7 +402,7 @@ function QuickAddOpportunity({ onSuccess, onCancel }: { onSuccess: (id: string) 
   );
 }
 
-function QuickAddActivity({ onSuccess, onCancel }: { onSuccess: (id: string) => void; onCancel: () => void }) {
+function QuickAddActivity({ onSuccess, onCancel, context }: { onSuccess: (id: string) => void; onCancel: () => void; context?: QuickAddContext }) {
   const [subject, setSubject] = useState("");
   const [type, setType] = useState("task");
   const [priority, setPriority] = useState("medium");
@@ -351,12 +410,18 @@ function QuickAddActivity({ onSuccess, onCancel }: { onSuccess: (id: string) => 
   const [notes, setNotes] = useState("");
   const { toast } = useToast();
 
+  const relatedType = context?.accountId ? "Account" : context?.contactId ? "Contact" : context?.leadId ? "Lead" : context?.opportunityId ? "Opportunity" : undefined;
+  const relatedId = context?.accountId || context?.contactId || context?.leadId || context?.opportunityId || undefined;
+
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/activities", {
+        id: "",
         subject, type, priority, status: "pending",
         dueAt: dueAt ? new Date(dueAt) : null,
         notes: notes || null,
+        relatedType: relatedType || null,
+        relatedId: relatedId || null,
       });
       return await res.json();
     },

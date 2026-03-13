@@ -8,6 +8,7 @@ import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
 import { QuickLogActivity } from "@/components/quick-log-activity";
+import { GlobalQuickAdd } from "@/components/global-quick-add";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -33,6 +34,7 @@ export default function LeadDetailPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isConversionOpen, setIsConversionOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
   const { data: lead, isLoading: leadLoading } = useQuery<Lead>({
@@ -287,6 +289,7 @@ export default function LeadDetailPage() {
               entities={relatedData?.activities.items || []}
               entityType="activities"
               emptyMessage="No activities logged"
+              onAdd={() => setIsQuickAddOpen(true)}
             />
           </div>
         </div>
@@ -309,6 +312,13 @@ export default function LeadDetailPage() {
         relatedName={fullName}
       />
     )}
+
+    <GlobalQuickAdd
+      open={isQuickAddOpen}
+      onOpenChange={setIsQuickAddOpen}
+      defaultTab="activity"
+      context={{ leadId: leadId || undefined }}
+    />
 
     <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
