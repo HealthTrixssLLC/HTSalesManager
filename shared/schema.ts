@@ -174,6 +174,8 @@ export const opportunities = pgTable("opportunities", {
   importStatus: text("import_status"), // Import status
   importNotes: text("import_notes"), // Import notes
   includeInForecast: boolean("include_in_forecast").notNull().default(true), // Exclude internal/test opportunities from sales metrics
+  implementationStartDate: timestamp("implementation_start_date"),
+  implementationEndDate: timestamp("implementation_end_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -184,6 +186,17 @@ export const opportunities = pgTable("opportunities", {
   closeDateIdx: index("opportunities_close_date_idx").on(table.closeDate),
   externalIdIdx: index("opportunities_external_id_idx").on(table.externalId),
   includeInForecastIdx: index("opportunities_include_in_forecast_idx").on(table.includeInForecast),
+}));
+
+export const opportunityResources = pgTable("opportunity_resources", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  opportunityId: varchar("opportunity_id", { length: 100 }).notNull().references(() => opportunities.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  opportunityIdIdx: index("opportunity_resources_opportunity_id_idx").on(table.opportunityId),
+  userIdIdx: index("opportunity_resources_user_id_idx").on(table.userId),
 }));
 
 export const activities = pgTable("activities", {
@@ -445,9 +458,15 @@ export const leadsRelations = relations(leads, ({ one }) => ({
   convertedOpportunity: one(opportunities, { fields: [leads.convertedOpportunityId], references: [opportunities.id] }),
 }));
 
-export const opportunitiesRelations = relations(opportunities, ({ one }) => ({
+export const opportunitiesRelations = relations(opportunities, ({ one, many }) => ({
   account: one(accounts, { fields: [opportunities.accountId], references: [accounts.id] }),
   owner: one(users, { fields: [opportunities.ownerId], references: [users.id] }),
+  resources: many(opportunityResources),
+}));
+
+export const opportunityResourcesRelations = relations(opportunityResources, ({ one }) => ({
+  opportunity: one(opportunities, { fields: [opportunityResources.opportunityId], references: [opportunities.id] }),
+  user: one(users, { fields: [opportunityResources.userId], references: [users.id] }),
 }));
 
 export const activitiesRelations = relations(activities, ({ one, many }) => ({
@@ -535,9 +554,15 @@ export const insertOpportunitySchema = createInsertSchema(opportunities)
     ),
     actualCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
     estCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
+    implementationStartDate: z.preprocess(datePreprocessor, z.date().nullable()),
+    implementationEndDate: z.preprocess(datePreprocessor, z.date().nullable()),
   });
 export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
 export type Opportunity = typeof opportunities.$inferSelect;
+
+export const insertOpportunityResourceSchema = createInsertSchema(opportunityResources).omit({ id: true, createdAt: true });
+export type InsertOpportunityResource = z.infer<typeof insertOpportunityResourceSchema>;
+export type OpportunityResource = typeof opportunityResources.$inferSelect;
 
 // Activities
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true, updatedAt: true }).extend({

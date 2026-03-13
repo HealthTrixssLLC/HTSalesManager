@@ -14,6 +14,7 @@ import type {
   IdPattern, InsertIdPattern,
   AccountCategory, InsertAccountCategory,
   BackupJob, InsertBackupJob,
+  OpportunityResource, InsertOpportunityResource,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -110,6 +111,12 @@ export interface IStorage {
   getEntityTags(entity: string, entityId: string): Promise<Tag[]>;
   addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void>;
   removeEntityTag(entity: string, entityId: string, tagId: string): Promise<void>;
+  
+  // ========== OPPORTUNITY RESOURCES ==========
+  getOpportunityResources(opportunityId: string): Promise<OpportunityResource[]>;
+  addOpportunityResource(resource: InsertOpportunityResource): Promise<OpportunityResource>;
+  removeOpportunityResource(id: string): Promise<void>;
+  getAllOpportunityResources(): Promise<OpportunityResource[]>;
   
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;

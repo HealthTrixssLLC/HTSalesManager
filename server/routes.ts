@@ -2,14 +2,14 @@
 // All routes with authentication, RBAC, and audit logging
 //
 // SECURITY NOTE: Rate limiting coverage across all API endpoints:
-// - 114 routes in this file: ALL protected with tiered rate limiting
+// - 118 routes in this file: ALL protected with tiered rate limiting
 //   * authRateLimiter: 5 req/min (login, register, logout)
 //   * sensitiveRateLimiter: 20 req/min (admin operations, backups, API keys)
 //   * crudRateLimiter: 100 req/min (POST/PUT/PATCH/DELETE operations)
 //   * readRateLimiter: 200 req/min (GET operations)
 // - 5 external API routes: Protected by per-API-key rate limiter (createApiKeyRateLimiter)
 // - 1 CSRF token endpoint (/api/csrf-token in server/index.ts): Intentionally exempt (public endpoint)
-// Total: 120 routes, 119 with rate limiting, 1 exempt with justification
+// Total: 124 routes, 123 with rate limiting, 1 exempt with justification
 
 import type { Express } from "express";
 import { z } from "zod";
@@ -24,6 +24,7 @@ import {
   insertLeadSchema,
   type InsertLead,
   insertOpportunitySchema,
+  insertOpportunityResourceSchema,
   type Opportunity,
   insertActivitySchema,
   insertActivityAssociationSchema,
@@ -42,6 +43,7 @@ import {
   contacts,
   leads,
   opportunities,
+  opportunityResources,
   activities,
   activityAssociations,
   auditLogs,
@@ -1228,6 +1230,9 @@ export function registerRoutes(app: Express) {
   app.post("/api/opportunities", authenticate, requirePermission("Opportunity", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertOpportunitySchema.parse(req.body);
+      if (data.implementationStartDate && data.implementationEndDate && new Date(data.implementationStartDate) > new Date(data.implementationEndDate)) {
+        return res.status(400).json({ error: "Implementation start date must be before end date" });
+      }
       const opportunity = await storage.createOpportunity(data);
       
       await createAudit(req, "create", "Opportunity", opportunity.id, null, opportunity);
@@ -1269,6 +1274,18 @@ export function registerRoutes(app: Express) {
       }
       if (updateData.estCloseDate !== undefined) {
         updateData.estCloseDate = parseDate(updateData.estCloseDate);
+      }
+      if (updateData.implementationStartDate !== undefined) {
+        updateData.implementationStartDate = parseDate(updateData.implementationStartDate);
+      }
+      if (updateData.implementationEndDate !== undefined) {
+        updateData.implementationEndDate = parseDate(updateData.implementationEndDate);
+      }
+
+      const startDate = updateData.implementationStartDate ?? before.implementationStartDate;
+      const endDate = updateData.implementationEndDate ?? before.implementationEndDate;
+      if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+        return res.status(400).json({ error: "Implementation start date must be before end date" });
       }
       
       const opportunity = await storage.updateOpportunity(req.params.id, updateData);
@@ -1377,6 +1394,142 @@ export function registerRoutes(app: Express) {
     }
   });
   
+  // ========== OPPORTUNITY RESOURCES ROUTES ==========
+
+  app.get("/api/opportunities/:id/resources", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const resources = await storage.getOpportunityResources(req.params.id);
+      const allUsers = await storage.getAllUsers();
+      const enriched = resources.map(r => {
+        const user = allUsers.find(u => u.id === r.userId);
+        return { ...r, userName: user?.name || "Unknown", userEmail: user?.email || "" };
+      });
+      return res.json(enriched);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch opportunity resources" });
+    }
+  });
+
+  app.post("/api/opportunities/:id/resources", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = insertOpportunityResourceSchema.safeParse({
+        ...req.body,
+        opportunityId: req.params.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Validation failed", details: parsed.error.errors });
+      }
+      const { opportunityId, userId, role } = parsed.data;
+      const existing = await storage.getOpportunityResources(opportunityId);
+      const duplicate = existing.find(r => r.userId === userId && r.role === role);
+      if (duplicate) {
+        return res.status(409).json({ error: "This user is already assigned with that role" });
+      }
+      const resource = await storage.addOpportunityResource({ opportunityId, userId, role });
+      return res.json(resource);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to add opportunity resource" });
+    }
+  });
+
+  app.delete("/api/opportunity-resources/:id", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      await storage.removeOpportunityResource(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to remove opportunity resource" });
+    }
+  });
+
+  app.get("/api/resource-allocation", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const [allOpportunities, allResources, allUsers] = await Promise.all([
+        storage.getAllOpportunities(),
+        storage.getAllOpportunityResources(),
+        storage.getAllUsers(),
+      ]);
+
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+
+      const closedStages = ["closed_won", "closed_lost"];
+      const oppMap = new Map(allOpportunities.map(opp => [opp.id, opp]));
+
+      const computeEffectiveDates = (opp: typeof allOpportunities[0]) => {
+        const implStart = opp.implementationStartDate;
+        const implEnd = opp.implementationEndDate;
+        const close = opp.closeDate;
+        let effectiveStart = implStart;
+        let effectiveEnd = implEnd;
+        if (!effectiveStart && close) {
+          effectiveStart = close;
+        }
+        if (!effectiveEnd && effectiveStart) {
+          effectiveEnd = new Date(new Date(effectiveStart).getTime() + 90 * 24 * 60 * 60 * 1000);
+        }
+        if (effectiveStart && !effectiveEnd) {
+          effectiveEnd = new Date(new Date(effectiveStart).getTime() + 90 * 24 * 60 * 60 * 1000);
+        }
+        return { effectiveStart, effectiveEnd };
+      };
+
+      const opportunitiesWithResources = allOpportunities
+        .filter(opp => !closedStages.includes(opp.stage))
+        .map(opp => {
+          const { effectiveStart, effectiveEnd } = computeEffectiveDates(opp);
+          return {
+            id: opp.id,
+            name: opp.name,
+            stage: opp.stage,
+            accountName: (opp as Record<string, unknown>).accountName as string || null,
+            implementationStartDate: opp.implementationStartDate,
+            implementationEndDate: opp.implementationEndDate,
+            effectiveStartDate: effectiveStart,
+            effectiveEndDate: effectiveEnd,
+            closeDate: opp.closeDate,
+            amount: opp.amount,
+            resources: allResources
+              .filter(r => r.opportunityId === opp.id)
+              .map(r => {
+                const user = userMap.get(r.userId);
+                return {
+                  id: r.id,
+                  userId: r.userId,
+                  role: r.role,
+                  userName: user?.name || "Unknown",
+                };
+              }),
+          };
+        });
+
+      const usersWithAssignments = allUsers.map(u => ({
+        id: u.id,
+        name: u.name,
+        assignments: allResources
+          .filter(r => r.userId === u.id)
+          .map(r => {
+            const opp = oppMap.get(r.opportunityId);
+            const effDates = opp ? computeEffectiveDates(opp) : { effectiveStart: null, effectiveEnd: null };
+            return {
+              resourceId: r.id,
+              role: r.role,
+              opportunityId: r.opportunityId,
+              opportunityName: opp?.name || "Unknown",
+              stage: opp?.stage || "unknown",
+              implementationStartDate: opp?.implementationStartDate || null,
+              implementationEndDate: opp?.implementationEndDate || null,
+              effectiveStartDate: effDates.effectiveStart,
+              effectiveEndDate: effDates.effectiveEnd,
+            };
+          }),
+      })).filter(u => u.assignments.length > 0);
+
+      return res.json({ opportunities: opportunitiesWithResources, users: usersWithAssignments });
+    } catch (error) {
+      console.error("Resource allocation error:", error);
+      return res.status(500).json({ error: "Failed to fetch resource allocation data" });
+    }
+  });
+
   // ========== ACTIVITIES ROUTES ==========
   
   app.get("/api/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {

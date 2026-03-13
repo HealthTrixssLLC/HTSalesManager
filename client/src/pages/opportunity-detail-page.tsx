@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { Loader2, Check, ChevronsUpDown } from "lucide-react";
+import { Loader2, Check, ChevronsUpDown, Plus, X, Users } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
@@ -44,6 +44,9 @@ export default function OpportunityDetailPage() {
   const [editRepSearchOpen, setEditRepSearchOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"contact" | "activity">("activity");
+  const [newResourceUserId, setNewResourceUserId] = useState("");
+  const [newResourceRole, setNewResourceRole] = useState("");
+  const [resourceUserSearchOpen, setResourceUserSearchOpen] = useState(false);
 
   const { data: opportunity, isLoading: oppLoading } = useQuery<Opportunity>({
     queryKey: ["/api/opportunities", opportunityId],
@@ -71,6 +74,51 @@ export default function OpportunityDetailPage() {
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  type OpportunityResourceWithUser = {
+    id: string;
+    opportunityId: string;
+    userId: string;
+    role: string;
+    userName: string;
+    userEmail: string;
+    createdAt: string;
+  };
+
+  const { data: resources = [] } = useQuery<OpportunityResourceWithUser[]>({
+    queryKey: ["/api/opportunities", opportunityId, "resources"],
+    enabled: !!opportunityId,
+  });
+
+  const addResourceMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const res = await apiRequest("POST", `/api/opportunities/${opportunityId}/resources`, { userId, role });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId, "resources"] });
+      toast({ title: "Resource assigned successfully" });
+      setNewResourceUserId("");
+      setNewResourceRole("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to assign resource", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeResourceMutation = useMutation({
+    mutationFn: async (resourceId: string) => {
+      const res = await apiRequest("DELETE", `/api/opportunity-resources/${resourceId}`);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId, "resources"] });
+      toast({ title: "Resource removed successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to remove resource", description: error.message, variant: "destructive" });
+    },
   });
 
   const updateMutation = useMutation({
@@ -126,6 +174,8 @@ export default function OpportunityDetailPage() {
     closeDate: z.union([z.date(), z.string(), z.null()]).optional(),
     actualCloseDate: z.union([z.date(), z.string(), z.null()]).optional(),
     estCloseDate: z.union([z.date(), z.string(), z.null()]).optional(),
+    implementationStartDate: z.union([z.date(), z.string(), z.null()]).optional(),
+    implementationEndDate: z.union([z.date(), z.string(), z.null()]).optional(),
   });
 
   const form = useForm<InsertOpportunity>({
@@ -146,6 +196,8 @@ export default function OpportunityDetailPage() {
       estRevenue: null,
       rating: null,
       includeInForecast: true,
+      implementationStartDate: null,
+      implementationEndDate: null,
     },
   });
 
@@ -235,6 +287,22 @@ export default function OpportunityDetailPage() {
           submitData.estCloseDate = null;
         }
       }
+
+      if (submitData.implementationStartDate) {
+        if (typeof submitData.implementationStartDate === 'string' && submitData.implementationStartDate !== '') {
+          submitData.implementationStartDate = new Date(submitData.implementationStartDate);
+        } else if (submitData.implementationStartDate === '') {
+          submitData.implementationStartDate = null;
+        }
+      }
+
+      if (submitData.implementationEndDate) {
+        if (typeof submitData.implementationEndDate === 'string' && submitData.implementationEndDate !== '') {
+          submitData.implementationEndDate = new Date(submitData.implementationEndDate);
+        } else if (submitData.implementationEndDate === '') {
+          submitData.implementationEndDate = null;
+        }
+      }
       
       updateMutation.mutate(submitData);
     }
@@ -243,16 +311,12 @@ export default function OpportunityDetailPage() {
   const handleEdit = () => {
     if (opportunity) {
       // Convert Date objects to YYYY-MM-DD strings for date inputs
-      const formatDate = (date: Date | null) => {
+      const toDateValue = (date: Date | string | null | undefined): Date | null => {
         if (!date) return null;
         try {
           const d = date instanceof Date ? date : new Date(date);
-          if (!isNaN(d.getTime())) {
-            return d.toISOString().split('T')[0];
-          }
-        } catch (e) {
-          // Invalid date
-        }
+          if (!isNaN(d.getTime())) return d;
+        } catch (_e) {}
         return null;
       };
 
@@ -264,14 +328,16 @@ export default function OpportunityDetailPage() {
         amount: opportunity.amount || "0",
         probability: opportunity.probability || 0,
         ownerId: opportunity.ownerId,
-        closeDate: formatDate(opportunity.closeDate) as any,
+        closeDate: toDateValue(opportunity.closeDate),
         status: opportunity.status || null,
-        actualCloseDate: formatDate(opportunity.actualCloseDate) as any,
+        actualCloseDate: toDateValue(opportunity.actualCloseDate),
         actualRevenue: opportunity.actualRevenue || null,
-        estCloseDate: formatDate(opportunity.estCloseDate) as any,
+        estCloseDate: toDateValue(opportunity.estCloseDate),
         estRevenue: opportunity.estRevenue || null,
         rating: opportunity.rating || null,
         includeInForecast: opportunity.includeInForecast ?? true,
+        implementationStartDate: toDateValue(opportunity.implementationStartDate),
+        implementationEndDate: toDateValue(opportunity.implementationEndDate),
       });
       setIsEditDialogOpen(true);
     }
@@ -327,6 +393,8 @@ export default function OpportunityDetailPage() {
             <DetailField label="Amount" value={opportunity.amount} type="currency" />
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
+            <DetailField label="Impl. Start Date" value={opportunity.implementationStartDate} type="date" />
+            <DetailField label="Impl. End Date" value={opportunity.implementationEndDate} type="date" />
             <div className="col-span-1">
               <label className="text-sm font-medium text-muted-foreground">Assigned Rep</label>
               <div className="mt-1 flex items-center gap-2" data-testid="field-assigned-rep">
@@ -384,6 +452,112 @@ export default function OpportunityDetailPage() {
                 entity="opportunities"
                 entityId={opportunity.id}
               />
+            </CardContent>
+          </Card>
+
+          <Card data-testid="section-resources">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Assigned Resources
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {resources.length > 0 ? (
+                <div className="space-y-2 mb-4">
+                  {resources.map(r => (
+                    <div key={r.id} className="flex items-center justify-between gap-2 py-1.5" data-testid={`resource-item-${r.id}`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar className="h-7 w-7 shrink-0">
+                          <AvatarFallback className="text-[10px]">
+                            {r.userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{r.userName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{r.role}</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeResourceMutation.mutate(r.id)}
+                        disabled={removeResourceMutation.isPending}
+                        data-testid={`button-remove-resource-${r.id}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground mb-4" data-testid="text-no-resources">No resources assigned yet.</p>
+              )}
+
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">Add Resource</p>
+                <Popover open={resourceUserSearchOpen} onOpenChange={setResourceUserSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className={cn("w-full justify-between", !newResourceUserId && "text-muted-foreground")}
+                      data-testid="input-resource-user"
+                    >
+                      {newResourceUserId
+                        ? users.find(u => u.id === newResourceUserId)?.name || "Select user"
+                        : "Select user..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search users..." />
+                      <CommandList>
+                        <CommandEmpty>No user found.</CommandEmpty>
+                        <CommandGroup>
+                          {users.map(u => (
+                            <CommandItem
+                              key={u.id}
+                              value={`${u.name} ${u.id}`}
+                              onSelect={() => {
+                                setNewResourceUserId(u.id);
+                                setResourceUserSearchOpen(false);
+                              }}
+                              data-testid={`resource-user-option-${u.id}`}
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", newResourceUserId === u.id ? "opacity-100" : "opacity-0")} />
+                              {u.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <Select value={newResourceRole} onValueChange={setNewResourceRole}>
+                  <SelectTrigger data-testid="select-resource-role">
+                    <SelectValue placeholder="Select role..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Product Developer">Product Developer</SelectItem>
+                    <SelectItem value="Architect">Architect</SelectItem>
+                    <SelectItem value="Tech Lead">Tech Lead</SelectItem>
+                    <SelectItem value="Project Manager">Project Manager</SelectItem>
+                    <SelectItem value="Business Analyst">Business Analyst</SelectItem>
+                    <SelectItem value="QA Engineer">QA Engineer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="w-full"
+                  disabled={!newResourceUserId || !newResourceRole || addResourceMutation.isPending}
+                  onClick={() => addResourceMutation.mutate({ userId: newResourceUserId, role: newResourceRole })}
+                  data-testid="button-add-resource"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  {addResourceMutation.isPending ? "Adding..." : "Add Resource"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -640,6 +814,66 @@ export default function OpportunityDetailPage() {
                   );
                 }}
               />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="implementationStartDate"
+                  render={({ field }) => {
+                    let dateString = "";
+                    if (field.value) {
+                      try {
+                        const date = field.value instanceof Date ? field.value : new Date(field.value as string);
+                        if (!isNaN(date.getTime())) {
+                          dateString = date.toISOString().split('T')[0];
+                        }
+                      } catch (e) {}
+                    }
+                    return (
+                      <FormItem>
+                        <FormLabel>Implementation Start</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={dateString}
+                            onChange={e => field.onChange(e.target.value || null)}
+                            data-testid="input-edit-impl-start-date"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+                <FormField
+                  control={form.control}
+                  name="implementationEndDate"
+                  render={({ field }) => {
+                    let dateString = "";
+                    if (field.value) {
+                      try {
+                        const date = field.value instanceof Date ? field.value : new Date(field.value as string);
+                        if (!isNaN(date.getTime())) {
+                          dateString = date.toISOString().split('T')[0];
+                        }
+                      } catch (e) {}
+                    }
+                    return (
+                      <FormItem>
+                        <FormLabel>Implementation End</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={dateString}
+                            onChange={e => field.onChange(e.target.value || null)}
+                            data-testid="input-edit-impl-end-date"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
+              </div>
               <FormField
                 control={form.control}
                 name="includeInForecast"
@@ -661,6 +895,77 @@ export default function OpportunityDetailPage() {
                   </FormItem>
                 )}
               />
+              <div className="rounded-lg border p-4 space-y-3" data-testid="section-edit-resources">
+                <p className="text-sm font-medium">Assigned Resources</p>
+                {resources.length > 0 ? (
+                  <div className="space-y-2">
+                    {resources.map(r => (
+                      <div key={r.id} className="flex items-center justify-between gap-2 py-1" data-testid={`edit-resource-item-${r.id}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar className="h-6 w-6 shrink-0">
+                            <AvatarFallback className="text-[9px]">
+                              {r.userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm truncate">{r.userName}</span>
+                          <Badge variant="secondary">{r.role}</Badge>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeResourceMutation.mutate(r.id)}
+                          disabled={removeResourceMutation.isPending}
+                          data-testid={`button-edit-remove-resource-${r.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground" data-testid="text-edit-no-resources">No resources assigned.</p>
+                )}
+                <div className="flex flex-wrap items-end gap-2 border-t pt-2">
+                  <div className="flex-1 min-w-[140px]">
+                    <Select value={newResourceUserId} onValueChange={setNewResourceUserId}>
+                      <SelectTrigger data-testid="select-edit-resource-user">
+                        <SelectValue placeholder="User..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 min-w-[140px]">
+                    <Select value={newResourceRole} onValueChange={setNewResourceRole}>
+                      <SelectTrigger data-testid="select-edit-resource-role">
+                        <SelectValue placeholder="Role..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Product Developer">Product Developer</SelectItem>
+                        <SelectItem value="Architect">Architect</SelectItem>
+                        <SelectItem value="Tech Lead">Tech Lead</SelectItem>
+                        <SelectItem value="Project Manager">Project Manager</SelectItem>
+                        <SelectItem value="Business Analyst">Business Analyst</SelectItem>
+                        <SelectItem value="QA Engineer">QA Engineer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newResourceUserId || !newResourceRole || addResourceMutation.isPending}
+                    onClick={() => addResourceMutation.mutate({ userId: newResourceUserId, role: newResourceRole })}
+                    data-testid="button-edit-add-resource"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} data-testid="button-cancel-edit">
                   Cancel

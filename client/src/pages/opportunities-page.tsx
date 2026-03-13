@@ -29,6 +29,9 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+type PendingResource = { userId: string; role: string; userName: string };
 
 const stages = [
   { id: "prospecting",   label: "Prospecting",   color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
@@ -52,6 +55,9 @@ export default function OpportunitiesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [accountSearchOpen, setAccountSearchOpen] = useState(false);
   const [repSearchOpen, setRepSearchOpen] = useState(false);
+  const [pendingResources, setPendingResources] = useState<PendingResource[]>([]);
+  const [createResourceUserId, setCreateResourceUserId] = useState("");
+  const [createResourceRole, setCreateResourceRole] = useState("");
   
   // Bulk operations state
   const [selectedOpportunityIds, setSelectedOpportunityIds] = useState<Set<string>>(new Set());
@@ -138,12 +144,24 @@ export default function OpportunitiesPage() {
   const createMutation = useMutation({
     mutationFn: async (data: InsertOpportunity) => {
       const res = await apiRequest("POST", "/api/opportunities", data);
-      return await res.json();
+      const opp = await res.json();
+      if (pendingResources.length > 0 && opp?.id) {
+        await Promise.all(pendingResources.map(r =>
+          apiRequest("POST", `/api/opportunities/${opp.id}/resources`, { userId: r.userId, role: r.role })
+        ));
+      }
+      return opp;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
       toast({ title: "Opportunity created successfully" });
       setIsCreateDialogOpen(false);
+      setPendingResources([]);
+      setCreateResourceUserId("");
+      setCreateResourceRole("");
+      if (data?.id) {
+        setLocation(`/opportunities/${data.id}`);
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Failed to create opportunity", description: error.message, variant: "destructive" });
@@ -196,13 +214,15 @@ export default function OpportunitiesPage() {
       amount: "0",
       probability: 0,
       ownerId: user?.id || "",
-      closeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Default to 30 days from now
+      closeDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       actualCloseDate: null,
       actualRevenue: null,
       estCloseDate: null,
       estRevenue: null,
       rating: null,
       includeInForecast: true,
+      implementationStartDate: null,
+      implementationEndDate: null,
     },
   });
 
@@ -729,6 +749,124 @@ export default function OpportunitiesPage() {
                     </FormItem>
                   )}
                 />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="implementationStartDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Implementation Start</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            data-testid="input-opportunity-impl-start"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="implementationEndDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Implementation End</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            data-testid="input-opportunity-impl-end"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="rounded-lg border p-4 space-y-3" data-testid="section-create-resources">
+                  <p className="text-sm font-medium">Resource Assignments</p>
+                  {pendingResources.length > 0 ? (
+                    <div className="space-y-2">
+                      {pendingResources.map((r, idx) => (
+                        <div key={`${r.userId}-${r.role}`} className="flex items-center justify-between gap-2 py-1" data-testid={`create-resource-item-${idx}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar className="h-6 w-6 shrink-0">
+                              <AvatarFallback className="text-[9px]">
+                                {r.userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm truncate">{r.userName}</span>
+                            <Badge variant="secondary">{r.role}</Badge>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setPendingResources(prev => prev.filter((_, i) => i !== idx))}
+                            data-testid={`button-remove-create-resource-${idx}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground" data-testid="text-no-create-resources">No resources added yet.</p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-2 border-t pt-2">
+                    <div className="flex-1 min-w-[140px]">
+                      <Select value={createResourceUserId} onValueChange={setCreateResourceUserId}>
+                        <SelectTrigger data-testid="select-create-resource-user">
+                          <SelectValue placeholder="User..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users?.map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1 min-w-[140px]">
+                      <Select value={createResourceRole} onValueChange={setCreateResourceRole}>
+                        <SelectTrigger data-testid="select-create-resource-role">
+                          <SelectValue placeholder="Role..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Product Developer">Product Developer</SelectItem>
+                          <SelectItem value="Architect">Architect</SelectItem>
+                          <SelectItem value="Tech Lead">Tech Lead</SelectItem>
+                          <SelectItem value="Project Manager">Project Manager</SelectItem>
+                          <SelectItem value="Business Analyst">Business Analyst</SelectItem>
+                          <SelectItem value="QA Engineer">QA Engineer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!createResourceUserId || !createResourceRole}
+                      onClick={() => {
+                        const dup = pendingResources.find(r => r.userId === createResourceUserId && r.role === createResourceRole);
+                        if (dup) {
+                          toast({ title: "This user is already assigned with that role", variant: "destructive" });
+                          return;
+                        }
+                        const userName = users?.find(u => u.id === createResourceUserId)?.name || "Unknown";
+                        setPendingResources(prev => [...prev, { userId: createResourceUserId, role: createResourceRole, userName }]);
+                        setCreateResourceUserId("");
+                        setCreateResourceRole("");
+                      }}
+                      data-testid="button-add-create-resource"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                </div>
                 <FormField
                   control={form.control}
                   name="includeInForecast"

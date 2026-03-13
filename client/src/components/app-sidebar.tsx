@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus } from "lucide-react";
+import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus, GanttChart } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,6 +28,7 @@ const menuItems = [
   { title: "Leads",         url: "/leads",        icon: UserPlus },
   { title: "Opportunities", url: "/opportunities",icon: Target },
   { title: "Activities",    url: "/activities",   icon: Calendar },
+  { title: "Resource Allocation", url: "/resource-allocation", icon: GanttChart },
 ];
 
 const adminItems = [

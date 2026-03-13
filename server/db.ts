@@ -381,6 +381,8 @@ export class PostgresStorage implements IStorage {
           o.import_notes as "importNotes",
           o.owner_id as "ownerId",
           o.include_in_forecast as "includeInForecast",
+          o.implementation_start_date as "implementationStartDate",
+          o.implementation_end_date as "implementationEndDate",
           o.created_at as "createdAt",
           o.updated_at as "updatedAt",
           a.name as "accountName",
@@ -926,12 +928,33 @@ export class PostgresStorage implements IStorage {
       ));
   }
   
+  // ========== OPPORTUNITY RESOURCES ==========
+  
+  async getOpportunityResources(opportunityId: string): Promise<schema.OpportunityResource[]> {
+    return await db.select().from(schema.opportunityResources)
+      .where(eq(schema.opportunityResources.opportunityId, opportunityId));
+  }
+  
+  async addOpportunityResource(resource: schema.InsertOpportunityResource): Promise<schema.OpportunityResource> {
+    const result = await db.insert(schema.opportunityResources).values(resource).returning();
+    return result[0];
+  }
+  
+  async removeOpportunityResource(id: string): Promise<void> {
+    await db.delete(schema.opportunityResources).where(eq(schema.opportunityResources.id, id));
+  }
+  
+  async getAllOpportunityResources(): Promise<schema.OpportunityResource[]> {
+    return await db.select().from(schema.opportunityResources);
+  }
+  
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {
     // Delete all CRM entity data in reverse dependency order
     // This preserves system configuration (roles, permissions, id_patterns)
     await db.delete(schema.entityTags);
+    await db.delete(schema.opportunityResources);
     await db.delete(schema.activities);
     await db.delete(schema.leads);
     await db.delete(schema.opportunities);
