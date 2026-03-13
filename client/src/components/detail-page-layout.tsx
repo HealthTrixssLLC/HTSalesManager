@@ -96,12 +96,7 @@ interface DetailFieldProps {
 
 export function DetailField({ label, value, type = "text" }: DetailFieldProps) {
   if (!value && value !== 0) {
-    return (
-      <div>
-        <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-        <dd className="mt-1 text-sm text-muted-foreground">—</dd>
-      </div>
-    );
+    return null;
   }
 
   let displayValue = value;

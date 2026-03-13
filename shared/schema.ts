@@ -75,8 +75,6 @@ export const accounts = pgTable("accounts", {
   industry: text("industry"),
   website: text("website"),
   phone: text("phone"),
-  primaryContactName: text("primary_contact_name"), // Name of primary contact
-  primaryContactEmail: text("primary_contact_email"), // Email of primary contact
   billingAddress: text("billing_address"),
   shippingAddress: text("shipping_address"),
   externalId: text("external_id"), // External system ID (e.g., Dynamics GUID)
@@ -496,8 +494,6 @@ export type Permission = typeof permissions.$inferSelect;
 export const insertAccountSchema = createInsertSchema(accounts).omit({ createdAt: true, updatedAt: true }).extend({
   accountNumber: z.string().optional(),
   category: z.string().optional(),
-  primaryContactName: z.string().optional(),
-  primaryContactEmail: z.string().email("Invalid email address").optional().or(z.literal("")),
 });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accounts.$inferSelect;

@@ -67,7 +67,6 @@ export default function AccountDetailPage() {
     defaultValues: {
       id: "",
       name: "",
-      accountNumber: "",
       category: "",
       type: "customer",
       ownerId: "",
@@ -115,7 +114,6 @@ export default function AccountDetailPage() {
       form.reset({
         id: account.id,
         name: account.name,
-        accountNumber: account.accountNumber || "",
         category: account.category || "",
         type: account.type || "customer",
         ownerId: account.ownerId || "",
@@ -187,21 +185,6 @@ export default function AccountDetailPage() {
             <DetailField label="Shipping Address" value={account.shippingAddress} />
           </DetailSection>
 
-          {(account.externalId || account.sourceSystem || account.sourceRecordId || account.importStatus || account.importNotes) && (
-            <DetailSection title="Import Information">
-              <DetailField label="External ID" value={account.externalId} />
-              <DetailField label="Source System" value={account.sourceSystem} />
-              <DetailField label="Source Record ID" value={account.sourceRecordId} />
-              <DetailField label="Import Status" value={account.importStatus} />
-              {account.importNotes && (
-                <div className="col-span-full">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Import Notes</p>
-                  <p className="text-sm whitespace-pre-wrap">{account.importNotes}</p>
-                </div>
-              )}
-            </DetailSection>
-          )}
-
           <Card data-testid="section-tags">
             <CardHeader>
               <CardTitle>Tags</CardTitle>
@@ -270,7 +253,7 @@ export default function AccountDetailPage() {
             <DialogDescription>Update account information</DialogDescription>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
                 control={form.control}
                 name="name"
@@ -287,13 +270,24 @@ export default function AccountDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="accountNumber"
+                  name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Account Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ACC-12345" {...field} value={field.value || ""} data-testid="input-edit-account-number" />
-                      </FormControl>
+                      <FormLabel>Account Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-account-type">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="customer">Customer</SelectItem>
+                          <SelectItem value="prospect">Prospect</SelectItem>
+                          <SelectItem value="partner">Partner</SelectItem>
+                          <SelectItem value="vendor">Vendor</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -323,30 +317,6 @@ export default function AccountDetailPage() {
                   )}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || undefined}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-edit-account-type">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="customer">Customer</SelectItem>
-                        <SelectItem value="prospect">Prospect</SelectItem>
-                        <SelectItem value="partner">Partner</SelectItem>
-                        <SelectItem value="vendor">Vendor</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -388,32 +358,37 @@ export default function AccountDetailPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="billingAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Billing Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St, City, State 12345" {...field} value={field.value || ""} data-testid="input-edit-account-billing" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="shippingAddress"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Shipping Address</FormLabel>
-                    <FormControl>
-                      <Input placeholder="123 Main St, City, State 12345" {...field} value={field.value || ""} data-testid="input-edit-account-shipping" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="pt-2">
+                <p className="text-sm font-medium text-muted-foreground mb-3">Address</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="billingAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Billing Address</FormLabel>
+                        <FormControl>
+                          <Input placeholder="123 Main St, City, State 12345" {...field} value={field.value || ""} data-testid="input-edit-account-billing" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="shippingAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Shipping Address</FormLabel>
+                        <FormControl>
+                          <Input placeholder="123 Main St, City, State 12345" {...field} value={field.value || ""} data-testid="input-edit-account-shipping" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel

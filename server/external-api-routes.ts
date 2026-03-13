@@ -250,8 +250,6 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
       industry: account.industry,
       website: account.website,
       phone: account.phone,
-      primaryContactName: account.primaryContactName,
-      primaryContactEmail: account.primaryContactEmail,
       externalId: account.externalId,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,

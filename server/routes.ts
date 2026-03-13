@@ -3077,7 +3077,7 @@ export function registerRoutes(app: Express) {
       
       const headers = [
         "id", "name", "accountNumber", "type", "category", "industry", "website", "phone",
-        "primaryContactName", "primaryContactEmail", "billingAddress", "shippingAddress",
+        "billingAddress", "shippingAddress",
         "externalId", "sourceSystem", "sourceRecordId", "importStatus", "importNotes"
       ];
       const csv = arrayToCSV(accounts, headers);
@@ -3219,8 +3219,6 @@ export function registerRoutes(app: Express) {
             industry: row.industry || "",
             website: row.website || "",
             phone: row.phone || "",
-            primaryContactName: row.primaryContactName || "",
-            primaryContactEmail: row.primaryContactEmail || "",
             billingAddress: row.billingAddress || "",
             shippingAddress: row.shippingAddress || "",
             externalId: row.externalId || "",

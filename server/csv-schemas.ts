@@ -31,8 +31,6 @@ export const accountCsvRowSchema = z.object({
   industry: optionalString,
   website: optionalString,
   phone: optionalString,
-  primaryContactName: optionalString,
-  primaryContactEmail: optionalString,
   billingAddress: optionalString,
   shippingAddress: optionalString,
   externalId: optionalString,

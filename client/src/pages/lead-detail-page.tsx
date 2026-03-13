@@ -320,7 +320,7 @@ export default function LeadDetailPage() {
           <DialogDescription>Update lead information</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmitEdit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmitEdit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
