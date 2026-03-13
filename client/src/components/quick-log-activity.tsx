@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,35 +22,40 @@ export function QuickLogActivity({ open, onOpenChange, relatedType, relatedId, r
   const [type, setType] = useState("task");
   const [priority, setPriority] = useState("medium");
   const [dueAt, setDueAt] = useState("");
+  const [ownerId, setOwnerId] = useState("");
   const [notes, setNotes] = useState("");
   const { toast } = useToast();
+
+  const { data: users } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/users"],
+    enabled: open,
+  });
 
   const resetForm = () => {
     setSubject("");
     setType("task");
     setPriority("medium");
     setDueAt("");
+    setOwnerId("");
     setNotes("");
   };
 
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/activities", {
+        id: "",
         subject, type, priority, status: "pending",
         relatedType, relatedId,
         dueAt: dueAt ? new Date(dueAt) : null,
+        ownerId: ownerId || null,
         notes: notes || null,
       });
       return await res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
-      const entityKey = relatedType.toLowerCase() + "s";
-      if (entityKey === "opportunitys") {
-        queryClient.invalidateQueries({ queryKey: ["/api/opportunities", relatedId, "related"] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: [`/api/${entityKey}`, relatedId, "related"] });
-      }
+      const entityKey = relatedType === "Opportunity" ? "opportunities" : relatedType.toLowerCase() + "s";
+      queryClient.invalidateQueries({ queryKey: [`/api/${entityKey}`, relatedId, "related"] });
       toast({ title: "Activity logged successfully" });
       resetForm();
       onOpenChange(false);
@@ -107,6 +112,19 @@ export function QuickLogActivity({ open, onOpenChange, relatedType, relatedId, r
           <div>
             <Label>Due Date</Label>
             <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className="mt-1.5" data-testid="input-quick-log-due" />
+          </div>
+          <div>
+            <Label>Assignee</Label>
+            <Select value={ownerId} onValueChange={setOwnerId}>
+              <SelectTrigger className="mt-1.5" data-testid="select-quick-log-assignee">
+                <SelectValue placeholder="Select assignee (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {users?.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Notes</Label>

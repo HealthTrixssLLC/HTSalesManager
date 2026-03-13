@@ -4,7 +4,6 @@ import { useRoute, useLocation } from "wouter";
 import { Loader2, ArrowRight } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
-import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
 import { QuickLogActivity } from "@/components/quick-log-activity";
@@ -161,13 +160,6 @@ export default function LeadDetailPage() {
     return "outline";
   };
 
-  const chainBar = (
-    <RelationshipChainBar
-      chain={[]}
-      current={{ label: fullName, type: "lead" }}
-    />
-  );
-
   return (
     <>
       <DetailPageLayout
@@ -180,7 +172,8 @@ export default function LeadDetailPage() {
         onEdit={() => setIsEditDialogOpen(true)}
         onDelete={() => setIsDeleteDialogOpen(true)}
         onLogActivity={() => setIsLogActivityOpen(true)}
-        chainBar={chainBar}
+        entityType="lead"
+        entityId={leadId || ""}
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

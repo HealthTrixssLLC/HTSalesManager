@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Lead } from "@shared/schema";
@@ -107,9 +107,11 @@ export function LeadConversionWizard({
     convertMutation.mutate(conversionData);
   };
 
-  if (lead && conversionData.accountName === "" && lead.company) {
-    setConversionData((prev) => ({ ...prev, accountName: lead.company || "" }));
-  }
+  useEffect(() => {
+    if (lead && lead.company && conversionData.accountName === "") {
+      setConversionData((prev) => ({ ...prev, accountName: lead.company || "" }));
+    }
+  }, [lead]);
 
   const atLeastOneSelected = conversionData.createAccount || conversionData.createContact || conversionData.createOpportunity;
 

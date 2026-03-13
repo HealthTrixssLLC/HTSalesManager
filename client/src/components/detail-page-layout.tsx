@@ -3,6 +3,7 @@ import { ArrowLeft, Pencil, Trash2, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RelationshipChainBar, type EntityType } from "@/components/relationship-chain-bar";
 
 interface DetailPageLayoutProps {
   title: string;
@@ -14,7 +15,8 @@ interface DetailPageLayoutProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onLogActivity?: () => void;
-  chainBar?: React.ReactNode;
+  entityType?: EntityType;
+  entityId?: string;
   children: React.ReactNode;
 }
 
@@ -28,14 +30,19 @@ export function DetailPageLayout({
   onEdit,
   onDelete,
   onLogActivity,
-  chainBar,
+  entityType,
+  entityId,
   children,
 }: DetailPageLayoutProps) {
   return (
     <div className="space-y-6 p-6">
-      {chainBar && (
+      {entityType && entityId && (
         <div className="pb-0">
-          {chainBar}
+          <RelationshipChainBar
+            entityType={entityType}
+            entityId={entityId}
+            entityName={title}
+          />
         </div>
       )}
       <div className="flex items-center justify-between gap-4">

@@ -60,15 +60,6 @@ export function AppSidebar() {
               <p className="text-white font-semibold text-sm leading-none">HealthTrixss</p>
               <p className="text-white/50 text-xs mt-0.5">CRM Platform</p>
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="text-white/70 hover:text-white hover:bg-white/10 shrink-0"
-              onClick={() => setQuickAddOpen(true)}
-              data-testid="button-global-quick-add"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
         </SidebarHeader>
 
@@ -139,6 +130,15 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="px-4 py-4 border-t border-white/10">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-2 mb-3"
+            onClick={() => setQuickAddOpen(true)}
+            data-testid="button-global-quick-add"
+          >
+            <Plus className="h-4 w-4" />
+            Quick Add
+          </Button>
           <div className="flex items-center gap-3 mb-3">
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback

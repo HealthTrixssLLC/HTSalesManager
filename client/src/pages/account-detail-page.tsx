@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
-import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
@@ -160,13 +159,6 @@ export default function AccountDetailPage() {
     return "outline";
   };
 
-  const chainBar = (
-    <RelationshipChainBar
-      chain={[]}
-      current={{ label: account.name, type: "account" }}
-    />
-  );
-
   return (
     <DetailPageLayout
       title={account.name}
@@ -178,7 +170,8 @@ export default function AccountDetailPage() {
       onEdit={() => setIsEditDialogOpen(true)}
       onDelete={() => setIsDeleteDialogOpen(true)}
       onLogActivity={() => setIsLogActivityOpen(true)}
-      chainBar={chainBar}
+      entityType="account"
+      entityId={accountId || ""}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

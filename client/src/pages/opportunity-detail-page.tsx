@@ -4,7 +4,6 @@ import { useRoute, useLocation } from "wouter";
 import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
-import { RelationshipChainBar } from "@/components/relationship-chain-bar";
 import { CommentSystem } from "@/components/comment-system";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd } from "@/components/global-quick-add";
@@ -298,22 +297,6 @@ export default function OpportunityDetailPage() {
 
   const account = relatedData?.account.items[0];
 
-  const chainLinks = [];
-  if (account) {
-    chainLinks.push({
-      label: account.name,
-      href: `/accounts/${account.id}`,
-      type: "account" as const,
-    });
-  }
-
-  const chainBar = (
-    <RelationshipChainBar
-      chain={chainLinks}
-      current={{ label: opportunity.name, type: "opportunity" }}
-    />
-  );
-
   return (
     <DetailPageLayout
       title={opportunity.name}
@@ -325,7 +308,8 @@ export default function OpportunityDetailPage() {
       onEdit={handleEdit}
       onDelete={() => setIsDeleteDialogOpen(true)}
       onLogActivity={() => setIsLogActivityOpen(true)}
-      chainBar={chainBar}
+      entityType="opportunity"
+      entityId={opportunityId || ""}
     >
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
