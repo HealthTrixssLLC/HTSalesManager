@@ -614,6 +614,125 @@ export async function getRepPerformance(dateRange: DateRange, roleNames?: string
   return performance;
 }
 
+// ========== REP PERFORMANCE TIMESERIES ==========
+
+export async function getRepPerformanceTimeseries(dateRange: DateRange) {
+  const { start, end } = dateRange;
+
+  const reps = await db
+    .select({
+      id: schema.users.id,
+      name: schema.users.name,
+    })
+    .from(schema.users);
+
+  const wonOpps = await db
+    .select()
+    .from(schema.opportunities)
+    .where(
+      and(
+        eq(schema.opportunities.includeInForecast, true),
+        eq(schema.opportunities.stage, "closed_won"),
+        gte(schema.opportunities.updatedAt, start),
+        lte(schema.opportunities.updatedAt, end)
+      )
+    );
+
+  const monthBuckets: Record<string, Record<string, { revenue: number; dealsWon: number }>> = {};
+
+  for (const opp of wonOpps) {
+    const d = new Date(opp.updatedAt);
+    const monthLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const repId = opp.ownerId;
+    if (!repId) continue;
+
+    if (!monthBuckets[monthLabel]) monthBuckets[monthLabel] = {};
+    if (!monthBuckets[monthLabel][repId]) monthBuckets[monthLabel][repId] = { revenue: 0, dealsWon: 0 };
+
+    monthBuckets[monthLabel][repId].revenue += parseFloat(opp.amount || "0");
+    monthBuckets[monthLabel][repId].dealsWon += 1;
+  }
+
+  const months = Object.keys(monthBuckets).sort();
+  const repMap = new Map(reps.map((r) => [r.id, r.name]));
+
+  const result = months.map((month) => {
+    const bucket = monthBuckets[month];
+    const entry: Record<string, any> = { month };
+    for (const [repId, data] of Object.entries(bucket)) {
+      const repName = repMap.get(repId) || "Unknown";
+      entry[repName] = data.revenue;
+      entry[`${repName}_deals`] = data.dealsWon;
+    }
+    return entry;
+  });
+
+  const activeRepNames = [...new Set(
+    wonOpps
+      .filter((o) => o.ownerId)
+      .map((o) => repMap.get(o.ownerId!) || "Unknown")
+  )];
+
+  return { timeseries: result, repNames: activeRepNames };
+}
+
+// ========== REP PIPELINE STAGE BREAKDOWN ==========
+
+export async function getRepPipelineStages() {
+  const reps = await db
+    .select({
+      id: schema.users.id,
+      name: schema.users.name,
+    })
+    .from(schema.users);
+
+  const openOpps = await db
+    .select()
+    .from(schema.opportunities)
+    .where(
+      and(
+        eq(schema.opportunities.includeInForecast, true),
+        or(
+          eq(schema.opportunities.stage, "prospecting"),
+          eq(schema.opportunities.stage, "qualification"),
+          eq(schema.opportunities.stage, "proposal"),
+          eq(schema.opportunities.stage, "negotiation")
+        )
+      )
+    );
+
+  const repMap = new Map(reps.map((r) => [r.id, r.name]));
+  const stages = ["prospecting", "qualification", "proposal", "negotiation"];
+
+  const dataByRep: Record<string, Record<string, { amount: number; count: number }>> = {};
+
+  for (const opp of openOpps) {
+    const repId = opp.ownerId;
+    if (!repId) continue;
+    const repName = repMap.get(repId) || "Unknown";
+
+    if (!dataByRep[repName]) {
+      dataByRep[repName] = {};
+      for (const s of stages) dataByRep[repName][s] = { amount: 0, count: 0 };
+    }
+
+    dataByRep[repName][opp.stage].amount += parseFloat(opp.amount || "0");
+    dataByRep[repName][opp.stage].count += 1;
+  }
+
+  const result = Object.entries(dataByRep).map(([repName, stageData]) => ({
+    repName,
+    ...Object.fromEntries(
+      stages.map((s) => [s, stageData[s]?.amount || 0])
+    ),
+    ...Object.fromEntries(
+      stages.map((s) => [`${s}_count`, stageData[s]?.count || 0])
+    ),
+  }));
+
+  return { pipelineStages: result, stages };
+}
+
 // ========== PIPELINE HEALTH SCORE ==========
 
 export async function calculatePipelineHealth() {

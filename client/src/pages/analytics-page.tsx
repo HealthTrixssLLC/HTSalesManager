@@ -23,6 +23,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 const DEFAULT_SELECTED_ROLES = ["Admin", "SalesRep"];
 
@@ -51,6 +52,8 @@ export default function AnalyticsPage() {
     },
     enabled: hasRolesSelected,
   });
+  const { data: repTimeseries } = useQuery<any>({ queryKey: ["/api/analytics/rep-performance/timeseries"] });
+  const { data: repPipelineStages } = useQuery<any>({ queryKey: ["/api/analytics/rep-performance/pipeline-stages"] });
   const { data: pipelineHealth } = useQuery<any>({ queryKey: ["/api/analytics/pipeline-health"] });
 
   const toggleRole = (role: string) => {
@@ -479,42 +482,192 @@ export default function AnalyticsPage() {
             </Card>
           )}
 
-          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length > 0 && (
+          {repTimeseries && repTimeseries.repNames.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Rep Performance Rankings</CardTitle>
+                <CardTitle>Revenue Won Over Time</CardTitle>
                 <CardDescription>
-                  Based on revenue, win rate, and pipeline (Last 90 days)
+                  Monthly closed-won revenue per rep
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {repPerformance.slice(0, 10).map((rep: any, idx: number) => (
-                    <div key={rep.rep.id} className="flex items-center gap-4 p-4 border rounded-md hover-elevate" data-testid={`rep-row-${rep.rep.id}`}>
-                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">{rep.rep.name}</div>
-                        <div className="text-sm text-muted-foreground">{rep.rep.email}</div>
-                      </div>
-                      <div className="text-right space-y-1">
-                        <div className="font-bold">{formatCurrency(rep.revenue)}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {rep.dealsWon} won • {formatPercent(rep.winRate)} win rate
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium">Pipeline</div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatCurrency(rep.pipelineValue)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <ChartContainer
+                  config={Object.fromEntries(
+                    repTimeseries.repNames.map((name: string, i: number) => [
+                      name,
+                      {
+                        label: name,
+                        color: `hsl(${(i * 360) / Math.max(repTimeseries.repNames.length, 1)}, 70%, 50%)`,
+                      },
+                    ])
+                  ) as ChartConfig}
+                  className="aspect-[2/1] w-full"
+                  data-testid="chart-rep-revenue-time"
+                >
+                  <AreaChart data={repTimeseries.timeseries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value: any, name: any) => [
+                            formatCurrency(value as number),
+                            name,
+                          ]}
+                        />
+                      }
+                    />
+                    <Legend />
+                    {repTimeseries.repNames.map((name: string, i: number) => (
+                      <Area
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stackId="1"
+                        stroke={`hsl(${(i * 360) / Math.max(repTimeseries.repNames.length, 1)}, 70%, 50%)`}
+                        fill={`hsl(${(i * 360) / Math.max(repTimeseries.repNames.length, 1)}, 70%, 50%)`}
+                        fillOpacity={0.3}
+                      />
+                    ))}
+                  </AreaChart>
+                </ChartContainer>
               </CardContent>
             </Card>
+          )}
+
+          {repPipelineStages && repPipelineStages.pipelineStages.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Open Pipeline by Stage</CardTitle>
+                <CardDescription>
+                  Each rep's open pipeline broken down by stage
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer
+                  config={{
+                    prospecting: { label: "Prospecting", color: "hsl(220, 70%, 50%)" },
+                    qualification: { label: "Qualification", color: "hsl(160, 70%, 45%)" },
+                    proposal: { label: "Proposal", color: "hsl(40, 85%, 50%)" },
+                    negotiation: { label: "Negotiation", color: "hsl(340, 70%, 50%)" },
+                  }}
+                  className="aspect-[2/1] w-full"
+                  data-testid="chart-rep-pipeline-stages"
+                >
+                  <BarChart data={repPipelineStages.pipelineStages} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="repName" tickLine={false} axisLine={false} />
+                    <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value: any, name: any, item: any) => {
+                            const stage = name as string;
+                            const countKey = `${stage}_count`;
+                            const count = item?.payload?.[countKey] ?? 0;
+                            return [
+                              `${formatCurrency(value as number)} (${count} deal${count !== 1 ? "s" : ""})`,
+                              stage.charAt(0).toUpperCase() + stage.slice(1),
+                            ];
+                          }}
+                        />
+                      }
+                    />
+                    <Legend />
+                    <Bar dataKey="prospecting" stackId="a" fill="hsl(220, 70%, 50%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="qualification" stackId="a" fill="hsl(160, 70%, 45%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="proposal" stackId="a" fill="hsl(40, 85%, 50%)" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="negotiation" stackId="a" fill="hsl(340, 70%, 50%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length > 0 && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pipeline vs. Closed-Won Revenue</CardTitle>
+                  <CardDescription>
+                    Compare each rep's open pipeline value against their closed-won revenue
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChartContainer
+                    config={{
+                      revenue: { label: "Closed-Won Revenue", color: "hsl(160, 70%, 45%)" },
+                      pipelineValue: { label: "Open Pipeline", color: "hsl(220, 70%, 50%)" },
+                    }}
+                    className="aspect-[2/1] w-full"
+                    data-testid="chart-rep-pipeline-vs-revenue"
+                  >
+                    <BarChart
+                      data={repPerformance.filter((r: any) => r.revenue > 0 || r.pipelineValue > 0).slice(0, 10).map((r: any) => ({
+                        name: r.rep.name,
+                        revenue: r.revenue,
+                        pipelineValue: r.pipelineValue,
+                      }))}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                      <YAxis tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+                      <ChartTooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value: any, name: any) => [
+                              formatCurrency(value as number),
+                              name === "revenue" ? "Closed-Won" : "Pipeline",
+                            ]}
+                          />
+                        }
+                      />
+                      <Legend />
+                      <Bar dataKey="revenue" fill="hsl(160, 70%, 45%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="pipelineValue" fill="hsl(220, 70%, 50%)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Rep Performance Rankings</CardTitle>
+                  <CardDescription>
+                    Based on revenue, win rate, and pipeline (Last 90 days)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {repPerformance.slice(0, 10).map((rep: any, idx: number) => (
+                      <div key={rep.rep.id} className="flex items-center gap-4 p-4 border rounded-md hover-elevate" data-testid={`rep-row-${rep.rep.id}`}>
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium" data-testid={`text-rep-name-${rep.rep.id}`}>{rep.rep.name}</div>
+                          <div className="text-sm text-muted-foreground">{rep.rep.email}</div>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className="font-bold" data-testid={`text-rep-revenue-${rep.rep.id}`}>{formatCurrency(rep.revenue)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {rep.dealsWon} won • {formatPercent(rep.winRate)} win rate
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-medium">Pipeline</div>
+                          <div className="text-sm text-muted-foreground" data-testid={`text-rep-pipeline-${rep.rep.id}`}>
+                            {formatCurrency(rep.pipelineValue)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
           )}
 
           {!repLoading && hasRolesSelected && repPerformance && repPerformance.length === 0 && (

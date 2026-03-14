@@ -4547,7 +4547,31 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  // Get pipeline health score
+  app.get("/api/analytics/rep-performance/timeseries", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const daysBack = parseInt(req.query.days as string) || 365;
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+
+      const data = await analyticsService.getRepPerformanceTimeseries({ start, end });
+      return res.json(data);
+    } catch (error: any) {
+      console.error("Rep timeseries error:", error);
+      return res.status(500).json({ error: "Failed to get rep timeseries", details: error.message });
+    }
+  });
+
+  app.get("/api/analytics/rep-performance/pipeline-stages", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const data = await analyticsService.getRepPipelineStages();
+      return res.json(data);
+    } catch (error: any) {
+      console.error("Rep pipeline stages error:", error);
+      return res.status(500).json({ error: "Failed to get rep pipeline stages", details: error.message });
+    }
+  });
+
   app.get("/api/analytics/pipeline-health", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const health = await analyticsService.calculatePipelineHealth();
