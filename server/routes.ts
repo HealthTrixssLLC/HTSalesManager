@@ -4519,6 +4519,15 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  app.get("/api/analytics/role-names", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const roles = await storage.getAllRoles();
+      return res.json(roles.map(r => r.name));
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch role names" });
+    }
+  });
+
   // Get rep performance metrics
   app.get("/api/analytics/rep-performance", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -4527,7 +4536,10 @@ export function registerRoutes(app: Express) {
       const start = new Date();
       start.setDate(start.getDate() - daysBack);
 
-      const performance = await analyticsService.getRepPerformance({ start, end });
+      const rolesParam = req.query.roles as string | undefined;
+      const roleNames = rolesParam ? rolesParam.split(",").map(r => r.trim()).filter(Boolean) : undefined;
+
+      const performance = await analyticsService.getRepPerformance({ start, end }, roleNames);
       return res.json(performance);
     } catch (error: any) {
       console.error("Rep performance error:", error);

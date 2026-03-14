@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, Filter } from "lucide-react";
 import {
   AreaChart,
   Area,
@@ -22,15 +24,42 @@ import {
   Cell,
 } from "recharts";
 
+const DEFAULT_SELECTED_ROLES = ["Admin", "SalesRep"];
+
 export default function AnalyticsPage() {
-  // Fetch all analytics data
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(DEFAULT_SELECTED_ROLES);
+
+  const { data: availableRoles } = useQuery<string[]>({ queryKey: ["/api/analytics/role-names"] });
+
+  const rolesQueryParam = selectedRoles.join(",");
+  const hasRolesSelected = selectedRoles.length > 0;
+  const repPerformanceUrl = `/api/analytics/rep-performance?roles=${encodeURIComponent(rolesQueryParam)}`;
+
   const { data: forecast } = useQuery<any>({ queryKey: ["/api/analytics/forecast"] });
   const { data: historical } = useQuery<any>({ queryKey: ["/api/analytics/historical"] });
   const { data: velocity } = useQuery<any>({ queryKey: ["/api/analytics/velocity"] });
   const { data: conversions } = useQuery<any>({ queryKey: ["/api/analytics/conversions"] });
   const { data: predictions } = useQuery<any>({ queryKey: ["/api/analytics/predictions"] });
-  const { data: repPerformance } = useQuery<any>({ queryKey: ["/api/analytics/rep-performance"] });
+  const { data: repPerformance, isLoading: repLoading } = useQuery<any>({
+    queryKey: ["/api/analytics/rep-performance", rolesQueryParam],
+    queryFn: async () => {
+      const res = await fetch(repPerformanceUrl, { credentials: "include" });
+      if (!res.ok) {
+        throw new Error(`${res.status}: ${await res.text() || res.statusText}`);
+      }
+      return res.json();
+    },
+    enabled: hasRolesSelected,
+  });
   const { data: pipelineHealth } = useQuery<any>({ queryKey: ["/api/analytics/pipeline-health"] });
+
+  const toggleRole = (role: string) => {
+    setSelectedRoles(prev =>
+      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
+    );
+  };
+
+  const rolesList = availableRoles || DEFAULT_SELECTED_ROLES;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -413,44 +442,89 @@ export default function AnalyticsPage() {
 
         {/* REP PERFORMANCE DASHBOARD */}
         <TabsContent value="reps" className="space-y-6">
-          {repPerformance && repPerformance.length > 0 && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Rep Performance Rankings</CardTitle>
-                  <CardDescription>
-                    Based on revenue, win rate, and pipeline (Last 90 days)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {repPerformance.slice(0, 10).map((rep: any, idx: number) => (
-                      <div key={rep.rep.id} className="flex items-center gap-4 p-4 border rounded-lg hover-elevate">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
-                          {idx + 1}
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-medium">{rep.rep.name}</div>
-                          <div className="text-sm text-muted-foreground">{rep.rep.email}</div>
-                        </div>
-                        <div className="text-right space-y-1">
-                          <div className="font-bold">{formatCurrency(rep.revenue)}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {rep.dealsWon} won • {formatPercent(rep.winRate)} win rate
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium">Pipeline</div>
-                          <div className="text-sm text-muted-foreground">
-                            {formatCurrency(rep.pipelineValue)}
-                          </div>
+          <div className="flex items-center gap-2 flex-wrap" data-testid="role-filter-container">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mr-1">
+              <Filter className="h-4 w-4" />
+              <span>Roles:</span>
+            </div>
+            {rolesList.map((role) => (
+              <Button
+                key={role}
+                size="sm"
+                variant={selectedRoles.includes(role) ? "default" : "outline"}
+                className="toggle-elevate"
+                onClick={() => toggleRole(role)}
+                data-testid={`role-filter-${role}`}
+              >
+                {role}
+              </Button>
+            ))}
+          </div>
+
+          {repLoading && (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center text-muted-foreground" data-testid="rep-loading">Loading performance data...</div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!repLoading && selectedRoles.length === 0 && (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center text-muted-foreground" data-testid="rep-no-roles">
+                  Select at least one role to view rep performance.
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Rep Performance Rankings</CardTitle>
+                <CardDescription>
+                  Based on revenue, win rate, and pipeline (Last 90 days)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {repPerformance.slice(0, 10).map((rep: any, idx: number) => (
+                    <div key={rep.rep.id} className="flex items-center gap-4 p-4 border rounded-md hover-elevate" data-testid={`rep-row-${rep.rep.id}`}>
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted font-bold">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">{rep.rep.name}</div>
+                        <div className="text-sm text-muted-foreground">{rep.rep.email}</div>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <div className="font-bold">{formatCurrency(rep.revenue)}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {rep.dealsWon} won • {formatPercent(rep.winRate)} win rate
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </>
+                      <div className="text-right">
+                        <div className="text-sm font-medium">Pipeline</div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatCurrency(rep.pipelineValue)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length === 0 && (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center text-muted-foreground" data-testid="rep-empty">
+                  No reps found for the selected roles.
+                </div>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
       </Tabs>

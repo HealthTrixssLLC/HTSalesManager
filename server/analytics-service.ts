@@ -3,7 +3,7 @@
 
 import { db } from "./db";
 import * as schema from "@shared/schema";
-import { eq, and, gte, lte, sql, desc, asc, isNull, isNotNull, or } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, asc, isNull, isNotNull, or, inArray } from "drizzle-orm";
 
 // Stage probability mapping (industry standard for healthcare/B2B)
 const STAGE_PROBABILITIES: Record<string, number> = {
@@ -490,17 +490,48 @@ export async function predictDealClosing(daysAhead: number = 30) {
 
 // ========== REP PERFORMANCE ==========
 
-export async function getRepPerformance(dateRange: DateRange) {
+export async function getRepPerformance(dateRange: DateRange, roleNames?: string[]) {
   const { start, end } = dateRange;
 
-  // Get all users with their opportunities
-  const reps = await db
-    .select({
-      id: schema.users.id,
-      name: schema.users.name,
-      email: schema.users.email,
-    })
-    .from(schema.users);
+  let reps;
+  if (roleNames && roleNames.length > 0) {
+    const matchingRoles = await db
+      .select({ id: schema.roles.id })
+      .from(schema.roles)
+      .where(inArray(schema.roles.name, roleNames));
+
+    if (matchingRoles.length === 0) {
+      return [];
+    }
+
+    const roleIds = matchingRoles.map(r => r.id);
+    const userIdsWithRoles = await db
+      .selectDistinct({ userId: schema.userRoles.userId })
+      .from(schema.userRoles)
+      .where(inArray(schema.userRoles.roleId, roleIds));
+
+    const userIds = userIdsWithRoles.map(u => u.userId);
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    reps = await db
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+      })
+      .from(schema.users)
+      .where(inArray(schema.users.id, userIds));
+  } else {
+    reps = await db
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+      })
+      .from(schema.users);
+  }
 
   const performance = await Promise.all(
     reps.map(async (rep) => {
