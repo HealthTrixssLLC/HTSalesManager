@@ -80,7 +80,9 @@ export class BackupService {
     
     // Specific date field names (not ending in "At")
     const specificDateFields = [
-      'closeDate', 'actualCloseDate', 'estCloseDate'
+      'closeDate', 'actualCloseDate', 'estCloseDate',
+      'implementationStartDate', 'implementationEndDate',
+      'startDate', 'endDate',
     ];
     
     const enumFields = [

@@ -104,6 +104,14 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Opportunity", action: "readOwn" },
     ],
   },
+  {
+    name: "Resource",
+    description: "View resource allocation timeline and opportunity pipeline timing only",
+    permissions: [
+      { resource: "ResourceAllocation", action: "read" },
+      { resource: "Opportunity", action: "readOwn" },
+    ],
+  },
 ];
 
 // Export the seeding logic so it can be called from role initialization
@@ -257,6 +265,51 @@ export async function ensureProductDeveloperRole() {
   }
 
   console.log("✓ ProductDeveloper role added successfully");
+}
+
+export async function ensureResourceRole() {
+  const existingRoles = await db.select().from(roles);
+  const resourceRole = existingRoles.find(r => r.name === "Resource");
+  if (resourceRole) {
+    return;
+  }
+
+  console.log("Adding Resource role to existing database...");
+
+  const [createdRole] = await db.insert(roles).values({
+    name: "Resource",
+    description: "View resource allocation timeline and opportunity pipeline timing only",
+  }).returning();
+
+  const resourcePerms = [
+    { resource: "ResourceAllocation", action: "read" },
+    { resource: "Opportunity", action: "readOwn" },
+  ];
+
+  for (const permDef of resourcePerms) {
+    const existing = await db.select().from(permissions)
+      .where(eq(permissions.resource, permDef.resource));
+    const match = existing.find(p => p.action === permDef.action);
+
+    let permissionId: string;
+    if (match) {
+      permissionId = match.id;
+    } else {
+      const [created] = await db.insert(permissions).values({
+        resource: permDef.resource,
+        action: permDef.action,
+        description: `Permission to ${permDef.action} ${permDef.resource}`,
+      }).returning();
+      permissionId = created.id;
+    }
+
+    await db.insert(rolePermissions).values({
+      roleId: createdRole.id,
+      permissionId,
+    });
+  }
+
+  console.log("✓ Resource role added successfully");
 }
 
 async function seed() {

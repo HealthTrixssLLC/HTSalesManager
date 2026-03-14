@@ -88,9 +88,9 @@ function CrmGuardedRoute({
     );
   }
 
-  const isProductDeveloper = user.roles?.some(r => r.name === "ProductDeveloper") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
+  const isLimitedRole = user.roles?.some(r => r.name === "ProductDeveloper" || r.name === "Resource") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
 
-  if (isProductDeveloper) {
+  if (isLimitedRole) {
     return (
       <Route path={path}>
         <Redirect to="/resource-allocation" />
@@ -113,7 +113,7 @@ function Router() {
       <CrmGuardedRoute path="/contacts" component={ContactsPage} />
       <CrmGuardedRoute path="/leads/:id" component={LeadDetailPage} />
       <CrmGuardedRoute path="/leads" component={LeadsPage} />
-      <ProtectedRoute path="/opportunities/:id" component={OpportunityDetailPage} />
+      <CrmGuardedRoute path="/opportunities/:id" component={OpportunityDetailPage} />
       <CrmGuardedRoute path="/opportunities" component={OpportunitiesPage} />
       <CrmGuardedRoute path="/activities/:id" component={ActivityDetailPage} />
       <CrmGuardedRoute path="/activities" component={ActivitiesPage} />

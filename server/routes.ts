@@ -1465,7 +1465,7 @@ export function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/resource-allocation", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/resource-allocation", authenticate, requirePermission("ResourceAllocation", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const [allOpportunities, allResources, allUsers] = await Promise.all([
         storage.getAllOpportunities(),
@@ -2620,6 +2620,10 @@ export function registerRoutes(app: Express) {
       const result = await backupService.restoreBackup(backupBuffer, encryptionKey);
       
       if (result.success) {
+        const { ensureProductDeveloperRole, ensureResourceRole } = await import("./seed");
+        await ensureProductDeveloperRole();
+        await ensureResourceRole();
+
         await createAudit(req, "restore", "Database", null, null, { 
           recordsRestored: result.recordsRestored,
           warnings: result.errors,

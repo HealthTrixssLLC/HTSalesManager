@@ -111,7 +111,7 @@ export default function ResourceAllocationPage() {
   const [filterUser, setFilterUser] = useState<string>("all");
   const [filterStage, setFilterStage] = useState<string>("all");
 
-  const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
+  const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper" || r.name === "Resource") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
 
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);

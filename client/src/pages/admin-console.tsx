@@ -22,6 +22,25 @@ import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
 
 type UserWithRoles = User & { roles: Role[] };
 
+function getRoleBadgeClass(roleName?: string): string {
+  switch (roleName) {
+    case "Admin":
+      return "bg-orange-600 dark:bg-orange-700 text-white border-transparent";
+    case "SalesManager":
+      return "bg-blue-600 dark:bg-blue-700 text-white border-transparent";
+    case "SalesRep":
+      return "bg-amber-500 dark:bg-amber-600 text-white border-transparent";
+    case "ReadOnly":
+      return "bg-slate-500 dark:bg-slate-600 text-white border-transparent";
+    case "ProductDeveloper":
+      return "bg-violet-600 dark:bg-violet-700 text-white border-transparent";
+    case "Resource":
+      return "bg-teal-600 dark:bg-teal-700 text-white border-transparent";
+    default:
+      return "";
+  }
+}
+
 export default function AdminConsole() {
   const { toast } = useToast();
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
@@ -667,7 +686,7 @@ export default function AdminConsole() {
                               </SelectContent>
                             </Select>
                           ) : (
-                            <Badge variant="secondary">
+                            <Badge variant="secondary" className={getRoleBadgeClass(user.roles[0]?.name)}>
                               {user.roles[0]?.name || "No role"}
                             </Badge>
                           )}
