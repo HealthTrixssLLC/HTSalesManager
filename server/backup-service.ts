@@ -27,6 +27,13 @@ export interface BackupData {
     tags: any[];
     entityTags: any[];
     accountCategories: any[];
+    opportunityResources: any[];
+    activityAssociations: any[];
+    savedFilters: any[];
+    comments: any[];
+    commentReactions: any[];
+    commentAttachments: any[];
+    commentSubscriptions: any[];
   };
 }
 
@@ -168,6 +175,21 @@ export class BackupService {
       db.select().from(schema.auditLogs),
     ]);
 
+    // Batch 4: Resource allocations, associations, saved filters, and comments
+    const [opportunityResources, activityAssociations, savedFilters, comments] = await Promise.all([
+      db.select().from(schema.opportunityResources),
+      db.select().from(schema.activityAssociations),
+      db.select().from(schema.savedFilters),
+      db.select().from(schema.comments),
+    ]);
+
+    // Batch 5: Comment child tables
+    const [commentReactions, commentAttachments, commentSubscriptions] = await Promise.all([
+      db.select().from(schema.commentReactions),
+      db.select().from(schema.commentAttachments),
+      db.select().from(schema.commentSubscriptions),
+    ]);
+
     const backupData: BackupData = {
       version: this.BACKUP_VERSION,
       timestamp: new Date().toISOString(),
@@ -188,6 +210,13 @@ export class BackupService {
         tags,
         entityTags,
         accountCategories,
+        opportunityResources,
+        activityAssociations,
+        savedFilters,
+        comments,
+        commentReactions,
+        commentAttachments,
+        commentSubscriptions,
       },
     };
 
@@ -282,6 +311,12 @@ export class BackupService {
           await tx.delete(schema.auditLogs);
           // Entity tags reference tags and users
           await tx.delete(schema.entityTags);
+          // Opportunity resources reference opportunities and users
+          await tx.delete(schema.opportunityResources);
+          // Activity associations reference activities
+          await tx.delete(schema.activityAssociations);
+          // Saved filters reference users
+          await tx.delete(schema.savedFilters);
           // Activities reference accounts, contacts, leads, opportunities
           await tx.delete(schema.activities);
           // Backup jobs are independent
@@ -449,12 +484,72 @@ export class BackupService {
           throw new Error(`Failed to restore audit logs: ${error instanceof Error ? error.message : String(error)}`);
         }
 
+        // Restore activity associations (after activities)
+        try {
+          await this.batchInsert(tx, schema.activityAssociations, backupData.data.activityAssociations || [], "activity associations");
+          recordsRestored += (backupData.data.activityAssociations || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore activity associations: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore opportunity resources (after opportunities and users)
+        try {
+          await this.batchInsert(tx, schema.opportunityResources, backupData.data.opportunityResources || [], "opportunity resources");
+          recordsRestored += (backupData.data.opportunityResources || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore opportunity resources: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore saved filters (after users)
+        try {
+          await this.batchInsert(tx, schema.savedFilters, backupData.data.savedFilters || [], "saved filters");
+          recordsRestored += (backupData.data.savedFilters || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore saved filters: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
         // Restore entity tags (after all entities and tags are restored)
         try {
           await this.batchInsert(tx, schema.entityTags, backupData.data.entityTags || [], "entity tags");
           recordsRestored += (backupData.data.entityTags || []).length;
         } catch (error) {
           throw new Error(`Failed to restore entity tags: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore comments (after users and all entity tables)
+        // Sort by depth ASC to ensure parent comments are inserted before children (self-referential FK)
+        try {
+          const sortedComments = [...(backupData.data.comments || [])].sort(
+            (a: any, b: any) => (a.depth ?? 0) - (b.depth ?? 0)
+          );
+          await this.batchInsert(tx, schema.comments, sortedComments, "comments");
+          recordsRestored += sortedComments.length;
+        } catch (error) {
+          throw new Error(`Failed to restore comments: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore comment reactions (after comments and users)
+        try {
+          await this.batchInsert(tx, schema.commentReactions, backupData.data.commentReactions || [], "comment reactions");
+          recordsRestored += (backupData.data.commentReactions || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore comment reactions: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore comment attachments (after comments and users)
+        try {
+          await this.batchInsert(tx, schema.commentAttachments, backupData.data.commentAttachments || [], "comment attachments");
+          recordsRestored += (backupData.data.commentAttachments || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore comment attachments: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore comment subscriptions (after comments and users)
+        try {
+          await this.batchInsert(tx, schema.commentSubscriptions, backupData.data.commentSubscriptions || [], "comment subscriptions");
+          recordsRestored += (backupData.data.commentSubscriptions || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore comment subscriptions: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
 
