@@ -570,10 +570,10 @@ export type Opportunity = typeof opportunities.$inferSelect;
 
 // Activities
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true, updatedAt: true }).extend({
-  dueAt: z.string().nullable(),
-  completedAt: z.string().nullable(),
-  ownerId: z.string().nullable(),
-  notes: z.string().nullable(),
+  dueAt: z.string().nullish(),
+  completedAt: z.string().nullish(),
+  ownerId: z.string().nullish(),
+  notes: z.string().nullish(),
 });
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;

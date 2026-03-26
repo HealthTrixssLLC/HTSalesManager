@@ -442,6 +442,7 @@ function QuickAddActivity({ onSuccess, onCancel, context }: { onSuccess: (id: st
         subject, type, priority, status: "pending",
         dueAt: dueAt ? new Date(dueAt) : null,
         notes: notes || null,
+        ownerId: null,
         relatedType: relatedType || null,
         relatedId: relatedId || null,
       });
@@ -449,6 +450,18 @@ function QuickAddActivity({ onSuccess, onCancel, context }: { onSuccess: (id: st
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
+      if (context?.opportunityId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/opportunities", context.opportunityId, "related"] });
+      }
+      if (context?.contactId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/contacts", context.contactId, "related"] });
+      }
+      if (context?.leadId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/leads", context.leadId, "related"] });
+      }
+      if (context?.accountId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/accounts", context.accountId, "related"] });
+      }
       onSuccess(data.id);
     },
     onError: (error: Error) => {
