@@ -569,6 +569,10 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
   errorReason: text("error_reason"),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  currentPhase: text("current_phase"),
+  phaseLog: jsonb("phase_log").default([]),
+  errorPhase: text("error_phase"),
+  errorReason: text("error_reason"),
   createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -576,6 +580,30 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
   statusIdx: index("lg_runs_status_idx").on(table.status),
   ownerIdIdx: index("lg_runs_owner_id_idx").on(table.ownerId),
 }));
+
+export const agentStepLogs = pgTable("agent_step_logs", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  runId: varchar("run_id", { length: 50 }).notNull().references(() => leadGenerationRuns.id, { onDelete: "cascade" }),
+  phase: text("phase").notNull(),
+  stepName: text("step_name").notNull(),
+  promptSent: text("prompt_sent"),
+  responseReceived: text("response_received"),
+  modelUsed: text("model_used"),
+  providerUsed: text("provider_used"),
+  durationMs: integer("duration_ms"),
+  success: boolean("success").notNull().default(true),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  runIdIdx: index("agent_step_logs_run_id_idx").on(table.runId),
+  phaseIdx: index("agent_step_logs_phase_idx").on(table.phase),
+  createdAtIdx: index("agent_step_logs_created_at_idx").on(table.createdAt),
+}));
+
+export const insertAgentStepLogSchema = createInsertSchema(agentStepLogs).omit({ id: true, createdAt: true });
+export type InsertAgentStepLog = z.infer<typeof insertAgentStepLogSchema>;
+export type AgentStepLog = typeof agentStepLogs.$inferSelect;
 
 export const candidateAccounts = pgTable("candidate_accounts", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -592,6 +620,11 @@ export const candidateAccounts = pgTable("candidate_accounts", {
   strategicApproach: text("strategic_approach"),
   sourceAgentPhase: text("source_agent_phase"),
   linkedinUrl: text("linkedin_url"),
+  domain: text("domain"),
+  icpFitRationale: text("icp_fit_rationale"),
+  companyOverview: text("company_overview"),
+  strategicApproach: text("strategic_approach"),
+  sourceAgentPhase: text("source_agent_phase"),
   existingAccountId: varchar("existing_account_id", { length: 100 }).references(() => accounts.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -632,6 +665,7 @@ export const candidateLeads = pgTable("candidate_leads", {
   reviewNote: text("review_note"),
   reviewedBy: varchar("reviewed_by", { length: 50 }).references(() => users.id),
   reviewedAt: timestamp("reviewed_at"),
+  communicationPlan: jsonb("communication_plan"),
   createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1160,6 +1194,27 @@ export type InsertAgentStepLog = z.infer<typeof insertAgentStepLogSchema>;
 export type AgentStepLog = typeof agentStepLogs.$inferSelect;
 
 // AI Configs
+export const aiConfigs = pgTable("ai_configs", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  apiKeyEnvVar: text("api_key_env_var"),
+  baseUrl: text("base_url"),
+  temperature: decimal("temperature", { precision: 3, scale: 2 }).default("0.7"),
+  maxTokens: integer("max_tokens").default(4096),
+  agentPhase: text("agent_phase"),
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  metadata: jsonb("metadata").default({}),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  providerIdx: index("ai_configs_provider_idx").on(table.provider),
+  isDefaultIdx: index("ai_configs_is_default_idx").on(table.isDefault),
+  agentPhaseIdx: index("ai_configs_agent_phase_idx").on(table.agentPhase),
+}));
 export const insertAiConfigSchema = createInsertSchema(aiConfigs).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAiConfig = z.infer<typeof insertAiConfigSchema>;
 export type AiConfig = typeof aiConfigs.$inferSelect;

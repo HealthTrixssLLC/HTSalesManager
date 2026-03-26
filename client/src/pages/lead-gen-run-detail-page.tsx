@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2, RefreshCw, AlertCircle, CheckCircle, Circle } from "lucide-react";
+import {
+  Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2,
+  Download, ClipboardList, Users, Search, Lightbulb, MessageSquare, Building2,
+  RefreshCw, AlertCircle, CheckCircle, Circle
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { LeadGenerationRun, CandidateLead, TaskPlaybook } from "@shared/schema";
@@ -31,25 +36,37 @@ interface PhaseLogEntry {
   errorMessage?: string;
 }
 
-type RunDetail = Omit<LeadGenerationRun, "phaseLog"> & {
+interface RunDetail extends Omit<LeadGenerationRun, "phaseLog"> {
   candidates: EnrichedCandidate[];
   phaseLog?: PhaseLogEntry[] | null;
-};
+}
+
+interface AuditEvent {
+  id: string;
+  eventType: string;
+  entityType: string;
+  entityId: string | null;
+  runId: string | null;
+  details: Record<string, unknown>;
+  createdAt: string;
+  actorId: string | null;
+  actorName: string | null;
+}
 
 const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-600",
-  active: "bg-blue-100 text-blue-700",
-  reviewing: "bg-amber-100 text-amber-700",
-  complete: "bg-green-100 text-green-700",
-  archived: "bg-gray-200 text-gray-500",
-  error: "bg-red-100 text-red-700",
+  draft: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  active: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  reviewing: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  complete: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  archived: "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400",
+  error: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
 };
 
 const candidateStatusColors: Record<string, string> = {
-  pending_review: "bg-amber-100 text-amber-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
-  deferred: "bg-gray-100 text-gray-600",
+  pending_review: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+  approved: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+  rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+  deferred: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
 };
 
 const NEXT_STATUS_LABEL: Record<string, string> = {
@@ -70,6 +87,105 @@ const PIPELINE_PHASES = [
   { key: "communication_drafting", label: "Communication Drafting" },
 ];
 
+const AGENT_PHASES = [
+  { id: "market_research", label: "Market Research", icon: Search },
+  { id: "company_discovery", label: "Company Discovery", icon: Building2 },
+  { id: "contact_discovery", label: "Contact Discovery", icon: Users },
+  { id: "strategy", label: "Strategy", icon: Lightbulb },
+  { id: "communication_drafting", label: "Communication Drafting", icon: MessageSquare },
+];
+
+function getPhaseStatusFromRun(run: RunDetail, phaseId: string): "queued" | "running" | "complete" | "error" {
+  // Try to get status from phaseLog first (Task #17 approach)
+  const logEntry = run.phaseLog?.find(e => e.phase === phaseId);
+  if (logEntry) {
+    if (logEntry.status === "success") return "complete";
+    if (logEntry.status === "error") return "error";
+    if (logEntry.status === "running") return "running";
+    if (logEntry.status === "skipped") return "complete";
+  }
+
+  // Fallback to run status-based heuristic (Task #19 approach)
+  const phaseOrder = AGENT_PHASES.map(p => p.id);
+  const phaseIndex = phaseOrder.indexOf(phaseId);
+  const runStatus = run.status;
+
+  if (runStatus === "draft") return "queued";
+  if (runStatus === "active") {
+    // If we have currentPhase from backend, use it
+    if (run.currentPhase) {
+      const currentIndex = phaseOrder.indexOf(run.currentPhase);
+      if (phaseIndex < currentIndex) return "complete";
+      if (phaseIndex === currentIndex) return run.errorPhase === phaseId ? "error" : "running";
+      return "queued";
+    }
+    if (phaseIndex === 0) return "running";
+    return "queued";
+  }
+  if (runStatus === "reviewing" || runStatus === "complete" || runStatus === "archived") {
+    return "complete";
+  }
+  if (runStatus === "error") {
+    if (run.errorPhase === phaseId) return "error";
+    const errorIndex = phaseOrder.indexOf(run.errorPhase || "");
+    if (errorIndex !== -1 && phaseIndex < errorIndex) return "complete";
+  }
+  return "queued";
+}
+
+const phaseStatusStyles: Record<string, { chip: string; dot: string }> = {
+  queued: { chip: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400", dot: "bg-gray-300 dark:bg-gray-600" },
+  running: { chip: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 animate-pulse", dot: "bg-blue-500" },
+  complete: { chip: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300", dot: "bg-green-500" },
+  error: { chip: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300", dot: "bg-red-500" },
+};
+
+function formatEventType(eventType: string): string {
+  return eventType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function getEventDescription(event: AuditEvent): string {
+  const details = event.details ?? {};
+  switch (event.eventType) {
+    case "run_created": return "Run created";
+    case "run_started": return `Run started — ${(details.candidatesGenerated as number) ?? 0} candidates generated`;
+    case "run_status_reviewing": return "Run moved to reviewing";
+    case "run_status_complete": return "Run marked complete";
+    case "run_updated": return "Run settings updated";
+    case "candidate_staged": return "Candidate staged";
+    case "candidate_approved": return `Candidate approved${(details.crmLeadId as string) ? ` → CRM Lead ${details.crmLeadId}` : ""}`;
+    case "candidate_rejected": return `Candidate rejected${(details.note as string) ? `: ${details.note}` : ""}`;
+    case "candidate_deferred": return `Candidate deferred${(details.note as string) ? `: ${details.note}` : ""}`;
+    case "candidate_edited": return "Candidate details edited";
+    case "candidate_account_staged": return "Company candidate staged";
+    case "candidate_contact_staged": return "Contact candidate staged";
+    default: return formatEventType(event.eventType);
+  }
+}
+
+function exportAuditLogCSV(events: AuditEvent[], runName: string) {
+  const header = ["Timestamp", "Event Type", "Actor", "Entity Type", "Entity ID", "Description"];
+  const rows = events.map(e => [
+    new Date(e.createdAt).toISOString(),
+    e.eventType,
+    e.actorName ?? e.actorId ?? "System",
+    e.entityType,
+    e.entityId ?? "",
+    getEventDescription(e),
+  ]);
+
+  const csvContent = [header, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `audit-log-${runName.replace(/\s+/g, "-").toLowerCase()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 export default function LeadGenRunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -112,6 +228,17 @@ export default function LeadGenRunDetailPage() {
     queryKey: ["/api/lead-gen/playbooks"],
   });
 
+  const { data: auditEvents = [], isLoading: auditLoading } = useQuery<AuditEvent[]>({
+    queryKey: ["/api/lead-gen/runs", id, "audit-events"],
+    queryFn: async () => {
+      const res = await fetch(`/api/lead-gen/runs/${id}/audit-events`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load audit events");
+      return res.json();
+    },
+    enabled: !!id,
+    refetchInterval: run?.status === "active" ? 10000 : false,
+  });
+
   const startRunMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/lead-gen/runs/${id}/start`, {});
@@ -120,6 +247,7 @@ export default function LeadGenRunDetailPage() {
     onSuccess: (data: { candidatesGenerated?: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
       const count = data.candidatesGenerated ?? 0;
       toast({
         title: "Run started!",
@@ -139,9 +267,23 @@ export default function LeadGenRunDetailPage() {
     onSuccess: (data: LeadGenerationRun) => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
       toast({ title: `Run moved to ${data.status}` });
     },
     onError: (err: Error) => toast({ title: "Failed to advance run status", description: err.message, variant: "destructive" }),
+  });
+
+  const retryPhaseMutation = useMutation({
+    mutationFn: async (phase: string) => {
+      const res = await apiRequest("POST", `/api/lead-gen/runs/${id}/retry-phase`, { startFromPhase: phase });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
+      toast({ title: "Pipeline retrying", description: "The AI pipeline is running again from the failed phase." });
+    },
+    onError: (err: Error) => toast({ title: "Retry failed", description: err.message, variant: "destructive" }),
   });
 
   const addCandidateMutation = useMutation({
@@ -191,6 +333,7 @@ export default function LeadGenRunDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
       toast({ title: "Candidate staged" });
       setIsCandidateDialogOpen(false);
       setCandidateForm({
@@ -237,6 +380,7 @@ export default function LeadGenRunDetailPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/lead-gen/runs")} data-testid="button-back-runs">
           <ArrowLeft className="h-4 w-4" />
@@ -248,6 +392,19 @@ export default function LeadGenRunDetailPage() {
         <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${statusColors[run.status] || ""}`} data-testid="badge-run-status">
           {run.status}
         </span>
+        {run.errorPhase && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => retryPhaseMutation.mutate(run.errorPhase!)}
+            disabled={retryPhaseMutation.isPending}
+            className="ml-2 border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
+            data-testid="button-retry-phase-header"
+          >
+            {retryPhaseMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : <RefreshCw className="h-3 w-3 mr-1.5" />}
+            Retry from {AGENT_PHASES.find(p => p.id === run.errorPhase)?.label || run.errorPhase}
+          </Button>
+        )}
         {run.status === "draft" && (
           <Button onClick={() => startRunMutation.mutate()} disabled={startRunMutation.isPending} data-testid="button-start-run">
             {startRunMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Play className="h-4 w-4 mr-2" />}
@@ -285,6 +442,91 @@ export default function LeadGenRunDetailPage() {
           </span>
         )}
       </div>
+
+      {/* Error Alert */}
+      {run.errorPhase && run.errorReason && (
+        <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 text-destructive border border-destructive/20" data-testid="run-error-alert">
+          <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="font-semibold text-sm">Pipeline Error</h3>
+            <p className="text-sm opacity-90">
+              Failed at <span className="font-medium">{AGENT_PHASES.find(p => p.id === run.errorPhase)?.label || run.errorPhase}</span>: {run.errorReason}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Phase Timeline */}
+      <Card data-testid="run-phase-timeline">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Agent Phase Timeline
+          </CardTitle>
+          {run.errorPhase && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => retryPhaseMutation.mutate(run.errorPhase!)}
+              disabled={retryPhaseMutation.isPending}
+              className="h-7 text-[10px] uppercase tracking-wider font-bold"
+              data-testid="button-retry-phase-timeline"
+            >
+              {retryPhaseMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+              Retry
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start gap-0 overflow-x-auto pb-1">
+            {AGENT_PHASES.map((phase, idx) => {
+              const phaseStatus = getPhaseStatusFromRun(run, phase.id);
+              const styles = phaseStatusStyles[phaseStatus];
+              const logEntry = run.phaseLog?.find(e => e.phase === phase.id);
+              const isLast = idx === AGENT_PHASES.length - 1;
+              
+              let Icon = phase.icon;
+              if (phaseStatus === "complete") Icon = CheckCircle;
+              if (phaseStatus === "error") Icon = AlertCircle;
+              if (phaseStatus === "running") Icon = Loader2;
+
+              return (
+                <div key={phase.id} className="flex items-center" data-testid={`phase-${phase.id}`}>
+                  <div className="flex flex-col items-center gap-1 min-w-[120px]">
+                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors ${styles.chip} ${
+                      phaseStatus === "running" ? "border-blue-200 dark:border-blue-800" : 
+                      phaseStatus === "error" ? "border-red-200 dark:border-red-800" :
+                      phaseStatus === "complete" ? "border-green-200 dark:border-green-800" :
+                      "border-transparent"
+                    }`}>
+                      <Icon className={`h-3 w-3 shrink-0 ${phaseStatus === "running" ? "animate-spin" : ""}`} />
+                      <span className="whitespace-nowrap">{phase.label}</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className={`text-[10px] uppercase font-bold tracking-tight ${
+                        phaseStatus === "complete" ? "text-green-600 dark:text-green-400" :
+                        phaseStatus === "running" ? "text-blue-600 dark:text-blue-400" :
+                        phaseStatus === "error" ? "text-red-600 dark:text-red-400" :
+                        "text-muted-foreground"
+                      }`}>
+                        {phaseStatus}
+                      </span>
+                      {logEntry?.durationMs && (
+                        <span className="text-[9px] text-muted-foreground opacity-70">
+                          {(logEntry.durationMs / 1000).toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {!isLast && (
+                    <div className="h-px w-6 bg-border shrink-0 mx-1 mt-[-20px]" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* AI Pipeline Phase Status */}
       {(run.status === "active" || run.status === "error" || run.currentPhase || run.errorPhase) && (
@@ -363,64 +605,155 @@ export default function LeadGenRunDetailPage() {
         ))}
       </div>
 
-      {/* Candidates */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">Candidates</h2>
-        <Button onClick={() => setIsCandidateDialogOpen(true)} disabled={run.status === "complete" || run.status === "archived"} data-testid="button-add-candidate">
-          <Plus className="h-4 w-4 mr-2" />
-          Stage Candidate
-        </Button>
-      </div>
+      {/* Tabs: Candidates + Audit Log */}
+      <Tabs defaultValue="candidates" data-testid="run-detail-tabs">
+        <TabsList>
+          <TabsTrigger value="candidates" data-testid="tab-candidates">Candidates</TabsTrigger>
+          <TabsTrigger value="audit" data-testid="tab-audit-log">Audit Log</TabsTrigger>
+        </TabsList>
 
-      {(!run.candidates || run.candidates.length === 0) ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            No candidates staged yet. Use the button above to add candidates to this run.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Company</th>
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Contact</th>
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Title</th>
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Tier</th>
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
-                <th className="py-3 px-4" />
-              </tr>
-            </thead>
-            <tbody>
-              {run.candidates.map(c => (
-                <tr
-                  key={c.id}
-                  className="border-b hover-elevate cursor-pointer"
-                  onClick={() => setLocation(`/lead-gen/candidates/${c.id}`)}
-                  data-testid={`row-candidate-${c.id}`}
-                >
-                  <td className="py-3 px-4 font-medium">{c.accountName || c.id.slice(0, 8)}</td>
-                  <td className="py-3 px-4">{c.contactName || "—"}</td>
-                  <td className="py-3 px-4 text-muted-foreground">{c.contactTitle || "—"}</td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${candidateStatusColors[c.status] || ""}`}>
-                      {c.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">{c.tier ? c.tier.replace("_", " ") : "—"}</td>
-                  <td className="py-3 px-4 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString()}</td>
-                  <td className="py-3 px-4">
-                    <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setLocation(`/lead-gen/candidates/${c.id}`); }} data-testid={`button-review-${c.id}`}>
-                      Review
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        {/* Candidates Tab */}
+        <TabsContent value="candidates" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-medium">Candidates ({run.candidates?.length ?? 0})</h2>
+            <Button onClick={() => setIsCandidateDialogOpen(true)} disabled={run.status === "complete" || run.status === "archived"} data-testid="button-add-candidate">
+              <Plus className="h-4 w-4 mr-2" />
+              Stage Candidate
+            </Button>
+          </div>
+
+          {(!run.candidates || run.candidates.length === 0) ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No candidates staged yet. Use the button above to add candidates to this run.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Company</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Contact</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Title</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Tier</th>
+                    <th className="text-left py-3 px-4 font-medium text-muted-foreground">Created</th>
+                    <th className="py-3 px-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.candidates.map(c => (
+                    <tr
+                      key={c.id}
+                      className="border-b hover-elevate cursor-pointer"
+                      onClick={() => setLocation(`/lead-gen/candidates/${c.id}`)}
+                      data-testid={`row-candidate-${c.id}`}
+                    >
+                      <td className="py-3 px-4 font-medium">{c.accountName || c.id.slice(0, 8)}</td>
+                      <td className="py-3 px-4">{c.contactName || "—"}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{c.contactTitle || "—"}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${candidateStatusColors[c.status] || ""}`}>
+                          {c.status.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">{c.tier ? c.tier.replace("_", " ") : "—"}</td>
+                      <td className="py-3 px-4 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString()}</td>
+                      <td className="py-3 px-4">
+                        <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setLocation(`/lead-gen/candidates/${c.id}`); }} data-testid={`button-review-${c.id}`}>
+                          Review
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Audit Log Tab */}
+        <TabsContent value="audit" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-medium">Audit Log ({auditEvents.length} events)</h2>
+            {auditEvents.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => exportAuditLogCSV(auditEvents, run.name)}
+                data-testid="button-export-audit-csv"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
+          </div>
+
+          {auditLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : auditEvents.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No audit events recorded for this run yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card data-testid="audit-log-events">
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {auditEvents.map((event, idx) => (
+                    <div
+                      key={event.id}
+                      className="flex items-start gap-4 px-4 py-3"
+                      data-testid={`audit-event-${event.id}`}
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                          event.eventType.includes("approved") ? "bg-green-500" :
+                          event.eventType.includes("rejected") ? "bg-red-500" :
+                          event.eventType.includes("started") ? "bg-blue-500" :
+                          event.eventType.includes("complete") ? "bg-green-600" :
+                          event.eventType.includes("deferred") ? "bg-amber-500" :
+                          "bg-muted-foreground/50"
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium">{getEventDescription(event)}</span>
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {event.entityType}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                          <span>{new Date(event.createdAt).toLocaleString()}</span>
+                          {event.actorName && (
+                            <>
+                              <span>&bull;</span>
+                              <span>by {event.actorName}</span>
+                            </>
+                          )}
+                          {!event.actorName && !event.actorId && (
+                            <>
+                              <span>&bull;</span>
+                              <span>System</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        #{auditEvents.length - idx}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Stage Candidate Dialog */}
       <Dialog open={isCandidateDialogOpen} onOpenChange={setIsCandidateDialogOpen}>

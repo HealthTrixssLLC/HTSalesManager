@@ -90,7 +90,6 @@ async function createAuditLog(
 
 export function registerLeadGenRoutes(app: Express) {
 
-  // ========== ICP PROFILES ==========
 
   app.get("/api/lead-gen/icps", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -172,7 +171,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== ICP PROFILE VERSIONS ==========
 
   app.get("/api/lead-gen/icps/:id/versions", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -208,7 +206,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== OFFERS ==========
 
   app.get("/api/lead-gen/icps/:id/offers", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -265,7 +262,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== TASK PLAYBOOKS ==========
 
   app.get("/api/lead-gen/playbooks", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -339,7 +335,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== PLAYBOOK STEPS ==========
 
   app.post("/api/lead-gen/playbooks/:id/steps", authenticate, requireRole("Admin", "SalesManager"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -387,7 +382,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== RUNS ==========
 
   app.get("/api/lead-gen/runs", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -581,7 +575,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== CANDIDATE ACCOUNTS ==========
 
   app.post("/api/lead-gen/runs/:runId/candidate-accounts", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -606,7 +599,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== CANDIDATE CONTACTS ==========
 
   app.post("/api/lead-gen/runs/:runId/candidate-contacts", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -621,7 +613,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== CANDIDATE LEADS ==========
 
   app.post("/api/lead-gen/runs/:runId/candidates", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -640,7 +631,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== CANDIDATE SCORES ==========
 
   app.post("/api/lead-gen/candidates/:id/scores", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -655,7 +645,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== EVIDENCE SOURCES ==========
 
   app.post("/api/lead-gen/candidates/:id/evidence", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -670,7 +659,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== REVIEW QUEUE (candidates list across runs) ==========
 
   app.get("/api/lead-gen/candidates", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -815,7 +803,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== REVIEW DECISIONS ==========
 
   async function approveCandidate(candidateId: string, actorId: string, note: string | undefined, req: { ip?: string; headers?: Record<string, string | string[] | undefined> }) {
     // Pre-flight reads (outside transaction for performance)
@@ -1142,7 +1129,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== DASHBOARD STATS ==========
 
   app.get("/api/lead-gen/dashboard", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -1175,7 +1161,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== REPORTING ==========
 
   app.get("/api/lead-gen/reports", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -1308,7 +1293,6 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  // ========== LG AUDIT EVENTS ==========
 
   app.get("/api/lead-gen/audit-events", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -1320,6 +1304,260 @@ export function registerLeadGenRoutes(app: Express) {
       return res.json(events);
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch audit events" });
+    }
+  });
+
+
+  app.get("/api/lead-gen/runs/:id/agent-logs", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const logs = await db.select().from(schema.agentStepLogs)
+        .where(eq(schema.agentStepLogs.runId, req.params.id))
+        .orderBy(desc(schema.agentStepLogs.createdAt))
+        .limit(500);
+      return res.json(logs);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch agent step logs" });
+    }
+  });
+
+
+  app.get("/api/lead-gen/ai-configs", authenticate, requireRole("Admin", "SalesManager"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const configs = await db.select({
+        id: schema.aiConfigs.id,
+        name: schema.aiConfigs.name,
+        provider: schema.aiConfigs.provider,
+        model: schema.aiConfigs.model,
+        apiKeyEnvVar: schema.aiConfigs.apiKeyEnvVar,
+        baseUrl: schema.aiConfigs.baseUrl,
+        temperature: schema.aiConfigs.temperature,
+        maxTokens: schema.aiConfigs.maxTokens,
+        agentPhase: schema.aiConfigs.agentPhase,
+        isDefault: schema.aiConfigs.isDefault,
+        isActive: schema.aiConfigs.isActive,
+        createdAt: schema.aiConfigs.createdAt,
+        updatedAt: schema.aiConfigs.updatedAt,
+      }).from(schema.aiConfigs).orderBy(desc(schema.aiConfigs.createdAt));
+      return res.json(configs);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch AI configs" });
+    }
+  });
+
+  app.post("/api/lead-gen/ai-configs", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const data = insertAiConfigSchema.parse({ ...req.body, createdBy: req.user?.id });
+      if (data.isDefault) {
+        await db.update(schema.aiConfigs).set({ isDefault: false, updatedAt: new Date() });
+      }
+      const result = await db.insert(schema.aiConfigs).values(data).returning();
+      await createLgAudit(req.user?.id, "ai_config_created", "AiConfig", result[0].id, null, { name: result[0].name, provider: result[0].provider, model: result[0].model });
+      return res.json(result[0]);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: "Validation failed", details: err.errors });
+      return res.status(500).json({ error: "Failed to create AI config" });
+    }
+  });
+
+  const aiConfigPatchSchema = z.object({
+    name: z.string().min(1).optional(),
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    apiKeyEnvVar: z.string().optional().nullable(),
+    baseUrl: z.string().optional().nullable(),
+    temperature: z.string().optional().nullable(),
+    maxTokens: z.number().int().optional().nullable(),
+    agentPhase: z.string().optional().nullable(),
+    isDefault: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    metadata: z.record(z.unknown()).optional().nullable(),
+  });
+
+  app.patch("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = aiConfigPatchSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
+      if (parsed.data.isDefault) {
+        await db.update(schema.aiConfigs).set({ isDefault: false, updatedAt: new Date() });
+      }
+      const result = await db.update(schema.aiConfigs)
+        .set({ ...parsed.data, updatedAt: new Date() })
+        .where(eq(schema.aiConfigs.id, req.params.id))
+        .returning();
+      if (!result[0]) return res.status(404).json({ error: "AI config not found" });
+      await createLgAudit(req.user?.id, "ai_config_updated", "AiConfig", req.params.id, null, parsed.data as Record<string, unknown>);
+      return res.json(result[0]);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to update AI config" });
+    }
+  });
+
+  app.delete("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      await db.delete(schema.aiConfigs).where(eq(schema.aiConfigs.id, req.params.id));
+      await createLgAudit(req.user?.id, "ai_config_deleted", "AiConfig", req.params.id, null, {});
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to delete AI config" });
+  // Run-specific audit events (with optional actor info)
+  app.get("/api/lead-gen/runs/:id/audit-events", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const events = await db.select({
+        id: schema.lgAuditEvents.id,
+        eventType: schema.lgAuditEvents.eventType,
+        entityType: schema.lgAuditEvents.entityType,
+        entityId: schema.lgAuditEvents.entityId,
+        runId: schema.lgAuditEvents.runId,
+        details: schema.lgAuditEvents.details,
+        createdAt: schema.lgAuditEvents.createdAt,
+        actorId: schema.lgAuditEvents.actorId,
+        actorName: schema.users.name,
+      })
+        .from(schema.lgAuditEvents)
+        .leftJoin(schema.users, eq(schema.lgAuditEvents.actorId, schema.users.id))
+        .where(eq(schema.lgAuditEvents.runId, req.params.id))
+        .orderBy(schema.lgAuditEvents.createdAt)
+        .limit(500);
+      return res.json(events);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch run audit events" });
+    }
+  });
+
+  // Per-run summary metrics for reports page (includes avg ICP fit score, time-to-first-promotion)
+  app.get("/api/lead-gen/reports/run-cards", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const runs = await db.select().from(schema.leadGenerationRuns).orderBy(desc(schema.leadGenerationRuns.createdAt)).limit(50);
+
+      const runCards = await Promise.all(runs.map(async (run) => {
+        // Get candidates for this run with scores
+        const candidates = await db.select({
+          id: schema.candidateLeads.id,
+          status: schema.candidateLeads.status,
+          reviewedAt: schema.candidateLeads.reviewedAt,
+          createdAt: schema.candidateLeads.createdAt,
+        }).from(schema.candidateLeads).where(eq(schema.candidateLeads.runId, run.id));
+
+        const candidateIds = candidates.map(c => c.id);
+        let avgIcpFitScore: number | null = null;
+
+        if (candidateIds.length > 0) {
+          const scores = await db.select({
+            candidateLeadId: schema.candidateScores.candidateLeadId,
+            totalScore: schema.candidateScores.totalScore,
+            maxScore: schema.candidateScores.maxScore,
+          }).from(schema.candidateScores)
+            .where(inArray(schema.candidateScores.candidateLeadId, candidateIds));
+
+          if (scores.length > 0) {
+            const normalized = scores.map(s => s.maxScore > 0 ? (s.totalScore / s.maxScore) * 100 : 0);
+            avgIcpFitScore = Math.round(normalized.reduce((a, b) => a + b, 0) / normalized.length);
+          }
+        }
+
+        // Time to first promotion: startedAt → first approved reviewedAt
+        let timeToFirstPromotion: number | null = null;
+        if (run.startedAt) {
+          const firstApproved = candidates
+            .filter(c => c.status === "approved" && c.reviewedAt)
+            .sort((a, b) => new Date(a.reviewedAt!).getTime() - new Date(b.reviewedAt!).getTime())[0];
+          if (firstApproved?.reviewedAt) {
+            const diffMs = new Date(firstApproved.reviewedAt).getTime() - new Date(run.startedAt).getTime();
+            timeToFirstPromotion = Math.max(0, Math.round(diffMs / (1000 * 60))); // minutes
+          }
+        }
+
+        const approved = candidates.filter(c => c.status === "approved").length;
+        const rejected = candidates.filter(c => c.status === "rejected").length;
+        const deferred = candidates.filter(c => c.status === "deferred").length;
+        const total = candidates.length;
+        const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+
+        return {
+          runId: run.id,
+          runName: run.name,
+          status: run.status,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt,
+          createdAt: run.createdAt,
+          totalCandidates: total,
+          approved,
+          rejected,
+          deferred,
+          approvalRate,
+          avgIcpFitScore,
+          timeToFirstPromotion,
+        };
+      }));
+
+      return res.json(runCards);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to fetch run cards" });
+    }
+  });
+
+  // Inline duplicate check for a candidate - checks against CRM accounts, contacts, leads
+  app.get("/api/lead-gen/candidates/:id/duplicate-check", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const candidate = await db.select().from(schema.candidateLeads).where(eq(schema.candidateLeads.id, req.params.id)).limit(1);
+      if (!candidate[0]) return res.status(404).json({ error: "Candidate not found" });
+
+      const matches: Array<{ type: string; id: string; name: string; matchedOn: string }> = [];
+
+      let account: schema.CandidateAccount | null = null;
+      let contact: schema.CandidateContact | null = null;
+
+      if (candidate[0].candidateAccountId) {
+        const acctRows = await db.select().from(schema.candidateAccounts).where(eq(schema.candidateAccounts.id, candidate[0].candidateAccountId!)).limit(1);
+        account = acctRows[0] || null;
+      }
+      if (candidate[0].candidateContactId) {
+        const contRows = await db.select().from(schema.candidateContacts).where(eq(schema.candidateContacts.id, candidate[0].candidateContactId!)).limit(1);
+        contact = contRows[0] || null;
+      }
+
+      // Check by email
+      if (contact?.email) {
+        const emailMatchLeads = await db.select({ id: schema.leads.id, firstName: schema.leads.firstName, lastName: schema.leads.lastName }).from(schema.leads).where(eq(schema.leads.email, contact.email)).limit(3);
+        for (const l of emailMatchLeads) {
+          matches.push({ type: "Lead", id: l.id, name: `${l.firstName} ${l.lastName}`, matchedOn: "email" });
+        }
+        const emailMatchContacts = await db.select({ id: schema.contacts.id, firstName: schema.contacts.firstName, lastName: schema.contacts.lastName }).from(schema.contacts).where(eq(schema.contacts.email, contact.email)).limit(3);
+        for (const c of emailMatchContacts) {
+          matches.push({ type: "Contact", id: c.id, name: `${c.firstName} ${c.lastName}`, matchedOn: "email" });
+        }
+      }
+
+      // Check by company name
+      if (account?.name && matches.length === 0) {
+        const nameMatchAccounts = await db.select({ id: schema.accounts.id, name: schema.accounts.name }).from(schema.accounts)
+          .where(sql`lower(${schema.accounts.name}) = lower(${account.name})`).limit(3);
+        for (const a of nameMatchAccounts) {
+          matches.push({ type: "Account", id: a.id, name: a.name, matchedOn: "name" });
+        }
+      }
+
+      // Check by domain
+      if (account?.website && matches.length === 0) {
+        const domain = account.website.replace(/^https?:\/\//i, "").replace(/^www\./i, "").split("/")[0].toLowerCase();
+        if (domain) {
+          const domainMatchAccounts = await db.select({ id: schema.accounts.id, name: schema.accounts.name, website: schema.accounts.website }).from(schema.accounts)
+            .where(sql`lower(${schema.accounts.website}) like ${"%" + domain + "%"}`).limit(3);
+          for (const a of domainMatchAccounts) {
+            matches.push({ type: "Account", id: a.id, name: a.name, matchedOn: "domain" });
+          }
+        }
+      }
+
+      return res.json({
+        candidateId: req.params.id,
+        duplicateClass: candidate[0].duplicateClass,
+        matches: matches.slice(0, 5),
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to check duplicates" });
     }
   });
 
