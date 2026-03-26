@@ -5269,28 +5269,24 @@ export async function registerRoutes(app: Express) {
           if (!config.baseUrl) {
             testResult = { success: false, latencyMs: 0, error: "Azure OpenAI requires an Endpoint URL — enter it in the Base URL / Endpoint field above." };
           } else {
+            // Use the deployments list endpoint — model-agnostic, avoids max_tokens vs
+            // max_completion_tokens incompatibility on o-series models (o3-mini, o1, etc.)
             const azureBaseUrl = config.baseUrl.replace(/\/+$/, "");
-            const apiVersion = config.apiVersion || "2024-12-01-preview";
-            const endpoint = `${azureBaseUrl}/openai/deployments/${config.modelName}/chat/completions?api-version=${apiVersion}`;
-            const response = await fetch(endpoint, {
-              method: "POST",
+            const apiVersion = config.apiVersion || "2025-03-01-preview";
+            const modelsEndpoint = `${azureBaseUrl}/openai/deployments?api-version=${apiVersion}`;
+            const response = await fetch(modelsEndpoint, {
+              method: "GET",
               headers: {
-                "Content-Type": "application/json",
                 "api-key": plainApiKey,
               },
-              body: JSON.stringify({
-                max_tokens: 5,
-                messages: [{ role: "user", content: "ping" }],
-              }),
               signal: AbortSignal.timeout(15000),
             });
             const latencyMs = Date.now() - startTime;
             if (response.ok) {
-              const data = await response.json() as { model?: string };
-              testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
+              testResult = { success: true, latencyMs, model: config.modelName };
             } else {
               const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
-              testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "check endpoint URL, deployment name, and key in Azure portal → Cognitive Services") };
+              testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "check endpoint URL and API key in Azure portal → Cognitive Services → Keys and Endpoint") };
             }
           }
         } else {
