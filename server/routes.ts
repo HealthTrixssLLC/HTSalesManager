@@ -5204,8 +5204,19 @@ export async function registerRoutes(app: Express) {
     try {
       const config = await storage.getLlmConfiguration();
       if (!config || !config.encryptedApiKey) {
-        // No API key configured — simulation mode is active; report success
-        return res.json({ success: true, latencyMs: 1, model: "demo-v1 (simulation mode)", simulated: true });
+        return res.status(400).json({
+          success: false,
+          error: [
+            "No API key configured.",
+            "To fix: select a provider, enter your API key, and click Save Configuration.",
+            "",
+            "Where to get a key:",
+            "  • OpenAI → platform.openai.com/api-keys",
+            "  • Anthropic → console.anthropic.com",
+            "  • Google AI → aistudio.google.com/app/apikey",
+            "  • Azure OpenAI → your Azure portal (Cognitive Services → Keys and Endpoint)",
+          ].join("\n"),
+        });
       }
 
       // Decrypt the stored API key (handles both encrypted keys and legacy plaintext)
@@ -5218,6 +5229,16 @@ export async function registerRoutes(app: Express) {
       }
       const startTime = Date.now();
       let testResult: LlmTestResult;
+
+      function describeTestError(status: number, body: OpenAiResponseBody, providerHint: string): string {
+        const detail = body?.error?.message ?? "";
+        if (status === 401) return `Invalid API key — ${providerHint}. ${detail}`.trim();
+        if (status === 403) return `Access denied (403) — your account may lack permission for this model. ${detail}`.trim();
+        if (status === 429) return `Rate limit exceeded (429) — add billing credits or wait before retrying. ${detail}`.trim();
+        if (status === 404) return `Model or endpoint not found (404) — check the model name is correct. ${detail}`.trim();
+        if (status >= 500) return `Server error (${status}) — this is typically temporary, try again shortly. ${detail}`.trim();
+        return `HTTP ${status}${detail ? ": " + detail : ""}`;
+      }
 
       try {
         if (config.provider === "anthropic") {
@@ -5242,11 +5263,11 @@ export async function registerRoutes(app: Express) {
             testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
           } else {
             const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
-            testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+            testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "verify at console.anthropic.com") };
           }
         } else if (config.provider === "azure") {
           if (!config.baseUrl) {
-            testResult = { success: false, latencyMs: 0, error: "Azure OpenAI requires an Endpoint URL" };
+            testResult = { success: false, latencyMs: 0, error: "Azure OpenAI requires an Endpoint URL — enter it in the Base URL / Endpoint field above." };
           } else {
             const azureBaseUrl = config.baseUrl.replace(/\/+$/, "");
             const apiVersion = config.apiVersion || "2024-12-01-preview";
@@ -5269,7 +5290,7 @@ export async function registerRoutes(app: Express) {
               testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
             } else {
               const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
-              testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+              testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "check endpoint URL, deployment name, and key in Azure portal → Cognitive Services") };
             }
           }
         } else {
@@ -5295,13 +5316,20 @@ export async function registerRoutes(app: Express) {
             testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
           } else {
             const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
-            testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+            testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "verify at platform.openai.com/api-keys") };
           }
         }
       } catch (fetchError: unknown) {
         const latencyMs = Date.now() - startTime;
-        const message = fetchError instanceof Error ? fetchError.message : "Connection failed";
-        testResult = { success: false, latencyMs, error: message };
+        const msg = fetchError instanceof Error ? fetchError.message : "Connection failed";
+        const isTimeout = msg.includes("timeout") || msg.includes("abort");
+        testResult = {
+          success: false,
+          latencyMs,
+          error: isTimeout
+            ? "Request timed out after 15 seconds — check your network connection and that the provider endpoint is reachable."
+            : `Connection failed: ${msg}`,
+        };
       }
 
       return res.json(testResult);

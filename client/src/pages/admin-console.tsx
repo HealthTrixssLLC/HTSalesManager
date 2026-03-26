@@ -96,7 +96,7 @@ function AiConfigTab() {
   const [enabledAgents, setEnabledAgents] = useState<string[]>(AGENT_KEYS);
   const [agentModelOverrides, setAgentModelOverrides] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; latencyMs: number; model?: string; error?: string; simulated?: boolean } | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; latencyMs: number; model?: string; error?: string } | null>(null);
 
   const { data: config, isLoading } = useQuery<LlmConfigData | null>({
     queryKey: ["/api/admin/llm-config"],
@@ -412,8 +412,14 @@ function AiConfigTab() {
             <Button
               variant="outline"
               onClick={() => testMutation.mutate()}
-              disabled={testMutation.isPending || !!apiKeyInput.trim()}
-              title={apiKeyInput.trim() ? "Save your configuration first before testing" : "Test the current AI configuration"}
+              disabled={testMutation.isPending || !config?.hasApiKey || !!apiKeyInput.trim()}
+              title={
+                apiKeyInput.trim()
+                  ? "Save your configuration first before testing"
+                  : !config?.hasApiKey
+                  ? "Enter and save an API key before testing"
+                  : "Test the saved API key connection"
+              }
               data-testid="button-test-llm-connection"
             >
               <Zap className="h-4 w-4 mr-2" />
@@ -424,16 +430,20 @@ function AiConfigTab() {
                 Save configuration first to test the new API key.
               </p>
             )}
+            {!config?.hasApiKey && !apiKeyInput.trim() && (
+              <p className="text-xs text-muted-foreground" data-testid="text-test-no-key">
+                No API key saved yet — enter a key above and save to enable testing.
+              </p>
+            )}
             {testResult && (
-              <div className={`flex items-center gap-2 text-sm rounded-md px-3 py-1.5 ${testResult.success ? (testResult.simulated ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400" : "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400") : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"}`} data-testid="text-test-result">
+              <div
+                className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 ${testResult.success ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400" : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"}`}
+                data-testid="text-test-result"
+              >
                 {testResult.success ? (
-                  testResult.simulated ? (
-                    <><Check className="h-4 w-4" /> Simulation mode active — no API key configured. Runs will use demo data.</>
-                  ) : (
-                    <><Check className="h-4 w-4" /> Connected — {testResult.latencyMs}ms — {testResult.model}</>
-                  )
+                  <><Check className="h-4 w-4 mt-0.5 shrink-0" /> Connected — {testResult.latencyMs}ms — {testResult.model}</>
                 ) : (
-                  <><X className="h-4 w-4" /> Failed: {testResult.error}</>
+                  <><X className="h-4 w-4 mt-0.5 shrink-0" /><pre className="whitespace-pre-wrap font-sans text-sm">{testResult.error}</pre></>
                 )}
               </div>
             )}

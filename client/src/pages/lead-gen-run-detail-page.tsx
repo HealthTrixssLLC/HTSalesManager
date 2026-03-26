@@ -435,11 +435,12 @@ export default function LeadGenRunDetailPage() {
       {run.errorPhase && run.errorReason && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 text-destructive border border-destructive/20" data-testid="run-error-alert">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-sm">Pipeline Error</h3>
-            <p className="text-sm opacity-90">
-              Failed at <span className="font-medium">{AGENT_PHASES.find(p => p.id === run.errorPhase)?.label || run.errorPhase}</span>: {run.errorReason}
-            </p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm mb-1">
+              Pipeline Error — failed at{" "}
+              <span className="font-medium">{AGENT_PHASES.find(p => p.id === run.errorPhase)?.label || run.errorPhase}</span>
+            </h3>
+            <pre className="whitespace-pre-wrap font-sans text-sm opacity-90 leading-relaxed">{run.errorReason}</pre>
           </div>
         </div>
       )}
