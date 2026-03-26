@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus } from "lucide-react";
+import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,8 @@ interface CandidateDetail {
   verificationStatus: string;
   reviewNote: string | null;
   runId: string;
+  candidateAccountId: string | null;
+  candidateContactId: string | null;
   assignedPlaybookId: string | null;
   account: CandidateAccount | null;
   contacts: CandidateContact[];
@@ -300,6 +303,7 @@ export default function LeadGenCandidateDetailPage() {
         <TabsList data-testid="tabs-candidate-detail">
           <TabsTrigger value="account" data-testid="tab-account">Account</TabsTrigger>
           <TabsTrigger value="contacts" data-testid="tab-contacts">Contacts & Evidence</TabsTrigger>
+          <TabsTrigger value="research" data-testid="tab-research">Research Docs</TabsTrigger>
           <TabsTrigger value="score" data-testid="tab-score">Score Rationale</TabsTrigger>
           <TabsTrigger value="duplicates" data-testid="tab-duplicates">Duplicate Check</TabsTrigger>
           <TabsTrigger value="playbook" data-testid="tab-playbook">Proposed Playbook</TabsTrigger>
@@ -379,6 +383,28 @@ export default function LeadGenCandidateDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Research Documents */}
+        <TabsContent value="research" data-testid="panel-research">
+          {candidate.candidateAccountId && (
+            <ResearchDocumentsPanel
+              entityType="candidate_account"
+              entityId={candidate.candidateAccountId}
+              className="mb-4"
+            />
+          )}
+          {candidate.candidateContactId && (
+            <ResearchDocumentsPanel
+              entityType="candidate_contact"
+              entityId={candidate.candidateContactId}
+              className="mb-4"
+            />
+          )}
+          <ResearchDocumentsPanel
+            entityType="candidate_lead"
+            entityId={candidate.id}
+          />
         </TabsContent>
 
         {/* Score Rationale */}

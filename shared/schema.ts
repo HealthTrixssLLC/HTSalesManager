@@ -17,6 +17,8 @@ export const lgVerificationStatusEnum = pgEnum("lg_verification_status", ["unver
 export const lgDecisionTypeEnum = pgEnum("lg_decision_type", ["approve", "reject", "defer", "edit"]);
 export const lgEvidenceSourceTypeEnum = pgEnum("lg_evidence_source_type", ["linkedin", "website", "crm", "manual", "import", "other"]);
 export const lgChannelEnum = pgEnum("lg_channel", ["email", "linkedin", "call", "event", "other"]);
+export const researchDocumentTypeEnum = pgEnum("research_document_type", ["company_overview", "strategic_approach", "contact_brief", "communication_draft", "manual_note"]);
+export const researchDocumentEntityTypeEnum = pgEnum("research_document_entity_type", ["candidate_account", "candidate_contact", "candidate_lead", "lead", "account", "contact", "opportunity"]);
 
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended"]);
 export const leadStatusEnum = pgEnum("lead_status", ["new", "contacted", "qualified", "unqualified", "converted"]);
@@ -425,6 +427,26 @@ export const savedFilters = pgTable("saved_filters", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   userPageIdx: index("saved_filters_user_page_idx").on(table.userId, table.pageName),
+}));
+
+// ========== RESEARCH DOCUMENTS ==========
+
+export const researchDocuments = pgTable("research_documents", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  entityType: researchDocumentEntityTypeEnum("entity_type").notNull(),
+  entityId: varchar("entity_id", { length: 100 }).notNull(),
+  documentType: researchDocumentTypeEnum("document_type").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  sourceAgentPhase: text("source_agent_phase"),
+  runId: varchar("run_id", { length: 50 }),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  entityIdx: index("research_documents_entity_idx").on(table.entityType, table.entityId),
+  runIdIdx: index("research_documents_run_id_idx").on(table.runId),
+  documentTypeIdx: index("research_documents_doc_type_idx").on(table.documentType),
 }));
 
 // ========== LEAD GENERATION MODULE TABLES ==========
@@ -1043,3 +1065,8 @@ export type LgCrmTask = typeof lgCrmTasks.$inferSelect;
 export const insertLgAuditEventSchema = createInsertSchema(lgAuditEvents).omit({ id: true, createdAt: true });
 export type InsertLgAuditEvent = z.infer<typeof insertLgAuditEventSchema>;
 export type LgAuditEvent = typeof lgAuditEvents.$inferSelect;
+
+// Research Documents
+export const insertResearchDocumentSchema = createInsertSchema(researchDocuments).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertResearchDocument = z.infer<typeof insertResearchDocumentSchema>;
+export type ResearchDocument = typeof researchDocuments.$inferSelect;

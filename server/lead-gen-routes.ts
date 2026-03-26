@@ -4,7 +4,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { db, storage, eq, and, sql, desc, inArray } from "./db";
-import { lt, ne } from "drizzle-orm";
+import { lt, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { NeonDatabase } from "drizzle-orm/neon-serverless";
@@ -25,6 +25,8 @@ import {
   insertCandidateLeadSchema,
   insertCandidateScoreSchema,
   insertEvidenceSourceSchema,
+  researchDocuments,
+  type ResearchDocument,
 } from "@shared/schema";
 
 type TypedPgDb = NodePgDatabase<typeof schema> | NeonDatabase<typeof schema>;
@@ -912,6 +914,19 @@ export function registerLeadGenRoutes(app: Express) {
         : Promise.resolve([] as schema.TaskPlaybookStep[]),
     ]);
 
+    // Fetch all research documents attached to candidate records
+    const candidateDocConditions = [
+      and(eq(researchDocuments.entityType, "candidate_lead"), eq(researchDocuments.entityId, candidateId)),
+      ...(candidate[0].candidateAccountId
+        ? [and(eq(researchDocuments.entityType, "candidate_account"), eq(researchDocuments.entityId, candidate[0].candidateAccountId!))]
+        : []),
+      ...(candidate[0].candidateContactId
+        ? [and(eq(researchDocuments.entityType, "candidate_contact"), eq(researchDocuments.entityId, candidate[0].candidateContactId!))]
+        : []),
+    ];
+    const candidateDocs: ResearchDocument[] = await db.select().from(researchDocuments)
+      .where(or(...candidateDocConditions));
+
     const accountData = accountRows[0];
     const contactData = contactRows[0];
 
@@ -1010,6 +1025,21 @@ export function registerLeadGenRoutes(app: Express) {
         decidedBy: actorId,
         note: note || null,
       });
+
+      // Copy research documents to the CRM lead record
+      if (candidateDocs.length > 0) {
+        const docsToInsert = candidateDocs.map((doc: ResearchDocument) => ({
+          entityType: "lead" as const,
+          entityId: crmLead.id,
+          documentType: doc.documentType,
+          title: doc.title,
+          content: doc.content,
+          sourceAgentPhase: doc.sourceAgentPhase,
+          runId: doc.runId,
+          createdBy: doc.createdBy,
+        }));
+        await tx.insert(researchDocuments).values(docsToInsert);
+      }
     });
 
     // Post-transaction audit logs (best-effort)

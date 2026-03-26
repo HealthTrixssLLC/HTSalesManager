@@ -15,7 +15,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
-import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission } from "./rbac";
+import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission, hasAnyRole } from "./rbac";
 import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter, readRateLimiter } from "./rate-limiters";
 import {
   insertUserSchema,
@@ -5115,6 +5115,78 @@ export async function registerRoutes(app: Express) {
   // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);
+
+  // ========== RESEARCH DOCUMENTS ==========
+
+  const VALID_ENTITY_TYPES = ["candidate_account", "candidate_contact", "candidate_lead", "lead", "account", "contact", "opportunity"] as const;
+  type ResearchDocEntityType = typeof VALID_ENTITY_TYPES[number];
+  const entityTypeSchema = z.enum(VALID_ENTITY_TYPES);
+
+  // GET /api/documents?entityType=&entityId= — list documents for a record
+  app.get("/api/documents", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = entityTypeSchema.safeParse(req.query.entityType);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid or missing entityType" });
+      }
+      const entityType: ResearchDocEntityType = parsed.data;
+      const entityId = req.query.entityId as string | undefined;
+      if (!entityId) {
+        return res.status(400).json({ error: "entityId is required" });
+      }
+      const { researchDocuments } = await import("@shared/schema");
+      const docs = await db
+        .select()
+        .from(researchDocuments)
+        .where(and(
+          eq(researchDocuments.entityType, entityType),
+          eq(researchDocuments.entityId, entityId)
+        ))
+        .orderBy(desc(researchDocuments.createdAt));
+      return res.json(docs);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      return res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // POST /api/documents — create a manual document
+  app.post("/api/documents", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const { researchDocuments, insertResearchDocumentSchema } = await import("@shared/schema");
+      const data = insertResearchDocumentSchema.parse({ ...req.body, createdBy: req.user?.id });
+      const [doc] = await db.insert(researchDocuments).values(data).returning();
+      await createAudit(req, "create", "ResearchDocument", doc.id, null, doc);
+      return res.json(doc);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error creating document:", error);
+      return res.status(500).json({ error: "Failed to create document" });
+    }
+  });
+
+  // DELETE /api/documents/:id — delete a document
+  app.delete("/api/documents/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const { researchDocuments } = await import("@shared/schema");
+      const [existing] = await db.select().from(researchDocuments).where(eq(researchDocuments.id, req.params.id));
+      if (!existing) return res.status(404).json({ error: "Document not found" });
+      // Only admins/managers or the document creator can delete
+      const user = req.user!;
+      const isAdmin = await hasAnyRole(user.id, ["Admin", "SalesManager"]);
+      if (!isAdmin && existing.createdBy !== user.id) {
+        return res.status(403).json({ error: "Not authorized to delete this document" });
+      }
+      await db.delete(researchDocuments).where(eq(researchDocuments.id, req.params.id));
+      await createAudit(req, "delete", "ResearchDocument", req.params.id, existing, null);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      return res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
 
   // ========== LEAD GENERATION MODULE ROUTES ==========
   const { registerLeadGenRoutes } = await import("./lead-gen-routes");

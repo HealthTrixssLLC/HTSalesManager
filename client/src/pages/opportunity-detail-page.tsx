@@ -5,6 +5,7 @@ import { Loader2, Check, ChevronsUpDown, Plus, X, Users } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
+import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd } from "@/components/global-quick-add";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -562,6 +563,12 @@ export default function OpportunityDetailPage() {
           </Card>
 
           <CommentSystem entity="opportunities" entityId={opportunity.id} />
+
+          <ResearchDocumentsPanel
+            entityType="opportunity"
+            entityId={opportunity.id}
+            data-testid="research-docs-opportunity"
+          />
         </div>
 
         <div className="space-y-6">
