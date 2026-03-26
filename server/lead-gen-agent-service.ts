@@ -429,22 +429,50 @@ async function updateRunPhase(
 }
 
 function extractJsonFromText(text: string): unknown {
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ||
-    text.match(/```\s*([\s\S]*?)```/) ||
-    text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  // 1. Explicit ```json ... ``` code fence
+  const jsonFence = text.match(/```json\s*([\s\S]*?)```/);
+  if (jsonFence) {
+    try { return JSON.parse(jsonFence[1].trim()); } catch { /* continue */ }
+  }
 
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[1]);
-    } catch {
+  // 2. Any ``` ... ``` code fence
+  const anyFence = text.match(/```(?:\w*\n)?([\s\S]*?)```/);
+  if (anyFence) {
+    try { return JSON.parse(anyFence[1].trim()); } catch { /* continue */ }
+  }
+
+  // 3. Bracket-depth scanning — finds the first complete JSON array or object,
+  //    correctly handles nested brackets and brackets inside strings.
+  //    This avoids the greedy-regex trap where [first [ ... last ]] picks up wrong spans.
+  for (const startChar of ['[', '{']) {
+    const endChar = startChar === '[' ? ']' : '}';
+    const startIdx = text.indexOf(startChar);
+    if (startIdx === -1) continue;
+
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startIdx; i < text.length; i++) {
+      const ch = text[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === startChar) depth++;
+      else if (ch === endChar) {
+        depth--;
+        if (depth === 0) {
+          try { return JSON.parse(text.slice(startIdx, i + 1)); } catch { break; }
+        }
+      }
     }
   }
 
-  try {
-    return JSON.parse(text.trim());
-  } catch {
-    return null;
-  }
+  // 4. Whole text as JSON
+  try { return JSON.parse(text.trim()); } catch { /* */ }
+
+  return null;
 }
 
 async function runMarketResearchPhase(
@@ -471,7 +499,7 @@ async function runMarketResearchPhase(
 
   const systemPrompt = `You are a market research specialist for a B2B sales team. 
 Your task is to analyze the target market and identify key insights for lead generation.
-Always respond with valid JSON only.`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
   const userPrompt = `Analyze the B2B target market with these parameters:
 - Target Industries: ${industries}
@@ -542,7 +570,7 @@ async function runCompanyDiscoveryPhase(
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
-Always respond with valid JSON only - an array of company objects.`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
 
   const userPrompt = `Discover ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
@@ -592,6 +620,7 @@ Respond with a JSON array of exactly ${numCompanies} companies:
     }> | null;
 
     if (!Array.isArray(parsed) || parsed.length === 0) {
+      console.error("[Agent] company_discovery parse failed. Raw response (first 1000 chars):", response.slice(0, 1000));
       throw new Error("LLM did not return a valid array of companies");
     }
 
@@ -679,7 +708,7 @@ async function runContactDiscoveryPhase(
       : "";
 
     const systemPrompt = `You are a contact discovery specialist finding B2B decision-makers.
-Always respond with valid JSON only.`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
 
     const userPrompt = `Find 2-3 key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
 Target roles: ${targetTitles}
@@ -784,7 +813,7 @@ async function runStrategyPhase(
 
   for (const account of accountsToProcess) {
     const systemPrompt = `You are a B2B sales strategist. Create targeted strategic approach documents for accounts.
-Always respond with valid JSON only.`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
     const userPrompt = `Create a strategic sales approach for ${account.name}:
 - Industry: ${account.industry || "technology"}
@@ -869,7 +898,7 @@ async function runCommunicationDraftingPhase(
 
     const systemPrompt = `You are a B2B sales communication specialist. 
 Draft personalized outreach messages tailored to specific contacts.
-Always respond with valid JSON only.`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
     const userPrompt = `Draft a personalized outreach communication plan for:
 - Contact: ${contact.firstName} ${contact.lastName}, ${contact.title || "executive"} at ${account.name}
