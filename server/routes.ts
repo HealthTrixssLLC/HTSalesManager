@@ -5277,6 +5277,9 @@ export async function registerRoutes(app: Express) {
             // Use a minimal chat completions call with max_completion_tokens (required for o-series)
             const endpoint = `${azureBaseUrl}/openai/deployments/${config.modelName}/chat/completions?api-version=${apiVersion}`;
             console.log(`[LLM Test] Azure endpoint: ${endpoint}`);
+            // o-series models (o1, o3-mini, o4-mini...) require max_completion_tokens and do not support temperature
+            const isOSeries = /^o\d/.test(config.modelName || "");
+            const testMaxTokens = config.maxTokens ?? 500;
             const response = await fetch(endpoint, {
               method: "POST",
               headers: {
@@ -5285,7 +5288,8 @@ export async function registerRoutes(app: Express) {
               },
               body: JSON.stringify({
                 messages: [{ role: "user", content: "ping" }],
-                max_completion_tokens: 500,
+                max_completion_tokens: testMaxTokens,
+                ...(isOSeries ? {} : { temperature: 0.1 }),
               }),
               signal: AbortSignal.timeout(15000),
             });

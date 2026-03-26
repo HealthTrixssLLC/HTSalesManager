@@ -126,12 +126,16 @@ async function callLlm(
   const { apiKey, temperature, maxTokens } = config;
 
   if (config.provider === "azure") {
-    const baseUrl = (config.baseUrl || "").replace(/\/+$/, "");
+    // Strip any accidentally-pasted path segments from the base URL
+    const rawBase = (config.baseUrl || "").replace(/\/+$/, "");
+    const baseUrl = rawBase.replace(/\/openai.*$/, "");
     if (!baseUrl) {
       throw new Error("Azure OpenAI requires a base URL (Endpoint URL) to be configured");
     }
     const apiVersion = config.apiVersion || "2024-12-01-preview";
     const url = `${baseUrl}/openai/deployments/${config.model}/chat/completions?api-version=${apiVersion}`;
+    // o-series models (o1, o3, o4...) require max_completion_tokens and do not support temperature
+    const isOSeries = /^o\d/.test(config.model);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -143,8 +147,8 @@ async function callLlm(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature,
-        max_tokens: maxTokens,
+        ...(isOSeries ? {} : { temperature }),
+        max_completion_tokens: maxTokens,
       }),
     });
 
