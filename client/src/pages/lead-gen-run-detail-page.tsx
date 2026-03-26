@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import {
   Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2,
   Download, ClipboardList, Users, Search, Lightbulb, MessageSquare, Building2,
-  RefreshCw, AlertCircle, CheckCircle, Circle
+  RefreshCw, AlertCircle, CheckCircle, Square
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,6 +56,7 @@ interface AuditEvent {
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   active: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+  stopped: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
   reviewing: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   complete: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
   archived: "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400",
@@ -78,14 +79,6 @@ const NEXT_STATUS_ICON: Record<string, typeof ArrowRight> = {
   active: ArrowRight,
   reviewing: CheckCircle2,
 };
-
-const PIPELINE_PHASES = [
-  { key: "market_research", label: "Market Research" },
-  { key: "company_discovery", label: "Company Discovery" },
-  { key: "contact_discovery", label: "Contact Discovery" },
-  { key: "strategy", label: "Strategy" },
-  { key: "communication_drafting", label: "Communication Drafting" },
-];
 
 const AGENT_PHASES = [
   { id: "market_research", label: "Market Research", icon: Search },
@@ -286,6 +279,30 @@ export default function LeadGenRunDetailPage() {
     onError: (err: Error) => toast({ title: "Retry failed", description: err.message, variant: "destructive" }),
   });
 
+  const stopRunMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/lead-gen/runs/${id}/stop`, {});
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
+      toast({ title: "Run stopped", description: "The pipeline will halt before the next phase." });
+    },
+    onError: (err: Error) => toast({ title: "Failed to stop run", description: err.message, variant: "destructive" }),
+  });
+
+  function getResumePhase(runData: RunDetail): string {
+    const phaseOrder = AGENT_PHASES.map(p => p.id);
+    const successPhases = (runData.phaseLog || [])
+      .filter(e => e.status === "success")
+      .map(e => e.phase);
+    const lastSuccessIdx = phaseOrder.reduce((max, p, i) => successPhases.includes(p) ? i : max, -1);
+    const nextIdx = lastSuccessIdx + 1;
+    return nextIdx < phaseOrder.length ? phaseOrder[nextIdx] : phaseOrder[0];
+  }
+
   const addCandidateMutation = useMutation({
     mutationFn: async (data: typeof candidateForm) => {
       let candidateAccountId: string | undefined;
@@ -399,6 +416,29 @@ export default function LeadGenRunDetailPage() {
             Start Run
           </Button>
         )}
+        {run.status === "active" && (
+          <Button
+            variant="outline"
+            onClick={() => stopRunMutation.mutate()}
+            disabled={stopRunMutation.isPending}
+            className="border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-400"
+            data-testid="button-stop-run"
+          >
+            {stopRunMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Square className="h-4 w-4 mr-2" />}
+            Stop Run
+          </Button>
+        )}
+        {run.status === "stopped" && (
+          <Button
+            variant="outline"
+            onClick={() => retryPhaseMutation.mutate(getResumePhase(run))}
+            disabled={retryPhaseMutation.isPending}
+            data-testid="button-resume-run"
+          >
+            {retryPhaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+            Resume from {AGENT_PHASES.find(p => p.id === getResumePhase(run))?.label || getResumePhase(run)}
+          </Button>
+        )}
         {canAdvance && NextIcon && (
           <Button
             variant="outline"
@@ -414,7 +454,7 @@ export default function LeadGenRunDetailPage() {
 
       {/* Status lifecycle indicator */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap" data-testid="run-lifecycle-indicator">
-        {(["draft", "active", "reviewing", "complete"] as const).map((s, i, arr) => (
+        {(["draft", "active", "stopped", "reviewing", "complete"] as const).map((s, i, arr) => (
           <span key={s} className="inline-flex items-center gap-2">
             <span
               className={`px-2 py-0.5 rounded-md font-medium ${s === run.status ? statusColors[s] : "text-muted-foreground"}`}
@@ -516,66 +556,6 @@ export default function LeadGenRunDetailPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* AI Pipeline Phase Status */}
-      {(run.status === "active" || run.status === "error" || run.currentPhase || run.errorPhase) && (
-        <Card data-testid="pipeline-phase-status">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
-            <CardTitle className="text-base">AI Pipeline Status</CardTitle>
-            {run.errorPhase && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => retryPhaseMutation.mutate(run.errorPhase!)}
-                disabled={retryPhaseMutation.isPending}
-                data-testid="button-retry-phase"
-              >
-                {retryPhaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Retry from {PIPELINE_PHASES.find(p => p.key === run.errorPhase)?.label ?? run.errorPhase}
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {run.errorPhase && run.errorReason && (
-              <div className="flex items-start gap-2 mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm" data-testid="pipeline-error-message">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <div>
-                  <span className="font-medium">Pipeline failed at {PIPELINE_PHASES.find(p => p.key === run.errorPhase)?.label ?? run.errorPhase}: </span>
-                  {run.errorReason}
-                </div>
-              </div>
-            )}
-            <div className="flex flex-wrap gap-3" data-testid="pipeline-phases-list">
-              {PIPELINE_PHASES.map(phase => {
-                const logEntry = (run.phaseLog as PhaseLogEntry[] | null)?.find(e => e.phase === phase.key);
-                const isRunning = logEntry?.status === "running" || (run.currentPhase === phase.key && !logEntry);
-                const isError = run.errorPhase === phase.key || logEntry?.status === "error";
-                return (
-                  <div
-                    key={phase.key}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border ${
-                      logEntry?.status === "success" ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400" :
-                      isError ? "border-destructive/30 bg-destructive/10 text-destructive" :
-                      isRunning ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400" :
-                      "border-border text-muted-foreground"
-                    }`}
-                    data-testid={`phase-${phase.key}`}
-                  >
-                    {logEntry?.status === "success" ? <CheckCircle className="h-3.5 w-3.5" /> :
-                     isError ? <AlertCircle className="h-3.5 w-3.5" /> :
-                     isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
-                     <Circle className="h-3.5 w-3.5" />}
-                    {phase.label}
-                    {logEntry?.durationMs && (
-                      <span className="text-xs opacity-70 ml-1">{(logEntry.durationMs / 1000).toFixed(1)}s</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

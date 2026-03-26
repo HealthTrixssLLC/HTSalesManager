@@ -9,7 +9,7 @@ import { z } from "zod";
 // ========== ENUMS ==========
 
 // Lead Generation Module Enums
-export const lgRunStatusEnum = pgEnum("lg_run_status", ["draft", "active", "reviewing", "complete", "archived", "error"]);
+export const lgRunStatusEnum = pgEnum("lg_run_status", ["draft", "active", "stopped", "reviewing", "complete", "archived", "error"]);
 export const lgCandidateStatusEnum = pgEnum("lg_candidate_status", ["pending_review", "approved", "rejected", "deferred"]);
 export const lgTierEnum = pgEnum("lg_tier", ["tier_1", "tier_2", "tier_3"]);
 export const lgDuplicateClassEnum = pgEnum("lg_duplicate_class", ["unique", "possible_duplicate", "confirmed_duplicate"]);

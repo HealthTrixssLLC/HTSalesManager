@@ -29,7 +29,7 @@ import {
   researchDocuments,
   type ResearchDocument,
 } from "@shared/schema";
-import { runLeadGenPipeline } from "./lead-gen-agent-service";
+import { runLeadGenPipeline, markRunStopped, clearRunStopped, isRunPipelineActive } from "./lead-gen-agent-service";
 
 type TypedPgDb = NodePgDatabase<typeof schema> | NeonDatabase<typeof schema>;
 
@@ -487,7 +487,11 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
-      if (run[0].status !== "active" && run[0].status !== "error") return res.status(400).json({ error: "Run must be active or in error state to retry a phase" });
+      if (run[0].status !== "active" && run[0].status !== "error" && run[0].status !== "stopped") return res.status(400).json({ error: "Run must be active, stopped, or in error state to retry a phase" });
+
+      if (isRunPipelineActive(req.params.id)) {
+        return res.status(409).json({ error: "Pipeline is still running. Please wait for the current phase to complete before resuming." });
+      }
 
       const failedPhase = req.body?.startFromPhase || req.body?.phase || run[0].errorPhase;
       if (!failedPhase) return res.status(400).json({ error: "No failed phase to retry. Provide a 'phase' in the request body." });
@@ -509,6 +513,8 @@ export function registerLeadGenRoutes(app: Express) {
 
       await createLgAudit(req.user?.id, "run_phase_retry", "LeadGenerationRun", req.params.id, req.params.id, { phase: failedPhase });
 
+      clearRunStopped(req.params.id);
+
       runLeadGenPipeline(req.params.id, failedPhase).catch(err => {
         console.error(`[Agent] Retry pipeline error for run ${req.params.id} phase ${failedPhase}:`, err);
       });
@@ -518,6 +524,29 @@ export function registerLeadGenRoutes(app: Express) {
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Failed to retry phase" });
+    }
+  });
+
+  app.post("/api/lead-gen/runs/:id/stop", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
+      if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (run[0].status !== "active") return res.status(400).json({ error: "Only active runs can be stopped" });
+
+      markRunStopped(req.params.id);
+
+      const result = await db.update(schema.leadGenerationRuns)
+        .set({ status: "stopped", currentPhase: null, updatedAt: new Date() })
+        .where(eq(schema.leadGenerationRuns.id, req.params.id))
+        .returning();
+
+      await createLgAudit(req.user?.id, "run_stopped", "LeadGenerationRun", req.params.id, req.params.id, {});
+      await createAuditLog(req.user?.id, "update", "LeadGenerationRun", req.params.id, null, { status: "stopped" }, req);
+
+      return res.json(result[0]);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to stop run" });
     }
   });
 

@@ -19,6 +19,21 @@ const PHASES = [
   "communication_drafting",
 ] as const;
 
+const stoppedRunIds = new Set<string>();
+const activeRunIds = new Set<string>();
+
+export function markRunStopped(runId: string): void {
+  stoppedRunIds.add(runId);
+}
+
+export function clearRunStopped(runId: string): void {
+  stoppedRunIds.delete(runId);
+}
+
+export function isRunPipelineActive(runId: string): boolean {
+  return activeRunIds.has(runId);
+}
+
 type Phase = typeof PHASES[number];
 
 interface ResolvedLlmConfig {
@@ -971,6 +986,15 @@ Respond with JSON:
 export async function runLeadGenPipeline(runId: string, startFromPhase?: string): Promise<void> {
   console.log(`[Agent] Starting pipeline for run ${runId}${startFromPhase ? ` from phase ${startFromPhase}` : ""}`);
 
+  activeRunIds.add(runId);
+  try {
+    await _runPipelineInternal(runId, startFromPhase);
+  } finally {
+    activeRunIds.delete(runId);
+  }
+}
+
+async function _runPipelineInternal(runId: string, startFromPhase?: string): Promise<void> {
   // Reset search config cache so each pipeline run re-reads from DB
   _cachedSearchConfig = undefined;
 
@@ -1039,6 +1063,15 @@ export async function runLeadGenPipeline(runId: string, startFromPhase?: string)
   }
 
   for (const phase of phasesToRun) {
+    if (stoppedRunIds.has(runId)) {
+      stoppedRunIds.delete(runId);
+      console.log(`[Agent] Run ${runId} was stopped before phase ${phase}. Halting pipeline.`);
+      await db.update(schema.leadGenerationRuns)
+        .set({ status: "stopped", currentPhase: null, updatedAt: new Date() })
+        .where(eq(schema.leadGenerationRuns.id, runId));
+      return;
+    }
+
     const config = await getLlmConfig(phase);
 
     if (!config) {
@@ -1110,14 +1143,25 @@ export async function runLeadGenPipeline(runId: string, startFromPhase?: string)
       phaseEntry.status = "error";
       phaseEntry.errorMessage = errorMsg;
 
-      // Transition run to explicit error state
-      await updateRunPhase(runId, phase, phaseEntry, {
-        errorPhase: phase,
-        errorReason: errorMsg,
-      });
-      await db.update(schema.leadGenerationRuns)
-        .set({ status: "error", updatedAt: new Date() })
-        .where(eq(schema.leadGenerationRuns.id, runId));
+      // If a stop was requested while this phase was running, honor stop intent
+      const wasStopped = stoppedRunIds.has(runId);
+      if (wasStopped) {
+        stoppedRunIds.delete(runId);
+        await updateRunPhase(runId, null, phaseEntry);
+        await db.update(schema.leadGenerationRuns)
+          .set({ status: "stopped", currentPhase: null, updatedAt: new Date() })
+          .where(eq(schema.leadGenerationRuns.id, runId));
+        console.log(`[Agent] Run ${runId} phase ${phase} errored but stop was requested; marking as stopped.`);
+      } else {
+        // Transition run to explicit error state
+        await updateRunPhase(runId, phase, phaseEntry, {
+          errorPhase: phase,
+          errorReason: errorMsg,
+        });
+        await db.update(schema.leadGenerationRuns)
+          .set({ status: "error", updatedAt: new Date() })
+          .where(eq(schema.leadGenerationRuns.id, runId));
+      }
       return;
     }
   }

@@ -36,6 +36,13 @@
       "when": 1774601000000,
       "tag": "0004_add_ai_agent_pipeline_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774563600000,
+      "tag": "0006_add_stopped_run_status",
+      "breakpoints": true
     }
   ]
 }
