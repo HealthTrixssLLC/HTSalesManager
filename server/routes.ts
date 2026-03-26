@@ -5269,23 +5269,35 @@ export async function registerRoutes(app: Express) {
           if (!config.baseUrl) {
             testResult = { success: false, latencyMs: 0, error: "Azure OpenAI requires an Endpoint URL — enter it in the Base URL / Endpoint field above." };
           } else {
-            // Use the deployments list endpoint — model-agnostic, avoids max_tokens vs
-            // max_completion_tokens incompatibility on o-series models (o3-mini, o1, etc.)
-            const azureBaseUrl = config.baseUrl.replace(/\/+$/, "");
+            // Strip any path segments the user may have pasted (e.g. /openai/deployments/...)
+            // The base URL should be just the root domain: https://your-resource.openai.azure.com
+            const rawBase = config.baseUrl.replace(/\/+$/, "");
+            const azureBaseUrl = rawBase.replace(/\/openai.*$/, "");
             const apiVersion = config.apiVersion || "2025-03-01-preview";
-            const modelsEndpoint = `${azureBaseUrl}/openai/deployments?api-version=${apiVersion}`;
-            const response = await fetch(modelsEndpoint, {
-              method: "GET",
+            // Use a minimal chat completions call with max_completion_tokens (required for o-series)
+            const endpoint = `${azureBaseUrl}/openai/deployments/${config.modelName}/chat/completions?api-version=${apiVersion}`;
+            console.log(`[LLM Test] Azure endpoint: ${endpoint}`);
+            const response = await fetch(endpoint, {
+              method: "POST",
               headers: {
+                "Content-Type": "application/json",
                 "api-key": plainApiKey,
               },
+              body: JSON.stringify({
+                messages: [{ role: "user", content: "ping" }],
+                max_completion_tokens: 500,
+              }),
               signal: AbortSignal.timeout(15000),
             });
             const latencyMs = Date.now() - startTime;
+            console.log(`[LLM Test] Azure response status: ${response.status}`);
             if (response.ok) {
               testResult = { success: true, latencyMs, model: config.modelName };
             } else {
-              const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
+              const body = await response.text();
+              console.log(`[LLM Test] Azure error body: ${body.slice(0, 500)}`);
+              let errData: OpenAiResponseBody = {};
+              try { errData = JSON.parse(body); } catch { /* non-JSON body */ }
               testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "check endpoint URL and API key in Azure portal → Cognitive Services → Keys and Endpoint") };
             }
           }
