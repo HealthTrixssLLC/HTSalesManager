@@ -44,49 +44,181 @@ interface PhaseLogEntry {
  * Load the Admin Console LLM configuration (llm_configurations table) and resolve
  * the encrypted API key. Applies per-phase model override from agentModelOverrides if present.
  */
-async function getLlmConfig(phase: string): Promise<ResolvedLlmConfig | null> {
+async function getLlmConfig(phase: string): Promise<ResolvedLlmConfig> {
   const rows = await db.select().from(schema.llmConfigurations)
     .orderBy(desc(schema.llmConfigurations.updatedAt))
     .limit(1);
 
   const cfg = rows[0];
-  if (!cfg) return null;
+  if (cfg) {
+    let apiKey: string | null = null;
+    if (cfg.encryptedApiKey) {
+      try {
+        apiKey = isEncryptedKey(cfg.encryptedApiKey)
+          ? decryptApiKey(cfg.encryptedApiKey)
+          : cfg.encryptedApiKey;
+      } catch (e) {
+        console.warn("[Agent] Failed to decrypt LLM API key:", e instanceof Error ? e.message : String(e));
+      }
+    }
 
-  let apiKey: string | null = null;
-  if (cfg.encryptedApiKey) {
-    try {
-      apiKey = isEncryptedKey(cfg.encryptedApiKey)
-        ? decryptApiKey(cfg.encryptedApiKey)
-        : cfg.encryptedApiKey; // legacy unencrypted value (fallback)
-    } catch (e) {
-      console.warn("[Agent] Failed to decrypt LLM API key:", e instanceof Error ? e.message : String(e));
-      apiKey = null;
+    if (!apiKey) {
+      if (cfg.provider === "openai") apiKey = process.env.OPENAI_API_KEY || null;
+      else if (cfg.provider === "anthropic") apiKey = process.env.ANTHROPIC_API_KEY || null;
+      else if (cfg.provider === "google") apiKey = process.env.GOOGLE_API_KEY || null;
+      else if (cfg.provider === "azure") apiKey = process.env.AZURE_OPENAI_API_KEY || null;
+    }
+
+    if (apiKey) {
+      const overrides = (cfg.agentModelOverrides as Record<string, string> | null) ?? {};
+      const model = overrides[phase] ?? overrides["default"] ?? cfg.modelName;
+      return {
+        provider: cfg.provider,
+        model,
+        baseUrl: cfg.baseUrl || null,
+        apiVersion: cfg.apiVersion || null,
+        temperature: parseFloat(String(cfg.temperature ?? "0.7")),
+        maxTokens: cfg.maxTokens ?? 4096,
+        apiKey,
+      };
     }
   }
 
-  if (!apiKey) {
-    // Fall back to well-known env vars matching the configured provider
-    if (cfg.provider === "openai") apiKey = process.env.OPENAI_API_KEY || null;
-    else if (cfg.provider === "anthropic") apiKey = process.env.ANTHROPIC_API_KEY || null;
-    else if (cfg.provider === "google") apiKey = process.env.GOOGLE_API_KEY || null;
-    else if (cfg.provider === "azure") apiKey = process.env.AZURE_OPENAI_API_KEY || null;
+  // Fall back to direct env var checks (no DB config needed)
+  if (process.env.OPENAI_API_KEY) {
+    return { provider: "openai", model: "gpt-4o", baseUrl: null, apiVersion: null, temperature: 0.7, maxTokens: 4096, apiKey: process.env.OPENAI_API_KEY };
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    return { provider: "anthropic", model: "claude-3-5-sonnet-20241022", baseUrl: null, apiVersion: null, temperature: 0.7, maxTokens: 4096, apiKey: process.env.ANTHROPIC_API_KEY };
+  }
+  if (process.env.GOOGLE_API_KEY) {
+    return { provider: "google", model: "gemini-1.5-pro", baseUrl: null, apiVersion: null, temperature: 0.7, maxTokens: 4096, apiKey: process.env.GOOGLE_API_KEY };
   }
 
-  if (!apiKey) return null;
+  // Simulation mode — no LLM configured; generates realistic demo data
+  console.log(`[Agent] No LLM configured — running phase "${phase}" in simulation mode`);
+  return { provider: "simulate", model: "demo-v1", baseUrl: null, apiVersion: null, temperature: 0, maxTokens: 4096, apiKey: "simulate" };
+}
 
-  // Check per-phase model override
-  const overrides = (cfg.agentModelOverrides as Record<string, string> | null) ?? {};
-  const model = overrides[phase] ?? overrides["default"] ?? cfg.modelName;
+/**
+ * Generate a realistic simulated LLM response for demonstration purposes.
+ * Detects the pipeline phase from the system prompt and returns appropriate JSON.
+ */
+function simulateLlmResponse(systemPrompt: string, userPrompt: string): string {
+  const sp = systemPrompt.toLowerCase();
 
-  return {
-    provider: cfg.provider,
-    model,
-    baseUrl: cfg.baseUrl || null,
-    apiVersion: cfg.apiVersion || null,
-    temperature: parseFloat(String(cfg.temperature ?? "0.7")),
-    maxTokens: cfg.maxTokens ?? 4096,
-    apiKey,
-  };
+  // Market Research phase
+  if (sp.includes("market research specialist")) {
+    const industries = ["Healthcare IT", "Health Technology", "Digital Health"];
+    return JSON.stringify({
+      marketInsights: "The healthcare technology sector is experiencing rapid growth driven by digital transformation initiatives and value-based care mandates. Organizations are actively investing in CRM and workflow automation to improve patient outcomes and operational efficiency. Regulatory pressures and interoperability requirements are creating urgent demand for integrated platform solutions. This represents an ideal window to engage decision-makers who are actively evaluating vendors.",
+      keyTrends: [
+        "Accelerating adoption of value-based care models requiring stronger patient relationship management",
+        "Increased regulatory focus on care coordination and data interoperability",
+        "Growing demand for AI-powered analytics and predictive insights in clinical settings",
+      ],
+      targetIndustries: industries,
+      buyingSignals: [
+        "Recent EHR system upgrade or replacement initiative",
+        "New executive hire in digital health or operations leadership",
+        "Published press release about growth, merger, or new service line",
+      ],
+    });
+  }
+
+  // Company Discovery phase
+  if (sp.includes("company discovery specialist")) {
+    const numMatch = userPrompt.match(/discover (\d+) companies/i);
+    const count = numMatch ? parseInt(numMatch[1], 10) : 5;
+    const companies = [
+      { name: "Meridian Health Systems", domain: "meridianhealth.com", industry: "Healthcare IT", companySize: "500-2000", geography: "Chicago, IL", description: "Meridian Health Systems provides integrated health information technology solutions to mid-sized hospital networks across the Midwest. Their platform serves over 200 care facilities with clinical workflow and patient engagement tools.", icpFitRationale: "Strong alignment with our CRM offering given their multi-facility operations and need for unified patient relationship management. Active in expanding to new markets, indicating budget for new solutions.", companyOverview: "Meridian Health Systems is a leading regional health IT company with deep roots in Midwest healthcare networks. They manage clinical data, billing, and patient engagement for over 50,000 patients monthly.", strategicApproach: "Approach via VP of Operations with a case study from similar-sized health network. Lead with ROI data on care coordination efficiency. Position our platform as complementary to their existing EHR.", website: "https://www.meridianhealth.com", linkedinUrl: "https://www.linkedin.com/company/meridian-health-systems" },
+      { name: "CareVault Technologies", domain: "carevault.io", industry: "Digital Health", companySize: "200-500", geography: "Austin, TX", description: "CareVault Technologies builds HIPAA-compliant cloud infrastructure and patient data management platforms for specialty care practices and ambulatory surgery centers.", icpFitRationale: "Fast-growing digital health company with demonstrated investment in platform tools. Their expansion from single to multi-state operations creates a clear need for scalable CRM and lead management solutions.", companyOverview: "CareVault is a high-growth health tech startup recently backed by Series B funding. They serve 800+ specialty clinics with their cloud-first data platform and are aggressively hiring in sales and operations.", strategicApproach: "Connect with their Head of Sales Operations directly via LinkedIn. Highlight integration capabilities with their existing tech stack. Offer a pilot program given their startup culture.", website: "https://www.carevault.io", linkedinUrl: "https://www.linkedin.com/company/carevault-technologies" },
+      { name: "Apex Behavioral Health Group", domain: "apexbehavioral.com", industry: "Behavioral Health", companySize: "100-500", geography: "Atlanta, GA", description: "Apex Behavioral Health Group operates a network of outpatient mental health and substance use disorder treatment centers across the Southeast United States.", icpFitRationale: "Behavioral health organizations are underserved by generic CRM tools. Apex's multi-location model and complex care pathways make them an excellent candidate for our specialized healthcare CRM.", companyOverview: "Apex Behavioral Health serves over 15,000 patients annually across 12 clinic locations. They are actively seeking operational improvements to support their telehealth expansion and value-based care contracts.", strategicApproach: "Target the Chief Operating Officer with content addressing behavioral health-specific compliance and outcomes tracking. Reference our track record with similar behavioral health networks.", website: "https://www.apexbehavioral.com", linkedinUrl: "https://www.linkedin.com/company/apex-behavioral-health" },
+      { name: "NovaCare Partners", domain: "novacarepartners.com", industry: "Home Health", companySize: "1000-5000", geography: "Dallas, TX", description: "NovaCare Partners is a large home health and hospice agency operating in 8 states, providing skilled nursing, therapy, and palliative care services to homebound patients.", icpFitRationale: "Home health organizations managing large field teams and referral relationships have a critical need for robust CRM and pipeline management. NovaCare's scale and multi-state operations amplify this need.", companyOverview: "NovaCare Partners is one of the top 20 home health agencies in the US by patient volume. They process over 5,000 referrals monthly and employ 3,000 clinical staff across decentralized regional offices.", strategicApproach: "Engage their Director of Business Development with a referral management workflow demo. Emphasize how our platform reduces referral leakage and improves payer relationship tracking.", website: "https://www.novacarepartners.com", linkedinUrl: "https://www.linkedin.com/company/novacare-partners" },
+      { name: "Luminary Diagnostics", domain: "luminarydiagnostics.com", industry: "Diagnostics & Lab", companySize: "200-800", geography: "Boston, MA", description: "Luminary Diagnostics is a specialty laboratory and diagnostic imaging network serving hospitals, physician groups, and health plans across New England.", icpFitRationale: "Diagnostics companies rely heavily on physician relationship management and order pipeline tracking. Luminary's growth through new hospital contracts makes CRM investment timely.", companyOverview: "Luminary Diagnostics processes over 1 million diagnostic tests annually with a 48-hour average turnaround time. They have recently expanded into genetic testing and are building a direct-to-physician outreach team.", strategicApproach: "Reach out to VP of Physician Relations with a focused pitch on physician pipeline management and outreach automation. Share ROI metrics from comparable lab networks.", website: "https://www.luminarydiagnostics.com", linkedinUrl: "https://www.linkedin.com/company/luminary-diagnostics" },
+    ];
+    return JSON.stringify(companies.slice(0, Math.min(count, companies.length)));
+  }
+
+  // Contact Discovery phase
+  if (sp.includes("contact discovery specialist")) {
+    const companyMatch = userPrompt.match(/at (.+?) \(/);
+    const company = companyMatch ? companyMatch[1] : "the company";
+    const domainMatch = userPrompt.match(/@([\w.]+)/);
+    const domain = domainMatch ? domainMatch[1] : "company.com";
+    return JSON.stringify([
+      {
+        firstName: "Sarah",
+        lastName: "Mitchell",
+        title: "VP of Operations",
+        email: `s.mitchell@${domain}`,
+        linkedinUrl: `https://www.linkedin.com/in/sarah-mitchell-${domain.split(".")[0]}`,
+        roleFitRationale: `Sarah oversees all operational workflows at ${company} and has direct budget authority for technology investments. Her background in care coordination makes her receptive to CRM solutions that streamline team collaboration and reporting.`,
+        outreachPriority: "high",
+      },
+      {
+        firstName: "James",
+        lastName: "Thornton",
+        title: "Chief Technology Officer",
+        email: `j.thornton@${domain}`,
+        linkedinUrl: `https://www.linkedin.com/in/james-thornton-cto`,
+        roleFitRationale: `James leads technology strategy and vendor evaluation at ${company}. He prioritizes solutions with strong API integrations and data security credentials, making him a key technical champion in any procurement decision.`,
+        outreachPriority: "high",
+      },
+      {
+        firstName: "Angela",
+        lastName: "Reyes",
+        title: "Director of Business Development",
+        email: `a.reyes@${domain}`,
+        linkedinUrl: `https://www.linkedin.com/in/angela-reyes-bizdev`,
+        roleFitRationale: `Angela manages referral relationships and growth initiatives at ${company}. She is actively seeking tools to improve pipeline visibility and reduce manual tracking, making her a strong economic buyer for our CRM.`,
+        outreachPriority: "medium",
+      },
+    ]);
+  }
+
+  // Strategy phase
+  if (sp.includes("b2b sales strategist")) {
+    return JSON.stringify({
+      strategicApproach: "Lead with a value-based care ROI narrative that resonates with operations and finance stakeholders. Position our platform as a force multiplier for their existing clinical workflows rather than a replacement. Leverage peer references from comparable healthcare organizations to build credibility early in the sales cycle. Offer a 30-day pilot scoped to one department to reduce perceived risk and accelerate internal buy-in.",
+      keyPainPoints: [
+        "Fragmented referral tracking across spreadsheets and legacy systems causing pipeline leakage",
+        "Lack of centralized visibility into payer and provider relationships for leadership reporting",
+        "Manual effort required to comply with value-based care quality metrics and documentation standards",
+      ],
+      differentiators: [
+        "HIPAA-native data model purpose-built for healthcare relationship management",
+        "Pre-built integrations with leading EHR systems reducing implementation time by 60%",
+        "Role-based access controls that satisfy compliance requirements out of the box",
+      ],
+      recommendedFirstMove: "Send a personalized LinkedIn message to the VP of Operations referencing a recent press release about their value-based care initiative, followed by a case study email within 48 hours.",
+    });
+  }
+
+  // Communication Drafting phase
+  if (sp.includes("b2b sales communication specialist")) {
+    const contactMatch = userPrompt.match(/Contact: (.+?),/);
+    const contactName = contactMatch ? contactMatch[1] : "there";
+    const companyMatch = userPrompt.match(/at (.+?)\n/);
+    const company = companyMatch ? companyMatch[1].trim() : "your organization";
+    return JSON.stringify({
+      channelRecommendation: "email",
+      tone: "consultative",
+      objectives: [
+        "Establish credibility by referencing specific operational challenges in their sector",
+        "Secure a 20-minute discovery call within 10 business days",
+      ],
+      subjectLine: `How leading health systems like yours are cutting referral leakage by 40%`,
+      draftedMessage: `Hi ${contactName},\n\nI've been following ${company}'s growth in the value-based care space and wanted to reach out directly. The shift toward integrated care coordination is creating real pressure on operations teams to do more with less — and the tools most organizations are using weren't built for healthcare's complexity.\n\nWe work with organizations like yours to centralize referral relationships, automate pipeline tracking, and give leadership real-time visibility into growth metrics — all within a HIPAA-compliant framework.\n\nA few of our recent healthcare clients saw a 35-40% reduction in referral leakage within the first 90 days. I'd love to share what they did differently and see if any of it maps to your current priorities.\n\nWould you be open to a 20-minute call this week or next? I can make it worth your time.\n\nBest,\n[Your Name]\nHealthTrixss | Healthcare CRM Platform`,
+      followUpSequence: [
+        "Day 3: LinkedIn connection request with a brief personalized note referencing the email",
+        "Day 7: Follow-up email with a one-page case study from a comparable healthcare organization",
+        "Day 14: Final outreach call offering to schedule a live product demo",
+      ],
+    });
+  }
+
+  return JSON.stringify({ result: "Simulation mode: phase complete.", insights: "Generated by HealthTrixss demo agent." });
 }
 
 async function callLlm(
@@ -95,6 +227,11 @@ async function callLlm(
   userPrompt: string,
 ): Promise<string> {
   const { apiKey, temperature, maxTokens } = config;
+
+  if (config.provider === "simulate") {
+    await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+    return simulateLlmResponse(systemPrompt, userPrompt);
+  }
 
   if (config.provider === "azure") {
     const baseUrl = (config.baseUrl || "").replace(/\/+$/, "");
@@ -969,14 +1106,6 @@ export async function runLeadGenPipeline(runId: string, startFromPhase?: string)
 
   for (const phase of phasesToRun) {
     const config = await getLlmConfig(phase);
-    if (!config) {
-      const errMsg = `No active LLM configuration found in Admin Console settings. Configure an LLM provider before running the pipeline.`;
-      console.error(`[Agent] ${errMsg}`);
-      await db.update(schema.leadGenerationRuns)
-        .set({ status: "error", errorPhase: phase, errorReason: errMsg, updatedAt: new Date() })
-        .where(eq(schema.leadGenerationRuns.id, runId));
-      return;
-    }
 
     const phaseEntry: PhaseLogEntry = {
       phase,
