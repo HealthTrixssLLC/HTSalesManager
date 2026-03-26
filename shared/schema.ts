@@ -8,6 +8,16 @@ import { z } from "zod";
 
 // ========== ENUMS ==========
 
+// Lead Generation Module Enums
+export const lgRunStatusEnum = pgEnum("lg_run_status", ["draft", "active", "reviewing", "complete", "archived"]);
+export const lgCandidateStatusEnum = pgEnum("lg_candidate_status", ["pending_review", "approved", "rejected", "deferred"]);
+export const lgTierEnum = pgEnum("lg_tier", ["tier_1", "tier_2", "tier_3"]);
+export const lgDuplicateClassEnum = pgEnum("lg_duplicate_class", ["unique", "possible_duplicate", "confirmed_duplicate"]);
+export const lgVerificationStatusEnum = pgEnum("lg_verification_status", ["unverified", "partial", "verified"]);
+export const lgDecisionTypeEnum = pgEnum("lg_decision_type", ["approve", "reject", "defer", "edit"]);
+export const lgEvidenceSourceTypeEnum = pgEnum("lg_evidence_source_type", ["linkedin", "website", "crm", "manual", "import", "other"]);
+export const lgChannelEnum = pgEnum("lg_channel", ["email", "linkedin", "call", "event", "other"]);
+
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended"]);
 export const leadStatusEnum = pgEnum("lead_status", ["new", "contacted", "qualified", "unqualified", "converted"]);
 export const leadSourceEnum = pgEnum("lead_source", ["website", "referral", "phone", "email", "event", "partner", "other"]);
@@ -417,6 +427,237 @@ export const savedFilters = pgTable("saved_filters", {
   userPageIdx: index("saved_filters_user_page_idx").on(table.userId, table.pageName),
 }));
 
+// ========== LEAD GENERATION MODULE TABLES ==========
+
+export const icpProfiles = pgTable("icp_profiles", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  nameIdx: index("icp_profiles_name_idx").on(table.name),
+}));
+
+export const icpProfileVersions = pgTable("icp_profile_versions", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  icpProfileId: varchar("icp_profile_id", { length: 50 }).notNull().references(() => icpProfiles.id, { onDelete: "cascade" }),
+  versionNumber: integer("version_number").notNull().default(1),
+  targetIndustries: text("target_industries").array(),
+  targetCompanySizes: text("target_company_sizes").array(),
+  targetGeographies: text("target_geographies").array(),
+  targetTitles: text("target_titles").array(),
+  scoringRubric: jsonb("scoring_rubric").default({}),
+  notes: text("notes"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  icpProfileIdIdx: index("icp_profile_versions_profile_id_idx").on(table.icpProfileId),
+}));
+
+export const offers = pgTable("offers", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  icpProfileId: varchar("icp_profile_id", { length: 50 }).notNull().references(() => icpProfiles.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  valueProposition: text("value_proposition"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  icpProfileIdIdx: index("offers_icp_profile_id_idx").on(table.icpProfileId),
+}));
+
+export const taskPlaybooks = pgTable("task_playbooks", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  icpProfileId: varchar("icp_profile_id", { length: 50 }).references(() => icpProfiles.id, { onDelete: "set null" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  nameIdx: index("task_playbooks_name_idx").on(table.name),
+}));
+
+export const taskPlaybookSteps = pgTable("task_playbook_steps", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  playbookId: varchar("playbook_id", { length: 50 }).notNull().references(() => taskPlaybooks.id, { onDelete: "cascade" }),
+  stepOrder: integer("step_order").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  channel: lgChannelEnum("channel").notNull().default("email"),
+  dayOffset: integer("day_offset").notNull().default(0),
+  activityType: activityTypeEnum("activity_type").notNull().default("task"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  playbookIdIdx: index("task_playbook_steps_playbook_id_idx").on(table.playbookId),
+}));
+
+export const leadGenerationRuns = pgTable("lead_generation_runs", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  icpProfileId: varchar("icp_profile_id", { length: 50 }).references(() => icpProfiles.id),
+  icpVersionId: varchar("icp_version_id", { length: 50 }).references(() => icpProfileVersions.id),
+  status: lgRunStatusEnum("status").notNull().default("draft"),
+  ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
+  targetCount: integer("target_count"),
+  candidateCount: integer("candidate_count").notNull().default(0),
+  reviewedCount: integer("reviewed_count").notNull().default(0),
+  approvedCount: integer("approved_count").notNull().default(0),
+  rejectedCount: integer("rejected_count").notNull().default(0),
+  deferredCount: integer("deferred_count").notNull().default(0),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  statusIdx: index("lg_runs_status_idx").on(table.status),
+  ownerIdIdx: index("lg_runs_owner_id_idx").on(table.ownerId),
+}));
+
+export const candidateAccounts = pgTable("candidate_accounts", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  runId: varchar("run_id", { length: 50 }).notNull().references(() => leadGenerationRuns.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  website: text("website"),
+  industry: text("industry"),
+  companySize: text("company_size"),
+  geography: text("geography"),
+  description: text("description"),
+  linkedinUrl: text("linkedin_url"),
+  existingAccountId: varchar("existing_account_id", { length: 100 }).references(() => accounts.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  runIdIdx: index("candidate_accounts_run_id_idx").on(table.runId),
+}));
+
+export const candidateContacts = pgTable("candidate_contacts", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateAccountId: varchar("candidate_account_id", { length: 50 }).references(() => candidateAccounts.id, { onDelete: "cascade" }),
+  runId: varchar("run_id", { length: 50 }).notNull().references(() => leadGenerationRuns.id, { onDelete: "cascade" }),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  title: text("title"),
+  linkedinUrl: text("linkedin_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateAccountIdIdx: index("candidate_contacts_account_id_idx").on(table.candidateAccountId),
+  runIdIdx: index("candidate_contacts_run_id_idx").on(table.runId),
+}));
+
+export const candidateLeads = pgTable("candidate_leads", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  runId: varchar("run_id", { length: 50 }).notNull().references(() => leadGenerationRuns.id, { onDelete: "cascade" }),
+  candidateAccountId: varchar("candidate_account_id", { length: 50 }).references(() => candidateAccounts.id, { onDelete: "cascade" }),
+  candidateContactId: varchar("candidate_contact_id", { length: 50 }).references(() => candidateContacts.id),
+  status: lgCandidateStatusEnum("status").notNull().default("pending_review"),
+  tier: lgTierEnum("tier"),
+  duplicateClass: lgDuplicateClassEnum("duplicate_class").notNull().default("unique"),
+  verificationStatus: lgVerificationStatusEnum("verification_status").notNull().default("unverified"),
+  assignedPlaybookId: varchar("assigned_playbook_id", { length: 50 }).references(() => taskPlaybooks.id),
+  reviewNote: text("review_note"),
+  reviewedBy: varchar("reviewed_by", { length: 50 }).references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  runIdIdx: index("candidate_leads_run_id_idx").on(table.runId),
+  statusIdx: index("candidate_leads_status_idx").on(table.status),
+  tierIdx: index("candidate_leads_tier_idx").on(table.tier),
+}));
+
+export const candidateScores = pgTable("candidate_scores", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateLeadId: varchar("candidate_lead_id", { length: 50 }).notNull().references(() => candidateLeads.id, { onDelete: "cascade" }),
+  totalScore: integer("total_score").notNull().default(0),
+  maxScore: integer("max_score").notNull().default(100),
+  industryScore: integer("industry_score"),
+  sizeScore: integer("size_score"),
+  geoScore: integer("geo_score"),
+  titleScore: integer("title_score"),
+  rationale: text("rationale"),
+  details: jsonb("details").default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateLeadIdIdx: index("candidate_scores_lead_id_idx").on(table.candidateLeadId),
+}));
+
+export const evidenceSources = pgTable("evidence_sources", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateLeadId: varchar("candidate_lead_id", { length: 50 }).references(() => candidateLeads.id, { onDelete: "cascade" }),
+  candidateAccountId: varchar("candidate_account_id", { length: 50 }).references(() => candidateAccounts.id, { onDelete: "cascade" }),
+  sourceType: lgEvidenceSourceTypeEnum("source_type").notNull().default("manual"),
+  url: text("url"),
+  title: text("title"),
+  content: text("content"),
+  collectedAt: timestamp("collected_at").defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateLeadIdIdx: index("evidence_sources_lead_id_idx").on(table.candidateLeadId),
+}));
+
+export const reviewDecisions = pgTable("review_decisions", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateLeadId: varchar("candidate_lead_id", { length: 50 }).notNull().references(() => candidateLeads.id, { onDelete: "cascade" }),
+  decisionType: lgDecisionTypeEnum("decision_type").notNull(),
+  decidedBy: varchar("decided_by", { length: 50 }).references(() => users.id),
+  note: text("note"),
+  editsBefore: jsonb("edits_before"),
+  editsAfter: jsonb("edits_after"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateLeadIdIdx: index("review_decisions_lead_id_idx").on(table.candidateLeadId),
+}));
+
+export const lgCrmLeads = pgTable("lg_crm_leads", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateLeadId: varchar("candidate_lead_id", { length: 50 }).notNull().references(() => candidateLeads.id),
+  crmLeadId: varchar("crm_lead_id", { length: 100 }).notNull().references(() => leads.id),
+  runId: varchar("run_id", { length: 50 }).references(() => leadGenerationRuns.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateLeadIdIdx: index("lg_crm_leads_candidate_id_idx").on(table.candidateLeadId),
+  crmLeadIdIdx: index("lg_crm_leads_crm_lead_id_idx").on(table.crmLeadId),
+}));
+
+export const lgCrmTasks = pgTable("lg_crm_tasks", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  candidateLeadId: varchar("candidate_lead_id", { length: 50 }).notNull().references(() => candidateLeads.id),
+  activityId: varchar("activity_id", { length: 100 }).notNull().references(() => activities.id),
+  playbookStepId: varchar("playbook_step_id", { length: 50 }).references(() => taskPlaybookSteps.id),
+  runId: varchar("run_id", { length: 50 }).references(() => leadGenerationRuns.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  candidateLeadIdIdx: index("lg_crm_tasks_candidate_id_idx").on(table.candidateLeadId),
+}));
+
+export const lgAuditEvents = pgTable("lg_audit_events", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  actorId: varchar("actor_id", { length: 50 }).references(() => users.id),
+  eventType: text("event_type").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  runId: varchar("run_id", { length: 50 }).references(() => leadGenerationRuns.id),
+  details: jsonb("details").default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  runIdIdx: index("lg_audit_events_run_id_idx").on(table.runId),
+  actorIdIdx: index("lg_audit_events_actor_id_idx").on(table.actorId),
+  createdAtIdx: index("lg_audit_events_created_at_idx").on(table.createdAt),
+}));
+
 // ========== RELATIONS ==========
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -725,3 +966,80 @@ export type CommentWithDetails = Comment & {
   replyCount?: number;
   userReaction?: string | null;
 };
+
+// ========== LEAD GENERATION MODULE SCHEMAS & TYPES ==========
+
+// ICP Profiles
+export const insertIcpProfileSchema = createInsertSchema(icpProfiles).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertIcpProfile = z.infer<typeof insertIcpProfileSchema>;
+export type IcpProfile = typeof icpProfiles.$inferSelect;
+
+// ICP Profile Versions
+export const insertIcpProfileVersionSchema = createInsertSchema(icpProfileVersions).omit({ id: true, createdAt: true });
+export type InsertIcpProfileVersion = z.infer<typeof insertIcpProfileVersionSchema>;
+export type IcpProfileVersion = typeof icpProfileVersions.$inferSelect;
+
+// Offers
+export const insertOfferSchema = createInsertSchema(offers).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertOffer = z.infer<typeof insertOfferSchema>;
+export type Offer = typeof offers.$inferSelect;
+
+// Task Playbooks
+export const insertTaskPlaybookSchema = createInsertSchema(taskPlaybooks).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertTaskPlaybook = z.infer<typeof insertTaskPlaybookSchema>;
+export type TaskPlaybook = typeof taskPlaybooks.$inferSelect;
+
+// Task Playbook Steps
+export const insertTaskPlaybookStepSchema = createInsertSchema(taskPlaybookSteps).omit({ id: true, createdAt: true });
+export type InsertTaskPlaybookStep = z.infer<typeof insertTaskPlaybookStepSchema>;
+export type TaskPlaybookStep = typeof taskPlaybookSteps.$inferSelect;
+
+// Lead Generation Runs
+export const insertLeadGenerationRunSchema = createInsertSchema(leadGenerationRuns).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertLeadGenerationRun = z.infer<typeof insertLeadGenerationRunSchema>;
+export type LeadGenerationRun = typeof leadGenerationRuns.$inferSelect;
+
+// Candidate Accounts
+export const insertCandidateAccountSchema = createInsertSchema(candidateAccounts).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCandidateAccount = z.infer<typeof insertCandidateAccountSchema>;
+export type CandidateAccount = typeof candidateAccounts.$inferSelect;
+
+// Candidate Contacts
+export const insertCandidateContactSchema = createInsertSchema(candidateContacts).omit({ id: true, createdAt: true });
+export type InsertCandidateContact = z.infer<typeof insertCandidateContactSchema>;
+export type CandidateContact = typeof candidateContacts.$inferSelect;
+
+// Candidate Leads
+export const insertCandidateLeadSchema = createInsertSchema(candidateLeads).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertCandidateLead = z.infer<typeof insertCandidateLeadSchema>;
+export type CandidateLead = typeof candidateLeads.$inferSelect;
+
+// Candidate Scores
+export const insertCandidateScoreSchema = createInsertSchema(candidateScores).omit({ id: true, createdAt: true });
+export type InsertCandidateScore = z.infer<typeof insertCandidateScoreSchema>;
+export type CandidateScore = typeof candidateScores.$inferSelect;
+
+// Evidence Sources
+export const insertEvidenceSourceSchema = createInsertSchema(evidenceSources).omit({ id: true, createdAt: true });
+export type InsertEvidenceSource = z.infer<typeof insertEvidenceSourceSchema>;
+export type EvidenceSource = typeof evidenceSources.$inferSelect;
+
+// Review Decisions
+export const insertReviewDecisionSchema = createInsertSchema(reviewDecisions).omit({ id: true, createdAt: true });
+export type InsertReviewDecision = z.infer<typeof insertReviewDecisionSchema>;
+export type ReviewDecision = typeof reviewDecisions.$inferSelect;
+
+// LG CRM Leads (linking table)
+export const insertLgCrmLeadSchema = createInsertSchema(lgCrmLeads).omit({ id: true, createdAt: true });
+export type InsertLgCrmLead = z.infer<typeof insertLgCrmLeadSchema>;
+export type LgCrmLead = typeof lgCrmLeads.$inferSelect;
+
+// LG CRM Tasks (linking table)
+export const insertLgCrmTaskSchema = createInsertSchema(lgCrmTasks).omit({ id: true, createdAt: true });
+export type InsertLgCrmTask = z.infer<typeof insertLgCrmTaskSchema>;
+export type LgCrmTask = typeof lgCrmTasks.$inferSelect;
+
+// LG Audit Events
+export const insertLgAuditEventSchema = createInsertSchema(lgAuditEvents).omit({ id: true, createdAt: true });
+export type InsertLgAuditEvent = z.infer<typeof insertLgAuditEventSchema>;
+export type LgAuditEvent = typeof lgAuditEvents.$inferSelect;

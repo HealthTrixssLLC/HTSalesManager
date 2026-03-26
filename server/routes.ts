@@ -35,7 +35,6 @@ import {
   savedFilters,
   insertSavedFilterSchema,
   opportunityResources,
-  insertOpportunityResourceSchema,
   comments,
   commentReactions,
   commentAttachments,
@@ -45,7 +44,6 @@ import {
   contacts,
   leads,
   opportunities,
-  opportunityResources,
   activities,
   activityAssociations,
   auditLogs,
@@ -93,7 +91,7 @@ async function createAudit(req: AuthRequest, action: string, resource: string, r
   }
 }
 
-export function registerRoutes(app: Express) {
+export async function registerRoutes(app: Express) {
 
   // ========== MICROSOFT ENTRA ID SSO ROUTES ==========
   registerEntraRoutes(app);
@@ -5117,4 +5115,8 @@ export function registerRoutes(app: Express) {
   // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);
+
+  // ========== LEAD GENERATION MODULE ROUTES ==========
+  const { registerLeadGenRoutes } = await import("./lead-gen-routes");
+  registerLeadGenRoutes(app);
 }

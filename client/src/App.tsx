@@ -26,6 +26,16 @@ import AuditLogPage from "@/pages/audit-log-page";
 import HelpPage from "@/pages/help-page";
 import AnalyticsPage from "@/pages/analytics-page";
 import ResourceAllocationPage from "@/pages/resource-allocation-page";
+import LeadGenDashboard from "@/pages/lead-gen-dashboard";
+import LeadGenIcpsPage from "@/pages/lead-gen-icps-page";
+import LeadGenIcpDetailPage from "@/pages/lead-gen-icp-detail-page";
+import LeadGenPlaybooksPage from "@/pages/lead-gen-playbooks-page";
+import LeadGenPlaybookDetailPage from "@/pages/lead-gen-playbook-detail-page";
+import LeadGenRunsPage from "@/pages/lead-gen-runs-page";
+import LeadGenRunDetailPage from "@/pages/lead-gen-run-detail-page";
+import LeadGenReviewPage from "@/pages/lead-gen-review-page";
+import LeadGenCandidateDetailPage from "@/pages/lead-gen-candidate-detail-page";
+import LeadGenReportsPage from "@/pages/lead-gen-reports-page";
 import { Redirect } from "wouter";
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -123,6 +133,18 @@ function Router() {
       <CrmGuardedRoute path="/admin" component={AdminConsole} />
       <CrmGuardedRoute path="/audit-log" component={AuditLogPage} />
       <ProtectedRoute path="/resource-allocation" component={ResourceAllocationPage} />
+
+      <CrmGuardedRoute path="/lead-gen" component={LeadGenDashboard} />
+      <CrmGuardedRoute path="/lead-gen/dashboard" component={LeadGenDashboard} />
+      <CrmGuardedRoute path="/lead-gen/icps" component={LeadGenIcpsPage} />
+      <CrmGuardedRoute path="/lead-gen/icps/:id" component={LeadGenIcpDetailPage} />
+      <CrmGuardedRoute path="/lead-gen/playbooks" component={LeadGenPlaybooksPage} />
+      <CrmGuardedRoute path="/lead-gen/playbooks/:id" component={LeadGenPlaybookDetailPage} />
+      <CrmGuardedRoute path="/lead-gen/runs" component={LeadGenRunsPage} />
+      <CrmGuardedRoute path="/lead-gen/runs/:id" component={LeadGenRunDetailPage} />
+      <CrmGuardedRoute path="/lead-gen/review" component={LeadGenReviewPage} />
+      <CrmGuardedRoute path="/lead-gen/candidates/:id" component={LeadGenCandidateDetailPage} />
+      <CrmGuardedRoute path="/lead-gen/reports" component={LeadGenReportsPage} />
 
       <Route>
         <div className="flex items-center justify-center min-h-screen">

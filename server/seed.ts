@@ -112,6 +112,34 @@ const defaultRoles: RoleConfig[] = [
       { resource: "Opportunity", action: "readOwn" },
     ],
   },
+  {
+    name: "SalesOperator",
+    description: "Operate lead generation runs: stage candidates, manage runs and ICPs, perform review decisions",
+    permissions: [
+      { resource: "LeadGen", action: "read" },
+      { resource: "LeadGen", action: "create" },
+      { resource: "LeadGen", action: "update" },
+      { resource: "LeadGen", action: "review" },
+      { resource: "Lead", action: "read" },
+      { resource: "Lead", action: "create" },
+      { resource: "Lead", action: "update" },
+      { resource: "Account", action: "read" },
+      { resource: "Contact", action: "read" },
+      { resource: "Activity", action: "read" },
+      { resource: "Activity", action: "create" },
+    ],
+  },
+  {
+    name: "Reviewer",
+    description: "Review staged candidates: approve, reject, or defer leads in the review queue",
+    permissions: [
+      { resource: "LeadGen", action: "read" },
+      { resource: "LeadGen", action: "review" },
+      { resource: "Lead", action: "read" },
+      { resource: "Account", action: "read" },
+      { resource: "Contact", action: "read" },
+    ],
+  },
 ];
 
 // Export the seeding logic so it can be called from role initialization
@@ -310,6 +338,70 @@ export async function ensureResourceRole() {
   }
 
   console.log("✓ Resource role added successfully");
+}
+
+export async function ensureLeadGenRoles() {
+  const existingRoles = await db.select().from(roles);
+
+  const newRoles = [
+    {
+      name: "SalesOperator",
+      description: "Operate lead generation runs: stage candidates, manage runs and ICPs, perform review decisions",
+      perms: [
+        { resource: "LeadGen", action: "read" },
+        { resource: "LeadGen", action: "create" },
+        { resource: "LeadGen", action: "update" },
+        { resource: "LeadGen", action: "review" },
+        { resource: "Lead", action: "read" },
+        { resource: "Lead", action: "create" },
+        { resource: "Lead", action: "update" },
+        { resource: "Account", action: "read" },
+        { resource: "Contact", action: "read" },
+        { resource: "Activity", action: "read" },
+        { resource: "Activity", action: "create" },
+      ],
+    },
+    {
+      name: "Reviewer",
+      description: "Review staged candidates: approve, reject, or defer leads in the review queue",
+      perms: [
+        { resource: "LeadGen", action: "read" },
+        { resource: "LeadGen", action: "review" },
+        { resource: "Lead", action: "read" },
+        { resource: "Account", action: "read" },
+        { resource: "Contact", action: "read" },
+      ],
+    },
+  ];
+
+  for (const roleDef of newRoles) {
+    if (existingRoles.find(r => r.name === roleDef.name)) continue;
+
+    console.log(`Adding ${roleDef.name} role to existing database...`);
+    const [createdRole] = await db.insert(roles).values({
+      name: roleDef.name,
+      description: roleDef.description,
+    }).returning();
+
+    for (const permDef of roleDef.perms) {
+      const existing = await db.select().from(permissions)
+        .where(eq(permissions.resource, permDef.resource));
+      const match = existing.find(p => p.action === permDef.action);
+      let permissionId: string;
+      if (match) {
+        permissionId = match.id;
+      } else {
+        const [created] = await db.insert(permissions).values({
+          resource: permDef.resource,
+          action: permDef.action,
+          description: `Permission to ${permDef.action} ${permDef.resource}`,
+        }).returning();
+        permissionId = created.id;
+      }
+      await db.insert(rolePermissions).values({ roleId: createdRole.id, permissionId });
+    }
+    console.log(`✓ ${roleDef.name} role added successfully`);
+  }
 }
 
 async function seed() {

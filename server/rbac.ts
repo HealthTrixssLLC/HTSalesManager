@@ -121,9 +121,10 @@ export async function initializeDefaultRolesAndPermissions() {
       console.log("✓ Default roles and permissions initialized successfully");
     } else {
       console.log("Roles already initialized");
-      const { ensureProductDeveloperRole, ensureResourceRole } = await import("./seed");
+      const { ensureProductDeveloperRole, ensureResourceRole, ensureLeadGenRoles } = await import("./seed");
       await ensureProductDeveloperRole();
       await ensureResourceRole();
+      await ensureLeadGenRoles();
     }
     
   } catch (error) {

@@ -90,7 +90,7 @@ app.use((req, res, next) => {
   });
   
   // Register API routes
-  registerRoutes(app);
+  await registerRoutes(app);
   
   // Error handling middleware
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

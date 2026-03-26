@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus, GanttChart } from "lucide-react";
+import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, LogOut, HelpCircle, Upload, BarChart3, Plus, GanttChart, Zap, BookOpen, Play, ClipboardList, BarChart2, UserCheck } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -36,6 +36,15 @@ const adminItems = [
   { title: "Admin Console",    url: "/admin",     icon: Settings },
   { title: "Audit Log",        url: "/audit-log", icon: History },
   { title: "Help & Migration", url: "/help",      icon: HelpCircle },
+];
+
+const leadGenItems = [
+  { title: "Dashboard",      url: "/lead-gen",           icon: Zap },
+  { title: "ICPs",           url: "/lead-gen/icps",      icon: UserCheck },
+  { title: "Task Playbooks", url: "/lead-gen/playbooks", icon: BookOpen },
+  { title: "Runs",           url: "/lead-gen/runs",      icon: Play },
+  { title: "Review Queue",   url: "/lead-gen/review",    icon: ClipboardList },
+  { title: "Reports",        url: "/lead-gen/reports",   icon: BarChart2 },
 ];
 
 const productDeveloperMenuItems = [
@@ -152,6 +161,40 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {!isProductDeveloper && (
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-white/40 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
+              Lead Generation
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {leadGenItems.map(item => {
+                  const active = isActive(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        className={
+                          active
+                            ? "text-white font-medium rounded-md"
+                            : "text-white/65 hover:text-white hover:bg-white/10 rounded-md transition-colors duration-150"
+                        }
+                        style={active ? { backgroundColor: "rgba(254,160,2,0.22)" } : undefined}
+                      >
+                        <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                          <item.icon className="h-4 w-4 shrink-0" style={active ? { color: "hsl(39,99%,60%)" } : undefined} />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          )}
 
           {visibleAdminItems.length > 0 && (
           <SidebarGroup className="mt-4">
