@@ -122,7 +122,7 @@ export interface IStorage {
   resetDatabase(): Promise<void>;
   
   // ========== DASHBOARD & STATS ==========
-  getDashboardStats(): Promise<{
+  getDashboardStats(year: number): Promise<{
     totalAccounts: number;
     totalContacts: number;
     totalLeads: number;

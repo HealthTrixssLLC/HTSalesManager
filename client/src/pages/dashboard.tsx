@@ -84,7 +84,15 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
-    queryKey: ["/api/dashboard/stats"],
+    queryKey: ["/api/dashboard/stats", selectedYear],
+    queryFn: async () => {
+      const res = await fetch(`/api/dashboard/stats?year=${selectedYear}`, { credentials: "include" });
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+      return res.json();
+    },
   });
 
   const { data: opportunities } = useQuery<OpportunityData[]>({

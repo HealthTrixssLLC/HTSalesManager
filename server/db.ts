@@ -635,7 +635,7 @@ export class PostgresStorage implements IStorage {
   
   // ========== DASHBOARD & STATS ==========
   
-  async getDashboardStats(): Promise<{
+  async getDashboardStats(year: number): Promise<{
     totalAccounts: number;
     totalContacts: number;
     totalLeads: number;
@@ -645,15 +645,33 @@ export class PostgresStorage implements IStorage {
     winRate: number;
     opportunitiesByCloseDate: { period: string; count: number; value: number; opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] }[];
   }> {
-    // Get counts
+    // Year date range
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    // Get counts (accounts and contacts are all-time)
     const accounts = await db.select({ count: sql<number>`count(*)` }).from(schema.accounts);
     const contacts = await db.select({ count: sql<number>`count(*)` }).from(schema.contacts);
-    const leads = await db.select({ count: sql<number>`count(*)` }).from(schema.leads);
+
+    // Leads created in the selected year
+    const leads = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.leads)
+      .where(and(
+        gte(schema.leads.createdAt, yearStart),
+        lte(schema.leads.createdAt, yearEnd)
+      ));
+
+    // Opportunities with close date in the selected year
     const opportunities = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.includeInForecast, true));
+      .where(and(
+        eq(schema.opportunities.includeInForecast, true),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
+      ));
     
-    // Get pipeline by stage (only opportunities included in forecast)
+    // Get pipeline by stage scoped to selected year
     const pipeline = await db
       .select({
         stage: schema.opportunities.stage,
@@ -661,31 +679,46 @@ export class PostgresStorage implements IStorage {
         value: sql<number>`sum(cast(${schema.opportunities.amount} as numeric))`,
       })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.includeInForecast, true))
+      .where(and(
+        eq(schema.opportunities.includeInForecast, true),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
+      ))
       .groupBy(schema.opportunities.stage);
     
-    // Get new leads this month
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    // New leads this month within the selected year
+    const now = new Date();
+    const targetMonth = year === now.getFullYear() ? now.getMonth() : 11;
+    const startOfMonth = new Date(year, targetMonth, 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(year, targetMonth + 1, 0, 23, 59, 59, 999);
     
     const newLeads = await db.select({ count: sql<number>`count(*)` })
       .from(schema.leads)
-      .where(gte(schema.leads.createdAt, startOfMonth));
+      .where(and(
+        gte(schema.leads.createdAt, startOfMonth),
+        lte(schema.leads.createdAt, endOfMonth)
+      ));
     
-    // Calculate win rate (only opportunities included in forecast)
+    // Calculate win rate scoped to selected year (close date in year)
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
         eq(schema.opportunities.stage, "closed_won"),
-        eq(schema.opportunities.includeInForecast, true)
+        eq(schema.opportunities.includeInForecast, true),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
       ));
     
     const closedLost = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
         eq(schema.opportunities.stage, "closed_lost"),
-        eq(schema.opportunities.includeInForecast, true)
+        eq(schema.opportunities.includeInForecast, true),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
       ));
     
     const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
@@ -693,9 +726,9 @@ export class PostgresStorage implements IStorage {
     
     // Get upcoming opportunities grouped by close date (month)
     // Only include open opportunities (not closed_won or closed_lost)
-    const now = new Date();
-    const sixMonthsLater = new Date(now);
-    sixMonthsLater.setMonth(now.getMonth() + 6);
+    const nowDate = new Date();
+    const sixMonthsLater = new Date(nowDate);
+    sixMonthsLater.setMonth(nowDate.getMonth() + 6);
     
     const upcomingOpps = await db
       .select({
@@ -713,7 +746,7 @@ export class PostgresStorage implements IStorage {
           or(
             and(
               isNotNull(schema.opportunities.closeDate),
-              gte(schema.opportunities.closeDate, now),
+              gte(schema.opportunities.closeDate, nowDate),
               lte(schema.opportunities.closeDate, sixMonthsLater)
             ),
             isNull(schema.opportunities.closeDate) // Include opportunities without close date

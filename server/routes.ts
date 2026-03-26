@@ -2118,7 +2118,17 @@ export function registerRoutes(app: Express) {
   
   app.get("/api/dashboard/stats", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const stats = await storage.getDashboardStats();
+      const currentYear = new Date().getFullYear();
+      const rawYear = req.query.year;
+      let year = currentYear;
+      if (rawYear !== undefined) {
+        const parsedYear = parseInt(rawYear as string, 10);
+        if (isNaN(parsedYear) || parsedYear < 2000 || parsedYear > 2100) {
+          return res.status(400).json({ error: "Invalid year parameter. Must be an integer between 2000 and 2100." });
+        }
+        year = parsedYear;
+      }
+      const stats = await storage.getDashboardStats(year);
       return res.json(stats);
     } catch (error) {
       console.error("Dashboard stats error:", error);
