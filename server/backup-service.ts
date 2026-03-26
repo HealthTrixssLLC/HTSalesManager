@@ -34,12 +34,33 @@ export interface BackupData {
     commentReactions: any[];
     commentAttachments: any[];
     commentSubscriptions: any[];
+    // Lead Generation Module tables (added in v2.0.0)
+    icpProfiles?: any[];
+    icpProfileVersions?: any[];
+    offers?: any[];
+    taskPlaybooks?: any[];
+    taskPlaybookSteps?: any[];
+    leadGenerationRuns?: any[];
+    agentStepLogs?: any[];
+    candidateAccounts?: any[];
+    candidateContacts?: any[];
+    candidateLeads?: any[];
+    candidateScores?: any[];
+    evidenceSources?: any[];
+    reviewDecisions?: any[];
+    lgCrmLeads?: any[];
+    lgCrmTasks?: any[];
+    lgAuditEvents?: any[];
+    // Research & Config tables (added in v2.0.0)
+    researchDocuments?: any[];
+    llmConfigurations?: any[];
+    aiConfigs?: any[];
   };
 }
 
 export class BackupService {
   private readonly ENCRYPTION_ALGORITHM = "aes-256-gcm";
-  private readonly BACKUP_VERSION = "1.0.0";
+  private readonly BACKUP_VERSION = "2.0.0";
   private readonly BATCH_SIZE = 50; // Insert records in batches to avoid PostgreSQL parameter limits
 
   /**
@@ -190,6 +211,45 @@ export class BackupService {
       db.select().from(schema.commentSubscriptions),
     ]);
 
+    // Batch 6: Lead Generation config tables (ICP profiles, offers, playbooks)
+    const [icpProfiles, icpProfileVersions, offers, taskPlaybooks, taskPlaybookSteps] = await Promise.all([
+      db.select().from(schema.icpProfiles),
+      db.select().from(schema.icpProfileVersions),
+      db.select().from(schema.offers),
+      db.select().from(schema.taskPlaybooks),
+      db.select().from(schema.taskPlaybookSteps),
+    ]);
+
+    // Batch 7: Lead Generation run tables
+    const [leadGenerationRuns, agentStepLogs] = await Promise.all([
+      db.select().from(schema.leadGenerationRuns),
+      db.select().from(schema.agentStepLogs),
+    ]);
+
+    // Batch 8: Candidate tables
+    const [candidateAccounts, candidateContacts, candidateLeads] = await Promise.all([
+      db.select().from(schema.candidateAccounts),
+      db.select().from(schema.candidateContacts),
+      db.select().from(schema.candidateLeads),
+    ]);
+
+    // Batch 9: Candidate scoring, evidence, decisions, and linking tables
+    const [candidateScores, evidenceSources, reviewDecisions, lgCrmLeads, lgCrmTasks, lgAuditEvents] = await Promise.all([
+      db.select().from(schema.candidateScores),
+      db.select().from(schema.evidenceSources),
+      db.select().from(schema.reviewDecisions),
+      db.select().from(schema.lgCrmLeads),
+      db.select().from(schema.lgCrmTasks),
+      db.select().from(schema.lgAuditEvents),
+    ]);
+
+    // Batch 10: Research documents and AI/LLM configuration
+    const [researchDocuments, llmConfigurations, aiConfigs] = await Promise.all([
+      db.select().from(schema.researchDocuments),
+      db.select().from(schema.llmConfigurations),
+      db.select().from(schema.aiConfigs),
+    ]);
+
     const backupData: BackupData = {
       version: this.BACKUP_VERSION,
       timestamp: new Date().toISOString(),
@@ -217,6 +277,25 @@ export class BackupService {
         commentReactions,
         commentAttachments,
         commentSubscriptions,
+        icpProfiles,
+        icpProfileVersions,
+        offers,
+        taskPlaybooks,
+        taskPlaybookSteps,
+        leadGenerationRuns,
+        agentStepLogs,
+        candidateAccounts,
+        candidateContacts,
+        candidateLeads,
+        candidateScores,
+        evidenceSources,
+        reviewDecisions,
+        lgCrmLeads,
+        lgCrmTasks,
+        lgAuditEvents,
+        researchDocuments,
+        llmConfigurations,
+        aiConfigs,
       },
     };
 
@@ -246,6 +325,7 @@ export class BackupService {
 
   /**
    * Restores data from a backup (extracts embedded checksum and verifies)
+   * Accepts v1.x and v2.x backups. Missing tables in older backups default to empty.
    * @throws Error if encryptionKey is not provided
    */
   async restoreBackup(
@@ -288,11 +368,21 @@ export class BackupService {
       const jsonData = buffer.toString("utf-8");
       const backupData: BackupData = JSON.parse(jsonData);
 
-      // Validate version
-      if (backupData.version !== this.BACKUP_VERSION) {
-        errors.push(
-          `Backup version mismatch: ${backupData.version} vs ${this.BACKUP_VERSION}`
+      // Validate version - only accept 1.x and 2.x backups; reject anything else
+      const backupMajor = parseInt((backupData.version || "1.0.0").split(".")[0], 10);
+      const currentMajor = parseInt(this.BACKUP_VERSION.split(".")[0], 10);
+      const SUPPORTED_MAJORS = [1, 2];
+      if (!SUPPORTED_MAJORS.includes(backupMajor)) {
+        throw new Error(
+          `Unsupported backup version v${backupData.version}. Only v1.x and v2.x backups are supported.`
         );
+      }
+      if (backupMajor !== currentMajor) {
+        const msg = `Cross-version restore: backup is v${backupData.version}, current is v${this.BACKUP_VERSION}. Missing tables will be skipped.`;
+        console.warn(`[Backup] WARNING: ${msg}`);
+        errors.push(msg);
+      } else if (backupData.version !== this.BACKUP_VERSION) {
+        console.log(`[Backup] Restoring from v${backupData.version} backup (current: v${this.BACKUP_VERSION})`);
       }
 
       // Use transaction for atomic restore
@@ -302,6 +392,50 @@ export class BackupService {
         // Clear ALL existing data (in reverse dependency order - child tables before parent tables)
         try {
           console.log("[Backup] Deleting existing data...");
+
+          // Lead Generation linking tables (most dependent)
+          await tx.delete(schema.lgCrmTasks);
+          await tx.delete(schema.lgCrmLeads);
+          await tx.delete(schema.lgAuditEvents);
+
+          // Lead Generation review/scoring/evidence (depend on candidateLeads)
+          await tx.delete(schema.reviewDecisions);
+          await tx.delete(schema.candidateScores);
+          await tx.delete(schema.evidenceSources);
+
+          // Candidate tables (depend on runs and accounts)
+          await tx.delete(schema.candidateLeads);
+          await tx.delete(schema.candidateContacts);
+          await tx.delete(schema.candidateAccounts);
+
+          // Agent step logs (depend on runs)
+          await tx.delete(schema.agentStepLogs);
+
+          // Lead generation runs (depend on ICP profiles)
+          await tx.delete(schema.leadGenerationRuns);
+
+          // Research documents (independent, but reference users/runs)
+          await tx.delete(schema.researchDocuments);
+
+          // Task playbook steps (depend on playbooks)
+          await tx.delete(schema.taskPlaybookSteps);
+
+          // Task playbooks (depend on ICP profiles)
+          await tx.delete(schema.taskPlaybooks);
+
+          // Offers (depend on ICP profiles)
+          await tx.delete(schema.offers);
+
+          // ICP profile versions (depend on ICP profiles)
+          await tx.delete(schema.icpProfileVersions);
+
+          // ICP profiles (independent)
+          await tx.delete(schema.icpProfiles);
+
+          // AI/LLM config (independent)
+          await tx.delete(schema.aiConfigs);
+          await tx.delete(schema.llmConfigurations);
+
           // Comments reference users, accounts, contacts, leads, opportunities
           await tx.delete(schema.commentReactions);
           await tx.delete(schema.commentAttachments);
@@ -550,6 +684,160 @@ export class BackupService {
           recordsRestored += (backupData.data.commentSubscriptions || []).length;
         } catch (error) {
           throw new Error(`Failed to restore comment subscriptions: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // ====== LEAD GENERATION MODULE RESTORE (v2.0.0+) ======
+        // All new fields use || [] to be backwards-compatible with v1.x backups
+
+        // Restore LLM configurations and AI configs (independent)
+        try {
+          await this.batchInsert(tx, schema.llmConfigurations, backupData.data.llmConfigurations || [], "LLM configurations");
+          recordsRestored += (backupData.data.llmConfigurations || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore LLM configurations: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        try {
+          await this.batchInsert(tx, schema.aiConfigs, backupData.data.aiConfigs || [], "AI configs");
+          recordsRestored += (backupData.data.aiConfigs || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore AI configs: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore ICP profiles (independent - no other tables depend on them at this point)
+        try {
+          await this.batchInsert(tx, schema.icpProfiles, backupData.data.icpProfiles || [], "ICP profiles");
+          recordsRestored += (backupData.data.icpProfiles || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore ICP profiles: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore ICP profile versions (depend on ICP profiles)
+        try {
+          await this.batchInsert(tx, schema.icpProfileVersions, backupData.data.icpProfileVersions || [], "ICP profile versions");
+          recordsRestored += (backupData.data.icpProfileVersions || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore ICP profile versions: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore offers (depend on ICP profiles)
+        try {
+          await this.batchInsert(tx, schema.offers, backupData.data.offers || [], "offers");
+          recordsRestored += (backupData.data.offers || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore offers: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore task playbooks (may reference ICP profiles)
+        try {
+          await this.batchInsert(tx, schema.taskPlaybooks, backupData.data.taskPlaybooks || [], "task playbooks");
+          recordsRestored += (backupData.data.taskPlaybooks || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore task playbooks: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore task playbook steps (depend on playbooks)
+        try {
+          await this.batchInsert(tx, schema.taskPlaybookSteps, backupData.data.taskPlaybookSteps || [], "task playbook steps");
+          recordsRestored += (backupData.data.taskPlaybookSteps || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore task playbook steps: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore lead generation runs (depend on ICP profiles/versions and users)
+        try {
+          await this.batchInsert(tx, schema.leadGenerationRuns, backupData.data.leadGenerationRuns || [], "lead generation runs");
+          recordsRestored += (backupData.data.leadGenerationRuns || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore lead generation runs: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore agent step logs (depend on runs)
+        try {
+          await this.batchInsert(tx, schema.agentStepLogs, backupData.data.agentStepLogs || [], "agent step logs");
+          recordsRestored += (backupData.data.agentStepLogs || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore agent step logs: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore candidate accounts (depend on runs and CRM accounts)
+        try {
+          await this.batchInsert(tx, schema.candidateAccounts, backupData.data.candidateAccounts || [], "candidate accounts");
+          recordsRestored += (backupData.data.candidateAccounts || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore candidate accounts: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore candidate contacts (depend on candidate accounts and runs)
+        try {
+          await this.batchInsert(tx, schema.candidateContacts, backupData.data.candidateContacts || [], "candidate contacts");
+          recordsRestored += (backupData.data.candidateContacts || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore candidate contacts: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore candidate leads (depend on runs, candidate accounts, candidate contacts, playbooks)
+        try {
+          await this.batchInsert(tx, schema.candidateLeads, backupData.data.candidateLeads || [], "candidate leads");
+          recordsRestored += (backupData.data.candidateLeads || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore candidate leads: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore candidate scores (depend on candidate leads)
+        try {
+          await this.batchInsert(tx, schema.candidateScores, backupData.data.candidateScores || [], "candidate scores");
+          recordsRestored += (backupData.data.candidateScores || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore candidate scores: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore evidence sources (depend on candidate leads and candidate accounts)
+        try {
+          await this.batchInsert(tx, schema.evidenceSources, backupData.data.evidenceSources || [], "evidence sources");
+          recordsRestored += (backupData.data.evidenceSources || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore evidence sources: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore review decisions (depend on candidate leads and users)
+        try {
+          await this.batchInsert(tx, schema.reviewDecisions, backupData.data.reviewDecisions || [], "review decisions");
+          recordsRestored += (backupData.data.reviewDecisions || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore review decisions: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore LG CRM leads (depend on candidate leads and CRM leads)
+        try {
+          await this.batchInsert(tx, schema.lgCrmLeads, backupData.data.lgCrmLeads || [], "LG CRM leads");
+          recordsRestored += (backupData.data.lgCrmLeads || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore LG CRM leads: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore LG CRM tasks (depend on candidate leads, activities, playbook steps, runs)
+        try {
+          await this.batchInsert(tx, schema.lgCrmTasks, backupData.data.lgCrmTasks || [], "LG CRM tasks");
+          recordsRestored += (backupData.data.lgCrmTasks || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore LG CRM tasks: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore LG audit events (depend on users and runs)
+        try {
+          await this.batchInsert(tx, schema.lgAuditEvents, backupData.data.lgAuditEvents || [], "LG audit events");
+          recordsRestored += (backupData.data.lgAuditEvents || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore LG audit events: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore research documents (depend on users; may reference runs)
+        try {
+          await this.batchInsert(tx, schema.researchDocuments, backupData.data.researchDocuments || [], "research documents");
+          recordsRestored += (backupData.data.researchDocuments || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore research documents: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
 
