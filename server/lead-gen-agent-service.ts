@@ -25,6 +25,7 @@ interface ResolvedLlmConfig {
   provider: string;
   model: string;
   baseUrl: string | null;
+  apiVersion: string | null;
   temperature: number;
   maxTokens: number;
   apiKey: string;
@@ -68,6 +69,7 @@ async function getLlmConfig(phase: string): Promise<ResolvedLlmConfig | null> {
     if (cfg.provider === "openai") apiKey = process.env.OPENAI_API_KEY || null;
     else if (cfg.provider === "anthropic") apiKey = process.env.ANTHROPIC_API_KEY || null;
     else if (cfg.provider === "google") apiKey = process.env.GOOGLE_API_KEY || null;
+    else if (cfg.provider === "azure") apiKey = process.env.AZURE_OPENAI_API_KEY || null;
   }
 
   if (!apiKey) return null;
@@ -80,6 +82,7 @@ async function getLlmConfig(phase: string): Promise<ResolvedLlmConfig | null> {
     provider: cfg.provider,
     model,
     baseUrl: cfg.baseUrl || null,
+    apiVersion: cfg.apiVersion || null,
     temperature: parseFloat(String(cfg.temperature ?? "0.7")),
     maxTokens: cfg.maxTokens ?? 4096,
     apiKey,
@@ -92,6 +95,40 @@ async function callLlm(
   userPrompt: string,
 ): Promise<string> {
   const { apiKey, temperature, maxTokens } = config;
+
+  if (config.provider === "azure") {
+    const baseUrl = (config.baseUrl || "").replace(/\/+$/, "");
+    if (!baseUrl) {
+      throw new Error("Azure OpenAI requires a base URL (Endpoint URL) to be configured");
+    }
+    const apiVersion = config.apiVersion || "2024-12-01-preview";
+    const url = `${baseUrl}/openai/deployments/${config.model}/chat/completions?api-version=${apiVersion}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Azure OpenAI API error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json() as {
+      choices: Array<{ message: { content: string } }>;
+    };
+    return data.choices[0]?.message?.content || "";
+  }
 
   if (config.provider === "openai" || config.provider === "openai-compatible") {
     const baseUrl = config.baseUrl || "https://api.openai.com/v1";

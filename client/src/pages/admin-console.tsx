@@ -28,6 +28,7 @@ interface LlmConfigSaveBody {
   provider: string;
   baseUrl: string | null;
   modelName: string;
+  apiVersion?: string | null;
   temperature: number;
   maxTokens: number;
   requestTimeout: number;
@@ -71,6 +72,7 @@ type LlmConfigData = {
   baseUrl: string | null;
   apiKeyHint: string | null;
   modelName: string;
+  apiVersion: string | null;
   temperature: string;
   maxTokens: number;
   requestTimeout: number;
@@ -87,6 +89,7 @@ function AiConfigTab() {
   const [provider, setProvider] = useState("openai");
   const [baseUrl, setBaseUrl] = useState("");
   const [modelName, setModelName] = useState("gpt-4o");
+  const [apiVersion, setApiVersion] = useState("");
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(4096);
   const [requestTimeout, setRequestTimeout] = useState(60);
@@ -104,6 +107,7 @@ function AiConfigTab() {
     setProvider(config.provider || "openai");
     setBaseUrl(config.baseUrl || "");
     setModelName(config.modelName || "gpt-4o");
+    setApiVersion(config.apiVersion || "");
     setTemperature(parseFloat(config.temperature) || 0.7);
     setMaxTokens(config.maxTokens || 4096);
     setRequestTimeout(config.requestTimeout || 60);
@@ -118,6 +122,7 @@ function AiConfigTab() {
         provider,
         baseUrl: baseUrl || null,
         modelName,
+        apiVersion: provider === "azure" ? (apiVersion || null) : null,
         temperature,
         maxTokens,
         requestTimeout,
@@ -167,13 +172,21 @@ function AiConfigTab() {
 
   const getDefaultModel = () => {
     if (provider === "anthropic") return "claude-3-5-sonnet-20241022";
+    if (provider === "azure") return "o3-mini";
     return "gpt-4o";
   };
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
-    setModelName(newProvider === "anthropic" ? "claude-3-5-sonnet-20241022" : "gpt-4o");
-    if (newProvider !== "custom") setBaseUrl("");
+    if (newProvider === "anthropic") {
+      setModelName("claude-3-5-sonnet-20241022");
+    } else if (newProvider === "azure") {
+      setModelName("o3-mini");
+    } else {
+      setModelName("gpt-4o");
+    }
+    if (newProvider !== "custom" && newProvider !== "azure") setBaseUrl("");
+    if (newProvider !== "azure") setApiVersion("");
   };
 
   if (isLoading) {
@@ -208,12 +221,13 @@ function AiConfigTab() {
                 <SelectContent>
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="azure">Azure OpenAI</SelectItem>
                   <SelectItem value="custom">Custom (OpenAI-compatible)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="llm-model">Model Name</Label>
+              <Label htmlFor="llm-model">{provider === "azure" ? "Deployment Name" : "Model Name"}</Label>
               <Input
                 id="llm-model"
                 value={modelName}
@@ -224,16 +238,30 @@ function AiConfigTab() {
             </div>
           </div>
 
-          {provider === "custom" && (
+          {(provider === "custom" || provider === "azure") && (
             <div className="space-y-2">
-              <Label htmlFor="llm-base-url">Base URL</Label>
+              <Label htmlFor="llm-base-url">{provider === "azure" ? "Endpoint URL" : "Base URL"}</Label>
               <Input
                 id="llm-base-url"
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="https://your-endpoint.example.com/v1"
+                placeholder={provider === "azure" ? "https://your-resource.openai.azure.com" : "https://your-endpoint.example.com/v1"}
                 data-testid="input-llm-base-url"
               />
+            </div>
+          )}
+
+          {provider === "azure" && (
+            <div className="space-y-2">
+              <Label htmlFor="llm-api-version">API Version</Label>
+              <Input
+                id="llm-api-version"
+                value={apiVersion}
+                onChange={(e) => setApiVersion(e.target.value)}
+                placeholder="2024-12-01-preview"
+                data-testid="input-llm-api-version"
+              />
+              <p className="text-xs text-muted-foreground">Azure OpenAI API version string (e.g. 2024-12-01-preview)</p>
             </div>
           )}
 

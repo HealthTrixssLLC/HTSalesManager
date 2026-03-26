@@ -5116,10 +5116,11 @@ export async function registerRoutes(app: Express) {
   // ========== LLM CONFIGURATION ROUTES (ADMIN ONLY) ==========
 
   const llmConfigPutSchema = z.object({
-    provider: z.enum(["openai", "anthropic", "custom"]).optional(),
+    provider: z.enum(["openai", "anthropic", "custom", "azure"]).optional(),
     baseUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
     apiKey: z.string().min(1).optional(),
     modelName: z.string().min(1).optional(),
+    apiVersion: z.union([z.string(), z.literal(""), z.null()]).optional(),
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().min(1).max(128000).optional(),
     requestTimeout: z.number().int().min(5).max(300).optional(),
@@ -5132,6 +5133,7 @@ export async function registerRoutes(app: Express) {
     provider?: string;
     baseUrl?: string | null;
     modelName?: string;
+    apiVersion?: string | null;
     temperature?: string;
     maxTokens?: number;
     requestTimeout?: number;
@@ -5174,6 +5176,7 @@ export async function registerRoutes(app: Express) {
       if (body.provider !== undefined) updateData.provider = body.provider;
       if (body.baseUrl !== undefined) updateData.baseUrl = body.baseUrl || null;
       if (body.modelName !== undefined) updateData.modelName = body.modelName;
+      if (body.apiVersion !== undefined) updateData.apiVersion = body.apiVersion || null;
       if (body.temperature !== undefined) updateData.temperature = body.temperature.toFixed(2);
       if (body.maxTokens !== undefined) updateData.maxTokens = body.maxTokens;
       if (body.requestTimeout !== undefined) updateData.requestTimeout = body.requestTimeout;
@@ -5239,6 +5242,34 @@ export async function registerRoutes(app: Express) {
           } else {
             const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
             testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+          }
+        } else if (config.provider === "azure") {
+          if (!config.baseUrl) {
+            testResult = { success: false, latencyMs: 0, error: "Azure OpenAI requires an Endpoint URL" };
+          } else {
+            const azureBaseUrl = config.baseUrl.replace(/\/+$/, "");
+            const apiVersion = config.apiVersion || "2024-12-01-preview";
+            const endpoint = `${azureBaseUrl}/openai/deployments/${config.modelName}/chat/completions?api-version=${apiVersion}`;
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "api-key": plainApiKey,
+              },
+              body: JSON.stringify({
+                max_tokens: 5,
+                messages: [{ role: "user", content: "ping" }],
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            const latencyMs = Date.now() - startTime;
+            if (response.ok) {
+              const data = await response.json() as { model?: string };
+              testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
+            } else {
+              const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
+              testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+            }
           }
         } else {
           const endpoint = config.baseUrl

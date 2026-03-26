@@ -453,11 +453,12 @@ export const researchDocuments = pgTable("research_documents", {
 
 export const llmConfigurations = pgTable("llm_configurations", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  provider: text("provider").notNull().default("openai"), // "openai", "anthropic", "custom"
+  provider: text("provider").notNull().default("openai"), // "openai", "anthropic", "custom", "azure"
   baseUrl: text("base_url"),
   encryptedApiKey: text("encrypted_api_key"),
   apiKeyHint: text("api_key_hint"), // Last 4 chars of key for display masking
   modelName: text("model_name").notNull().default("gpt-4o"),
+  apiVersion: text("api_version"), // Azure OpenAI: e.g. "2024-12-01-preview"
   temperature: decimal("temperature", { precision: 3, scale: 2 }).notNull().default("0.7"),
   maxTokens: integer("max_tokens").notNull().default(4096),
   requestTimeout: integer("request_timeout").notNull().default(60), // seconds
