@@ -134,8 +134,13 @@ async function callLlm(
     }
     const apiVersion = config.apiVersion || "2024-12-01-preview";
     const url = `${baseUrl}/openai/deployments/${config.model}/chat/completions?api-version=${apiVersion}`;
-    // o-series models (o1, o3, o4...) require max_completion_tokens and do not support temperature
+    // o-series models (o1, o3, o4...) require max_completion_tokens and do not support temperature.
+    // max_completion_tokens on o-series includes reasoning tokens as well as output tokens — the model
+    // can spend thousands of tokens reasoning internally, leaving very little for the actual JSON output.
+    // Using reasoning_effort:"low" caps reasoning overhead and leaves the budget for real output.
+    // We also use a minimum of 16000 so truncation doesn't cut off large JSON responses.
     const isOSeries = /^o\d/.test(config.model);
+    const effectiveMaxTokens = isOSeries ? Math.max(maxTokens * 4, 16000) : maxTokens;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -147,8 +152,8 @@ async function callLlm(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        ...(isOSeries ? {} : { temperature }),
-        max_completion_tokens: maxTokens,
+        ...(isOSeries ? { reasoning_effort: "low" } : { temperature }),
+        max_completion_tokens: effectiveMaxTokens,
       }),
     });
 
