@@ -5204,7 +5204,7 @@ export async function registerRoutes(app: Express) {
     try {
       const config = await storage.getLlmConfiguration();
       if (!config || !config.encryptedApiKey) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           error: [
             "No API key configured.",
@@ -5294,26 +5294,21 @@ export async function registerRoutes(app: Express) {
             }
           }
         } else {
-          const endpoint = config.baseUrl
-            ? `${config.baseUrl}/chat/completions`
-            : "https://api.openai.com/v1/chat/completions";
-          const response = await fetch(endpoint, {
-            method: "POST",
+          // Use the models list endpoint to validate the API key — this is model-agnostic
+          // and avoids parameter compatibility issues (e.g. max_tokens vs max_completion_tokens
+          // across o-series and gpt-series models).
+          const baseUrl = (config.baseUrl || "https://api.openai.com/v1").replace(/\/+$/, "");
+          const modelsEndpoint = `${baseUrl}/models`;
+          const response = await fetch(modelsEndpoint, {
+            method: "GET",
             headers: {
-              "Content-Type": "application/json",
               "Authorization": `Bearer ${plainApiKey}`,
             },
-            body: JSON.stringify({
-              model: config.modelName,
-              max_tokens: 5,
-              messages: [{ role: "user", content: "ping" }],
-            }),
             signal: AbortSignal.timeout(15000),
           });
           const latencyMs = Date.now() - startTime;
           if (response.ok) {
-            const data = await response.json() as { model?: string };
-            testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
+            testResult = { success: true, latencyMs, model: config.modelName };
           } else {
             const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
             testResult = { success: false, latencyMs, error: describeTestError(response.status, errData, "verify at platform.openai.com/api-keys") };
