@@ -248,6 +248,12 @@ function AiConfigTab() {
                 placeholder={provider === "azure" ? "https://your-resource.openai.azure.com" : "https://your-endpoint.example.com/v1"}
                 data-testid="input-llm-base-url"
               />
+              {provider === "azure" && (
+                <p className="text-xs text-muted-foreground">
+                  Enter only the root domain — <span className="font-medium">not</span> the full path.
+                  Example: <span className="font-mono">https://your-resource.openai.azure.com</span>
+                </p>
+              )}
             </div>
           )}
 
@@ -258,10 +264,19 @@ function AiConfigTab() {
                 id="llm-api-version"
                 value={apiVersion}
                 onChange={(e) => setApiVersion(e.target.value)}
-                placeholder="2024-12-01-preview"
+                placeholder="2025-03-01-preview"
                 data-testid="input-llm-api-version"
               />
-              <p className="text-xs text-muted-foreground">Azure OpenAI API version string (e.g. 2024-12-01-preview)</p>
+              <p className="text-xs text-muted-foreground">Recommended for o3-mini: <span className="font-mono">2025-03-01-preview</span></p>
+            </div>
+          )}
+
+          {provider === "azure" && baseUrl && modelName && (
+            <div className="rounded-md bg-muted/50 border px-3 py-2 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Full URL the pipeline will call:</p>
+              <p className="text-xs font-mono break-all text-foreground">
+                {baseUrl.replace(/\/+$/, "")}/openai/deployments/{modelName}/chat/completions?api-version={apiVersion || "2025-03-01-preview"}
+              </p>
             </div>
           )}
 
