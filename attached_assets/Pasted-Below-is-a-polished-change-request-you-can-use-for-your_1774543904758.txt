@@ -1,0 +1,331 @@
+Below is a polished change request you can use for your CRM lead generation enhancement.
+
+**Change Request**
+**Title:** CRM Lead Generation Enhancement with Agent Driven Market Research, Lead Discovery, and Communication Planning
+
+**Requestor:** Jay Baker
+**System:** CRM Application
+**Change Type:** Enhancement
+**Priority:** High
+**Business Area:** Sales, Marketing, Business Development
+
+**1. Purpose**
+
+This change request proposes an enhancement to the CRM platform to add an end to end lead generation workflow powered by AI agents. The enhancement will allow users to define an Ideal Customer Profile, create a task playbook, execute a lead generation run, and use agent based automation to perform external market research, identify target companies, identify target contacts, generate approach strategies, and draft customized communications.
+
+The enhancement is intended to create a one stop lead generation capability inside the CRM so that users can move from strategy to approved leads and approved activities in a seamless workflow.
+
+**2. Business Need**
+
+The current CRM process does not provide a unified workflow for external market research, company targeting, lead identification, strategic outreach planning, and promotion of qualified leads into the CRM. Much of this work is manual, fragmented, and inconsistent.
+
+The business needs a structured and repeatable lead generation process that:
+
+1. Starts with a defined ICP
+2. Uses a documented outreach or task playbook
+3. Executes external market and lead research
+4. Presents companies and leads for user review and approval
+5. Builds company level strategy and contact level communication recommendations
+6. Promotes approved companies and contacts into the CRM as leads
+7. Creates approved follow up activities automatically
+
+**3. Current State**
+
+Today, lead generation is either manual or only partially supported. Users may identify target accounts and contacts outside the CRM, but there is no integrated workflow that coordinates market research, lead discovery, approval, communication planning, and CRM record creation.
+
+The current process lacks:
+
+A formal ICP driven workflow
+An automated run concept
+Agent based external research
+A review and approval gate before lead creation
+Company level strategy output
+Contact specific communication generation
+Seamless promotion into CRM leads and activities
+
+**4. Proposed Future State**
+
+The CRM will support a structured lead generation workflow consisting of the following stages:
+
+1. ICP Profile Setup
+   The user creates or selects an Ideal Customer Profile that defines target market characteristics, company attributes, buyer personas, geography, industry focus, pain points, and desired opportunity criteria.
+
+2. Task Playbook Setup
+   The user creates or selects a task playbook that defines the lead generation objective, required research steps, outreach sequence, communication channels, approval rules, and activity templates.
+
+3. Execute Run
+   The user launches a lead generation run for a selected ICP and task playbook.
+
+4. Agent Orchestration
+   The system creates and coordinates a set of AI agents, using a framework such as CrewAI, to execute external market research and lead generation tasks.
+
+5. Company Discovery and Research
+   Agents identify target companies that match the ICP and create a company overview, market relevance summary, and strategic approach recommendation for each company.
+
+6. Contact Discovery and Research
+   Agents identify candidate contacts within approved or shortlisted companies, validate role fit, and generate lead level insights.
+
+7. User Review and Approval
+   The user reviews recommended companies and leads and approves, rejects, or edits them before promotion into the CRM.
+
+8. Communication Strategy Generation
+   For approved leads, agents research the company, contact, role, likely business priorities, and outreach approach, then generate customized communication guidance and draft messaging.
+
+9. CRM Promotion
+   Approved companies and leads are promoted into the CRM lead generation system as structured records.
+
+10. Activity Creation
+    Once the user approves the recommended outreach actions, the system creates activities in the CRM tied to the created leads and the assigned user or team.
+
+**5. In Scope**
+
+This enhancement includes the following capabilities:
+
+ICP profile configuration and management
+Task playbook configuration and management
+Lead generation run setup and execution
+Agent orchestration for market research and lead identification
+Use of external sources for research, not limited to internal CRM data
+Company discovery and company level research summaries
+Lead and contact discovery with validation support
+Approval workflow for companies and leads
+Generation of company strategy and approach plans
+Generation of customized communications for each lead
+Promotion of approved companies and leads into CRM records
+Creation of approved activities inside the CRM
+Run status tracking, audit history, and results review
+
+**6. Out of Scope**
+
+The following items are not included unless separately approved:
+
+Full marketing automation campaign execution
+Automated sending of emails or texts without user approval
+Third party data vendor contracts or data licensing
+Advanced predictive scoring models beyond initial rules based ranking
+Social media ad campaign execution
+Closed loop revenue attribution
+
+**7. End to End Workflow**
+
+**Step 1: Create or Select ICP**
+The user defines the target customer profile including market, product fit, company size, plan type, geography, role targets, business problems, and value proposition alignment.
+
+**Step 2: Create or Select Task Playbook**
+The user documents the lead generation playbook including research objectives, qualification standards, required outputs, approval steps, communication style, and follow up tasks.
+
+**Step 3: Launch Run**
+The user initiates a run and selects the ICP, playbook, desired volume, target market focus, and optional filters.
+
+**Step 4: System Creates Agents**
+The platform creates a coordinated set of agents to perform the work. Example agents may include:
+
+Market Research Agent
+Company Discovery Agent
+Lead Discovery Agent
+Data Validation Agent
+Strategy Agent
+Communication Drafting Agent
+CRM Promotion Agent
+
+**Step 5: Agents Perform Market Research**
+Agents research the market based on the ICP and identify sectors, competitor context, buyer trends, industry themes, and target company pools.
+
+**Step 6: Agents Identify Companies**
+Agents produce a recommended list of companies that fit the ICP. Each company record should include:
+
+Company name
+Website and market presence
+Industry and segment
+Size and location
+Why the company matches the ICP
+Company overview
+Strategic plan or approach strategy
+Recommended engagement angle
+
+**Step 7: User Reviews Companies**
+The user reviews company recommendations and approves, rejects, or edits them before moving forward.
+
+**Step 8: Agents Identify Leads or Candidates**
+For approved companies, agents identify relevant contacts or candidate leads and generate details such as:
+
+Name
+Title
+Role fit
+Reason for selection
+Available public business context
+Recommended outreach priority
+
+**Step 9: User Reviews Leads**
+The user reviews identified leads and approves, rejects, or edits them before promotion.
+
+**Step 10: Agents Build Outreach Strategy**
+For each approved company and lead, agents research the best approach for communication. The output should include:
+
+Company specific strategic approach
+Lead specific outreach angle
+Suggested channel such as email, text, or other communication
+Recommended tone and objective
+Customized communication draft
+Suggested next steps and follow up plan
+
+**Step 11: Promote to CRM**
+Approved companies and leads are created in the CRM lead generation system with all relevant metadata, research outputs, and strategy notes attached.
+
+**Step 12: Create Activities**
+Once outreach actions are approved, the system creates CRM activities such as:
+
+Initial outreach task
+Follow up task
+Call task
+Email task
+Research task
+Reminder task
+
+**8. Functional Requirements**
+
+**FR1. ICP Management**
+The system shall allow users to create, edit, version, archive, and reuse ICP profiles.
+
+**FR2. Task Playbook Management**
+The system shall allow users to create, edit, version, archive, and reuse task playbooks for lead generation workflows.
+
+**FR3. Run Configuration**
+The system shall allow users to launch a run using a selected ICP and task playbook with configurable filters and run parameters.
+
+**FR4. Agent Based Execution**
+The system shall create and orchestrate a set of AI agents to perform market research, company discovery, lead discovery, strategy creation, and communication generation.
+
+**FR5. External Research Support**
+The system shall support agent access to external information sources for market research, company research, and lead discovery. The workflow shall not be limited to internal CRM data.
+
+**FR6. Company Recommendation Output**
+The system shall generate a structured list of recommended companies with match rationale, company overview, and strategic approach.
+
+**FR7. Lead Recommendation Output**
+The system shall generate a structured list of recommended contacts or leads within target companies with role fit rationale and outreach relevance.
+
+**FR8. Approval Workflow**
+The system shall require user approval before companies and leads are promoted into the CRM.
+
+**FR9. Company Strategy Generation**
+The system shall produce a company overview and a recommended strategic engagement approach for each shortlisted company.
+
+**FR10. Customized Communication Generation**
+The system shall generate customized communication recommendations and draft content for each approved lead.
+
+**FR11. CRM Promotion**
+The system shall create CRM lead records from approved companies and leads.
+
+**FR12. Activity Creation**
+The system shall create CRM activities for approved outreach steps after user confirmation.
+
+**FR13. Audit Trail**
+The system shall maintain a run history showing who launched the run, when it was executed, what outputs were generated, and what approvals or rejections occurred.
+
+**FR14. User Assignment**
+The system shall support assignment of approved leads and activities to specific CRM users or teams.
+
+**FR15. Status Tracking**
+The system shall track run status, including queued, running, review pending, approved, rejected, promoted, and completed.
+
+**9. Non Functional Requirements**
+
+The workflow should be scalable to support multiple runs and multiple ICPs.
+The platform should provide clear traceability of how recommendations were generated.
+The user interface should make review and approval easy and fast.
+The system should avoid duplicate company and lead creation.
+The system should protect sensitive data and use only approved sources and approved integrations.
+The workflow should be modular so the orchestration framework, including CrewAI or equivalent, can be changed later without major redesign.
+
+**10. Data and Record Requirements**
+
+**ICP Record**
+Name, description, target segment, company attributes, role targets, geography, qualification criteria, active status, version
+
+**Task Playbook Record**
+Name, objective, sequence of steps, required outputs, activity templates, communication guidance, approval rules, version
+
+**Run Record**
+Run ID, ICP used, playbook used, execution date, status, initiated by, outputs summary
+
+**Company Recommendation Record**
+Company name, domain, segment, summary, ICP fit rationale, company overview, strategic approach, review status
+
+**Lead Recommendation Record**
+Lead name, title, company, role fit rationale, contact context, communication strategy, review status
+
+**Communication Record**
+Lead, recommended channel, message objective, customized message draft, next action recommendation
+
+**CRM Lead Record**
+Standard CRM lead fields plus source run, ICP reference, strategy notes, communication notes, approval metadata
+
+**Activity Record**
+Activity type, assigned owner, due date, linked lead, status, notes, source run
+
+**11. User Stories**
+
+As a business user, I want to define an ICP so the lead generation process targets the right market.
+
+As a business user, I want to define a task playbook so every run follows a repeatable strategy.
+
+As a business user, I want to launch a lead generation run so the system can perform external market research and identify opportunities.
+
+As a business user, I want the system to generate company level summaries and strategy plans so I understand how to approach each account.
+
+As a business user, I want the system to identify relevant contacts so I can focus on leads that match the ICP.
+
+As a business user, I want to approve companies and leads before they are created in the CRM so I maintain control and data quality.
+
+As a business user, I want customized communication recommendations for each lead so outreach is more effective.
+
+As a business user, I want approved leads and activities to be automatically created in the CRM so execution is seamless.
+
+**12. Acceptance Criteria**
+
+The enhancement will be considered complete when the following are true:
+
+1. A user can create and save an ICP profile.
+2. A user can create and save a task playbook.
+3. A user can launch a run using an ICP and a playbook.
+4. The system creates and coordinates research agents for the run.
+5. The system returns recommended companies that match the ICP.
+6. Each recommended company includes a company overview and strategic approach.
+7. The system returns recommended leads for target companies.
+8. The user can approve or reject companies and leads.
+9. The system generates customized communication guidance for approved leads.
+10. Approved leads are promoted into CRM lead records.
+11. Approved activities are created in the CRM and linked to the appropriate leads.
+12. The system stores run history, approvals, and generated outputs.
+13. Duplicate detection prevents unnecessary duplicate lead or company creation.
+14. The workflow supports end to end execution without requiring manual reentry of approved data.
+
+**13. Risks and Considerations**
+
+External data quality may vary and should be validated before promotion.
+AI generated outputs may require review and editing before use.
+Compliance rules may be needed for approved communication channels and content.
+Duplicate management will be important when promoting companies and leads.
+The orchestration layer should be designed so that CrewAI or any future framework can be swapped with minimal impact.
+
+**14. Recommended Technical Approach**
+
+Use a modular orchestration layer that can create specialized agents for each run. CrewAI may be used as an initial framework to coordinate market research, company discovery, lead discovery, strategy generation, and communication generation.
+
+Recommended architecture components:
+
+CRM front end for ICP, playbook, run setup, review, and approvals
+Agent orchestration service
+External research connectors and search utilities
+Lead and company recommendation store
+Approval engine
+CRM promotion service
+Activity generation service
+Audit and run history service
+
+**15. Business Outcome**
+
+This enhancement will give the CRM a true agent driven lead generation capability that moves from strategy to execution in a controlled and scalable workflow. It will improve lead quality, reduce manual research effort, increase consistency in outreach planning, and accelerate the movement of qualified opportunities into the CRM pipeline.
+
+Next step could be turning this into a formal BRD, a Replit build package, or a developer ready user story backlog.
