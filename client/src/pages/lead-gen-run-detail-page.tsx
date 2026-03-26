@@ -346,18 +346,6 @@ export default function LeadGenRunDetailPage() {
     onError: () => toast({ title: "Failed to stage candidate", variant: "destructive" }),
   });
 
-  const retryPhaseMutation = useMutation({
-    mutationFn: async (phase: string) => {
-      const res = await apiRequest("POST", `/api/lead-gen/runs/${id}/retry-phase`, { startFromPhase: phase });
-      return await res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
-      toast({ title: "Pipeline retrying", description: "The AI pipeline is running again from the failed phase." });
-    },
-    onError: (err: Error) => toast({ title: "Retry failed", description: err.message, variant: "destructive" }),
-  });
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full p-12">

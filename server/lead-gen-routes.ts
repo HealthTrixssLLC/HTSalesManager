@@ -1399,6 +1399,9 @@ export function registerLeadGenRoutes(app: Express) {
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: "Failed to delete AI config" });
+    }
+  });
+
   // Run-specific audit events (with optional actor info)
   app.get("/api/lead-gen/runs/:id/audit-events", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
@@ -1615,46 +1618,4 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  const aiConfigPatchSchema = z.object({
-    name: z.string().min(1).optional(),
-    provider: z.string().optional(),
-    model: z.string().optional(),
-    apiKeyEnvVar: z.string().optional().nullable(),
-    baseUrl: z.string().optional().nullable(),
-    temperature: z.string().optional().nullable(),
-    maxTokens: z.number().int().optional().nullable(),
-    agentPhase: z.string().optional().nullable(),
-    isDefault: z.boolean().optional(),
-    isActive: z.boolean().optional(),
-    metadata: z.record(z.unknown()).optional().nullable(),
-  });
-
-  app.patch("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
-    try {
-      const parsed = aiConfigPatchSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
-      if (parsed.data.isDefault) {
-        await db.update(schema.aiConfigs).set({ isDefault: false, updatedAt: new Date() });
-      }
-      const result = await db.update(schema.aiConfigs)
-        .set({ ...parsed.data, updatedAt: new Date() })
-        .where(eq(schema.aiConfigs.id, req.params.id))
-        .returning();
-      if (!result[0]) return res.status(404).json({ error: "AI config not found" });
-      await createLgAudit(req.user?.id, "ai_config_updated", "AiConfig", req.params.id, null, parsed.data as Record<string, unknown>);
-      return res.json(result[0]);
-    } catch (err) {
-      return res.status(500).json({ error: "Failed to update AI config" });
-    }
-  });
-
-  app.delete("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
-    try {
-      await db.delete(schema.aiConfigs).where(eq(schema.aiConfigs.id, req.params.id));
-      await createLgAudit(req.user?.id, "ai_config_deleted", "AiConfig", req.params.id, null, {});
-      return res.json({ success: true });
-    } catch (err) {
-      return res.status(500).json({ error: "Failed to delete AI config" });
-    }
-  });
 }
