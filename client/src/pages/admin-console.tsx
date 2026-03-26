@@ -3,8 +3,10 @@
 
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
+import { Slider } from "@/components/ui/slider";
 import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +23,18 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
 
 type UserWithRoles = User & { roles: Role[] };
+
+interface LlmConfigSaveBody {
+  provider: string;
+  baseUrl: string | null;
+  modelName: string;
+  temperature: number;
+  maxTokens: number;
+  requestTimeout: number;
+  enabledAgents: string[];
+  agentModelOverrides: Record<string, string>;
+  apiKey?: string;
+}
 
 function getRoleBadgeClass(roleName?: string): string {
   switch (roleName) {
@@ -41,8 +55,367 @@ function getRoleBadgeClass(roleName?: string): string {
   }
 }
 
+const AGENT_LABELS: Record<string, string> = {
+  market_research: "Market Research",
+  company_discovery: "Company Discovery",
+  lead_discovery: "Lead Discovery",
+  strategy: "Strategy",
+  communication_drafting: "Communication Drafting",
+};
+
+const AGENT_KEYS = Object.keys(AGENT_LABELS);
+
+type LlmConfigData = {
+  id: string;
+  provider: string;
+  baseUrl: string | null;
+  apiKeyHint: string | null;
+  modelName: string;
+  temperature: string;
+  maxTokens: number;
+  requestTimeout: number;
+  enabledAgents: string[];
+  agentModelOverrides: Record<string, string>;
+  hasApiKey: boolean;
+  updatedAt: string;
+};
+
+function AiConfigTab() {
+  const { toast } = useToast();
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [provider, setProvider] = useState("openai");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [modelName, setModelName] = useState("gpt-4o");
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(4096);
+  const [requestTimeout, setRequestTimeout] = useState(60);
+  const [enabledAgents, setEnabledAgents] = useState<string[]>(AGENT_KEYS);
+  const [agentModelOverrides, setAgentModelOverrides] = useState<Record<string, string>>({});
+  const [initialized, setInitialized] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; latencyMs: number; model?: string; error?: string } | null>(null);
+
+  const { data: config, isLoading } = useQuery<LlmConfigData | null>({
+    queryKey: ["/api/admin/llm-config"],
+  });
+
+  // Initialize form from loaded config
+  if (config && !initialized) {
+    setProvider(config.provider || "openai");
+    setBaseUrl(config.baseUrl || "");
+    setModelName(config.modelName || "gpt-4o");
+    setTemperature(parseFloat(config.temperature) || 0.7);
+    setMaxTokens(config.maxTokens || 4096);
+    setRequestTimeout(config.requestTimeout || 60);
+    setEnabledAgents(Array.isArray(config.enabledAgents) ? config.enabledAgents : AGENT_KEYS);
+    setAgentModelOverrides((config.agentModelOverrides as Record<string, string>) || {});
+    setInitialized(true);
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const body: LlmConfigSaveBody = {
+        provider,
+        baseUrl: baseUrl || null,
+        modelName,
+        temperature,
+        maxTokens,
+        requestTimeout,
+        enabledAgents,
+        agentModelOverrides,
+      };
+      if (apiKeyInput.trim()) {
+        body.apiKey = apiKeyInput.trim();
+      }
+      const res = await apiRequest("PUT", "/api/admin/llm-config", body);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/llm-config"] });
+      setApiKeyInput("");
+      setInitialized(false);
+      toast({ title: "AI configuration saved successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to save configuration", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/llm-config/test", {});
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setTestResult(data);
+      if (data.success) {
+        toast({ title: `Connection successful — ${data.latencyMs}ms latency, model: ${data.model}` });
+      } else {
+        toast({ title: "Connection failed", description: data.error, variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Test failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const toggleAgent = (agentKey: string) => {
+    setEnabledAgents(prev =>
+      prev.includes(agentKey) ? prev.filter(a => a !== agentKey) : [...prev, agentKey]
+    );
+  };
+
+  const getDefaultModel = () => {
+    if (provider === "anthropic") return "claude-3-5-sonnet-20241022";
+    return "gpt-4o";
+  };
+
+  const handleProviderChange = (newProvider: string) => {
+    setProvider(newProvider);
+    setModelName(newProvider === "anthropic" ? "claude-3-5-sonnet-20241022" : "gpt-4o");
+    if (newProvider !== "custom") setBaseUrl("");
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          Loading AI configuration...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Provider & Credentials */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-5 w-5" />
+            Provider & Credentials
+          </CardTitle>
+          <CardDescription>Configure which LLM provider and credentials to use for the lead generation agent engine</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="llm-provider">LLM Provider</Label>
+              <Select value={provider} onValueChange={handleProviderChange}>
+                <SelectTrigger id="llm-provider" data-testid="select-llm-provider">
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="custom">Custom (OpenAI-compatible)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="llm-model">Model Name</Label>
+              <Input
+                id="llm-model"
+                value={modelName}
+                onChange={(e) => setModelName(e.target.value)}
+                placeholder={getDefaultModel()}
+                data-testid="input-llm-model"
+              />
+            </div>
+          </div>
+
+          {provider === "custom" && (
+            <div className="space-y-2">
+              <Label htmlFor="llm-base-url">Base URL</Label>
+              <Input
+                id="llm-base-url"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://your-endpoint.example.com/v1"
+                data-testid="input-llm-base-url"
+              />
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="llm-api-key">API Key</Label>
+            {config?.hasApiKey && !apiKeyInput && (
+              <p className="text-sm text-muted-foreground">
+                A key is saved (ends in <span className="font-mono font-medium">...{config.apiKeyHint}</span>). Enter a new key to replace it.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="llm-api-key"
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={config?.hasApiKey ? "Enter new key to replace existing" : "sk-..."}
+                  className="pr-10"
+                  data-testid="input-llm-api-key"
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  type="button"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  data-testid="button-toggle-api-key-visibility"
+                >
+                  {showApiKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Generation Parameters */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Generation Parameters</CardTitle>
+          <CardDescription>Control how the LLM generates responses</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label>Temperature</Label>
+              <span className="text-sm font-mono text-muted-foreground" data-testid="text-temperature-value">{temperature.toFixed(2)}</span>
+            </div>
+            <Slider
+              min={0}
+              max={2}
+              step={0.01}
+              value={[temperature]}
+              onValueChange={([val]) => setTemperature(val)}
+              data-testid="slider-temperature"
+            />
+            <p className="text-xs text-muted-foreground">Lower = more focused/deterministic. Higher = more creative/random. (0.0 – 2.0)</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="llm-max-tokens">Max Tokens</Label>
+              <Input
+                id="llm-max-tokens"
+                type="number"
+                min={1}
+                max={128000}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(parseInt(e.target.value) || 4096)}
+                data-testid="input-llm-max-tokens"
+              />
+              <p className="text-xs text-muted-foreground">Maximum tokens in the LLM response</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="llm-timeout">Request Timeout (seconds)</Label>
+              <Input
+                id="llm-timeout"
+                type="number"
+                min={5}
+                max={300}
+                value={requestTimeout}
+                onChange={(e) => setRequestTimeout(parseInt(e.target.value) || 60)}
+                data-testid="input-llm-timeout"
+              />
+              <p className="text-xs text-muted-foreground">How long to wait before timing out LLM requests</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Agent Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Configuration</CardTitle>
+          <CardDescription>Enable or disable individual agents and optionally override the model used per agent</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {AGENT_KEYS.map((agentKey) => {
+            const isEnabled = enabledAgents.includes(agentKey);
+            const override = agentModelOverrides[agentKey] || "";
+            return (
+              <div key={agentKey} className="rounded-md border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-sm">{AGENT_LABELS[agentKey]}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{agentKey.replace(/_/g, " ")} agent</p>
+                  </div>
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={() => toggleAgent(agentKey)}
+                    data-testid={`switch-agent-${agentKey}`}
+                  />
+                </div>
+                {isEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Model Override (optional)</Label>
+                    <Input
+                      value={override}
+                      onChange={(e) => setAgentModelOverrides(prev => ({
+                        ...prev,
+                        [agentKey]: e.target.value,
+                      }))}
+                      placeholder={`Default: ${modelName}`}
+                      className="text-sm"
+                      data-testid={`input-agent-model-override-${agentKey}`}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      {/* Test Connection & Save */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+              data-testid="button-save-llm-config"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {saveMutation.isPending ? "Saving..." : "Save Configuration"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => testMutation.mutate()}
+              disabled={testMutation.isPending || !config?.hasApiKey || !!apiKeyInput.trim()}
+              title={apiKeyInput.trim() ? "Save your configuration first before testing" : !config?.hasApiKey ? "No API key saved yet" : "Test the saved API key connection"}
+              data-testid="button-test-llm-connection"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              {testMutation.isPending ? "Testing..." : "Test Connection"}
+            </Button>
+            {apiKeyInput.trim() && (
+              <p className="text-xs text-muted-foreground" data-testid="text-test-save-first">
+                Save configuration first to test the new API key.
+              </p>
+            )}
+            {testResult && (
+              <div className={`flex items-center gap-2 text-sm rounded-md px-3 py-1.5 ${testResult.success ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400" : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"}`} data-testid="text-test-result">
+                {testResult.success ? (
+                  <><Check className="h-4 w-4" /> Connected — {testResult.latencyMs}ms — {testResult.model}</>
+                ) : (
+                  <><X className="h-4 w-4" /> Failed: {testResult.error}</>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminConsole() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.roles?.some((r: Role) => r.name === "Admin") ?? false;
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmClearAccountsOpen, setConfirmClearAccountsOpen] = useState(false);
   const [confirmSystemResetOpen, setConfirmSystemResetOpen] = useState(false);
@@ -611,6 +984,7 @@ export default function AdminConsole() {
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
+          {isAdmin && <TabsTrigger value="ai-config" data-testid="tab-ai-config">AI Configuration</TabsTrigger>}
         </TabsList>
 
         {/* Users Tab */}
@@ -1399,6 +1773,13 @@ export default function AdminConsole() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* AI Configuration Tab — Admin only */}
+        {isAdmin && (
+          <TabsContent value="ai-config" className="space-y-4">
+            <AiConfigTab />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit ID Pattern Dialog */}

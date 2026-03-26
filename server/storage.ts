@@ -15,6 +15,9 @@ import type {
   AccountCategory, InsertAccountCategory,
   BackupJob, InsertBackupJob,
   OpportunityResource, InsertOpportunityResource,
+  LlmConfiguration, InsertLlmConfiguration,
+  Tag, InsertTag,
+  EntityTag,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -117,6 +120,10 @@ export interface IStorage {
   addOpportunityResource(resource: InsertOpportunityResource): Promise<OpportunityResource>;
   removeOpportunityResource(id: string): Promise<void>;
   getAllOpportunityResources(): Promise<OpportunityResource[]>;
+  
+  // ========== LLM CONFIGURATION ==========
+  getLlmConfiguration(): Promise<LlmConfiguration | undefined>;
+  upsertLlmConfiguration(config: Partial<InsertLlmConfiguration> & { updatedBy?: string }): Promise<LlmConfiguration>;
   
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;

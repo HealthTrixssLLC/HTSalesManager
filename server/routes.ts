@@ -52,6 +52,7 @@ import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
 import { DynamicsMapper, type DynamicsMappingConfig } from "./dynamics-mapper";
 import { generateApiKey } from "./api-key-utils";
+import { encryptApiKey, decryptApiKey } from "./llm-key-utils";
 import externalApiRoutes from "./external-api-routes";
 import { registerEntraRoutes } from "./entra-auth";
 import multer from "multer";
@@ -5109,6 +5110,172 @@ export async function registerRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting saved filter:", error);
       return res.status(500).json({ error: "Failed to delete saved filter" });
+    }
+  });
+
+  // ========== LLM CONFIGURATION ROUTES (ADMIN ONLY) ==========
+
+  const llmConfigPutSchema = z.object({
+    provider: z.enum(["openai", "anthropic", "custom"]).optional(),
+    baseUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
+    apiKey: z.string().min(1).optional(),
+    modelName: z.string().min(1).optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().int().min(1).max(128000).optional(),
+    requestTimeout: z.number().int().min(5).max(300).optional(),
+    enabledAgents: z.array(z.string()).optional(),
+    agentModelOverrides: z.record(z.string()).optional(),
+  });
+
+  type LlmConfigUpdate = {
+    updatedBy: string;
+    provider?: string;
+    baseUrl?: string | null;
+    modelName?: string;
+    temperature?: string;
+    maxTokens?: number;
+    requestTimeout?: number;
+    enabledAgents?: string[];
+    agentModelOverrides?: Record<string, string>;
+    encryptedApiKey?: string;
+    apiKeyHint?: string;
+  };
+
+  type LlmTestResult = { success: boolean; latencyMs: number; model?: string; error?: string };
+
+  type OpenAiResponseBody = { model?: string; error?: { message?: string } };
+
+  // GET /api/admin/llm-config - fetch current LLM configuration (API key never sent)
+  app.get("/api/admin/llm-config", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const config = await storage.getLlmConfiguration();
+      if (!config) {
+        return res.json(null);
+      }
+      const { encryptedApiKey: _omit, ...safeConfig } = config;
+      return res.json({ ...safeConfig, hasApiKey: !!config.encryptedApiKey });
+    } catch (error) {
+      console.error("Error fetching LLM configuration:", error);
+      return res.status(500).json({ error: "Failed to fetch LLM configuration" });
+    }
+  });
+
+  // PUT /api/admin/llm-config - save LLM configuration; API key encrypted with AES-256-GCM
+  app.put("/api/admin/llm-config", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = llmConfigPutSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Validation failed", details: parsed.error.errors });
+      }
+      const body = parsed.data;
+
+      const updateData: LlmConfigUpdate = { updatedBy: req.user!.id };
+
+      if (body.provider !== undefined) updateData.provider = body.provider;
+      if (body.baseUrl !== undefined) updateData.baseUrl = body.baseUrl || null;
+      if (body.modelName !== undefined) updateData.modelName = body.modelName;
+      if (body.temperature !== undefined) updateData.temperature = body.temperature.toFixed(2);
+      if (body.maxTokens !== undefined) updateData.maxTokens = body.maxTokens;
+      if (body.requestTimeout !== undefined) updateData.requestTimeout = body.requestTimeout;
+      if (body.enabledAgents !== undefined) updateData.enabledAgents = body.enabledAgents;
+      if (body.agentModelOverrides !== undefined) updateData.agentModelOverrides = body.agentModelOverrides;
+
+      // Encrypt the API key with AES-256-GCM before storing
+      if (body.apiKey) {
+        const plainKey = body.apiKey.trim();
+        updateData.encryptedApiKey = encryptApiKey(plainKey);
+        updateData.apiKeyHint = plainKey.slice(-4);
+      }
+
+      const config = await storage.upsertLlmConfiguration(updateData);
+      const { encryptedApiKey: _omit, ...safeConfig } = config;
+      return res.json({ ...safeConfig, hasApiKey: !!config.encryptedApiKey });
+    } catch (error) {
+      console.error("Error saving LLM configuration:", error);
+      return res.status(500).json({ error: "Failed to save LLM configuration" });
+    }
+  });
+
+  // POST /api/admin/llm-config/test - ping the configured LLM and return latency / model
+  app.post("/api/admin/llm-config/test", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const config = await storage.getLlmConfiguration();
+      if (!config || !config.encryptedApiKey) {
+        return res.status(400).json({ error: "No LLM configuration or API key found. Please save configuration first." });
+      }
+
+      // Decrypt the stored API key (handles both encrypted keys and legacy plaintext)
+      let plainApiKey: string;
+      try {
+        plainApiKey = decryptApiKey(config.encryptedApiKey);
+      } catch {
+        // Fallback: treat as plaintext (only for pre-encryption legacy records)
+        plainApiKey = config.encryptedApiKey;
+      }
+      const startTime = Date.now();
+      let testResult: LlmTestResult;
+
+      try {
+        if (config.provider === "anthropic") {
+          const baseUrl = config.baseUrl || "https://api.anthropic.com";
+          const response = await fetch(`${baseUrl}/v1/messages`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": plainApiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: config.modelName,
+              max_tokens: 5,
+              messages: [{ role: "user", content: "ping" }],
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const latencyMs = Date.now() - startTime;
+          if (response.ok) {
+            const data = await response.json() as { model?: string };
+            testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
+          } else {
+            const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
+            testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+          }
+        } else {
+          const endpoint = config.baseUrl
+            ? `${config.baseUrl}/chat/completions`
+            : "https://api.openai.com/v1/chat/completions";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${plainApiKey}`,
+            },
+            body: JSON.stringify({
+              model: config.modelName,
+              max_tokens: 5,
+              messages: [{ role: "user", content: "ping" }],
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const latencyMs = Date.now() - startTime;
+          if (response.ok) {
+            const data = await response.json() as { model?: string };
+            testResult = { success: true, latencyMs, model: data.model ?? config.modelName };
+          } else {
+            const errData = await response.json().catch(() => ({}) as OpenAiResponseBody) as OpenAiResponseBody;
+            testResult = { success: false, latencyMs, error: errData.error?.message ?? `HTTP ${response.status}` };
+          }
+        }
+      } catch (fetchError: unknown) {
+        const latencyMs = Date.now() - startTime;
+        const message = fetchError instanceof Error ? fetchError.message : "Connection failed";
+        testResult = { success: false, latencyMs, error: message };
+      }
+
+      return res.json(testResult);
+    } catch (error) {
+      console.error("Error testing LLM configuration:", error);
+      return res.status(500).json({ error: "Failed to test LLM configuration" });
     }
   });
 

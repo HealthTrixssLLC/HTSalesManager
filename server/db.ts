@@ -981,6 +981,36 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(schema.opportunityResources);
   }
   
+  // ========== LLM CONFIGURATION ==========
+  
+  async getLlmConfiguration(): Promise<schema.LlmConfiguration | undefined> {
+    const results = await db.select().from(schema.llmConfigurations).limit(1);
+    return results[0];
+  }
+  
+  async upsertLlmConfiguration(config: Partial<schema.InsertLlmConfiguration> & { updatedBy?: string }): Promise<schema.LlmConfiguration> {
+    const existing = await this.getLlmConfiguration();
+    if (existing) {
+      const result = await db.update(schema.llmConfigurations)
+        .set({ ...config, updatedAt: new Date() })
+        .where(eq(schema.llmConfigurations.id, existing.id))
+        .returning();
+      return result[0];
+    } else {
+      const result = await db.insert(schema.llmConfigurations).values({
+        provider: "openai",
+        modelName: "gpt-4o",
+        temperature: "0.7",
+        maxTokens: 4096,
+        requestTimeout: 60,
+        enabledAgents: ["market_research", "company_discovery", "lead_discovery", "strategy", "communication_drafting"],
+        agentModelOverrides: {},
+        ...config,
+      }).returning();
+      return result[0];
+    }
+  }
+  
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {

@@ -449,6 +449,33 @@ export const researchDocuments = pgTable("research_documents", {
   documentTypeIdx: index("research_documents_doc_type_idx").on(table.documentType),
 }));
 
+// ========== LLM CONFIGURATION TABLE ==========
+
+export const llmConfigurations = pgTable("llm_configurations", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  provider: text("provider").notNull().default("openai"), // "openai", "anthropic", "custom"
+  baseUrl: text("base_url"),
+  encryptedApiKey: text("encrypted_api_key"),
+  apiKeyHint: text("api_key_hint"), // Last 4 chars of key for display masking
+  modelName: text("model_name").notNull().default("gpt-4o"),
+  temperature: decimal("temperature", { precision: 3, scale: 2 }).notNull().default("0.7"),
+  maxTokens: integer("max_tokens").notNull().default(4096),
+  requestTimeout: integer("request_timeout").notNull().default(60), // seconds
+  enabledAgents: jsonb("enabled_agents").default(["market_research", "company_discovery", "lead_discovery", "strategy", "communication_drafting"]),
+  agentModelOverrides: jsonb("agent_model_overrides").default({}), // { agentName: modelName }
+  updatedBy: varchar("updated_by", { length: 50 }).references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertLlmConfigurationSchema = createInsertSchema(llmConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertLlmConfiguration = z.infer<typeof insertLlmConfigurationSchema>;
+export type LlmConfiguration = typeof llmConfigurations.$inferSelect;
+
 // ========== LEAD GENERATION MODULE TABLES ==========
 
 export const icpProfiles = pgTable("icp_profiles", {
