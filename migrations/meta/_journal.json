@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1741868400000,
+      "tag": "0001_drop_primary_contact_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1741882020000,
+      "tag": "0002_add_opportunity_resources_and_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1741895340000,
+      "tag": "0002_add_opportunity_resources",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1743008461000,
+      "tag": "0003_add_llm_configurations",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774601000000,
+      "tag": "0004_add_ai_agent_pipeline_fields",
+      "breakpoints": true
+    }
+  ]
+}

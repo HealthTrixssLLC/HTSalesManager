@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2, RefreshCw, AlertCircle, CheckCircle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,9 +21,20 @@ interface EnrichedCandidate extends CandidateLead {
   contactTitle?: string | null;
 }
 
-interface RunDetail extends LeadGenerationRun {
-  candidates: EnrichedCandidate[];
+interface PhaseLogEntry {
+  phase: string;
+  status: "running" | "success" | "error" | "skipped";
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+  error?: string;
+  errorMessage?: string;
 }
+
+type RunDetail = Omit<LeadGenerationRun, "phaseLog"> & {
+  candidates: EnrichedCandidate[];
+  phaseLog?: PhaseLogEntry[] | null;
+};
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -31,6 +42,7 @@ const statusColors: Record<string, string> = {
   reviewing: "bg-amber-100 text-amber-700",
   complete: "bg-green-100 text-green-700",
   archived: "bg-gray-200 text-gray-500",
+  error: "bg-red-100 text-red-700",
 };
 
 const candidateStatusColors: Record<string, string> = {
@@ -49,6 +61,14 @@ const NEXT_STATUS_ICON: Record<string, typeof ArrowRight> = {
   active: ArrowRight,
   reviewing: CheckCircle2,
 };
+
+const PIPELINE_PHASES = [
+  { key: "market_research", label: "Market Research" },
+  { key: "company_discovery", label: "Company Discovery" },
+  { key: "contact_discovery", label: "Contact Discovery" },
+  { key: "strategy", label: "Strategy" },
+  { key: "communication_drafting", label: "Communication Drafting" },
+];
 
 export default function LeadGenRunDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,6 +96,15 @@ export default function LeadGenRunDetailPage() {
       const res = await fetch(`/api/lead-gen/runs/${id}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load run");
       return res.json();
+    },
+    refetchInterval: (query) => {
+      const data = query.state.data as RunDetail | undefined;
+      if (!data) return false;
+      // Poll every 4 seconds while run is active and pipeline is running (has currentPhase but no error)
+      if (data.status === "active" && data.currentPhase && !data.errorPhase && data.currentPhase !== "complete") {
+        return 4000;
+      }
+      return false;
     },
   });
 
@@ -174,6 +203,18 @@ export default function LeadGenRunDetailPage() {
     onError: () => toast({ title: "Failed to stage candidate", variant: "destructive" }),
   });
 
+  const retryPhaseMutation = useMutation({
+    mutationFn: async (phase: string) => {
+      const res = await apiRequest("POST", `/api/lead-gen/runs/${id}/retry-phase`, { startFromPhase: phase });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
+      toast({ title: "Pipeline retrying", description: "The AI pipeline is running again from the failed phase." });
+    },
+    onError: (err: Error) => toast({ title: "Retry failed", description: err.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full p-12">
@@ -227,7 +268,7 @@ export default function LeadGenRunDetailPage() {
       </div>
 
       {/* Status lifecycle indicator */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground" data-testid="run-lifecycle-indicator">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap" data-testid="run-lifecycle-indicator">
         {(["draft", "active", "reviewing", "complete"] as const).map((s, i, arr) => (
           <span key={s} className="inline-flex items-center gap-2">
             <span
@@ -238,7 +279,72 @@ export default function LeadGenRunDetailPage() {
             {i < arr.length - 1 && <span className="text-muted-foreground">›</span>}
           </span>
         ))}
+        {run.status === "error" && (
+          <span className={`ml-2 px-2 py-0.5 rounded-md font-medium ${statusColors.error}`} data-testid="badge-run-error-status">
+            error
+          </span>
+        )}
       </div>
+
+      {/* AI Pipeline Phase Status */}
+      {(run.status === "active" || run.status === "error" || run.currentPhase || run.errorPhase) && (
+        <Card data-testid="pipeline-phase-status">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+            <CardTitle className="text-base">AI Pipeline Status</CardTitle>
+            {run.errorPhase && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => retryPhaseMutation.mutate(run.errorPhase!)}
+                disabled={retryPhaseMutation.isPending}
+                data-testid="button-retry-phase"
+              >
+                {retryPhaseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                Retry from {PIPELINE_PHASES.find(p => p.key === run.errorPhase)?.label ?? run.errorPhase}
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {run.errorPhase && run.errorReason && (
+              <div className="flex items-start gap-2 mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm" data-testid="pipeline-error-message">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-medium">Pipeline failed at {PIPELINE_PHASES.find(p => p.key === run.errorPhase)?.label ?? run.errorPhase}: </span>
+                  {run.errorReason}
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-3" data-testid="pipeline-phases-list">
+              {PIPELINE_PHASES.map(phase => {
+                const logEntry = (run.phaseLog as PhaseLogEntry[] | null)?.find(e => e.phase === phase.key);
+                const isRunning = logEntry?.status === "running" || (run.currentPhase === phase.key && !logEntry);
+                const isError = run.errorPhase === phase.key || logEntry?.status === "error";
+                return (
+                  <div
+                    key={phase.key}
+                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border ${
+                      logEntry?.status === "success" ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400" :
+                      isError ? "border-destructive/30 bg-destructive/10 text-destructive" :
+                      isRunning ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-400" :
+                      "border-border text-muted-foreground"
+                    }`}
+                    data-testid={`phase-${phase.key}`}
+                  >
+                    {logEntry?.status === "success" ? <CheckCircle className="h-3.5 w-3.5" /> :
+                     isError ? <AlertCircle className="h-3.5 w-3.5" /> :
+                     isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
+                     <Circle className="h-3.5 w-3.5" />}
+                    {phase.label}
+                    {logEntry?.durationMs && (
+                      <span className="text-xs opacity-70 ml-1">{(logEntry.durationMs / 1000).toFixed(1)}s</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

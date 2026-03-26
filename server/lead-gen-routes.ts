@@ -25,9 +25,11 @@ import {
   insertCandidateLeadSchema,
   insertCandidateScoreSchema,
   insertEvidenceSourceSchema,
+  insertAiConfigSchema,
   researchDocuments,
   type ResearchDocument,
 } from "@shared/schema";
+import { runLeadGenPipeline } from "./lead-gen-agent-service";
 
 type TypedPgDb = NodePgDatabase<typeof schema> | NeonDatabase<typeof schema>;
 
@@ -415,7 +417,7 @@ export function registerLeadGenRoutes(app: Express) {
         .where(eq(schema.candidateLeads.runId, req.params.id))
         .orderBy(desc(schema.candidateLeads.createdAt));
 
-      const candidates = rawCandidates.map(r => ({
+      const candidates = rawCandidates.map((r: typeof rawCandidates[number]) => ({
         ...r.candidate,
         accountName: r.accountName,
         contactName: r.contactFirstName && r.contactLastName ? `${r.contactFirstName} ${r.contactLastName}` : r.contactFirstName || null,
@@ -462,147 +464,66 @@ export function registerLeadGenRoutes(app: Express) {
       if (run[0].status !== "draft") return res.status(400).json({ error: "Run must be in draft status to start" });
 
       const result = await db.update(schema.leadGenerationRuns)
-        .set({ status: "active", startedAt: new Date(), updatedAt: new Date() })
+        .set({
+          status: "active",
+          startedAt: new Date(),
+          currentPhase: "market_research",
+          errorPhase: null,
+          errorReason: null,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.leadGenerationRuns.id, req.params.id))
         .returning();
 
-      let candidatesGenerated = 0;
-
-      let versionId = run[0].icpVersionId;
-      if (!versionId && run[0].icpProfileId) {
-        const activeVersion = await db.select().from(schema.icpProfileVersions)
-          .where(and(
-            eq(schema.icpProfileVersions.icpProfileId, run[0].icpProfileId),
-            eq(schema.icpProfileVersions.isActive, true),
-          ))
-          .orderBy(desc(schema.icpProfileVersions.versionNumber))
-          .limit(1);
-        if (activeVersion[0]) versionId = activeVersion[0].id;
-      }
-
-      const maxCandidates = run[0].targetCount ? Math.min(run[0].targetCount, 200) : 50;
-      let generated = 0;
-
-      const allAccounts = await db.select().from(schema.accounts);
-      let matchingAccounts = allAccounts;
-
-      if (versionId) {
-        const version = await db.select().from(schema.icpProfileVersions)
-          .where(eq(schema.icpProfileVersions.id, versionId)).limit(1);
-
-        if (version[0]) {
-          const industries = version[0].targetIndustries ?? [];
-          if (industries.length > 0) {
-            const filtered = allAccounts.filter(a =>
-              a.industry && industries.some(ind => a.industry!.toLowerCase().includes(ind.toLowerCase()))
-            );
-            if (filtered.length > 0) matchingAccounts = filtered;
-          }
-        }
-      }
-
-      for (const acct of matchingAccounts) {
-        if (generated >= maxCandidates) break;
-
-        const acctContacts = await db.select().from(schema.contacts)
-          .where(eq(schema.contacts.accountId, acct.id))
-          .limit(3);
-
-        if (acctContacts.length === 0) continue;
-
-        for (const ct of acctContacts) {
-          if (generated >= maxCandidates) break;
-
-          const [candAcct] = await db.insert(schema.candidateAccounts).values({
-            runId: req.params.id,
-            name: acct.name,
-            website: acct.website,
-            industry: acct.industry,
-            description: null,
-            companySize: null,
-            geography: null,
-            existingAccountId: acct.id,
-          }).returning();
-          const [candContact] = await db.insert(schema.candidateContacts).values({
-            runId: req.params.id,
-            candidateAccountId: candAcct.id,
-            firstName: ct.firstName,
-            lastName: ct.lastName,
-            email: ct.email,
-            phone: ct.phone,
-            title: ct.title,
-            linkedinUrl: null,
-          }).returning();
-          await db.insert(schema.candidateLeads).values({
-            runId: req.params.id,
-            candidateAccountId: candAcct.id,
-            candidateContactId: candContact.id,
-            tier: "tier_1",
-            status: "pending_review",
-          });
-          generated++;
-        }
-      }
-
-      if (generated < maxCandidates) {
-        const standaloneContacts = await db.select().from(schema.contacts)
-          .where(sql`${schema.contacts.accountId} IS NULL`)
-          .limit(maxCandidates - generated);
-
-        for (const ct of standaloneContacts) {
-          if (generated >= maxCandidates) break;
-          try {
-            const firstName = ct.firstName || "Unknown";
-            const lastName = ct.lastName || "Contact";
-            const displayName = [ct.firstName, ct.lastName].filter(Boolean).join(" ") || "Unknown Contact";
-            const [candAcct] = await db.insert(schema.candidateAccounts).values({
-              runId: req.params.id,
-              name: displayName,
-              website: null,
-              industry: null,
-              description: null,
-              companySize: null,
-              geography: null,
-            }).returning();
-            const [candContact] = await db.insert(schema.candidateContacts).values({
-              runId: req.params.id,
-              candidateAccountId: candAcct.id,
-              firstName,
-              lastName,
-              email: ct.email,
-              phone: ct.phone,
-              title: ct.title,
-              linkedinUrl: null,
-            }).returning();
-            await db.insert(schema.candidateLeads).values({
-              runId: req.params.id,
-              candidateAccountId: candAcct.id,
-              candidateContactId: candContact.id,
-              tier: "tier_2",
-              status: "pending_review",
-            });
-            generated++;
-          } catch {
-            continue;
-          }
-        }
-      }
-
-      if (generated > 0) {
-        await db.update(schema.leadGenerationRuns)
-          .set({ candidateCount: generated, updatedAt: new Date() })
-          .where(eq(schema.leadGenerationRuns.id, req.params.id));
-      }
-      candidatesGenerated = generated;
-
-      await createLgAudit(req.user?.id, "run_started", "LeadGenerationRun", req.params.id, req.params.id, { candidatesGenerated });
+      await createLgAudit(req.user?.id, "run_started", "LeadGenerationRun", req.params.id, req.params.id, { pipeline: "ai_agent" });
       await createAuditLog(req.user?.id, "update", "LeadGenerationRun", req.params.id, null, { status: "active" }, req);
 
-      const updatedRun = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
-      return res.json({ ...updatedRun[0], candidatesGenerated });
+      runLeadGenPipeline(req.params.id).catch(err => {
+        console.error(`[Agent] Pipeline error for run ${req.params.id}:`, err);
+      });
+
+      return res.json({ ...result[0], pipelineStarted: true });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Failed to start run" });
+    }
+  });
+
+  app.post("/api/lead-gen/runs/:id/retry-phase", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
+      if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (run[0].status !== "active" && run[0].status !== "error") return res.status(400).json({ error: "Run must be active or in error state to retry a phase" });
+
+      const failedPhase = req.body?.startFromPhase || req.body?.phase || run[0].errorPhase;
+      if (!failedPhase) return res.status(400).json({ error: "No failed phase to retry. Provide a 'phase' in the request body." });
+
+      const validPhases = ["market_research", "company_discovery", "contact_discovery", "strategy", "communication_drafting"];
+      if (!validPhases.includes(failedPhase)) {
+        return res.status(400).json({ error: `Invalid phase '${failedPhase}'. Valid phases: ${validPhases.join(", ")}` });
+      }
+
+      await db.update(schema.leadGenerationRuns)
+        .set({
+          status: "active",
+          currentPhase: failedPhase,
+          errorPhase: null,
+          errorReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.leadGenerationRuns.id, req.params.id));
+
+      await createLgAudit(req.user?.id, "run_phase_retry", "LeadGenerationRun", req.params.id, req.params.id, { phase: failedPhase });
+
+      runLeadGenPipeline(req.params.id, failedPhase).catch(err => {
+        console.error(`[Agent] Retry pipeline error for run ${req.params.id} phase ${failedPhase}:`, err);
+      });
+
+      const updatedRun = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
+      return res.json({ ...updatedRun[0], retrying: true, phase: failedPhase });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to retry phase" });
     }
   });
 
@@ -1399,6 +1320,103 @@ export function registerLeadGenRoutes(app: Express) {
       return res.json(events);
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch audit events" });
+    }
+  });
+
+  // ========== AGENT STEP LOGS ==========
+
+  app.get("/api/lead-gen/runs/:id/agent-logs", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const logs = await db.select().from(schema.agentStepLogs)
+        .where(eq(schema.agentStepLogs.runId, req.params.id))
+        .orderBy(desc(schema.agentStepLogs.createdAt))
+        .limit(500);
+      return res.json(logs);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch agent step logs" });
+    }
+  });
+
+  // ========== AI CONFIGS ==========
+
+  app.get("/api/lead-gen/ai-configs", authenticate, requireRole("Admin", "SalesManager"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const configs = await db.select({
+        id: schema.aiConfigs.id,
+        name: schema.aiConfigs.name,
+        provider: schema.aiConfigs.provider,
+        model: schema.aiConfigs.model,
+        apiKeyEnvVar: schema.aiConfigs.apiKeyEnvVar,
+        baseUrl: schema.aiConfigs.baseUrl,
+        temperature: schema.aiConfigs.temperature,
+        maxTokens: schema.aiConfigs.maxTokens,
+        agentPhase: schema.aiConfigs.agentPhase,
+        isDefault: schema.aiConfigs.isDefault,
+        isActive: schema.aiConfigs.isActive,
+        createdAt: schema.aiConfigs.createdAt,
+        updatedAt: schema.aiConfigs.updatedAt,
+      }).from(schema.aiConfigs).orderBy(desc(schema.aiConfigs.createdAt));
+      return res.json(configs);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch AI configs" });
+    }
+  });
+
+  app.post("/api/lead-gen/ai-configs", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const data = insertAiConfigSchema.parse({ ...req.body, createdBy: req.user?.id });
+      if (data.isDefault) {
+        await db.update(schema.aiConfigs).set({ isDefault: false, updatedAt: new Date() });
+      }
+      const result = await db.insert(schema.aiConfigs).values(data).returning();
+      await createLgAudit(req.user?.id, "ai_config_created", "AiConfig", result[0].id, null, { name: result[0].name, provider: result[0].provider, model: result[0].model });
+      return res.json(result[0]);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: "Validation failed", details: err.errors });
+      return res.status(500).json({ error: "Failed to create AI config" });
+    }
+  });
+
+  const aiConfigPatchSchema = z.object({
+    name: z.string().min(1).optional(),
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    apiKeyEnvVar: z.string().optional().nullable(),
+    baseUrl: z.string().optional().nullable(),
+    temperature: z.string().optional().nullable(),
+    maxTokens: z.number().int().optional().nullable(),
+    agentPhase: z.string().optional().nullable(),
+    isDefault: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    metadata: z.record(z.unknown()).optional().nullable(),
+  });
+
+  app.patch("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = aiConfigPatchSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
+      if (parsed.data.isDefault) {
+        await db.update(schema.aiConfigs).set({ isDefault: false, updatedAt: new Date() });
+      }
+      const result = await db.update(schema.aiConfigs)
+        .set({ ...parsed.data, updatedAt: new Date() })
+        .where(eq(schema.aiConfigs.id, req.params.id))
+        .returning();
+      if (!result[0]) return res.status(404).json({ error: "AI config not found" });
+      await createLgAudit(req.user?.id, "ai_config_updated", "AiConfig", req.params.id, null, parsed.data as Record<string, unknown>);
+      return res.json(result[0]);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to update AI config" });
+    }
+  });
+
+  app.delete("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      await db.delete(schema.aiConfigs).where(eq(schema.aiConfigs.id, req.params.id));
+      await createLgAudit(req.user?.id, "ai_config_deleted", "AiConfig", req.params.id, null, {});
+      return res.json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to delete AI config" });
     }
   });
 }
