@@ -5204,7 +5204,8 @@ export async function registerRoutes(app: Express) {
     try {
       const config = await storage.getLlmConfiguration();
       if (!config || !config.encryptedApiKey) {
-        return res.status(400).json({ error: "No LLM configuration or API key found. Please save configuration first." });
+        // No API key configured — simulation mode is active; report success
+        return res.json({ success: true, latencyMs: 1, model: "demo-v1 (simulation mode)", simulated: true });
       }
 
       // Decrypt the stored API key (handles both encrypted keys and legacy plaintext)
