@@ -119,11 +119,11 @@ export function AppSidebar() {
           <div className="flex items-center gap-3">
             <img
               src="/ht-logo.png"
-              alt="HealthTrixss"
+              alt="Health Trixss"
               className="h-9 w-9 rounded-md shrink-0 object-contain bg-white"
             />
             <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold text-sm leading-none">HealthTrixss</p>
+              <p className="text-white font-semibold text-sm leading-none">Health Trixss</p>
               <p className="text-white/50 text-xs mt-0.5">CRM Platform</p>
             </div>
           </div>

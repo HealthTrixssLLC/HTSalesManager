@@ -13,9 +13,9 @@ I want iterative development. Ask before making major changes. I prefer detailed
 The system utilizes a full-stack JavaScript architecture. The backend is built with Node.js and Express, interacting with a PostgreSQL database via Drizzle ORM. The frontend is developed using React with Vite.
 
 **UI/UX Decisions:**
-The design adheres to the official HealthTrixss Design System, incorporating specific brand elements:
+The design adheres to the official Health Trixss Design System, incorporating specific brand elements:
 - **Logo**: Official H+ mark (`/ht-logo.png`)
-- **Brand Name**: "HealthTrixss"
+- **Brand Name**: "Health Trixss"
 - **Color Palette**: Primary Dark Blue (`#2E456B`), Accent Orange (`#FEA002`), Secondary Dark Teal (`#277493`), and Background Warm Cream (`#FAF7F2`).
 - **Typography**: Inter and IBM Plex Sans, with JetBrains Mono for code.
 - **Components**: Utilizes a consistent border radius, dark blue gradient sidebar, white cards with blue-tinted borders, and a two-panel login page.

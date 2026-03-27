@@ -80,15 +80,15 @@ export default function AuthPage() {
         className="hidden lg:flex flex-1 flex-col justify-between p-12 text-white"
         style={{ background: "linear-gradient(160deg, hsl(216,42%,18%) 0%, hsl(216,40%,22%) 55%, hsl(216,38%,28%) 100%)" }}
       >
-        {/* Official H+ logo + HealthTrixss wordmark */}
+        {/* Official H+ logo + Health Trixss wordmark */}
         <div className="flex items-center gap-3">
           <img
             src="/ht-logo.png"
-            alt="HealthTrixss"
+            alt="Health Trixss"
             className="h-10 w-10 rounded-md shrink-0 object-contain bg-white"
           />
           <div>
-            <p className="font-semibold text-white text-sm leading-none">HealthTrixss</p>
+            <p className="font-semibold text-white text-sm leading-none">Health Trixss</p>
             <p className="text-white/50 text-xs mt-0.5">Healthcare Innovation &amp; Analytics</p>
           </div>
         </div>
@@ -127,7 +127,7 @@ export default function AuthPage() {
 
         {/* Footer */}
         <p className="text-white/30 text-xs">
-          &copy; {new Date().getFullYear()} HealthTrixss. Self-hosted &amp; secure.
+          &copy; {new Date().getFullYear()} Health Trixss, Inc. Self-hosted &amp; secure.
         </p>
       </div>
 
@@ -139,11 +139,11 @@ export default function AuthPage() {
           <div className="flex lg:hidden items-center gap-3 mb-8">
             <img
               src="/ht-logo.png"
-              alt="HealthTrixss"
+              alt="Health Trixss"
               className="h-9 w-9 rounded-md shrink-0 object-contain"
               style={{ background: "hsl(216, 40%, 22%)", padding: "4px" }}
             />
-            <p className="font-semibold text-foreground">HealthTrixss CRM</p>
+            <p className="font-semibold text-foreground">Health Trixss CRM</p>
           </div>
 
           <div className="mb-7">
