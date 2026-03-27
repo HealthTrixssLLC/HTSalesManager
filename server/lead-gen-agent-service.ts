@@ -877,23 +877,34 @@ async function runCompanyDiscoveryPhase(
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
   const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
-  // Determine whether to use strict grounding mode or knowledge fallback mode.
-  // Use knowledge fallback when: (a) search was not usable at all, or (b) search returned
-  // text but contained too few distinct named company entities (< 3 proper nouns).
+  // Three prompt modes:
+  // Mode A: Search returned enough named companies → prefer search, allow minor supplementation
+  // Mode B: Search usable but thin (< 2 snippets with company names) → still show search results,
+  //         allow mixed search_verified + knowledge_based output with mandatory distinction
+  // Mode C: Search completely unusable → training knowledge only, all marked knowledge_based
   const useKnowledgeFallback = !searchUsable || !hasEnoughNamedEntities;
+  const mixedMode = searchUsable && !hasEnoughNamedEntities; // Mode B
 
-  if (useKnowledgeFallback && searchUsable && !hasEnoughNamedEntities) {
-    console.warn(`[Agent] [knowledge_fallback] Activating knowledge fallback: search usable but only ${likelyCompanyNouns.length} named entities in results.`);
+  if (mixedMode) {
+    console.warn(`[Agent] [knowledge_fallback] Search usable but only ${snippetsWithCompanyNames.length}/${searchResults.length} snippets contain company names. Mixed mode: search + training knowledge, both labeled. Knowledge fallback ACTIVE.`);
   }
 
-  // Build search context and prompt mode based on whether the search was usable
+  // Build search context: show search results whenever search is usable (Modes A and B),
+  // even when entity count is thin — the model will supplement with knowledge_based entries.
   const searchContext = searchUsable
     ? `\n\nWeb research results (${searchResults.length} results from ${searchQueries.length} targeted searches):\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`
     : `\n\nNote: Web searches across ${searchQueries.length} targeted queries did not return usable results. Use your training knowledge to identify real companies that match the ICP criteria below.`;
 
+  // Mode A: sufficient search grounding
+  // Mode B: thin search results — allow mixed, require distinction
+  // Mode C: no usable search — all knowledge_based
   const companySourceInstruction = !useKnowledgeFallback
-    ? `CRITICAL INSTRUCTION — Company names: Prefer companies that are explicitly named in the web research results. You may supplement with real companies from your training knowledge to reach the target count — but for every company, you MUST set the "sourceType" field: use "search_verified" if the company name appears in the search results, and "knowledge_based" if you are drawing from your training knowledge. Do NOT fabricate fictional company names.`
-    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. For every company, set "sourceType" to "knowledge_based". Only include companies that actually exist and fit the industry, size, and geography requirements.`;
+    ? `CRITICAL INSTRUCTION — Company names: Prefer companies explicitly named in the web research results. You may supplement with real companies from your training knowledge only if you cannot reach the requested count from search results alone. For EVERY company you MUST set the "sourceType" field: "search_verified" if the name appears in search results, or "knowledge_based" if supplementing from training knowledge. Do NOT fabricate fictional company names.`
+    : searchUsable
+      // Mode B: search usable but thin
+      ? `CRITICAL INSTRUCTION — Company names: Web search returned limited results. Use companies named in the search results AND supplement freely with real companies from your training knowledge. For EVERY company you MUST set "sourceType": use "search_verified" if the company name appears in the search results, or "knowledge_based" if from your training knowledge. Do NOT fabricate fictional companies.`
+      // Mode C: search completely unusable
+      : `CRITICAL INSTRUCTION — Company names: Web search returned no usable results. Use your training knowledge to identify real, named companies that match the ICP. Set "sourceType": "knowledge_based" for every entry. Do NOT fabricate fictional companies.`;
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
@@ -902,8 +913,13 @@ ${companySourceInstruction}
 CRITICAL INSTRUCTION — Company details: For every company you include, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
 
   const companySourceUserInstruction = !useKnowledgeFallback
-    ? `Respond with a JSON array of up to ${numCompanies} companies. Prioritize companies named in the web research above; supplement with real companies from your training knowledge to reach the target count if needed. Set "sourceType": "search_verified" for search-grounded companies and "sourceType": "knowledge_based" for training-knowledge companies. Each object must have this shape:`
-    : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge that best match the ICP. Return an empty array [] only if you genuinely cannot identify any real companies in this space. Set "sourceType": "knowledge_based" for all entries. Each object must have this shape:`;
+    // Mode A: search grounded
+    ? `Respond with a JSON array of up to ${numCompanies} companies. Prioritize companies named in the web research above; supplement with real training-knowledge companies if needed. Set "sourceType": "search_verified" or "knowledge_based" for every entry. Each object must have this shape:`
+    : searchUsable
+      // Mode B: search usable but thin — mixed output
+      ? `Respond with a JSON array of up to ${numCompanies} companies. Use any companies identified in the search results AND supplement from your training knowledge. Set "sourceType": "search_verified" for search-identified companies and "knowledge_based" for training-knowledge companies. Each object must have this shape:`
+      // Mode C: no usable search
+      : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge. Return an empty array [] only if you genuinely cannot identify any. Set "sourceType": "knowledge_based" for all entries. Each object must have this shape:`;
 
   const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
