@@ -495,17 +495,64 @@ function extractJsonFromText(text: string): unknown {
   return null;
 }
 
+// ──────────────────────────────────────────────────────────────
+// ICP context helpers — enrich prompts with ICP profile data
+// ──────────────────────────────────────────────────────────────
+
+function formatScoringRubric(rubric: unknown): string {
+  if (!rubric || typeof rubric !== "object") return "";
+  const r = rubric as { criteria?: Array<{ name: string; weight: number }> };
+  if (!Array.isArray(r.criteria) || r.criteria.length === 0) return "";
+  return r.criteria
+    .filter(c => c.name && c.weight != null)
+    .map(c => `${c.name} (${c.weight}%)`)
+    .join(", ");
+}
+
+function buildIcpContextSection(
+  icpProfile: schema.IcpProfile | null,
+  icpVersion: schema.IcpProfileVersion | null,
+  includeScoringRubric = false,
+): string {
+  const parts: string[] = [];
+  if (icpProfile?.description) {
+    parts.push(`ICP Description: ${icpProfile.description}`);
+  }
+  if (icpVersion?.notes) {
+    parts.push(`ICP Notes: ${icpVersion.notes}`);
+  }
+  if (includeScoringRubric && icpVersion?.scoringRubric) {
+    const rubricStr = formatScoringRubric(icpVersion.scoringRubric);
+    if (rubricStr) {
+      parts.push(`Qualification criteria (use these to score and prioritize): ${rubricStr}`);
+    }
+  }
+  return parts.length > 0 ? "\n\n" + parts.join("\n") : "";
+}
+
+function formatOffersSection(offers: schema.Offer[]): string {
+  if (offers.length === 0) return "";
+  return offers.map(o => {
+    const lines = [`- ${o.name}`];
+    if (o.valueProposition) lines.push(`  Value Proposition: ${o.valueProposition}`);
+    if (o.description) lines.push(`  Description: ${o.description}`);
+    return lines.join("\n");
+  }).join("\n");
+}
+
 async function runMarketResearchPhase(
   runId: string,
   icpVersion: schema.IcpProfileVersion | null,
+  icpProfile: schema.IcpProfile | null,
   offers: schema.Offer[],
   config: ResolvedLlmConfig,
-): Promise<{ marketInsights: string; targetIndustries: string[]; searchResults: { title: string; url: string; snippet: string }[] }> {
+): Promise<{ marketInsights: string; targetIndustries: string[]; keyTrends: string[]; buyingSignals: string[]; searchResults: { title: string; url: string; snippet: string }[] }> {
   const industries = icpVersion?.targetIndustries?.join(", ") || "technology, healthcare, finance";
   const sizes = icpVersion?.targetCompanySizes?.join(", ") || "50-5000 employees";
   const geos = icpVersion?.targetGeographies?.join(", ") || "North America";
 
-  const searchQuery = `${industries} industry trends market size growth 2024 2025`;
+  const primaryIndustry = icpVersion?.targetIndustries?.[0] || "technology";
+  const searchQuery = `${primaryIndustry} market trends growth 2024 2025 B2B software healthcare`;
   const searchResults = await performWebSearch(searchQuery);
 
   // Log search query as a step in the audit trail
@@ -517,6 +564,9 @@ async function runMarketResearchPhase(
     ? `\n\nRecent web research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`
     : "";
 
+  const icpContext = buildIcpContextSection(icpProfile, icpVersion, false);
+  const offersSection = formatOffersSection(offers);
+
   const systemPrompt = `You are a market research specialist for a B2B sales team. 
 Your task is to analyze the target market and identify key insights for lead generation.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
@@ -525,15 +575,15 @@ CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No 
 - Target Industries: ${industries}
 - Company Sizes: ${sizes}
 - Target Geographies: ${geos}
-- Our Offerings: ${offers.map(o => o.name + (o.valueProposition ? ` (${o.valueProposition})` : "")).join(", ")}
+- Our Offerings:\n${offersSection}${icpContext}
 ${searchContext}
 
 Respond with JSON:
 {
-  "marketInsights": "3-4 sentences on current market conditions and why now is good time to target this market",
-  "keyTrends": ["trend1", "trend2", "trend3"],
+  "marketInsights": "3-4 sentences on current market conditions and why now is a good time to target this market",
+  "keyTrends": ["specific market trend 1", "specific market trend 2", "specific market trend 3"],
   "targetIndustries": ["specific industry segment 1", "specific industry segment 2"],
-  "buyingSignals": ["signal indicating a company is ready to buy"]
+  "buyingSignals": ["observable signal that a company is ready to buy or evaluate vendors"]
 }`;
 
   const startTime = Date.now();
@@ -545,11 +595,15 @@ Respond with JSON:
 
     const parsed = extractJsonFromText(response) as {
       marketInsights?: string;
+      keyTrends?: string[];
       targetIndustries?: string[];
+      buyingSignals?: string[];
     } | null;
     return {
       marketInsights: parsed?.marketInsights || "Market shows strong demand for solutions in this space.",
       targetIndustries: parsed?.targetIndustries || (icpVersion?.targetIndustries || []),
+      keyTrends: parsed?.keyTrends || [],
+      buyingSignals: parsed?.buyingSignals || [],
       searchResults,
     };
   } catch (err) {
@@ -563,6 +617,7 @@ Respond with JSON:
 async function runCompanyDiscoveryPhase(
   runId: string,
   icpVersion: schema.IcpProfileVersion | null,
+  icpProfile: schema.IcpProfile | null,
   marketInsights: string,
   targetIndustries: string[],
   targetCount: number,
@@ -576,7 +631,14 @@ async function runCompanyDiscoveryPhase(
   const titles = icpVersion?.targetTitles?.join(", ") || "VP of Sales, CTO, CEO";
   const numCompanies = Math.min(targetCount, 20);
 
-  const searchQuery = `${industries.slice(0, 2).join(" ")} companies ${sizes} ${geos} site:linkedin.com OR site:crunchbase.com OR site:g2.com`;
+  // Build a more targeted search query using the most specific ICP signals
+  const primaryIndustry = industries[0] || "technology";
+  const secondaryIndustry = industries[1] || "";
+  const topGeo = icpVersion?.targetGeographies?.[0] || "North America";
+  const industryPart = secondaryIndustry
+    ? `(${primaryIndustry} OR ${secondaryIndustry})`
+    : primaryIndustry;
+  const searchQuery = `${industryPart} company ${topGeo} site:linkedin.com OR site:crunchbase.com OR site:g2.com`;
   const searchResults = await performWebSearch(searchQuery);
 
   // Log search query as a step in the audit trail
@@ -591,6 +653,8 @@ async function runCompanyDiscoveryPhase(
 
   const searchContext = `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`;
 
+  const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
+
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
@@ -602,7 +666,7 @@ CRITICAL INSTRUCTION: Only include companies that are explicitly mentioned or cl
 - Geographies: ${geos}
 - Decision-maker roles we target: ${titles}
 
-Market context: ${marketInsights}
+Market context: ${marketInsights}${icpContext}
 ${searchContext}
 
 Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:
@@ -743,6 +807,8 @@ async function runContactDiscoveryPhase(
   runId: string,
   accounts: schema.CandidateAccount[],
   icpVersion: schema.IcpProfileVersion | null,
+  icpProfile: schema.IcpProfile | null,
+  buyingSignals: string[],
   config: ResolvedLlmConfig,
 ): Promise<{ contacts: schema.CandidateContact[]; leads: schema.CandidateLead[] }> {
   const targetTitles = icpVersion?.targetTitles?.join(", ") || "VP of Sales, CTO, CEO, Head of Operations";
@@ -775,6 +841,11 @@ async function runContactDiscoveryPhase(
 
     const searchContext = `\n\nWeb research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`;
 
+    const icpContext = buildIcpContextSection(icpProfile, icpVersion, false);
+    const buyingSignalsContext = buyingSignals.length > 0
+      ? `\nBuying signals to look for: ${buyingSignals.join("; ")}`
+      : "";
+
     const systemPrompt = `You are a contact discovery specialist finding B2B decision-makers.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
 CRITICAL INSTRUCTION: Only include contacts whose full names (first and last) appear explicitly in the web research results provided below. Do NOT invent, fabricate, or hallucinate any person's name, email, or LinkedIn URL. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any other generic example name. If no named individuals can be confirmed from the search results, return an empty array [].`;
@@ -782,6 +853,7 @@ CRITICAL INSTRUCTION: Only include contacts whose full names (first and last) ap
     const userPrompt = `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
 Target roles: ${targetTitles}
 Company overview: ${account.companyOverview || account.description || "No description available"}
+ICP fit rationale for this company: ${account.icpFitRationale || "Good fit"}${icpContext}${buyingSignalsContext}
 ${searchContext}
 
 Return a JSON array containing only contacts whose real names appear in the web research above. Return an empty array [] if no named individuals can be confirmed. Each object must have this shape:
@@ -904,11 +976,25 @@ async function runStrategyPhase(
   runId: string,
   accounts: schema.CandidateAccount[],
   offers: schema.Offer[],
+  icpProfile: schema.IcpProfile | null,
+  icpVersion: schema.IcpProfileVersion | null,
+  marketInsights: string,
+  keyTrends: string[],
+  buyingSignals: string[],
   config: ResolvedLlmConfig,
 ): Promise<void> {
   const accountsToProcess = accounts.slice(0, 15);
   let successCount = 0;
   const lastError: string[] = [];
+
+  const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
+  const offersSection = formatOffersSection(offers);
+  const trendsContext = keyTrends.length > 0
+    ? `\nKey market trends: ${keyTrends.join("; ")}`
+    : "";
+  const signalsContext = buyingSignals.length > 0
+    ? `\nBuying signals to leverage: ${buyingSignals.join("; ")}`
+    : "";
 
   for (const account of accountsToProcess) {
     const systemPrompt = `You are a B2B sales strategist. Create targeted strategic approach documents for accounts.
@@ -917,15 +1003,22 @@ CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No 
     const userPrompt = `Create a strategic sales approach for ${account.name}:
 - Industry: ${account.industry || "technology"}
 - Company Size: ${account.companySize || "unknown"}
+- Geography: ${account.geography || "unknown"}
 - ICP Fit Rationale: ${account.icpFitRationale || "Good fit"}
-- Our offerings: ${offers.map(o => o.name + (o.valueProposition ? ` - ${o.valueProposition}` : "")).join("; ")}
+- Company Overview: ${account.companyOverview || account.description || "Not available"}
+
+Our Offerings:
+${offersSection}
+
+Market Intelligence:
+- Market Insights: ${marketInsights}${trendsContext}${signalsContext}${icpContext}
 
 Respond with JSON:
 {
-  "strategicApproach": "3-4 sentence detailed strategic approach",
-  "keyPainPoints": ["pain point 1", "pain point 2"],
-  "differentiators": ["why our solution stands out for this company"],
-  "recommendedFirstMove": "specific first outreach recommendation"
+  "strategicApproach": "3-4 sentence detailed strategic approach specific to this company",
+  "keyPainPoints": ["specific pain point this company likely has", "another specific pain point"],
+  "differentiators": ["specific reason our solution stands out for this company vs alternatives"],
+  "recommendedFirstMove": "specific, concrete first outreach action with a clear hook"
 }`;
 
     const startTime = Date.now();
@@ -937,6 +1030,9 @@ Respond with JSON:
 
       const parsed = extractJsonFromText(response) as {
         strategicApproach?: string;
+        keyPainPoints?: string[];
+        differentiators?: string[];
+        recommendedFirstMove?: string;
       } | null;
 
       if (parsed?.strategicApproach && !account.strategicApproach) {
@@ -945,6 +1041,8 @@ Respond with JSON:
           .where(eq(schema.candidateAccounts.id, account.id));
       }
 
+      // Store the complete strategy JSON in researchDocuments so communication
+      // drafting can retrieve keyPainPoints and differentiators without a schema change.
       await db.insert(schema.researchDocuments).values({
         entityType: "candidate_account",
         entityId: account.id,
@@ -972,11 +1070,29 @@ Respond with JSON:
 async function runCommunicationDraftingPhase(
   runId: string,
   leads: schema.CandidateLead[],
+  offers: schema.Offer[],
+  icpProfile: schema.IcpProfile | null,
+  icpVersion: schema.IcpProfileVersion | null,
+  marketInsights: string,
+  keyTrends: string[],
+  buyingSignals: string[],
   config: ResolvedLlmConfig,
 ): Promise<void> {
   const leadsToProcess = leads.slice(0, 30);
   let successCount = 0;
   const lastError: string[] = [];
+
+  const offersSection = formatOffersSection(offers);
+  const icpContext = buildIcpContextSection(icpProfile, icpVersion, false);
+  const trendsContext = keyTrends.length > 0
+    ? `\nKey market trends: ${keyTrends.join("; ")}`
+    : "";
+  const signalsContext = buyingSignals.length > 0
+    ? `\nBuying signals: ${buyingSignals.join("; ")}`
+    : "";
+
+  // Cache strategy documents per account to avoid redundant DB lookups
+  const strategyDocCache = new Map<string, { keyPainPoints: string[]; differentiators: string[]; recommendedFirstMove: string }>();
 
   for (const lead of leadsToProcess) {
     let contact: schema.CandidateContact | null = null;
@@ -995,25 +1111,75 @@ async function runCommunicationDraftingPhase(
 
     if (!contact || !account) continue;
 
+    // Fetch strategy phase outputs (keyPainPoints, differentiators, recommendedFirstMove)
+    // stored in researchDocuments from the strategy phase.
+    let strategyData = strategyDocCache.get(account.id);
+    if (!strategyData && account.id) {
+      try {
+        const strategyDocs = await db.select().from(schema.researchDocuments)
+          .where(and(
+            eq(schema.researchDocuments.entityType, "candidate_account"),
+            eq(schema.researchDocuments.entityId, account.id),
+            eq(schema.researchDocuments.documentType, "strategic_approach"),
+          ))
+          .orderBy(desc(schema.researchDocuments.createdAt))
+          .limit(1);
+
+        if (strategyDocs[0]) {
+          const parsedStrategy = extractJsonFromText(strategyDocs[0].content) as {
+            keyPainPoints?: string[];
+            differentiators?: string[];
+            recommendedFirstMove?: string;
+          } | null;
+          if (parsedStrategy) {
+            strategyData = {
+              keyPainPoints: parsedStrategy.keyPainPoints || [],
+              differentiators: parsedStrategy.differentiators || [],
+              recommendedFirstMove: parsedStrategy.recommendedFirstMove || "",
+            };
+            strategyDocCache.set(account.id, strategyData);
+          }
+        }
+      } catch (e) {
+        console.warn(`[Agent] Could not load strategy doc for account ${account.id}:`, e);
+      }
+    }
+
+    const painPointsStr = strategyData?.keyPainPoints?.length
+      ? `\n- Key Pain Points: ${strategyData.keyPainPoints.join("; ")}`
+      : "";
+    const differentiatorsStr = strategyData?.differentiators?.length
+      ? `\n- Our Differentiators for this company: ${strategyData.differentiators.join("; ")}`
+      : "";
+    const firstMoveStr = strategyData?.recommendedFirstMove
+      ? `\n- Recommended First Move: ${strategyData.recommendedFirstMove}`
+      : "";
+
     const systemPrompt = `You are a B2B sales communication specialist. 
 Draft personalized outreach messages tailored to specific contacts.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
     const userPrompt = `Draft a personalized outreach communication plan for:
 - Contact: ${contact.firstName} ${contact.lastName}, ${contact.title || "executive"} at ${account.name}
-- Role Fit: ${contact.roleFitRationale || "Good match for our solution"}
-- Company: ${account.industry || "technology"} company, ${account.companySize || "mid-size"}
-- Strategic Context: ${account.strategicApproach || account.icpFitRationale || "Strong ICP fit"}
+- Contact Role Fit: ${contact.roleFitRationale || "Good match for our solution"}
 - Outreach Priority: ${contact.outreachPriority || "medium"}
+- Company: ${account.name} (${account.industry || "technology"}, ${account.companySize || "mid-size"})
+- Strategic Context: ${account.strategicApproach || account.icpFitRationale || "Strong ICP fit"}${painPointsStr}${differentiatorsStr}${firstMoveStr}
+
+Our Offerings:
+${offersSection || "Not specified"}
+
+Market Intelligence:
+- ${marketInsights}${trendsContext}${signalsContext}${icpContext}
 
 Respond with JSON:
 {
   "channelRecommendation": "email|linkedin|call",
   "tone": "professional|consultative|direct|warm",
   "objectives": ["primary objective", "secondary objective"],
-  "subjectLine": "Email subject line",
-  "draftedMessage": "Full personalized message (3-4 paragraphs)",
-  "followUpSequence": ["day 3: follow up action", "day 7: action"]
+  "subjectLine": "Compelling, specific email subject line (not generic)",
+  "draftedMessage": "Full personalized message (3-4 paragraphs) referencing specific pain points and value propositions",
+  "followUpSequence": ["day 3: specific follow up action", "day 7: specific action"]
 }`;
 
     const startTime = Date.now();
@@ -1098,6 +1264,15 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
     icpVersion = vRows[0] || null;
   }
 
+  // Load the parent ICP profile for its description field
+  let icpProfile: schema.IcpProfile | null = null;
+  const icpProfileId = icpVersion?.icpProfileId || run.icpProfileId;
+  if (icpProfileId) {
+    const pRows = await db.select().from(schema.icpProfiles)
+      .where(eq(schema.icpProfiles.id, icpProfileId)).limit(1);
+    icpProfile = pRows[0] || null;
+  }
+
   const offers = run.icpProfileId
     ? await db.select().from(schema.offers)
         .where(and(eq(schema.offers.icpProfileId, run.icpProfileId), eq(schema.offers.isActive, true)))
@@ -1109,6 +1284,8 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
 
   let marketInsights = "Strong market opportunity identified.";
   let targetIndustries: string[] = icpVersion?.targetIndustries || [];
+  let keyTrends: string[] = [];
+  let buyingSignals: string[] = [];
   let discoveredAccounts: schema.CandidateAccount[] = [];
   let discoveredLeads: schema.CandidateLead[] = [];
 
@@ -1178,32 +1355,34 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
       console.log(`[Agent] Running phase: ${phase} with model ${config.model}`);
 
       if (phase === "market_research") {
-        const result = await runMarketResearchPhase(runId, icpVersion, offers, config);
+        const result = await runMarketResearchPhase(runId, icpVersion, icpProfile, offers, config);
         marketInsights = result.marketInsights;
         targetIndustries = result.targetIndustries.length > 0 ? result.targetIndustries : targetIndustries;
+        keyTrends = result.keyTrends;
+        buyingSignals = result.buyingSignals;
       } else if (phase === "company_discovery") {
         discoveredAccounts = await runCompanyDiscoveryPhase(
-          runId, icpVersion, marketInsights, targetIndustries, targetCount, config
+          runId, icpVersion, icpProfile, marketInsights, targetIndustries, targetCount, config
         );
       } else if (phase === "contact_discovery") {
         if (discoveredAccounts.length === 0) {
           discoveredAccounts = await db.select().from(schema.candidateAccounts)
             .where(eq(schema.candidateAccounts.runId, runId));
         }
-        const result = await runContactDiscoveryPhase(runId, discoveredAccounts, icpVersion, config);
+        const result = await runContactDiscoveryPhase(runId, discoveredAccounts, icpVersion, icpProfile, buyingSignals, config);
         discoveredLeads = result.leads;
       } else if (phase === "strategy") {
         if (discoveredAccounts.length === 0) {
           discoveredAccounts = await db.select().from(schema.candidateAccounts)
             .where(eq(schema.candidateAccounts.runId, runId));
         }
-        await runStrategyPhase(runId, discoveredAccounts, offers, config);
+        await runStrategyPhase(runId, discoveredAccounts, offers, icpProfile, icpVersion, marketInsights, keyTrends, buyingSignals, config);
       } else if (phase === "communication_drafting") {
         if (discoveredLeads.length === 0) {
           discoveredLeads = await db.select().from(schema.candidateLeads)
             .where(eq(schema.candidateLeads.runId, runId));
         }
-        await runCommunicationDraftingPhase(runId, discoveredLeads, config);
+        await runCommunicationDraftingPhase(runId, discoveredLeads, offers, icpProfile, icpVersion, marketInsights, keyTrends, buyingSignals, config);
       }
 
       const phaseEnd = Date.now();
