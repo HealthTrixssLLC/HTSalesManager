@@ -1029,20 +1029,113 @@ async function runContactDiscoveryPhase(
   const nonExecIcp = !icpTargetsCSuite;
 
   for (const account of accountsToProcess) {
-    const searchQuery = nonExecIcp
-      ? `${account.name} ${targetTitles} contacts staff leadership`
-      : `${account.name} executives decision makers ${targetTitles}`;
-    const searchResults = await performWebSearch(searchQuery);
+    // Build search queries based on ICP type
+    type SourcedResult = { title: string; url: string; snippet: string; sourceType: "linkedin" | "press_release" | "conference" | "publication" | "general" };
 
-    // Log the search query itself as an evidence source
-    if (searchResults.length > 0) {
-      await db.insert(schema.evidenceSources).values({
-        candidateAccountId: account.id,
-        sourceType: "other",
-        url: `https://search.brave.com/search?q=${encodeURIComponent(searchQuery)}`,
-        title: `Search: ${searchQuery}`,
-        content: searchResults.map(r => `${r.title}: ${r.snippet}`).join("\n"),
-      });
+    let searchResults: SourcedResult[] = [];
+
+    if (nonExecIcp) {
+      // Multi-query approach for non-executive ICPs
+      // Extract concise role keywords from target titles for use in queries
+      // Build a compact role phrase from up to 3 target titles for broader coverage
+      const roleKeywords = targetTitles
+        .split(",")
+        .map(t => t.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      // Use the most specific keyword for site-targeted queries, and an OR phrase for broader ones
+      const primaryRoleKeyword = roleKeywords[0];
+      const roleOrPhrase = roleKeywords.length > 1
+        ? roleKeywords.map(k => `"${k}"`).join(" OR ")
+        : `"${primaryRoleKeyword}"`;
+
+      const queries: Array<{ query: string; sourceType: SourcedResult["sourceType"]; label: string }> = [
+        {
+          query: `site:linkedin.com/in "${account.name}" (${roleOrPhrase})`,
+          sourceType: "linkedin",
+          label: "linkedin_search",
+        },
+        {
+          query: `"${account.name}" (${roleOrPhrase}) announcement OR appointed OR joins OR promoted`,
+          sourceType: "press_release",
+          label: "press_release_search",
+        },
+        {
+          query: `"${account.name}" (${roleOrPhrase}) speaker OR panelist OR conference OR summit`,
+          sourceType: "conference",
+          label: "conference_search",
+        },
+        {
+          query: `"${account.name}" (${roleOrPhrase}) site:modernhealthcare.com OR site:ahip.org OR site:healthcarefinancenews.com OR site:healthleadersmedia.com OR site:beckershospitalreview.com`,
+          sourceType: "publication",
+          label: "publication_search",
+        },
+      ];
+
+      const seenUrls = new Set<string>();
+
+      for (const { query, sourceType, label } of queries) {
+        console.log(`[Agent] [${account.name}] Running ${label}: ${query}`);
+        let results: { title: string; url: string; snippet: string }[] = [];
+        const passStart = Date.now();
+        try {
+          results = await performWebSearch(query);
+        } catch (searchErr) {
+          console.warn(`[Agent] ${label} failed for "${account.name}": ${searchErr instanceof Error ? searchErr.message : String(searchErr)}`);
+        }
+        const passDurationMs = Date.now() - passStart;
+
+        const deduped: SourcedResult[] = [];
+        for (const r of results) {
+          if (!seenUrls.has(r.url)) {
+            seenUrls.add(r.url);
+            deduped.push({ ...r, sourceType });
+          }
+        }
+
+        // Log each search pass as a separate audit step with actual duration
+        await logAgentStep(
+          runId,
+          "contact_discovery",
+          `${label}_${account.id}`,
+          query,
+          `${results.length} results returned; ${deduped.length} new after dedup`,
+          config.model,
+          config.provider,
+          passDurationMs,
+          true,
+        );
+
+        // Log as evidence source if results found
+        if (deduped.length > 0) {
+          await db.insert(schema.evidenceSources).values({
+            candidateAccountId: account.id,
+            sourceType: sourceType === "linkedin" ? "linkedin" : "other",
+            url: `https://search.brave.com/search?q=${encodeURIComponent(query)}`,
+            title: `${label.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}: ${account.name}`,
+            content: deduped.map(r => `[${r.sourceType}] ${r.title}: ${r.snippet}`).join("\n"),
+          }).catch((e: unknown) => console.warn(`[Agent] Failed to log evidence for ${label}: ${e instanceof Error ? e.message : String(e)}`));
+        }
+
+        searchResults = searchResults.concat(deduped);
+        console.log(`[Agent] [${account.name}] ${label}: ${results.length} results, ${deduped.length} new unique`);
+      }
+    } else {
+      // Single broad query for executive ICPs
+      const searchQuery = `${account.name} executives decision makers ${targetTitles}`;
+      const rawResults = await performWebSearch(searchQuery);
+      searchResults = rawResults.map(r => ({ ...r, sourceType: "general" as const }));
+
+      // Log the search query itself as an evidence source
+      if (searchResults.length > 0) {
+        await db.insert(schema.evidenceSources).values({
+          candidateAccountId: account.id,
+          sourceType: "other",
+          url: `https://search.brave.com/search?q=${encodeURIComponent(searchQuery)}`,
+          title: `Search: ${searchQuery}`,
+          content: searchResults.map(r => `${r.title}: ${r.snippet}`).join("\n"),
+        });
+      }
     }
 
     if (searchResults.length === 0) {
@@ -1075,7 +1168,28 @@ async function runContactDiscoveryPhase(
       continue;
     }
 
-    const searchContext = `\n\nWeb research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`;
+    // Build source-typed search context for the LLM
+    let searchContext: string;
+    if (nonExecIcp) {
+      const bySource: Record<string, string[]> = {};
+      for (const r of searchResults) {
+        if (!bySource[r.sourceType]) bySource[r.sourceType] = [];
+        bySource[r.sourceType].push(`- ${r.title}: ${r.snippet}`);
+      }
+      const sourceLabels: Record<string, string> = {
+        linkedin: "LinkedIn Profiles (strongest grounding signal for real named individuals)",
+        press_release: "Press Releases & Announcements",
+        conference: "Conference & Event Speaker Listings",
+        publication: "Industry Publications & Trade Media",
+        general: "General Web Results",
+      };
+      const sections = Object.entries(bySource).map(([type, lines]) =>
+        `[${sourceLabels[type] || type}]\n${lines.join("\n")}`
+      );
+      searchContext = `\n\nWeb research (grouped by source):\n${sections.join("\n\n")}`;
+    } else {
+      searchContext = `\n\nWeb research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`;
+    }
 
     const icpContext = buildIcpContextSection(icpProfile, icpVersion, false);
     const buyingSignalsContext = buyingSignals.length > 0
@@ -1091,14 +1205,23 @@ async function runContactDiscoveryPhase(
       ? `CRITICAL INSTRUCTION: The ICP for this run specifically targets NON-EXECUTIVE, functional roles. Do NOT return CEOs, Presidents, CFOs, COOs, CTOs, Chief Officers, Executive Vice Presidents, Senior Vice Presidents, or any other C-suite or executive leadership title. ONLY return people who hold roles closely matching: ${targetTitles}. If you cannot find anyone at those functional levels for this company, return an empty array [] rather than defaulting to executives.`
       : ``;
 
+    const sourceGuidanceInstruction = nonExecIcp
+      ? `SOURCE GUIDANCE: The web research below is grouped by source type. LinkedIn profile snippets are the STRONGEST grounding signal — if a person's name and title appear in a LinkedIn result, they are almost certainly real and at that company. Press release and conference results are also strong signals when they name a specific individual. Industry publication mentions confirm a person's role and company. Use all source types to triangulate real contacts. If a name appears across multiple source types, that increases confidence.`
+      : ``;
+
     const systemPrompt = `You are a contact discovery specialist finding B2B contacts who match specific role criteria.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
 ${csuiteExclusionInstruction}
+${sourceGuidanceInstruction}
 ${knowledgeInstruction} Do NOT fabricate or invent people. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any generic example name. Do NOT generate email addresses unless you found a specific confirmed email in the search results. Return an empty array [] if you genuinely cannot identify any real named individuals at this company who match the target roles.`;
 
     const contactFraming = nonExecIcp
       ? `Find contacts at ${account.name} (${account.industry || "health plan"} company, ${account.companySize || "mid-size"}) who specifically hold these functional roles — NOT executives or C-suite`
       : `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"})`;
+
+    const returnInstruction = nonExecIcp
+      ? `Return a JSON array of real named contacts at this company who hold the listed target roles. Use the web research above as your primary evidence — prioritize people who appear in the LinkedIn Profiles section, then those mentioned in press releases or conference listings, then industry publications. Supplement with your knowledge only for contacts you are highly confident are real and publicly documented. Do not fabricate contacts. Return an empty array [] if you cannot identify any real individuals matching the target roles.`
+      : `Return a JSON array of real named contacts at this company who hold the listed target roles. Use the web research above for context, and supplement with your knowledge of this company's publicly known staff in these functional areas. Do not fabricate contacts — only include people you know or can confirm are real. Return an empty array [] if you cannot identify any real individuals matching the target roles.`;
 
     const userPrompt = `${contactFraming}.
 Target roles (ONLY return people whose titles closely match these): ${targetTitles}
@@ -1106,13 +1229,13 @@ Company overview: ${account.companyOverview || account.description || "No descri
 ICP fit rationale for this company: ${account.icpFitRationale || "Good fit"}${icpContext}${buyingSignalsContext}
 ${searchContext}
 
-Return a JSON array of real named contacts at this company who hold the listed target roles. Use the web research above for context, and supplement with your knowledge of this company's publicly known staff in these functional areas. Do not fabricate contacts — only include people you know or can confirm are real. Return an empty array [] if you cannot identify any real individuals matching the target roles. Each object must have this shape:
+${returnInstruction} Each object must have this shape:
 {
   "firstName": "<real first name>",
   "lastName": "<real last name>",
   "title": "<their actual job title>",
   "email": "<confirmed email from search results only — omit if unknown>",
-  "linkedinUrl": "<LinkedIn URL if known, otherwise omit>",
+  "linkedinUrl": "<LinkedIn URL if found in the LinkedIn search results — include full URL>",
   "roleFitRationale": "<2-3 sentences why this person is a good contact>",
   "outreachPriority": "high|medium|low"
 }`;
@@ -1221,11 +1344,31 @@ Return a JSON array of real named contacts at this company who hold the listed t
         const inOriginalSearch = contactSearchContextText.includes(firstNameNorm) &&
           contactSearchContextText.includes(lastNameNorm);
 
-        // Signal 3: Targeted LinkedIn web search — only triggered when signals 1 & 2 both fail
+        // Signal 3a (non-exec ICP only): Name appeared in the LinkedIn-specific multi-source search
+        // results, OR the LLM-provided linkedinUrl matches a URL returned by the LinkedIn search pass.
+        // These were already retrieved as part of the linkedin_search pass, so no extra API call is
+        // needed — the contact is already grounded.
+        const linkedInSourceResults = nonExecIcp
+          ? searchResults.filter(r => r.sourceType === "linkedin")
+          : [];
+        const linkedInSourcedContextText = linkedInSourceResults
+          .map(r => `${r.title} ${r.snippet}`)
+          .join(" ")
+          .toLowerCase();
+        const linkedInSourcedUrls = new Set(linkedInSourceResults.map(r => r.url.toLowerCase()));
+        const providedLinkedInUrl = typeof contactData.linkedinUrl === "string"
+          ? contactData.linkedinUrl.toLowerCase()
+          : "";
+        const groundedViaLinkedInSource = nonExecIcp && (
+          (linkedInSourcedContextText.includes(firstNameNorm) && linkedInSourcedContextText.includes(lastNameNorm)) ||
+          (providedLinkedInUrl.includes("linkedin.com/in/") && linkedInSourcedUrls.has(providedLinkedInUrl))
+        );
+
+        // Signal 3b: Targeted LinkedIn web search — only triggered when signals 1, 2, and 3a all fail
         let groundedViaLinkedIn = false;
         let linkedInSearchResults: { title: string; url: string; snippet: string }[] = [];
 
-        if (!hasLinkedInUrl && !inOriginalSearch) {
+        if (!hasLinkedInUrl && !inOriginalSearch && !groundedViaLinkedInSource) {
           try {
             const linkedInQuery = `"${contactData.firstName} ${contactData.lastName}" "${account.name}" LinkedIn`;
             linkedInSearchResults = await performWebSearch(linkedInQuery);
@@ -1238,14 +1381,19 @@ Return a JSON array of real named contacts at this company who hold the listed t
           } catch (searchErr) {
             console.warn(`[Agent] LinkedIn grounding search failed for "${contactData.firstName} ${contactData.lastName}": ${searchErr instanceof Error ? searchErr.message : String(searchErr)}`);
           }
+        } else if (groundedViaLinkedInSource) {
+          console.log(`[Agent] Contact "${contactData.firstName} ${contactData.lastName}" at ${account.name} grounded via LinkedIn-specific search pass — skipping redundant confirmation search`);
         }
 
-        if (!hasLinkedInUrl && !inOriginalSearch && !groundedViaLinkedIn) {
-          console.warn(`[Agent] Skipping ungrounded contact — not confirmed by LinkedIn URL, original search, or LinkedIn search: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
+        if (!hasLinkedInUrl && !inOriginalSearch && !groundedViaLinkedInSource && !groundedViaLinkedIn) {
+          console.warn(`[Agent] Skipping ungrounded contact — not confirmed by LinkedIn URL, original search, LinkedIn source pass, or LinkedIn search: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
           continue;
         }
 
-        const groundingMethod = hasLinkedInUrl ? "linkedin_url" : inOriginalSearch ? "original_search" : "linkedin_search";
+        const groundingMethod = hasLinkedInUrl ? "linkedin_url"
+          : inOriginalSearch ? "original_search"
+          : groundedViaLinkedInSource ? "linkedin_source_pass"
+          : "linkedin_search";
         console.log(`[Agent] Grounded contact "${contactData.firstName} ${contactData.lastName}" at ${account.name} via ${groundingMethod}`);
 
         // Log LinkedIn evidence source when confirmed via LinkedIn search
@@ -1258,7 +1406,7 @@ Return a JSON array of real named contacts at this company who hold the listed t
               || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contactData.firstName} ${contactData.lastName} ${account.name}`)}`,
             title: `LinkedIn: ${contactData.firstName} ${contactData.lastName} at ${account.name}`,
             content: linkedInSearchResults.map(r => `${r.title}: ${r.snippet}`).join("\n"),
-          }).catch(e => console.warn(`[Agent] Failed to log LinkedIn evidence: ${e instanceof Error ? e.message : String(e)}`));
+          }).catch((e: unknown) => console.warn(`[Agent] Failed to log LinkedIn evidence: ${e instanceof Error ? e.message : String(e)}`));
         }
 
         const [contact] = await db.insert(schema.candidateContacts).values({
