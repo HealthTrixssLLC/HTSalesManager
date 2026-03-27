@@ -675,7 +675,12 @@ export default function LeadGenRunDetailPage() {
                       data-testid={`row-candidate-${c.id}`}
                     >
                       <td className="py-3 px-4 font-medium">{c.accountName || c.id.slice(0, 8)}</td>
-                      <td className="py-3 px-4">{c.contactName || "—"}</td>
+                      <td className="py-3 px-4">
+                        {c.contactName
+                          ? c.contactName
+                          : <span className="text-muted-foreground italic text-xs">No contact found</span>
+                        }
+                      </td>
                       <td className="py-3 px-4 text-muted-foreground">{c.contactTitle || "—"}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${candidateStatusColors[c.status] || ""}`}>

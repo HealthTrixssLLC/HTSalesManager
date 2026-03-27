@@ -1047,6 +1047,30 @@ async function runContactDiscoveryPhase(
 
     if (searchResults.length === 0) {
       console.warn(`[Agent] No search results for account "${account.name}" — skipping contact discovery to avoid hallucinations.`);
+      // Still surface the account in run results with a company-only lead.
+      // Check both in-memory list and DB to handle resume/retry scenarios.
+      const accountHasLeadsAlready = allLeads.some(l => l.candidateAccountId === account.id);
+      if (!accountHasLeadsAlready) {
+        const existingLead = await db.select({ id: schema.candidateLeads.id })
+          .from(schema.candidateLeads)
+          .where(and(eq(schema.candidateLeads.runId, runId), eq(schema.candidateLeads.candidateAccountId, account.id)))
+          .limit(1);
+        if (existingLead.length === 0) {
+          try {
+            const [fallbackLead] = await db.insert(schema.candidateLeads).values({
+              runId,
+              candidateAccountId: account.id,
+              candidateContactId: null,
+              tier: "tier_2",
+              status: "pending_review",
+              assignedPlaybookId: runPlaybookId || null,
+            }).returning();
+            if (fallbackLead) allLeads.push(fallbackLead);
+          } catch (insertErr) {
+            console.warn(`[Agent] Failed to insert company-only lead for account "${account.name}": ${insertErr instanceof Error ? insertErr.message : String(insertErr)}`);
+          }
+        }
+      }
       successCount++;
       continue;
     }
@@ -1112,6 +1136,31 @@ Return a JSON array of real named contacts at this company who hold the listed t
 
       if (!Array.isArray(parsed)) {
         lastError.push(`No contact array returned for ${account.name}`);
+        // Still create a company-only lead so the account is visible in results.
+        // Check both in-memory list and DB to handle resume/retry scenarios.
+        const accountHasLeadsAlreadyP = allLeads.some(l => l.candidateAccountId === account.id);
+        if (!accountHasLeadsAlreadyP) {
+          const existingLeadP = await db.select({ id: schema.candidateLeads.id })
+            .from(schema.candidateLeads)
+            .where(and(eq(schema.candidateLeads.runId, runId), eq(schema.candidateLeads.candidateAccountId, account.id)))
+            .limit(1);
+          if (existingLeadP.length === 0) {
+            try {
+              const [fallbackLead] = await db.insert(schema.candidateLeads).values({
+                runId,
+                candidateAccountId: account.id,
+                candidateContactId: null,
+                tier: "tier_2",
+                status: "pending_review",
+                assignedPlaybookId: runPlaybookId || null,
+              }).returning();
+              if (fallbackLead) allLeads.push(fallbackLead);
+            } catch (insertErr) {
+              console.warn(`[Agent] Failed to insert company-only lead for account "${account.name}": ${insertErr instanceof Error ? insertErr.message : String(insertErr)}`);
+            }
+          }
+        }
+        successCount++;
         continue;
       }
 
@@ -1243,6 +1292,34 @@ Return a JSON array of real named contacts at this company who hold the listed t
           if (lead) allLeads.push(lead);
         }
       }
+
+      // If no contacts were found (or all were filtered/ungrounded) for this account,
+      // insert a company-only candidate lead so the account surfaces in run results.
+      // Check both in-memory list and DB to handle resume/retry scenarios.
+      const accountHasLeads = allLeads.some(l => l.candidateAccountId === account.id);
+      if (!accountHasLeads) {
+        const existingLeadFinal = await db.select({ id: schema.candidateLeads.id })
+          .from(schema.candidateLeads)
+          .where(and(eq(schema.candidateLeads.runId, runId), eq(schema.candidateLeads.candidateAccountId, account.id)))
+          .limit(1);
+        if (existingLeadFinal.length === 0) {
+          console.log(`[Agent] No contacts found for account "${account.name}" — inserting company-only candidate lead.`);
+          try {
+            const [fallbackLead] = await db.insert(schema.candidateLeads).values({
+              runId,
+              candidateAccountId: account.id,
+              candidateContactId: null,
+              tier: "tier_2",
+              status: "pending_review",
+              assignedPlaybookId: runPlaybookId || null,
+            }).returning();
+            if (fallbackLead) allLeads.push(fallbackLead);
+          } catch (insertErr) {
+            console.warn(`[Agent] Failed to insert company-only lead for account "${account.name}": ${insertErr instanceof Error ? insertErr.message : String(insertErr)}`);
+          }
+        }
+      }
+
       successCount++;
     } catch (err) {
       const durationMs = Date.now() - startTime;
