@@ -1,0 +1,459 @@
+Lead Generation Research Engine Upgrade
+Replace external search dependency with Azure OpenAI Responses API web_search, preserve no hallucination safeguards, and add explicit research provenance and configuration validation.
+
+Business Problem
+
+The current lead generation pipeline completes successfully but returns no companies when no external search provider is configured. Logs show the research steps are skipped and the company discovery phase intentionally returns an empty array to avoid hallucinated output. This is a good safeguard, but the current design depends on a separately configured search provider even though Azure OpenAI and OpenAI now support built in web search through the Responses API.
+
+Requested Change
+
+Refactor the research phases so public market research and company discovery use Azure OpenAI Responses API with the web_search tool as the primary search mechanism. Keep the current empty result safeguard, but change the failure mode from silent skip to an explicit configuration or capability error when research is required and search is unavailable. Capture citations and source URLs for every discovered company so downstream strategy and communication phases only operate on grounded records. Azure documents that web_search is the recommended tool in the Responses API, supports inline citations, supports allowed domain filters, and can include returned source metadata.
+
+Why this is the right pattern
+
+The Responses API is the current agent oriented interface for tool use, including web search, and Azure’s v1 endpoint supports it directly. For your use case, standard web_search or reasoning driven agentic search is appropriate for interactive company discovery, while deeper long form research should be reserved for heavier background workflows because Azure notes that deep research is slower and intended for more exhaustive investigations.
+
+Important compliance note
+
+Azure states that its web search capability uses Grounding with Bing Search or Bing Custom Search, that the Microsoft Data Protection Addendum does not apply to data sent there, and that customer data can flow outside the customer’s compliance and geo boundary. So this public web research path should only receive sanitized public market research prompts, never PHI, sensitive customer data, or confidential deal details.
+
+Scope
+
+In scope
+
+Replace research phase search calls with Azure web_search
+Add explicit configuration validation on application startup
+Add structured provenance for every discovered company
+Preserve human approval before CRM promotion
+Keep internal data enrichment separate from public web research
+
+Out of scope for this change
+
+Full internal document retrieval
+Full contact enrichment from third party data vendors
+CRM schema redesign
+Automated outbound sending
+
+Acceptance Criteria
+
+If research is invoked and Azure web search is configured, the pipeline returns grounded company candidates with source metadata and no fabricated companies.
+If research is invoked and search is not configured, the pipeline fails with a clear actionable configuration error rather than silently succeeding with empty output.
+Company discovery returns a normalized object per company that includes at minimum company name, website, evidence summary, and one or more source citations.
+Strategy and communication drafting phases only run on user approved companies.
+The system stores enough provenance to show the user why each company was selected.
+Sensitive prompts can be routed away from public web search and into your internal retrieval path.
+
+Target Architecture
+
+Use two retrieval lanes.
+
+Public web lane
+For market trends, competitor research, company discovery, company websites, leadership pages, news, and press releases. Use Azure Responses API plus web_search. Azure supports domain filtering and optional user location hints.
+Private knowledge lane
+For your CRM notes, prior approved leads, internal playbooks, and internal documents. Use a separate private retrieval service such as Azure AI Search, which Microsoft positions for text, vector, and multimodal enterprise retrieval scenarios.
+
+Recommended phase flow
+
+ICP intake
+User defines ideal customer profile.
+Research plan
+System converts ICP into research intents such as market trends, target company criteria, geography, payer type, plan type, and exclusion rules.
+Public market research
+Use web_search to identify themes, signals, and named organizations.
+Company discovery
+Use web_search again with a stricter instruction set and a required grounding rule.
+User review
+User approves companies.
+Strategy generation
+Generate company overviews, entry strategy, and recommended messaging only for approved companies.
+Contact enrichment
+Optional separate step. Do not rely on generic web search alone for contact accuracy.
+CRM promotion
+Create leads and tasks only after user approval.
+
+Implementation Pattern
+
+I would implement this as a provider based research service so you are not trapped by one vendor or one search style.
+
+// src/lib/research/types.ts
+export type ResearchMode = "market_research" | "company_discovery";
+
+export interface ResearchRequest {
+  mode: ResearchMode;
+  icpSummary: string;
+  query: string;
+  allowedDomains?: string[];
+  regionHint?: { country?: string; city?: string; region?: string };
+  maxCompanies?: number;
+}
+
+export interface Citation {
+  title: string;
+  url: string;
+}
+
+export interface CompanyCandidate {
+  name: string;
+  website?: string;
+  summary: string;
+  whyMatched: string;
+  citations: Citation[];
+}
+
+export interface ResearchResult {
+  narrative?: string;
+  companies?: CompanyCandidate[];
+  rawText: string;
+}
+
+export interface ResearchProvider {
+  validateConfig(): void;
+  run(request: ResearchRequest): Promise<ResearchResult>;
+}
+
+Then create an Azure provider as the primary public research provider.
+
+// src/lib/research/providers/AzureWebSearchProvider.ts
+import OpenAI from "openai";
+import type {
+  ResearchProvider,
+  ResearchRequest,
+  ResearchResult,
+  CompanyCandidate,
+} from "../types";
+
+export class AzureWebSearchProvider implements ResearchProvider {
+  private client: OpenAI;
+  private model: string;
+
+  constructor() {
+    const apiKey = process.env.AZURE_OPENAI_API_KEY;
+    const baseUrl = process.env.AZURE_OPENAI_BASE_URL;
+    const model = process.env.AZURE_OPENAI_MODEL;
+
+    if (!apiKey || !baseUrl || !model) {
+      throw new Error(
+        "Azure web research is not configured. Set AZURE_OPENAI_API_KEY, AZURE_OPENAI_BASE_URL, and AZURE_OPENAI_MODEL."
+      );
+    }
+
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: baseUrl,
+    });
+
+    this.model = model;
+  }
+
+  validateConfig() {
+    // Constructor already validates required secrets.
+  }
+
+  async run(request: ResearchRequest): Promise<ResearchResult> {
+    const instructions =
+      request.mode === "company_discovery"
+        ? [
+            "You are a B2B healthcare market research agent.",
+            "Use web search before answering.",
+            "Return only real companies supported by sources.",
+            "Do not infer or invent organizations.",
+            "Prefer US organizations that match the ICP.",
+            "For each company, include why it matches and cite the supporting sources.",
+          ].join(" ")
+        : [
+            "You are a healthcare market research agent.",
+            "Use web search before answering.",
+            "Summarize current market trends relevant to the ICP.",
+            "Include citations to the supporting web sources.",
+          ].join(" ");
+
+    const tool: any = { type: "web_search" };
+
+    if (request.allowedDomains?.length) {
+      tool.filters = { allowed_domains: request.allowedDomains };
+    }
+
+    if (request.regionHint?.country || request.regionHint?.city || request.regionHint?.region) {
+      tool.user_location = {
+        type: "approximate",
+        ...(request.regionHint.country ? { country: request.regionHint.country } : {}),
+        ...(request.regionHint.city ? { city: request.regionHint.city } : {}),
+        ...(request.regionHint.region ? { region: request.regionHint.region } : {}),
+      };
+    }
+
+    const prompt =
+      request.mode === "company_discovery"
+        ? `
+ICP:
+${request.icpSummary}
+
+Discovery task:
+${request.query}
+
+Return JSON with this shape:
+{
+  "companies": [
+    {
+      "name": "string",
+      "website": "string | null",
+      "summary": "string",
+      "whyMatched": "string"
+    }
+  ]
+}
+Only include companies supported by the cited sources.
+Maximum companies: ${request.maxCompanies ?? 10}
+`
+        : `
+ICP:
+${request.icpSummary}
+
+Research task:
+${request.query}
+
+Return a concise market research summary grounded in sources.
+`;
+
+    const response = await this.client.responses.create({
+      model: this.model,
+      instructions,
+      input: prompt,
+      tools: [tool],
+      tool_choice: request.mode === "company_discovery" ? "required" : "auto",
+      include: ["web_search_call.action.sources"],
+      store: false,
+    });
+
+    const rawText = response.output_text || "";
+
+    const sources =
+      response.output
+        ?.filter((item: any) => item.type === "web_search_call")
+        ?.flatMap((item: any) => item.action?.sources || []) || [];
+
+    if (request.mode === "company_discovery") {
+      let parsed: { companies?: CompanyCandidate[] } = {};
+      try {
+        parsed = JSON.parse(rawText);
+      } catch {
+        parsed = { companies: [] };
+      }
+
+      const companies = (parsed.companies || []).map((c) => ({
+        ...c,
+        citations: sources.map((s: any) => ({
+          title: s.title,
+          url: s.url,
+        })),
+      }));
+
+      return {
+        companies,
+        rawText,
+      };
+    }
+
+    return {
+      narrative: rawText,
+      rawText,
+    };
+  }
+}
+
+Why this pattern is sound: Azure’s Responses API supports the v1 endpoint shape, API key or Entra authentication, the web_search tool, allowed_domains, user_location, and source inclusion. OpenAI’s Responses API also supports tool usage, source inclusion, and tool_choice, including required when you need to force tool use.
+
+Recommended orchestration service
+
+// src/lib/research/ResearchService.ts
+import { AzureWebSearchProvider } from "./providers/AzureWebSearchProvider";
+import type { ResearchRequest, ResearchResult } from "./types";
+
+export class ResearchService {
+  private provider = new AzureWebSearchProvider();
+
+  async run(request: ResearchRequest): Promise<ResearchResult> {
+    this.provider.validateConfig();
+    const result = await this.provider.run(request);
+
+    if (request.mode === "company_discovery" && (!result.companies || result.companies.length === 0)) {
+      return {
+        companies: [],
+        rawText: result.rawText,
+      };
+    }
+
+    return result;
+  }
+}
+
+Recommended API endpoints
+
+// src/server/routes/research.ts
+import express from "express";
+import { ResearchService } from "../../lib/research/ResearchService";
+
+const router = express.Router();
+const service = new ResearchService();
+
+router.post("/market-research", async (req, res) => {
+  try {
+    const result = await service.run({
+      mode: "market_research",
+      icpSummary: req.body.icpSummary,
+      query: req.body.query,
+      allowedDomains: req.body.allowedDomains,
+      regionHint: req.body.regionHint,
+    });
+    res.json({ ok: true, result });
+  } catch (error: any) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/company-discovery", async (req, res) => {
+  try {
+    const result = await service.run({
+      mode: "company_discovery",
+      icpSummary: req.body.icpSummary,
+      query: req.body.query,
+      allowedDomains: req.body.allowedDomains,
+      regionHint: req.body.regionHint,
+      maxCompanies: req.body.maxCompanies ?? 10,
+    });
+    res.json({ ok: true, result });
+  } catch (error: any) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+export default router;
+
+Environment variables
+
+Set these secrets in your app environment:
+
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_BASE_URL=https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/
+AZURE_OPENAI_MODEL=gpt-5
+RESEARCH_PROVIDER=azure_web_search
+
+That endpoint pattern and auth model are documented by Azure for the Responses API.
+
+Prompting rules for company discovery
+
+Use a strong developer instruction for discovery. The system should say:
+
+Use web search before answering
+Return only real companies supported by sources
+If insufficient evidence exists, return an empty array
+Prefer official websites, government pages, and reputable publications
+Avoid duplicative subsidiaries unless they are commercially distinct
+
+This complements your current empty array safeguard and matches the agentic tool use pattern described for Responses.
+
+Recommended domain filtering for healthcare
+
+For some workflows, you should allow broad discovery. For others, constrain results. Azure and OpenAI both show allowed_domains as a supported pattern. For healthcare, you may want a mix of official and commercial domains depending on the step.
+
+Examples:
+
+For policy and market validation
+
+[
+  "cms.gov",
+  "kff.org",
+  "healthaffairs.org",
+  "ahip.org"
+]
+
+For company validation
+
+[
+  "company-website.com",
+  "linkedin.com",
+  "businesswire.com",
+  "globenewswire.com"
+]
+
+I would not use overly tight domain filters during the first discovery pass because you will miss candidates. Use broader discovery first, then narrower verification.
+
+Recommended workflow changes to your existing phases
+
+Current five phase pipeline should become:
+
+Market Research
+Call Azure web_search with tool_choice: auto. Return narrative summary plus sources.
+Company Discovery
+Call Azure web_search with tool_choice: required. Return only grounded company objects. If parsing fails or no evidence exists, return empty array. tool_choice modes are documented in the Responses API reference.
+User Verification
+No change. User approves companies.
+Strategy Generation
+No web search required unless user asks for refreshed context. Generate strategy only from approved records plus citations captured earlier.
+Communication Drafting
+Draft custom outreach per approved company and lead. Keep a reference back to the company evidence packet.
+
+What to do with internal research
+
+Do not push internal notes, CRM data, prior call reports, or confidential customer material into public web search. Route that content through a separate private retrieval system. Azure AI Search is the right class of service for this because Microsoft positions it for enterprise text, vector, and multimodal retrieval in generative search scenarios.
+
+Operational safeguards
+
+Add a startup config check
+If research is enabled and required Azure variables are missing, fail startup or mark research unavailable.
+Add an explicit research_status object to every run
+Example: configured, tool_invoked, source_count, company_count, errors.
+Store sources per company
+This gives your UI the ability to show “why this company was selected.”
+Add a no silent fallback rule
+If search was required but not executed, return a clear error. Do not continue downstream phases.
+Keep store: false unless you intentionally want state persisted. OpenAI’s migration guide notes Responses are stored by default unless disabled.
+
+Minimal UI change request
+
+In the run detail page, add:
+
+Research status
+Sources found
+Companies discovered
+Approval queue
+Citation drawer for each company
+
+That will make the pipeline trustworthy to users because they can see where every candidate came from.
+
+Exact change request text you can paste into your ticket system
+
+Summary
+Refactor the lead generation research pipeline to use Azure OpenAI Responses API web_search as the primary public research capability. Preserve the empty array anti hallucination safeguard, but replace silent search skips with explicit configuration errors. Add source provenance for all discovered companies and enforce user approval before CRM promotion.
+
+Business value
+This change enables grounded market research and company discovery without relying on a separately managed external search vendor. It reduces hallucination risk, improves traceability, and creates a stronger foundation for strategy and communication generation.
+
+Functional requirements
+
+System shall validate Azure research configuration before executing research.
+System shall use Azure Responses API web_search for market research and company discovery.
+System shall capture source metadata for every research run.
+System shall return only grounded company records for discovery.
+System shall return an empty array if no grounded companies are found.
+System shall block downstream lead creation until user approval is received.
+System shall separate public web research from private internal retrieval.
+System shall not send confidential or regulated data into public web search.
+
+Nonfunctional requirements
+
+Clear error handling
+Deterministic normalized response objects
+Source traceability
+No silent degradation
+Extensible provider architecture
+
+Definition of done
+
+End to end run returns grounded market summary and company candidates
+Source links are visible in logs or UI
+Empty result behavior works correctly when no evidence is found
+Missing configuration produces actionable error
+Approved companies can be promoted into CRM with tasks
+
+If you want, I can turn this into a full Replit build package next, including a PRD, technical design, folder structure, and implementation SOP.
