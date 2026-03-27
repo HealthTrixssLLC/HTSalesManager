@@ -723,8 +723,10 @@ export class PostgresStorage implements IStorage {
         lte(schema.opportunities.closeDate, yearEnd)
       ));
     
-    const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
-    const winRate = totalClosed > 0 ? Math.round(((closedWon[0]?.count || 0) / totalClosed) * 100) : 0;
+    const wonCount = Number(closedWon[0]?.count ?? 0);
+    const lostCount = Number(closedLost[0]?.count ?? 0);
+    const totalClosed = wonCount + lostCount;
+    const winRate = totalClosed > 0 ? Math.round((wonCount / totalClosed) * 100) : 0;
     
     // Get upcoming opportunities grouped by close date (month)
     // Only include open opportunities (not closed_won or closed_lost)
@@ -809,7 +811,7 @@ export class PostgresStorage implements IStorage {
       })),
       newLeadsThisMonth: newLeads[0]?.count || 0,
       winRate,
-      totalClosedDeals: totalClosed,
+      totalClosedDeals: wonCount + lostCount,
       opportunitiesByCloseDate,
     };
   }
