@@ -13,6 +13,35 @@ import { decryptApiKey, isEncryptedKey } from "./llm-key-utils";
 import { isAzureWebSearchConfigured, AzureWebSearchProvider } from "./lib/research/providers/AzureWebSearchProvider";
 import { researchService } from "./lib/research/ResearchService";
 
+let _cachedAzureProvider: AzureWebSearchProvider | null | undefined = undefined;
+
+async function getOrBuildAzureSearchProvider(): Promise<AzureWebSearchProvider | null> {
+  if (_cachedAzureProvider !== undefined) return _cachedAzureProvider;
+
+  if (isAzureWebSearchConfigured()) {
+    try {
+      _cachedAzureProvider = new AzureWebSearchProvider();
+      return _cachedAzureProvider;
+    } catch {
+      // fall through to DB fallback
+    }
+  }
+
+  const llmConfig = await getLlmConfig("market_research");
+  if (llmConfig && llmConfig.provider === "azure" && llmConfig.apiKey && llmConfig.baseUrl) {
+    console.log("[Agent] Azure web search: using DB LLM config (no env vars set)");
+    _cachedAzureProvider = new AzureWebSearchProvider({
+      apiKey: llmConfig.apiKey,
+      baseUrl: llmConfig.baseUrl,
+      model: llmConfig.model,
+    });
+    return _cachedAzureProvider;
+  }
+
+  _cachedAzureProvider = null;
+  return null;
+}
+
 const PHASES = [
   "market_research",
   "company_discovery",
@@ -287,7 +316,7 @@ let _cachedSearchConfig: SearchConfig | null | undefined = undefined;
 async function getSearchConfig(): Promise<SearchConfig | null> {
   if (_cachedSearchConfig !== undefined) return _cachedSearchConfig;
 
-  // Azure OpenAI web search takes priority when configured (uses AZURE_OPENAI_API_KEY/BASE_URL/MODEL)
+  // Azure OpenAI web search takes priority when env vars are set
   if (isAzureWebSearchConfigured()) {
     _cachedSearchConfig = { provider: "azure_web_search", apiKey: process.env.AZURE_OPENAI_API_KEY || "" };
     return _cachedSearchConfig;
@@ -322,6 +351,13 @@ async function getSearchConfig(): Promise<SearchConfig | null> {
     return _cachedSearchConfig;
   }
 
+  // Final fallback: if DB LLM config is Azure, use it for web search too (no separate env vars needed)
+  const llmCfg = await getLlmConfig("market_research");
+  if (llmCfg && llmCfg.provider === "azure" && llmCfg.apiKey) {
+    _cachedSearchConfig = { provider: "azure_web_search", apiKey: llmCfg.apiKey, baseUrl: llmCfg.baseUrl };
+    return _cachedSearchConfig;
+  }
+
   _cachedSearchConfig = null;
   return null;
 }
@@ -335,8 +371,12 @@ async function performWebSearch(query: string): Promise<{ title: string; url: st
   }
 
   if (config.provider === "azure_web_search") {
-    // Azure errors propagate — callers decide how to handle failures
-    return await researchService.searchWithCitations(query);
+    const azureProvider = await getOrBuildAzureSearchProvider();
+    if (azureProvider) {
+      return await azureProvider.search(query);
+    }
+    console.warn("[Agent] Azure web search config resolved but provider could not be built");
+    return [];
   }
 
   // Brave and Serper: errors are logged and return empty rather than aborting the run,

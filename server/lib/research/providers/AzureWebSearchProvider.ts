@@ -1,30 +1,42 @@
 import type { ResearchProvider, ResearchMode, Citation } from "../types";
 
+export interface AzureWebSearchConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export class AzureWebSearchProvider implements ResearchProvider {
   readonly mode: ResearchMode = "azure_web_search";
   private apiKey: string;
   private baseUrl: string;
   private model: string;
 
-  constructor() {
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const baseUrl = process.env.AZURE_OPENAI_BASE_URL;
-    const model = process.env.AZURE_OPENAI_MODEL;
+  constructor(config?: AzureWebSearchConfig) {
+    if (config) {
+      this.apiKey = config.apiKey;
+      this.baseUrl = config.baseUrl.replace(/\/+$/, "");
+      this.model = config.model;
+    } else {
+      const apiKey = process.env.AZURE_OPENAI_API_KEY;
+      const baseUrl = process.env.AZURE_OPENAI_BASE_URL;
+      const model = process.env.AZURE_OPENAI_MODEL;
 
-    const missing: string[] = [];
-    if (!apiKey) missing.push("AZURE_OPENAI_API_KEY");
-    if (!baseUrl) missing.push("AZURE_OPENAI_BASE_URL");
-    if (!model) missing.push("AZURE_OPENAI_MODEL");
-    if (missing.length > 0) {
-      throw new Error(
-        `Azure OpenAI web search requires these environment variables: ${missing.join(", ")}. ` +
-        `Configure them in Admin Console → AI Configuration → Web Search Provider.`
-      );
+      const missing: string[] = [];
+      if (!apiKey) missing.push("AZURE_OPENAI_API_KEY");
+      if (!baseUrl) missing.push("AZURE_OPENAI_BASE_URL");
+      if (!model) missing.push("AZURE_OPENAI_MODEL");
+      if (missing.length > 0) {
+        throw new Error(
+          `Azure OpenAI web search requires these environment variables: ${missing.join(", ")}. ` +
+          `Configure them in Admin Console → AI Configuration → Web Search Provider.`
+        );
+      }
+
+      this.apiKey = apiKey!;
+      this.baseUrl = baseUrl!.replace(/\/+$/, "");
+      this.model = model!;
     }
-
-    this.apiKey = apiKey!;
-    this.baseUrl = baseUrl!.replace(/\/+$/, "");
-    this.model = model!;
   }
 
   validateConfig(): string | null {
@@ -57,7 +69,7 @@ export class AzureWebSearchProvider implements ResearchProvider {
       if (response.status === 401) reason = "Invalid or expired API key";
       else if (response.status === 403) reason = "Access denied — check model permissions";
       else if (response.status === 429) reason = "Rate limit exceeded";
-      else if (response.status === 404) reason = "Endpoint or model not found — check AZURE_OPENAI_BASE_URL and AZURE_OPENAI_MODEL";
+      else if (response.status === 404) reason = "Endpoint or model not found — check base URL and model name";
       throw new Error(`Azure OpenAI web search failed: ${reason}. Details: ${errorText.slice(0, 300)}`);
     }
 
@@ -104,8 +116,6 @@ export class AzureWebSearchProvider implements ResearchProvider {
               }
             }
 
-            // Fallback: if no URL citations found, include the full text result without URL
-            // so the LLM still has context (but no citation provenance)
             if (results.length === 0 && text.trim()) {
               results.push({
                 title: "Azure Web Search Summary",

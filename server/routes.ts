@@ -5348,13 +5348,34 @@ export async function registerRoutes(app: Express) {
 
   // GET /api/admin/research/status - return current active search provider
   app.get("/api/admin/research/status", authenticate, requireRole("Admin"), readRateLimiter, async (_req: AuthRequest, res) => {
-    const azureConfigured = !!(
+    const azureEnvConfigured = !!(
       process.env.AZURE_OPENAI_API_KEY &&
       process.env.AZURE_OPENAI_BASE_URL &&
       process.env.AZURE_OPENAI_MODEL
     );
     const braveConfigured = !!process.env.BRAVE_SEARCH_API_KEY;
     const serperConfigured = !!process.env.SERPER_API_KEY;
+
+    // Check if the DB LLM config is Azure (can be used as web search source)
+    let azureDbConfigured = false;
+    let azureSource: "env" | "db_llm_config" | null = null;
+    try {
+      const llmRows = await db.select({
+        provider: schema.llmConfigurations.provider,
+        encryptedApiKey: schema.llmConfigurations.encryptedApiKey,
+        baseUrl: schema.llmConfigurations.baseUrl,
+      }).from(schema.llmConfigurations).orderBy(desc(schema.llmConfigurations.updatedAt)).limit(1);
+      const llmCfg = llmRows[0];
+      if (llmCfg && llmCfg.provider === "azure" && llmCfg.encryptedApiKey && llmCfg.baseUrl) {
+        azureDbConfigured = true;
+      }
+    } catch {
+      // ignore DB errors for status check
+    }
+
+    const azureConfigured = azureEnvConfigured || azureDbConfigured;
+    if (azureEnvConfigured) azureSource = "env";
+    else if (azureDbConfigured) azureSource = "db_llm_config";
 
     let activeProvider: string;
     if (azureConfigured) activeProvider = "azure_web_search";
@@ -5364,7 +5385,7 @@ export async function registerRoutes(app: Express) {
 
     return res.json({
       activeProvider,
-      azure: { configured: azureConfigured },
+      azure: { configured: azureConfigured, source: azureSource },
       brave: { configured: braveConfigured },
       serper: { configured: serperConfigured },
     });
@@ -5373,10 +5394,38 @@ export async function registerRoutes(app: Express) {
   // POST /api/admin/research/test - verify Azure web search connectivity via AzureWebSearchProvider
   app.post("/api/admin/research/test", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (_req: AuthRequest, res) => {
     try {
-      const { AzureWebSearchProvider } = await import("./lib/research/providers/AzureWebSearchProvider");
+      const { AzureWebSearchProvider, isAzureWebSearchConfigured } = await import("./lib/research/providers/AzureWebSearchProvider");
+      const { decryptApiKey, isEncryptedKey } = await import("./llm-key-utils");
       let provider: InstanceType<typeof AzureWebSearchProvider>;
+
       try {
-        provider = new AzureWebSearchProvider();
+        if (isAzureWebSearchConfigured()) {
+          provider = new AzureWebSearchProvider();
+        } else {
+          // Fall back to DB LLM config
+          const llmRows = await db.select().from(schema.llmConfigurations)
+            .orderBy(desc(schema.llmConfigurations.updatedAt)).limit(1);
+          const cfg = llmRows[0];
+          if (!cfg || cfg.provider !== "azure" || !cfg.encryptedApiKey || !cfg.baseUrl) {
+            return res.json({
+              success: false,
+              error: "Azure web search is not configured. Set AZURE_OPENAI_API_KEY/BASE_URL/MODEL env vars, or configure an Azure LLM in Admin Console → AI Configuration.",
+            });
+          }
+          let apiKey: string;
+          try {
+            apiKey = isEncryptedKey(cfg.encryptedApiKey)
+              ? decryptApiKey(cfg.encryptedApiKey)
+              : cfg.encryptedApiKey;
+          } catch {
+            return res.json({ success: false, error: "Failed to decrypt Azure API key from database." });
+          }
+          provider = new AzureWebSearchProvider({
+            apiKey,
+            baseUrl: cfg.baseUrl,
+            model: cfg.modelName,
+          });
+        }
       } catch (configErr) {
         return res.json({
           success: false,
@@ -5384,13 +5433,7 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      // Validate config (should be null since constructor threw if missing)
-      const configError = provider.validateConfig();
-      if (configError) {
-        return res.json({ success: false, error: configError });
-      }
-
-      // Do a lightweight live search to confirm connectivity
+      // Do a lightweight live search to confirm connectivity and Responses API support
       await provider.search("Azure OpenAI web search connectivity test");
       return res.json({ success: true });
     } catch (error) {
