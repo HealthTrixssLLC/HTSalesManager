@@ -789,23 +789,22 @@ async function runCompanyDiscoveryPhase(
   // markets (e.g. "Medicare Advantage dual eligible SNP") don't collapse to a generic term.
   const query1 = [allIndustriesText, "companies", topGeo].filter(Boolean).join(" ");
 
-  // Query 2: News / trigger-events query. Finds companies with recent market activity.
-  const query2Parts = [
-    secondaryIndustry || primaryIndustry,
-    tertiaryIndustry || "",
-    "company new market growth expansion launch 2025 2026",
-  ].filter(Boolean);
-  const query2 = query2Parts.join(" ");
+  // Query 2: LinkedIn company discovery. Targets LinkedIn company profile pages by
+  // including "linkedin.com" and "company" in natural language (site: operators are
+  // avoided because Azure web search treats the input as natural language and ignores them).
+  const query2 = `linkedin company profiles ${allIndustriesText} ${topGeo} B2B organizations`;
 
-  // Query 3: ICP-description-aware query. If there are ICP notes, use them to form a
-  // semantic search that surfaces more relevant niche players.
-  const query3 = icpNotes
-    ? `${icpNotes.slice(0, 100)} company organization list`
-    : `${primaryIndustry} ${secondaryIndustry} organizations provider companies list`.trim();
+  // Query 3: Industry-publication targeted search. Mimics searches that surface trade
+  // press results (Modern Healthcare, Becker's, AHIP, Health Leaders, etc.) which
+  // routinely name specific real companies operating in a market.
+  const query3 = `modernhealthcare becker's AHIP "health leaders" ${allIndustriesText} companies named list 2024 2025`;
 
-  // Query 4: Industry-press / named-entity discovery. Targets trade publication results
-  // (Modern Healthcare, Becker's, AHIP etc.) that typically name real companies.
-  const query4 = `${allIndustriesText} companies news industry report named organizations 2024 2025`;
+  // Query 4: ICP-description-aware + news/trigger-events query. Uses ICP notes or
+  // all industry tags to find companies with recent market activity. Surfaces niche
+  // players that wouldn't appear in a generic industry search.
+  const query4 = icpNotes
+    ? `${icpNotes.slice(0, 100)} company growth expansion launch new market 2025 2026`
+    : `${allIndustriesText} company growth expansion launch new market 2025 2026`;
 
   const searchQueries = [query1, query2, query3, query4];
 
@@ -848,25 +847,31 @@ async function runCompanyDiscoveryPhase(
   const searchUsable = isUsefulSearch && !snippetTooShort && !snippetLooksLikeError;
 
   if (!searchUsable) {
-    console.warn(`[Agent] Company discovery search yielded unusable results across all passes (usefulURLs=${isUsefulSearch}, shortSnippet=${snippetTooShort}, looksLikeError=${snippetLooksLikeError}). Falling back to LLM training knowledge.`);
+    console.warn(`[Agent] [knowledge_fallback] Company discovery search yielded unusable results across all passes (usefulURLs=${isUsefulSearch}, shortSnippet=${snippetTooShort}, looksLikeError=${snippetLooksLikeError}). Knowledge fallback ACTIVE.`);
   }
 
   if (searchResults.length === 0) {
-    console.warn("[Agent] No search results for company discovery across all queries — falling back to LLM training knowledge.");
+    console.warn("[Agent] [knowledge_fallback] No search results for company discovery across all queries. Knowledge fallback ACTIVE.");
   }
 
-  // Detect whether the search results contain enough named company entities.
-  // Heuristic: look for capitalized proper-noun sequences in the snippets.
-  // If very few are found, activate knowledge fallback even when search returned text.
-  const properNounPattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g;
-  const properNouns = new Set((combinedSnippets.match(properNounPattern) || []).map(s => s.toLowerCase()));
-  // Filter out common English phrases that match the pattern but aren't company names
-  const commonPhrases = new Set(["United States", "North America", "New York", "Los Angeles", "San Francisco", "United Kingdom", "South Korea", "New Jersey"]);
-  const likelyCompanyNouns = [...properNouns].filter(n => !commonPhrases.has(n.replace(/\b\w/g, c => c.toUpperCase())));
-  const hasEnoughNamedEntities = likelyCompanyNouns.length >= 3;
+  // Detect whether enough individual snippets contain specific company name mentions.
+  // Spec: "fewer than 2 snippets that mention a specific company name" triggers fallback.
+  // Method: a snippet "mentions a company name" if it contains at least one multi-word
+  // proper-noun sequence (capitalized words) that isn't a common English phrase.
+  const commonPhrases = new Set([
+    "United States", "North America", "New York", "Los Angeles", "San Francisco",
+    "United Kingdom", "South Korea", "New Jersey", "Centers For", "Department Of",
+    "Centers Medicare", "Medicare Medicaid",
+  ]);
+  const properNounPattern = /\b[A-Z][a-z]{1,}(?:\s+[A-Z][a-z]{1,})+\b/g;
+  const snippetsWithCompanyNames = searchResults.filter(r => {
+    const matches = (r.snippet.match(properNounPattern) || []);
+    return matches.some(m => !commonPhrases.has(m));
+  });
+  const hasEnoughNamedEntities = snippetsWithCompanyNames.length >= 2;
 
   if (!hasEnoughNamedEntities && searchUsable) {
-    console.warn(`[Agent] [knowledge_fallback] Search returned text but only ${likelyCompanyNouns.length} distinct named entities detected. Activating knowledge fallback for company discovery.`);
+    console.warn(`[Agent] [knowledge_fallback] Search usable but only ${snippetsWithCompanyNames.length}/${searchResults.length} snippets contain specific company names. Knowledge fallback ACTIVE.`);
   }
 
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
@@ -887,8 +892,8 @@ async function runCompanyDiscoveryPhase(
     : `\n\nNote: Web searches across ${searchQueries.length} targeted queries did not return usable results. Use your training knowledge to identify real companies that match the ICP criteria below.`;
 
   const companySourceInstruction = !useKnowledgeFallback
-    ? `CRITICAL INSTRUCTION — Company names: Prefer companies that are explicitly named in the web research results. If the search results contain named companies, use those. You may supplement with your training knowledge for companies you are confident exist in this market — but clearly prioritize search-verified companies. Do NOT fabricate fictional company names.`
-    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. Only include companies that actually exist and fit the industry, size, and geography requirements. Well-known real companies in the target market are acceptable even without web search verification.`;
+    ? `CRITICAL INSTRUCTION — Company names: Prefer companies that are explicitly named in the web research results. You may supplement with real companies from your training knowledge to reach the target count — but for every company, you MUST set the "sourceType" field: use "search_verified" if the company name appears in the search results, and "knowledge_based" if you are drawing from your training knowledge. Do NOT fabricate fictional company names.`
+    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. For every company, set "sourceType" to "knowledge_based". Only include companies that actually exist and fit the industry, size, and geography requirements.`;
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
@@ -897,8 +902,8 @@ ${companySourceInstruction}
 CRITICAL INSTRUCTION — Company details: For every company you include, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
 
   const companySourceUserInstruction = !useKnowledgeFallback
-    ? `Respond with a JSON array of up to ${numCompanies} companies. Prioritize companies named in the web research above; supplement with real companies from your training knowledge to reach the target count if needed. Each object must have this shape:`
-    : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge that best match the ICP. Return an empty array [] only if you genuinely cannot identify any real companies in this space. Each object must have this shape:`;
+    ? `Respond with a JSON array of up to ${numCompanies} companies. Prioritize companies named in the web research above; supplement with real companies from your training knowledge to reach the target count if needed. Set "sourceType": "search_verified" for search-grounded companies and "sourceType": "knowledge_based" for training-knowledge companies. Each object must have this shape:`
+    : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge that best match the ICP. Return an empty array [] only if you genuinely cannot identify any real companies in this space. Set "sourceType": "knowledge_based" for all entries. Each object must have this shape:`;
 
   const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
@@ -911,7 +916,8 @@ ${searchContext}
 
 ${companySourceUserInstruction}
 {
-  "name": "<actual company name from search results>",
+  "name": "<actual company name>",
+  "sourceType": "<'search_verified' if company appears in web research above, or 'knowledge_based' if from training knowledge>",
   "domain": "<actual company domain>",
   "industry": "<specific industry>",
   "companySize": "<size range e.g. 200-500>",
@@ -933,6 +939,7 @@ ${companySourceUserInstruction}
 
     const parsed = extractJsonFromText(response) as Array<{
       name?: string;
+      sourceType?: "search_verified" | "knowledge_based" | string;
       domain?: string;
       industry?: string;
       companySize?: string;
@@ -976,6 +983,16 @@ ${companySourceUserInstruction}
     const targetGeoTokens = (icpVersion?.targetGeographies || [])
       .flatMap(g => g.toLowerCase().split(/[\s,/]+/))
       .filter(t => t.length > 2);
+
+    // Log sourceType distribution — how many came from search vs training knowledge
+    const searchVerifiedCount = parsed.filter(c => c.sourceType === "search_verified").length;
+    const knowledgeBasedCount = parsed.filter(c => c.sourceType === "knowledge_based").length;
+    const unlabeledCount = parsed.length - searchVerifiedCount - knowledgeBasedCount;
+    if (knowledgeBasedCount > 0 || unlabeledCount > 0) {
+      console.log(`[Agent] [knowledge_fallback] Company sourceType distribution: ${searchVerifiedCount} search_verified, ${knowledgeBasedCount} knowledge_based, ${unlabeledCount} unlabeled (fallback=${useKnowledgeFallback})`);
+    } else {
+      console.log(`[Agent] Company sourceType distribution: ${searchVerifiedCount} search_verified (all grounded)`);
+    }
 
     const accounts: schema.CandidateAccount[] = [];
     for (const company of parsed.slice(0, numCompanies)) {
@@ -1061,6 +1078,13 @@ ${companySourceUserInstruction}
         }
       }
 
+      const companySourceType = company.sourceType === "search_verified" ? "search_verified" : "knowledge_based";
+      console.log(`[Agent] Inserting company "${companyName}" (sourceType=${companySourceType})`);
+      // Prefix icpFitRationale with sourceType badge so reviewers know origin
+      const icpFitRationaleWithSource = company.icpFitRationale
+        ? `[${companySourceType}] ${company.icpFitRationale}`
+        : `[${companySourceType}]`;
+
       const [inserted] = await db.insert(schema.candidateAccounts).values({
         runId,
         name: companyName,
@@ -1070,7 +1094,7 @@ ${companySourceUserInstruction}
         companySize: company.companySize || null,
         geography: company.geography || null,
         description: company.description || null,
-        icpFitRationale: company.icpFitRationale || null,
+        icpFitRationale: icpFitRationaleWithSource,
         companyOverview: company.companyOverview || null,
         strategicApproach: company.strategicApproach || null,
         sourceAgentPhase: "company_discovery",
