@@ -753,7 +753,8 @@ async function runCompanyDiscoveryPhase(
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
-CRITICAL INSTRUCTION: Only include companies that are explicitly mentioned or clearly referenced in the web research results provided. Do NOT fabricate, invent, or hallucinate company names or domains. Do NOT use placeholder values like "Company Name", "Example Corp", "company.com", or "example.com". If the search results do not contain enough real companies, return fewer entries or an empty array rather than inventing any.`;
+CRITICAL INSTRUCTION — Company names: Only include companies that are explicitly named in the web research results. Do NOT invent or hallucinate company names that are not mentioned in the search results. If the search results do not contain enough real company names, return fewer entries or an empty array rather than making up names.
+CRITICAL INSTRUCTION — Company details: For every company that IS named in the search results, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
 
   const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
