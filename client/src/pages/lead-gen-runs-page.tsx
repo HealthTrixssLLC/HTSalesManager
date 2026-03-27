@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { LeadGenerationRun, IcpProfile, IcpProfileVersion, User } from "@shared/schema";
+import type { LeadGenerationRun, IcpProfile, IcpProfileVersion, User, TaskPlaybook } from "@shared/schema";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -25,7 +25,7 @@ export default function LeadGenRunsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", icpProfileId: "", icpVersionId: "" });
+  const [form, setForm] = useState({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "" });
 
   const { data: runs, isLoading } = useQuery<LeadGenerationRun[]>({
     queryKey: ["/api/lead-gen/runs"],
@@ -37,6 +37,10 @@ export default function LeadGenRunsPage() {
 
   const { data: users } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: playbooks } = useQuery<TaskPlaybook[]>({
+    queryKey: ["/api/lead-gen/playbooks"],
   });
 
   const { data: icpVersions } = useQuery<IcpProfileVersion[]>({
@@ -56,6 +60,7 @@ export default function LeadGenRunsPage() {
       };
       if (data.icpProfileId) payload.icpProfileId = data.icpProfileId;
       if (data.icpVersionId) payload.icpVersionId = data.icpVersionId;
+      if (data.playbookId) payload.playbookId = data.playbookId;
       const res = await apiRequest("POST", "/api/lead-gen/runs", payload);
       return await res.json();
     },
@@ -63,7 +68,7 @@ export default function LeadGenRunsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
       toast({ title: "Run created" });
       setIsCreateOpen(false);
-      setForm({ name: "", description: "", icpProfileId: "", icpVersionId: "" });
+      setForm({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "" });
       setLocation(`/lead-gen/runs/${run.id}`);
     },
     onError: () => toast({ title: "Failed to create run", variant: "destructive" }),
@@ -184,6 +189,26 @@ export default function LeadGenRunsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Playbook</Label>
+              <Select
+                value={form.playbookId || "_none"}
+                onValueChange={v => setForm(f => ({ ...f, playbookId: v === "_none" ? "" : v }))}
+              >
+                <SelectTrigger data-testid="select-run-playbook">
+                  <SelectValue placeholder="Select a playbook (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">None</SelectItem>
+                  {(playbooks ?? []).filter(p => p.isActive).map(pb => (
+                    <SelectItem key={pb.id} value={pb.id}>{pb.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                When a playbook is linked, Communication Drafting generates one message per step.
+              </p>
             </div>
             {form.icpProfileId && (
               <div>

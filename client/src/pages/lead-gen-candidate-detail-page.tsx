@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus, ChevronDown, ChevronUp, Mail, Linkedin, Phone, CheckSquare } from "lucide-react";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +79,27 @@ interface RunSummary {
   status: string;
 }
 
+interface PlaybookStepDraft {
+  stepOrder: number;
+  stepName: string;
+  channel: string;
+  dayOffset: number;
+  activityType: string;
+  subject?: string;
+  draftMessage: string;
+}
+
+interface LegacyCommunicationPlan {
+  channelRecommendation?: string;
+  tone?: string;
+  objectives?: string[];
+  subjectLine?: string;
+  draftedMessage?: string;
+  followUpSequence?: string[];
+}
+
+type CommunicationPlan = PlaybookStepDraft[] | LegacyCommunicationPlan | null;
+
 interface CandidateDetail {
   id: string;
   status: string;
@@ -90,6 +111,7 @@ interface CandidateDetail {
   candidateAccountId: string | null;
   candidateContactId: string | null;
   assignedPlaybookId: string | null;
+  communicationPlan?: CommunicationPlan;
   account: CandidateAccount | null;
   contacts: CandidateContact[];
   scores: CandidateScore[];
@@ -113,6 +135,134 @@ const verificationColors: Record<string, string> = {
   partial: "bg-blue-100 text-blue-700",
   verified: "bg-green-100 text-green-700",
 };
+
+function channelIcon(channel: string) {
+  const c = (channel ?? "").toLowerCase();
+  if (c.includes("email")) return <Mail className="h-4 w-4" />;
+  if (c.includes("linkedin")) return <Linkedin className="h-4 w-4" />;
+  if (c.includes("phone") || c.includes("call")) return <Phone className="h-4 w-4" />;
+  return <CheckSquare className="h-4 w-4" />;
+}
+
+function CommunicationPlanPanel({ plan }: { plan: CommunicationPlan }) {
+  const [expanded, setExpanded] = useState<number[]>([]);
+
+  if (!plan) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center text-muted-foreground">
+          No communication plan has been generated for this candidate yet.
+          Run the Communication Drafting phase to generate one.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (Array.isArray(plan)) {
+    const steps = plan as PlaybookStepDraft[];
+    return (
+      <div className="space-y-3" data-testid="communication-plan-steps">
+        <p className="text-sm text-muted-foreground">
+          Playbook-driven communication plan — {steps.length} step{steps.length !== 1 ? "s" : ""}
+        </p>
+        {steps.map((step) => {
+          const isOpen = expanded.includes(step.stepOrder);
+          return (
+            <Card key={step.stepOrder} data-testid={`comm-step-${step.stepOrder}`}>
+              <CardHeader
+                className="py-3 cursor-pointer"
+                onClick={() => setExpanded(prev =>
+                  prev.includes(step.stepOrder) ? prev.filter(n => n !== step.stepOrder) : [...prev, step.stepOrder]
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-muted-foreground shrink-0">{channelIcon(step.channel)}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{step.stepName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Day {step.dayOffset} · {step.channel} · {step.activityType}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {step.subject && (
+                      <span className="text-xs text-muted-foreground hidden sm:block truncate max-w-[200px]">{step.subject}</span>
+                    )}
+                    {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                  </div>
+                </div>
+              </CardHeader>
+              {isOpen && (
+                <CardContent className="pt-0 space-y-3">
+                  {step.subject && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Subject</p>
+                      <p className="text-sm">{step.subject}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Draft Message</p>
+                    <pre className="text-sm whitespace-pre-wrap bg-muted/40 rounded-md p-3 font-sans leading-relaxed">{step.draftMessage}</pre>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const legacy = plan as LegacyCommunicationPlan;
+  return (
+    <Card data-testid="communication-plan-legacy">
+      <CardHeader><CardTitle className="text-base">Communication Plan</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        {legacy.channelRecommendation && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Recommended Channel</p>
+            <p className="text-sm">{legacy.channelRecommendation}</p>
+          </div>
+        )}
+        {legacy.tone && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Tone</p>
+            <p className="text-sm">{legacy.tone}</p>
+          </div>
+        )}
+        {legacy.objectives && legacy.objectives.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Objectives</p>
+            <ul className="list-disc list-inside text-sm space-y-1">
+              {legacy.objectives.map((o, i) => <li key={i}>{o}</li>)}
+            </ul>
+          </div>
+        )}
+        {legacy.subjectLine && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Subject Line</p>
+            <p className="text-sm">{legacy.subjectLine}</p>
+          </div>
+        )}
+        {legacy.draftedMessage && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Draft Message</p>
+            <pre className="text-sm whitespace-pre-wrap bg-muted/40 rounded-md p-3 font-sans leading-relaxed">{legacy.draftedMessage}</pre>
+          </div>
+        )}
+        {legacy.followUpSequence && legacy.followUpSequence.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">Follow-up Sequence</p>
+            <ol className="list-decimal list-inside text-sm space-y-1">
+              {legacy.followUpSequence.map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function LeadGenCandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -307,6 +457,7 @@ export default function LeadGenCandidateDetailPage() {
           <TabsTrigger value="score" data-testid="tab-score">Score Rationale</TabsTrigger>
           <TabsTrigger value="duplicates" data-testid="tab-duplicates">Duplicate Check</TabsTrigger>
           <TabsTrigger value="playbook" data-testid="tab-playbook">Proposed Playbook</TabsTrigger>
+          <TabsTrigger value="communication" data-testid="tab-communication">Communication Plan</TabsTrigger>
           <TabsTrigger value="decisions" data-testid="tab-decisions">History</TabsTrigger>
         </TabsList>
 
@@ -487,6 +638,11 @@ export default function LeadGenCandidateDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Communication Plan */}
+        <TabsContent value="communication" data-testid="panel-communication">
+          <CommunicationPlanPanel plan={candidate.communicationPlan ?? null} />
         </TabsContent>
 
         {/* Decision History */}

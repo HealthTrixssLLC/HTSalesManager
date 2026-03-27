@@ -540,11 +540,28 @@ function formatOffersSection(offers: schema.Offer[]): string {
   }).join("\n");
 }
 
+// ──────────────────────────────────────────────────────────────
+// Playbook helpers
+// ──────────────────────────────────────────────────────────────
+
+function buildPlaybookContextSection(
+  playbook: schema.TaskPlaybook | null,
+  steps: schema.TaskPlaybookStep[],
+): string {
+  if (!playbook || steps.length === 0) return "";
+  const stepSummary = steps
+    .map(s => `Day ${s.dayOffset} — ${s.channel} (${s.activityType}): ${s.name}`)
+    .join(", ");
+  return `\n\nOutreach Sequence: This run uses the "${playbook.name}" playbook — ${steps.length} steps: ${stepSummary}. Keep this channel mix and timing in mind when assessing engagement styles and communication preferences.`;
+}
+
 async function runMarketResearchPhase(
   runId: string,
   icpVersion: schema.IcpProfileVersion | null,
   icpProfile: schema.IcpProfile | null,
   offers: schema.Offer[],
+  playbook: schema.TaskPlaybook | null,
+  playbookSteps: schema.TaskPlaybookStep[],
   config: ResolvedLlmConfig,
 ): Promise<{ marketInsights: string; targetIndustries: string[]; keyTrends: string[]; buyingSignals: string[]; searchResults: { title: string; url: string; snippet: string }[] }> {
   const industries = icpVersion?.targetIndustries?.join(", ") || "technology, healthcare, finance";
@@ -566,6 +583,7 @@ async function runMarketResearchPhase(
 
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, false);
   const offersSection = formatOffersSection(offers);
+  const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
   const systemPrompt = `You are a market research specialist for a B2B sales team. 
 Your task is to analyze the target market and identify key insights for lead generation.
@@ -575,7 +593,7 @@ CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No 
 - Target Industries: ${industries}
 - Company Sizes: ${sizes}
 - Target Geographies: ${geos}
-- Our Offerings:\n${offersSection}${icpContext}
+- Our Offerings:\n${offersSection}${icpContext}${playbookContext}
 ${searchContext}
 
 Respond with JSON:
@@ -839,6 +857,7 @@ async function runContactDiscoveryPhase(
   icpVersion: schema.IcpProfileVersion | null,
   icpProfile: schema.IcpProfile | null,
   buyingSignals: string[],
+  runPlaybookId: string | null,
   config: ResolvedLlmConfig,
 ): Promise<{ contacts: schema.CandidateContact[]; leads: schema.CandidateLead[] }> {
   const targetTitles = icpVersion?.targetTitles?.join(", ") || "VP of Sales, CTO, CEO, Head of Operations";
@@ -979,6 +998,7 @@ Return a JSON array containing only contacts whose real names appear in the web 
             candidateContactId: contact.id,
             tier,
             status: "pending_review",
+            assignedPlaybookId: runPlaybookId || null,
           }).returning();
 
           if (lead) allLeads.push(lead);
@@ -1100,6 +1120,16 @@ Respond with JSON:
   }
 }
 
+interface PlaybookStepDraft {
+  stepOrder: number;
+  stepName: string;
+  channel: string;
+  dayOffset: number;
+  activityType: string;
+  subject?: string;
+  draftMessage: string;
+}
+
 async function runCommunicationDraftingPhase(
   runId: string,
   leads: schema.CandidateLead[],
@@ -1109,6 +1139,8 @@ async function runCommunicationDraftingPhase(
   marketInsights: string,
   keyTrends: string[],
   buyingSignals: string[],
+  playbook: schema.TaskPlaybook | null,
+  playbookSteps: schema.TaskPlaybookStep[],
   config: ResolvedLlmConfig,
 ): Promise<void> {
   const leadsToProcess = leads.slice(0, 30);
@@ -1189,22 +1221,98 @@ async function runCommunicationDraftingPhase(
       ? `\n- Recommended First Move: ${strategyData.recommendedFirstMove}`
       : "";
 
-    const systemPrompt = `You are a B2B sales communication specialist. 
-Draft personalized outreach messages tailored to specific contacts.
-CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
-
-    const userPrompt = `Draft a personalized outreach communication plan for:
-- Contact: ${contact.firstName} ${contact.lastName}, ${contact.title || "executive"} at ${account.name}
-- Contact Role Fit: ${contact.roleFitRationale || "Good match for our solution"}
-- Outreach Priority: ${contact.outreachPriority || "medium"}
-- Company: ${account.name} (${account.industry || "technology"}, ${account.companySize || "mid-size"})
-- Strategic Context: ${account.strategicApproach || account.icpFitRationale || "Strong ICP fit"}${painPointsStr}${differentiatorsStr}${firstMoveStr}
+    const sharedContext = `Contact: ${contact.firstName} ${contact.lastName}, ${contact.title || "executive"} at ${account.name}
+Company: ${account.name} (${account.industry || "technology"}, ${account.companySize || "mid-size"})
+Strategic Context: ${account.strategicApproach || account.icpFitRationale || "Strong ICP fit"}${painPointsStr}${differentiatorsStr}${firstMoveStr}
 
 Our Offerings:
 ${offersSection || "Not specified"}
 
 Market Intelligence:
-- ${marketInsights}${trendsContext}${signalsContext}${icpContext}
+- ${marketInsights}${trendsContext}${signalsContext}${icpContext}`;
+
+    const startTime = Date.now();
+    let response = "";
+
+    try {
+      let communicationPlan: unknown;
+
+      if (playbook && playbookSteps.length > 0) {
+        // ── PLAYBOOK MODE: generate one draft per step ──────────────────────
+        const stepsJson = playbookSteps.map(s => ({
+          stepOrder: s.stepOrder,
+          name: s.name,
+          channel: s.channel,
+          dayOffset: s.dayOffset,
+          activityType: s.activityType,
+          description: s.description || "",
+        }));
+
+        const systemPrompt = `You are a B2B sales communication specialist.
+Generate one personalised outreach draft per playbook step, channel-appropriate for each step type.
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
+
+        const userPrompt = `Write one outreach draft for each step of the "${playbook.name}" playbook below.
+
+${sharedContext}
+
+Playbook steps (write one draft per step, in order):
+${JSON.stringify(stepsJson, null, 2)}
+
+Return a JSON array with one object per step:
+[
+  {
+    "stepOrder": 1,
+    "stepName": "<step name>",
+    "channel": "<email|linkedin|call|task>",
+    "dayOffset": 0,
+    "activityType": "<email|call|task|meeting|note>",
+    "subject": "<email subject — only for email channel steps; omit for other channels>",
+    "draftMessage": "<full message body: email gets 2-3 paragraphs, LinkedIn gets a short connection note, call gets a talk-track outline>"
+  }
+]
+
+Guidelines:
+- Email: subject + 2-3 paragraph body referencing pain points and value propositions
+- LinkedIn: concise connection message (≤300 chars) referencing shared context
+- Call / phone: talk-track outline with opening hook, key questions, value statement, and next step ask
+- Task / other: a clear action description`;
+
+        response = await callLlm(config, systemPrompt, userPrompt);
+        const durationMs = Date.now() - startTime;
+        await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, true);
+
+        const parsedSteps = extractJsonFromText(response) as Array<{
+          stepOrder?: number;
+          stepName?: string;
+          channel?: string;
+          dayOffset?: number;
+          activityType?: string;
+          subject?: string;
+          draftMessage?: string;
+        }> | null;
+
+        if (Array.isArray(parsedSteps) && parsedSteps.length > 0) {
+          communicationPlan = parsedSteps
+            .filter(s => s.draftMessage)
+            .map(s => ({
+              stepOrder: s.stepOrder ?? 1,
+              stepName: s.stepName ?? "",
+              channel: s.channel ?? "email",
+              dayOffset: s.dayOffset ?? 0,
+              activityType: s.activityType ?? "email",
+              subject: s.subject || undefined,
+              draftMessage: s.draftMessage!,
+            } as PlaybookStepDraft));
+        }
+      } else {
+        // ── LEGACY MODE: single communication plan (no playbook) ────────────
+        const systemPrompt = `You are a B2B sales communication specialist. 
+Draft personalized outreach messages tailored to specific contacts.
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
+
+        const userPrompt = `Draft a personalized outreach communication plan for:
+- ${sharedContext}
 
 Respond with JSON:
 {
@@ -1216,33 +1324,28 @@ Respond with JSON:
   "followUpSequence": ["day 3: specific follow up action", "day 7: specific action"]
 }`;
 
-    const startTime = Date.now();
-    let response = "";
-    try {
-      response = await callLlm(config, systemPrompt, userPrompt);
-      const durationMs = Date.now() - startTime;
-      await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, true);
+        response = await callLlm(config, systemPrompt, userPrompt);
+        const durationMs = Date.now() - startTime;
+        await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, true);
 
-      const parsed = extractJsonFromText(response) as {
-        channelRecommendation?: string;
-        tone?: string;
-        objectives?: string[];
-        subjectLine?: string;
-        draftedMessage?: string;
-        followUpSequence?: string[];
-      } | null;
+        communicationPlan = extractJsonFromText(response);
+      }
 
-      if (parsed) {
+      if (communicationPlan) {
         await db.update(schema.candidateLeads)
-          .set({ communicationPlan: parsed, updatedAt: new Date() })
+          .set({ communicationPlan, updatedAt: new Date() })
           .where(eq(schema.candidateLeads.id, lead.id));
+
+        const draftText = Array.isArray(communicationPlan)
+          ? (communicationPlan as PlaybookStepDraft[]).map(s => `[Day ${s.dayOffset} — ${s.channel}]\n${s.draftMessage}`).join("\n\n---\n\n")
+          : ((communicationPlan as Record<string, unknown>)?.draftedMessage as string | undefined) || response;
 
         await db.insert(schema.researchDocuments).values({
           entityType: "candidate_lead",
           entityId: lead.id,
           documentType: "communication_draft",
           title: `Communication Plan: ${contact.firstName} ${contact.lastName} @ ${account.name}`,
-          content: parsed.draftedMessage || response,
+          content: draftText,
           sourceAgentPhase: "communication_drafting",
           runId,
         });
@@ -1251,7 +1354,7 @@ Respond with JSON:
     } catch (err) {
       const durationMs = Date.now() - startTime;
       const errorMsg = err instanceof Error ? err.message : String(err);
-      await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, false, errorMsg);
+      await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, response ? "prompt sent" : "", response, config.model, config.provider, durationMs, false, errorMsg);
       lastError.push(errorMsg);
       console.warn(`[Agent] Communication drafting failed for lead ${lead.id}: ${errorMsg}`);
     }
@@ -1305,6 +1408,21 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
     const pRows = await db.select().from(schema.icpProfiles)
       .where(eq(schema.icpProfiles.id, icpProfileId)).limit(1);
     icpProfile = pRows[0] || null;
+  }
+
+  // Load playbook + steps if the run has a playbookId
+  let runPlaybook: schema.TaskPlaybook | null = null;
+  let runPlaybookSteps: schema.TaskPlaybookStep[] = [];
+  if (run.playbookId) {
+    const pbRows = await db.select().from(schema.taskPlaybooks)
+      .where(eq(schema.taskPlaybooks.id, run.playbookId)).limit(1);
+    runPlaybook = pbRows[0] || null;
+    if (runPlaybook) {
+      runPlaybookSteps = await db.select().from(schema.taskPlaybookSteps)
+        .where(eq(schema.taskPlaybookSteps.playbookId, runPlaybook.id))
+        .orderBy(schema.taskPlaybookSteps.stepOrder);
+      console.log(`[Agent] Loaded playbook "${runPlaybook.name}" with ${runPlaybookSteps.length} steps for run ${runId}`);
+    }
   }
 
   const offers = run.icpProfileId
@@ -1389,7 +1507,7 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
       console.log(`[Agent] Running phase: ${phase} with model ${config.model}`);
 
       if (phase === "market_research") {
-        const result = await runMarketResearchPhase(runId, icpVersion, icpProfile, offers, config);
+        const result = await runMarketResearchPhase(runId, icpVersion, icpProfile, offers, runPlaybook, runPlaybookSteps, config);
         marketInsights = result.marketInsights;
         targetIndustries = result.targetIndustries.length > 0 ? result.targetIndustries : targetIndustries;
         keyTrends = result.keyTrends;
@@ -1403,7 +1521,7 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
           discoveredAccounts = await db.select().from(schema.candidateAccounts)
             .where(eq(schema.candidateAccounts.runId, runId));
         }
-        const result = await runContactDiscoveryPhase(runId, discoveredAccounts, icpVersion, icpProfile, buyingSignals, config);
+        const result = await runContactDiscoveryPhase(runId, discoveredAccounts, icpVersion, icpProfile, buyingSignals, run.playbookId || null, config);
         discoveredLeads = result.leads;
       } else if (phase === "strategy") {
         if (discoveredAccounts.length === 0) {
@@ -1416,7 +1534,7 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
           discoveredLeads = await db.select().from(schema.candidateLeads)
             .where(eq(schema.candidateLeads.runId, runId));
         }
-        await runCommunicationDraftingPhase(runId, discoveredLeads, offers, icpProfile, icpVersion, marketInsights, keyTrends, buyingSignals, config);
+        await runCommunicationDraftingPhase(runId, discoveredLeads, offers, icpProfile, icpVersion, marketInsights, keyTrends, buyingSignals, runPlaybook, runPlaybookSteps, config);
       }
 
       const phaseEnd = Date.now();

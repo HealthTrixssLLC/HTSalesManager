@@ -555,6 +555,7 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
   description: text("description"),
   icpProfileId: varchar("icp_profile_id", { length: 50 }).references(() => icpProfiles.id),
   icpVersionId: varchar("icp_version_id", { length: 50 }).references(() => icpProfileVersions.id),
+  playbookId: varchar("playbook_id", { length: 50 }).references(() => taskPlaybooks.id, { onDelete: "set null" }),
   status: lgRunStatusEnum("status").notNull().default("draft"),
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   targetCount: integer("target_count"),

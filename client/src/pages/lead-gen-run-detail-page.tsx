@@ -39,6 +39,7 @@ interface PhaseLogEntry {
 interface RunDetail extends Omit<LeadGenerationRun, "phaseLog"> {
   candidates: EnrichedCandidate[];
   phaseLog?: PhaseLogEntry[] | null;
+  playbookId?: string | null;
 }
 
 interface AuditEvent {
@@ -556,6 +557,19 @@ export default function LeadGenRunDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Linked playbook badge */}
+      {run.playbookId && (() => {
+        const pb = playbooks?.find(p => p.id === run.playbookId);
+        return pb ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="run-playbook-info">
+            <ClipboardList className="h-4 w-4 shrink-0" />
+            <span>Outreach playbook:</span>
+            <span className="font-medium text-foreground">{pb.name}</span>
+            <span className="text-xs opacity-70">— communication drafts will be generated per playbook step</span>
+          </div>
+        ) : null;
+      })()}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
