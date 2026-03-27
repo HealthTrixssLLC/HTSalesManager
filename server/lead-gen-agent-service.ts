@@ -751,21 +751,43 @@ async function runCompanyDiscoveryPhase(
     searchResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
     searchProvider, searchProvider, 0, true);
 
-  if (searchResults.length === 0) {
-    console.warn("[Agent] No search results for company discovery — returning empty array to avoid hallucinations.");
-    return [];
+  // Detect useless search results: all have empty URLs (fallback text blob) or
+  // the combined snippet content is suspiciously short / looks like an API error.
+  const isUsefulSearch = searchResults.length > 0 && searchResults.some(r => r.url && r.url.length > 0);
+  const combinedSnippets = searchResults.map(r => r.snippet).join(" ");
+  const snippetTooShort = combinedSnippets.trim().length < 80;
+  const snippetLooksLikeError = /i'll try|command format|invalid request|i cannot|unable to|error:/i.test(combinedSnippets);
+  const searchUsable = isUsefulSearch && !snippetTooShort && !snippetLooksLikeError;
+
+  if (!searchUsable) {
+    console.warn(`[Agent] Company discovery search yielded unusable results (usefulURLs=${isUsefulSearch}, shortSnippet=${snippetTooShort}, looksLikeError=${snippetLooksLikeError}). Falling back to LLM training knowledge.`);
   }
 
-  const searchContext = `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`;
+  if (searchResults.length === 0) {
+    console.warn("[Agent] No search results for company discovery — falling back to LLM training knowledge.");
+  }
 
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
   const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
+  // Build search context and prompt mode based on whether the search was usable
+  const searchContext = searchUsable
+    ? `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`
+    : `\n\nNote: Web search did not return usable results for this query. Use your training knowledge to identify real companies that match the ICP criteria below.`;
+
+  const companySourceInstruction = searchUsable
+    ? `CRITICAL INSTRUCTION — Company names: Only include companies that are explicitly named in the web research results. Do NOT invent or hallucinate company names that are not mentioned in the search results. If the search results do not contain enough real company names, return fewer entries or an empty array rather than making up names.`
+    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. Only include companies that actually exist and fit the industry, size, and geography requirements. Common examples of real companies are acceptable when they are well-known in the target market.`;
+
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
-CRITICAL INSTRUCTION — Company names: Only include companies that are explicitly named in the web research results. Do NOT invent or hallucinate company names that are not mentioned in the search results. If the search results do not contain enough real company names, return fewer entries or an empty array rather than making up names.
-CRITICAL INSTRUCTION — Company details: For every company that IS named in the search results, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
+${companySourceInstruction}
+CRITICAL INSTRUCTION — Company details: For every company you include, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
+
+  const companySourceUserInstruction = searchUsable
+    ? `Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:`
+    : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge that best match the ICP. Return an empty array [] only if you genuinely cannot identify any real companies in this space. Each object must have this shape:`;
 
   const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
@@ -776,7 +798,7 @@ CRITICAL INSTRUCTION — Company details: For every company that IS named in the
 Market context: ${marketInsights}${icpContext}${playbookContext}
 ${searchContext}
 
-Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:
+${companySourceUserInstruction}
 {
   "name": "<actual company name from search results>",
   "domain": "<actual company domain>",
@@ -1747,6 +1769,7 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
 
   await db.update(schema.leadGenerationRuns)
     .set({
+      status: "complete",
       currentPhase: "complete",
       candidateCount: totalLeadCount,
       errorPhase: null,
