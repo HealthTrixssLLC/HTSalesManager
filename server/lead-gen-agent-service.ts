@@ -862,6 +862,13 @@ Respond with a JSON array containing only real companies found in the web resear
       }
 
       const nameNorm = companyName.toLowerCase();
+
+      // Deduplicate by normalized company name within this batch
+      if (accounts.some(a => a.name.toLowerCase() === nameNorm)) {
+        console.warn(`[Agent] Skipping duplicate company name: "${companyName}"`);
+        continue;
+      }
+
       const domainInSearch = domain ? searchContextText.includes(domain) : false;
       const nameInSearch = searchContextText.includes(nameNorm);
       if (!nameInSearch && !domainInSearch) {
@@ -1001,7 +1008,7 @@ async function runContactDiscoveryPhase(
 
     const systemPrompt = `You are a contact discovery specialist finding B2B decision-makers.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
-CRITICAL INSTRUCTION: Only include contacts whose full names (first and last) appear explicitly in the web research results provided below. Do NOT invent, fabricate, or hallucinate any person's name, email, or LinkedIn URL. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any other generic example name. If no named individuals can be confirmed from the search results, return an empty array [].`;
+CRITICAL INSTRUCTION: You may use your training knowledge to identify real named executives and decision-makers at the target company — especially for well-known organizations whose leadership is publicly documented in annual reports, press releases, SEC filings, or news coverage. Do NOT fabricate or invent people. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any generic example name. Do NOT generate email addresses unless you found a specific confirmed email in the search results. Return an empty array [] if you genuinely cannot identify any real named individuals at this company.`;
 
     const userPrompt = `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
 Target roles: ${targetTitles}
@@ -1009,13 +1016,13 @@ Company overview: ${account.companyOverview || account.description || "No descri
 ICP fit rationale for this company: ${account.icpFitRationale || "Good fit"}${icpContext}${buyingSignalsContext}
 ${searchContext}
 
-Return a JSON array containing only contacts whose real names appear in the web research above. Return an empty array [] if no named individuals can be confirmed. Each object must have this shape:
+Return a JSON array of real named decision-makers at this company who hold relevant roles. Use the web research above for context, and supplement with your knowledge of this company's publicly known leadership. Do not fabricate contacts — only include people you know or can confirm are real. Return an empty array [] if you cannot identify any real individuals. Each object must have this shape:
 {
-  "firstName": "<real first name from search results>",
-  "lastName": "<real last name from search results>",
+  "firstName": "<real first name>",
+  "lastName": "<real last name>",
   "title": "<their actual job title>",
-  "email": "<their email if found, otherwise omit>",
-  "linkedinUrl": "<their LinkedIn URL if found, otherwise omit>",
+  "email": "<confirmed email from search results only — omit if unknown>",
+  "linkedinUrl": "<LinkedIn URL if known, otherwise omit>",
   "roleFitRationale": "<2-3 sentences why this person is a good contact>",
   "outreachPriority": "high|medium|low"
 }`;

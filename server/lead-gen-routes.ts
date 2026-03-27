@@ -1461,6 +1461,19 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
+  // LLM step logs for a run — returns the full prompt/response audit trail from agent_step_logs
+  app.get("/api/lead-gen/runs/:id/step-logs", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const logs = await db.select().from(schema.agentStepLogs)
+        .where(eq(schema.agentStepLogs.runId, req.params.id))
+        .orderBy(schema.agentStepLogs.createdAt)
+        .limit(500);
+      return res.json(logs);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to fetch step logs" });
+    }
+  });
+
   // Per-run summary metrics for reports page (includes avg ICP fit score, time-to-first-promotion)
   app.get("/api/lead-gen/reports/run-cards", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {

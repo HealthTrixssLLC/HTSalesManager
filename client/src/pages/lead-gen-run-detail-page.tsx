@@ -4,7 +4,7 @@ import { useParams, useLocation } from "wouter";
 import {
   Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2,
   Download, ClipboardList, Users, Search, Lightbulb, MessageSquare, Building2,
-  RefreshCw, AlertCircle, CheckCircle, Square
+  RefreshCw, AlertCircle, CheckCircle, Square, ChevronDown, ChevronRight, Terminal
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +54,21 @@ interface AuditEvent {
   createdAt: string;
   actorId: string | null;
   actorName: string | null;
+}
+
+interface AgentStepLog {
+  id: string;
+  runId: string;
+  phase: string;
+  stepName: string;
+  promptSent: string | null;
+  responseReceived: string | null;
+  modelUsed: string | null;
+  provider: string | null;
+  success: boolean;
+  durationMs: number | null;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -187,6 +202,12 @@ export default function LeadGenRunDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCandidateDialogOpen, setIsCandidateDialogOpen] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const toggleStep = (id: string) => setExpandedSteps(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const [candidateForm, setCandidateForm] = useState({
     accountName: "",
     accountWebsite: "",
@@ -233,6 +254,17 @@ export default function LeadGenRunDetailPage() {
     },
     enabled: !!id,
     refetchInterval: run?.status === "active" ? 10000 : false,
+  });
+
+  const { data: stepLogs = [], isLoading: stepLogsLoading } = useQuery<AgentStepLog[]>({
+    queryKey: ["/api/lead-gen/runs", id, "step-logs"],
+    queryFn: async () => {
+      const res = await fetch(`/api/lead-gen/runs/${id}/step-logs`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load step logs");
+      return res.json();
+    },
+    enabled: !!id,
+    refetchInterval: run?.status === "active" ? 4000 : false,
   });
 
   const startRunMutation = useMutation({
@@ -590,10 +622,17 @@ export default function LeadGenRunDetailPage() {
         ))}
       </div>
 
-      {/* Tabs: Candidates + Audit Log */}
+      {/* Tabs: Candidates + LLM Activity + Audit Log */}
       <Tabs defaultValue="candidates" data-testid="run-detail-tabs">
         <TabsList>
           <TabsTrigger value="candidates" data-testid="tab-candidates">Candidates</TabsTrigger>
+          <TabsTrigger value="llm-activity" data-testid="tab-llm-activity">
+            <Terminal className="h-3.5 w-3.5 mr-1.5" />
+            LLM Activity
+            {stepLogs.length > 0 && (
+              <span className="ml-1.5 text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">{stepLogs.length}</span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="audit" data-testid="tab-audit-log">Audit Log</TabsTrigger>
         </TabsList>
 
@@ -654,6 +693,104 @@ export default function LeadGenRunDetailPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* LLM Activity Tab */}
+        <TabsContent value="llm-activity" className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-medium">LLM Activity ({stepLogs.length} steps)</h2>
+            <p className="text-xs text-muted-foreground">Full prompt and response for each agent step</p>
+          </div>
+
+          {stepLogsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : stepLogs.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No LLM steps recorded yet. Start or retry the run to see activity.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {stepLogs.map((log) => {
+                const isExpanded = expandedSteps.has(log.id);
+                const phaseColors: Record<string, string> = {
+                  market_research: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+                  company_discovery: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                  contact_discovery: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300",
+                  strategy: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                  communication_drafting: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+                };
+                return (
+                  <Card key={log.id} data-testid={`step-log-${log.id}`}>
+                    <button
+                      className="w-full text-left"
+                      onClick={() => toggleStep(log.id)}
+                      data-testid={`button-toggle-step-${log.id}`}
+                    >
+                      <CardHeader className="py-3 px-4">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          }
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${phaseColors[log.phase] || "bg-gray-100 text-gray-600"}`}>
+                            {log.phase.replace(/_/g, " ")}
+                          </span>
+                          <span className="text-sm font-medium truncate flex-1">{log.stepName}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {log.success
+                              ? <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                              : <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                            }
+                            {log.durationMs != null && (
+                              <span className="text-xs text-muted-foreground tabular-nums">{(log.durationMs / 1000).toFixed(1)}s</span>
+                            )}
+                            {log.modelUsed && (
+                              <span className="text-xs text-muted-foreground hidden sm:inline">{log.modelUsed}</span>
+                            )}
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {new Date(log.createdAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                        {log.errorMessage && (
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1 ml-7">{log.errorMessage}</p>
+                        )}
+                      </CardHeader>
+                    </button>
+
+                    {isExpanded && (
+                      <CardContent className="px-4 pb-4 pt-0 space-y-4">
+                        <div className="border-t pt-4">
+                          <div className="space-y-3">
+                            {log.promptSent && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Prompt Sent</p>
+                                <pre className="text-xs bg-muted/50 rounded-md p-3 whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto border">
+                                  {log.promptSent}
+                                </pre>
+                              </div>
+                            )}
+                            {log.responseReceived != null && (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Response Received</p>
+                                <pre className="text-xs bg-muted/50 rounded-md p-3 whitespace-pre-wrap font-mono leading-relaxed max-h-64 overflow-y-auto border">
+                                  {log.responseReceived || <span className="text-muted-foreground italic">(empty response)</span>}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    )}
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
