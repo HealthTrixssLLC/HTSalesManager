@@ -584,15 +584,19 @@ async function runCompanyDiscoveryPhase(
     searchResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
     "brave-search", "brave", 0, true);
 
-  const searchContext = searchResults.length > 0
-    ? `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`
-    : "";
+  if (searchResults.length === 0) {
+    console.warn("[Agent] No search results for company discovery — returning empty array to avoid hallucinations.");
+    return [];
+  }
+
+  const searchContext = `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`;
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
-CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
+CRITICAL INSTRUCTION: Only include companies that are explicitly mentioned or clearly referenced in the web research results provided. Do NOT fabricate, invent, or hallucinate company names or domains. Do NOT use placeholder values like "Company Name", "Example Corp", "company.com", or "example.com". If the search results do not contain enough real companies, return fewer entries or an empty array rather than inventing any.`;
 
-  const userPrompt = `Discover ${numCompanies} companies that match this ICP:
+  const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
 - Industries: ${industries.join(", ")}
 - Company sizes: ${sizes}
 - Geographies: ${geos}
@@ -601,22 +605,20 @@ CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No p
 Market context: ${marketInsights}
 ${searchContext}
 
-Respond with a JSON array of exactly ${numCompanies} companies:
-[
-  {
-    "name": "Company Name",
-    "domain": "company.com",
-    "industry": "specific industry",
-    "companySize": "size range e.g. 200-500",
-    "geography": "city, country",
-    "description": "2-3 sentence company description",
-    "icpFitRationale": "2-3 sentences why this company fits the ICP",
-    "companyOverview": "Comprehensive 3-4 sentence overview of the company",
-    "strategicApproach": "2-3 sentences on how to approach this company",
-    "website": "https://www.company.com",
-    "linkedinUrl": "https://www.linkedin.com/company/company-name"
-  }
-]`;
+Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:
+{
+  "name": "<actual company name from search results>",
+  "domain": "<actual company domain>",
+  "industry": "<specific industry>",
+  "companySize": "<size range e.g. 200-500>",
+  "geography": "<city, country>",
+  "description": "<2-3 sentence company description>",
+  "icpFitRationale": "<2-3 sentences why this company fits the ICP>",
+  "companyOverview": "<comprehensive 3-4 sentence overview>",
+  "strategicApproach": "<2-3 sentences on how to approach this company>",
+  "website": "<actual company website URL>",
+  "linkedinUrl": "<actual LinkedIn company page URL>"
+}`;
 
   const startTime = Date.now();
   let response = "";
@@ -639,15 +641,57 @@ Respond with a JSON array of exactly ${numCompanies} companies:
       linkedinUrl?: string;
     }> | null;
 
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+    if (!Array.isArray(parsed)) {
       console.error("[Agent] company_discovery parse failed. Raw response (first 1000 chars):", response.slice(0, 1000));
       throw new Error("LLM did not return a valid array of companies");
     }
+
+    if (parsed.length === 0) {
+      console.warn("[Agent] company_discovery returned empty array — no companies found in search results, skipping.");
+      return [];
+    }
+
+    const PLACEHOLDER_COMPANY_NAMES = new Set([
+      "company name", "example corp", "example company", "acme", "acme corp",
+      "your company", "client company", "sample company", "test company", "n/a", "unknown",
+    ]);
+    const PLACEHOLDER_DOMAINS = new Set([
+      "company.com", "example.com", "yourcompany.com", "domain.com",
+      "website.com", "mycompany.com", "test.com", "sample.com",
+    ]);
+
+    const searchContextText = searchResults.map(r =>
+      `${r.title} ${r.url} ${r.snippet}`
+    ).join(" ").toLowerCase();
 
     const accounts: schema.CandidateAccount[] = [];
     for (const company of parsed.slice(0, numCompanies)) {
       const companyName: string | undefined = company.name;
       if (!companyName) continue;
+
+      if (PLACEHOLDER_COMPANY_NAMES.has(companyName.toLowerCase().trim())) {
+        console.warn(`[Agent] Skipping placeholder company name: "${companyName}"`);
+        continue;
+      }
+
+      const rawDomain = company.domain?.toLowerCase().trim() || "";
+      const domain = rawDomain
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .replace(/\/.*$/, "")
+        .trim();
+      if (domain && PLACEHOLDER_DOMAINS.has(domain)) {
+        console.warn(`[Agent] Skipping company with placeholder domain: "${companyName}" (${domain})`);
+        continue;
+      }
+
+      const nameNorm = companyName.toLowerCase();
+      const domainInSearch = domain ? searchContextText.includes(domain) : false;
+      const nameInSearch = searchContextText.includes(nameNorm);
+      if (!nameInSearch && !domainInSearch) {
+        console.warn(`[Agent] Skipping ungrounded company not found in search results: "${companyName}"`);
+        continue;
+      }
 
       const [inserted] = await db.insert(schema.candidateAccounts).values({
         runId,
@@ -723,30 +767,33 @@ async function runContactDiscoveryPhase(
       });
     }
 
-    const searchContext = searchResults.length > 0
-      ? `\n\nWeb research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`
-      : "";
+    if (searchResults.length === 0) {
+      console.warn(`[Agent] No search results for account "${account.name}" — skipping contact discovery to avoid hallucinations.`);
+      successCount++;
+      continue;
+    }
+
+    const searchContext = `\n\nWeb research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`;
 
     const systemPrompt = `You are a contact discovery specialist finding B2B decision-makers.
-CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
+CRITICAL INSTRUCTION: Only include contacts whose full names (first and last) appear explicitly in the web research results provided below. Do NOT invent, fabricate, or hallucinate any person's name, email, or LinkedIn URL. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any other generic example name. If no named individuals can be confirmed from the search results, return an empty array [].`;
 
-    const userPrompt = `Find 2-3 key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
+    const userPrompt = `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
 Target roles: ${targetTitles}
 Company overview: ${account.companyOverview || account.description || "No description available"}
 ${searchContext}
 
-Respond with a JSON array of 2-3 contacts:
-[
-  {
-    "firstName": "First",
-    "lastName": "Last",
-    "title": "VP of Sales",
-    "email": "first.last@${account.domain || "company.com"}",
-    "linkedinUrl": "https://www.linkedin.com/in/first-last",
-    "roleFitRationale": "2-3 sentences why this person is a good contact",
-    "outreachPriority": "high|medium|low"
-  }
-]`;
+Return a JSON array containing only contacts whose real names appear in the web research above. Return an empty array [] if no named individuals can be confirmed. Each object must have this shape:
+{
+  "firstName": "<real first name from search results>",
+  "lastName": "<real last name from search results>",
+  "title": "<their actual job title>",
+  "email": "<their email if found, otherwise omit>",
+  "linkedinUrl": "<their LinkedIn URL if found, otherwise omit>",
+  "roleFitRationale": "<2-3 sentences why this person is a good contact>",
+  "outreachPriority": "high|medium|low"
+}`;
 
     const startTime = Date.now();
     let response = "";
@@ -770,8 +817,40 @@ Respond with a JSON array of 2-3 contacts:
         continue;
       }
 
+      const STRUCTURAL_PLACEHOLDER_NAMES = new Set([
+        "first", "firstname", "last", "lastname", "name", "fullname",
+        "example", "test", "unknown", "n/a", "tbd",
+      ]);
+
+      const PLACEHOLDER_FULL_NAMES = new Set([
+        "john doe", "jane doe", "john smith", "jane smith",
+        "jim doe", "joe doe", "first last", "firstname lastname",
+      ]);
+
+      const contactSearchContextText = searchResults.map(r =>
+        `${r.title} ${r.snippet}`
+      ).join(" ").toLowerCase();
+
       for (const contactData of parsed.slice(0, 3)) {
         if (!contactData.firstName || !contactData.lastName) continue;
+
+        const firstNameNorm = contactData.firstName.toLowerCase().trim();
+        const lastNameNorm = contactData.lastName.toLowerCase().trim();
+        const fullNameNorm = `${firstNameNorm} ${lastNameNorm}`;
+
+        if (
+          STRUCTURAL_PLACEHOLDER_NAMES.has(firstNameNorm) ||
+          STRUCTURAL_PLACEHOLDER_NAMES.has(lastNameNorm) ||
+          PLACEHOLDER_FULL_NAMES.has(fullNameNorm)
+        ) {
+          console.warn(`[Agent] Skipping placeholder contact: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
+          continue;
+        }
+
+        if (!contactSearchContextText.includes(fullNameNorm)) {
+          console.warn(`[Agent] Skipping ungrounded contact — full name not found in search results: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
+          continue;
+        }
 
         const [contact] = await db.insert(schema.candidateContacts).values({
           runId,
