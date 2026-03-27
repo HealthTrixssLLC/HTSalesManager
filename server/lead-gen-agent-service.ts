@@ -891,9 +891,12 @@ ${companySourceUserInstruction}
         continue;
       }
 
+      // Skip the search-grounding check when the search was unusable — the LLM was
+      // explicitly told to use training knowledge, so requiring names to appear in
+      // a garbage search result would drop every company it correctly identifies.
       const domainInSearch = domain ? searchContextText.includes(domain) : false;
       const nameInSearch = searchContextText.includes(nameNorm);
-      if (!nameInSearch && !domainInSearch) {
+      if (searchUsable && !nameInSearch && !domainInSearch) {
         console.warn(`[Agent] Skipping ungrounded company not found in search results: "${companyName}"`);
         continue;
       }
