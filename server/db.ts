@@ -702,12 +702,12 @@ export class PostgresStorage implements IStorage {
       ));
     
     // Win rate = closed_won / (closed_won + closed_lost) for the selected year.
-    // Scoped to close date in the selected year; pipeline stages excluded.
-    // No includeInForecast filter — every won/lost deal in the year counts.
+    // Scoped to close date in the selected year; only includeInForecast deals; pipeline excluded.
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
         eq(schema.opportunities.stage, "closed_won"),
+        eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         gte(schema.opportunities.closeDate, yearStart),
         lte(schema.opportunities.closeDate, yearEnd)
@@ -717,6 +717,7 @@ export class PostgresStorage implements IStorage {
       .from(schema.opportunities)
       .where(and(
         eq(schema.opportunities.stage, "closed_lost"),
+        eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         gte(schema.opportunities.closeDate, yearStart),
         lte(schema.opportunities.closeDate, yearEnd)
