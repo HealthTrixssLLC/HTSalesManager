@@ -1079,9 +1079,53 @@ Return a JSON array of real named decision-makers at this company who hold relev
           continue;
         }
 
-        if (!contactSearchContextText.includes(fullNameNorm)) {
-          console.warn(`[Agent] Skipping ungrounded contact — full name not found in search results: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
+        // === DUAL-PASS GROUNDING ===
+        // Pass 1: LLM-provided linkedin.com/in/ URL is an immediate grounding signal
+        const hasLinkedInUrl = typeof contactData.linkedinUrl === "string" &&
+          contactData.linkedinUrl.toLowerCase().includes("linkedin.com/in/");
+
+        // Pass 2: Name appears in the original company search context (fast, no extra API call)
+        const inOriginalSearch = contactSearchContextText.includes(firstNameNorm) &&
+          contactSearchContextText.includes(lastNameNorm);
+
+        // Pass 3: Targeted LinkedIn web search — only if passes 1 & 2 both failed
+        let groundedViaLinkedIn = false;
+        let linkedInSearchResults: { title: string; url: string; snippet: string }[] = [];
+
+        if (!hasLinkedInUrl && !inOriginalSearch) {
+          try {
+            const linkedInQuery = `"${contactData.firstName} ${contactData.lastName}" "${account.name}" LinkedIn`;
+            linkedInSearchResults = await performWebSearch(linkedInQuery);
+            const linkedInText = linkedInSearchResults
+              .map(r => `${r.title} ${r.snippet}`)
+              .join(" ")
+              .toLowerCase();
+            groundedViaLinkedIn = linkedInText.includes(firstNameNorm) && linkedInText.includes(lastNameNorm);
+            console.log(`[Agent] LinkedIn grounding search for "${contactData.firstName} ${contactData.lastName}" at ${account.name}: ${groundedViaLinkedIn ? "CONFIRMED" : "not found"} (${linkedInSearchResults.length} results)`);
+          } catch (searchErr) {
+            console.warn(`[Agent] LinkedIn grounding search failed for "${contactData.firstName} ${contactData.lastName}": ${searchErr instanceof Error ? searchErr.message : String(searchErr)}`);
+          }
+        }
+
+        if (!hasLinkedInUrl && !inOriginalSearch && !groundedViaLinkedIn) {
+          console.warn(`[Agent] Skipping ungrounded contact — not confirmed by LinkedIn URL, original search, or LinkedIn search: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
           continue;
+        }
+
+        const groundingMethod = hasLinkedInUrl ? "linkedin_url" : inOriginalSearch ? "original_search" : "linkedin_search";
+        console.log(`[Agent] Grounded contact "${contactData.firstName} ${contactData.lastName}" at ${account.name} via ${groundingMethod}`);
+
+        // Log LinkedIn evidence source when confirmed via LinkedIn search
+        if (groundedViaLinkedIn && linkedInSearchResults.length > 0) {
+          const linkedInQuery = `"${contactData.firstName} ${contactData.lastName}" "${account.name}" LinkedIn`;
+          await db.insert(schema.evidenceSources).values({
+            candidateAccountId: account.id,
+            sourceType: "linkedin",
+            url: linkedInSearchResults.find(r => r.url.includes("linkedin.com"))?.url
+              || `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${contactData.firstName} ${contactData.lastName} ${account.name}`)}`,
+            title: `LinkedIn: ${contactData.firstName} ${contactData.lastName} at ${account.name}`,
+            content: linkedInSearchResults.map(r => `${r.title}: ${r.snippet}`).join("\n"),
+          }).catch(e => console.warn(`[Agent] Failed to log LinkedIn evidence: ${e instanceof Error ? e.message : String(e)}`));
         }
 
         const [contact] = await db.insert(schema.candidateContacts).values({
