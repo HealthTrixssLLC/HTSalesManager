@@ -22,6 +22,7 @@ type DashboardStats = {
   pipelineByStage: { stage: string; count: number; value: number }[];
   newLeadsThisMonth: number;
   winRate: number;
+  totalClosedDeals: number;
   opportunitiesByCloseDate: { 
     period: string; 
     count: number; 
@@ -258,7 +259,7 @@ export default function Dashboard() {
           },
           {
             label: "Win Rate",
-            sublabel: `${stats?.totalOpportunities ?? 0} opportunities`,
+            sublabel: `${stats?.totalClosedDeals ?? 0} closed deals (all time)`,
             value: `${stats?.winRate ?? 0}%`,
             icon: TrendingUp,
             testId: "stat-win-rate",

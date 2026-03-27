@@ -137,6 +137,7 @@ export interface IStorage {
     pipelineByStage: { stage: string; count: number; value: number }[];
     newLeadsThisMonth: number;
     winRate: number;
+    totalClosedDeals: number;
     opportunitiesByCloseDate: { period: string; count: number; value: number; opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] }[];
   }>;
 }

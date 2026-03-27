@@ -643,6 +643,7 @@ export class PostgresStorage implements IStorage {
     pipelineByStage: { stage: string; count: number; value: number }[];
     newLeadsThisMonth: number;
     winRate: number;
+    totalClosedDeals: number;
     opportunitiesByCloseDate: { period: string; count: number; value: number; opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] }[];
   }> {
     // Year date range
@@ -700,26 +701,16 @@ export class PostgresStorage implements IStorage {
         lte(schema.leads.createdAt, endOfMonth)
       ));
     
-    // Calculate win rate scoped to selected year (close date in year)
+    // Win rate = all-time closed_won / (closed_won + closed_lost).
+    // No year scoping and no includeInForecast filter — every closed deal counts;
+    // only active pipeline stages (prospecting, qualification, proposal, etc.) are excluded.
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(and(
-        eq(schema.opportunities.stage, "closed_won"),
-        eq(schema.opportunities.includeInForecast, true),
-        isNotNull(schema.opportunities.closeDate),
-        gte(schema.opportunities.closeDate, yearStart),
-        lte(schema.opportunities.closeDate, yearEnd)
-      ));
+      .where(eq(schema.opportunities.stage, "closed_won"));
     
     const closedLost = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(and(
-        eq(schema.opportunities.stage, "closed_lost"),
-        eq(schema.opportunities.includeInForecast, true),
-        isNotNull(schema.opportunities.closeDate),
-        gte(schema.opportunities.closeDate, yearStart),
-        lte(schema.opportunities.closeDate, yearEnd)
-      ));
+      .where(eq(schema.opportunities.stage, "closed_lost"));
     
     const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
     const winRate = totalClosed > 0 ? Math.round(((closedWon[0]?.count || 0) / totalClosed) * 100) : 0;
@@ -807,6 +798,7 @@ export class PostgresStorage implements IStorage {
       })),
       newLeadsThisMonth: newLeads[0]?.count || 0,
       winRate,
+      totalClosedDeals: totalClosed,
       opportunitiesByCloseDate,
     };
   }
