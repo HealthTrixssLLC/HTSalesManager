@@ -1065,7 +1065,10 @@ Respond with JSON:
         recommendedFirstMove?: string;
       } | null;
 
-      if (parsed?.strategicApproach && !account.strategicApproach) {
+      if (parsed?.strategicApproach) {
+        // Always persist the strategy-phase strategicApproach, overwriting the
+        // company-discovery-generated placeholder so Communication Drafting gets
+        // a richer, offer-aware strategic context.
         await db.update(schema.candidateAccounts)
           .set({ strategicApproach: parsed.strategicApproach, updatedAt: new Date() })
           .where(eq(schema.candidateAccounts.id, account.id));
@@ -1151,6 +1154,7 @@ async function runCommunicationDraftingPhase(
             eq(schema.researchDocuments.entityType, "candidate_account"),
             eq(schema.researchDocuments.entityId, account.id),
             eq(schema.researchDocuments.documentType, "strategic_approach"),
+            eq(schema.researchDocuments.runId, runId),
           ))
           .orderBy(desc(schema.researchDocuments.createdAt))
           .limit(1);
