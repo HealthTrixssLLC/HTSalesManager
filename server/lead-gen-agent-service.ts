@@ -180,13 +180,15 @@ async function callLlm(
     }
     const apiVersion = config.apiVersion || "2024-12-01-preview";
     const url = `${baseUrl}/openai/deployments/${config.model}/chat/completions?api-version=${apiVersion}`;
-    // o-series models (o1, o3, o4...) require max_completion_tokens and do not support temperature.
-    // max_completion_tokens on o-series includes reasoning tokens as well as output tokens — the model
-    // can spend thousands of tokens reasoning internally, leaving very little for the actual JSON output.
-    // Using reasoning_effort:"low" caps reasoning overhead and leaves the budget for real output.
-    // We also use a minimum of 16000 so truncation doesn't cut off large JSON responses.
-    const isOSeries = /^o\d/.test(config.model);
-    const effectiveMaxTokens = isOSeries ? Math.max(maxTokens * 4, 16000) : maxTokens;
+    // Reasoning models (o1, o3, o4-mini, and non-standard names like gpt-5.4-mini) consume
+    // "thinking" tokens that count against max_completion_tokens before producing visible output.
+    // With a small budget (e.g. 2000), ALL tokens can be spent on internal reasoning, leaving
+    // zero for actual JSON — resulting in an empty response.
+    // Fix: apply a large max_completion_tokens for ALL Azure calls (no cost for unused budget).
+    // reasoning_effort:"low" is only sent for strict o-series names (o1/o3/o4) because other
+    // models reject that parameter.
+    const isStrictOSeries = /^o\d/.test(config.model);
+    const effectiveMaxTokens = Math.max(maxTokens * 4, 16000);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -198,7 +200,7 @@ async function callLlm(
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        ...(isOSeries ? { reasoning_effort: "low" } : { temperature }),
+        ...(isStrictOSeries ? { reasoning_effort: "low" } : { temperature }),
         max_completion_tokens: effectiveMaxTokens,
       }),
     });
@@ -210,9 +212,18 @@ async function callLlm(
     }
 
     const data = await response.json() as {
-      choices: Array<{ message: { content: string } }>;
+      choices: Array<{
+        message: { content: string | null };
+        finish_reason?: string;
+      }>;
     };
-    return data.choices[0]?.message?.content || "";
+    const choice = data.choices[0];
+    const content = choice?.message?.content || "";
+    if (!content) {
+      const finishReason = choice?.finish_reason ?? "unknown";
+      console.warn(`[Agent] Azure returned empty content for model ${config.model}. finish_reason: ${finishReason}. This usually means the reasoning token budget was exhausted or content filtering triggered.`);
+    }
+    return content;
   }
 
   if (config.provider === "openai" || config.provider === "openai-compatible") {
