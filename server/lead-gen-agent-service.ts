@@ -987,6 +987,9 @@ ${companySourceUserInstruction}
   }
 }
 
+// C-suite / executive title keywords used to detect ICP targeting mode
+const C_SUITE_KEYWORDS = ["ceo", "cfo", "coo", "cto", "chief", "president", "evp", "svp", "executive vice", "managing director"];
+
 async function runContactDiscoveryPhase(
   runId: string,
   accounts: schema.CandidateAccount[],
@@ -1003,8 +1006,18 @@ async function runContactDiscoveryPhase(
   let successCount = 0;
   const lastError: string[] = [];
 
+  // Determine if this ICP explicitly targets non-executive, functional roles.
+  // When targetTitles are set and contain NO C-suite terms, we apply stricter
+  // prompt instructions and a post-LLM demotion filter.
+  const targetTitleKeywords = (icpVersion?.targetTitles || []).map(t => t.toLowerCase().trim());
+  const icpTargetsCSuite = targetTitleKeywords.length === 0 ||
+    targetTitleKeywords.some(t => C_SUITE_KEYWORDS.some(cs => t.includes(cs)));
+  const nonExecIcp = !icpTargetsCSuite;
+
   for (const account of accountsToProcess) {
-    const searchQuery = `${account.name} executives decision makers ${targetTitles}`;
+    const searchQuery = nonExecIcp
+      ? `${account.name} ${targetTitles} contacts staff leadership`
+      : `${account.name} executives decision makers ${targetTitles}`;
     const searchResults = await performWebSearch(searchQuery);
 
     // Log the search query itself as an evidence source
@@ -1031,17 +1044,31 @@ async function runContactDiscoveryPhase(
       ? `\nBuying signals to look for: ${buyingSignals.join("; ")}`
       : "";
 
-    const systemPrompt = `You are a contact discovery specialist finding B2B decision-makers.
-CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
-CRITICAL INSTRUCTION: You may use your training knowledge to identify real named executives and decision-makers at the target company — especially for well-known organizations whose leadership is publicly documented in annual reports, press releases, SEC filings, or news coverage. Do NOT fabricate or invent people. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any generic example name. Do NOT generate email addresses unless you found a specific confirmed email in the search results. Return an empty array [] if you genuinely cannot identify any real named individuals at this company.`;
+    // Build mode-specific prompt instructions based on ICP targeting
+    const knowledgeInstruction = nonExecIcp
+      ? `You may use your training knowledge to identify real people at this company who hold the specific functional roles listed. Focus on publicly documented staff in these functional areas via company websites, press releases, conference speakers, and industry publications. Do NOT default to executives or C-suite.`
+      : `You may use your training knowledge to identify real named executives and decision-makers at the target company — especially for well-known organizations whose leadership is publicly documented in annual reports, press releases, SEC filings, or news coverage.`;
 
-    const userPrompt = `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"}).
-Target roles: ${targetTitles}
+    const csuiteExclusionInstruction = nonExecIcp
+      ? `CRITICAL INSTRUCTION: The ICP for this run specifically targets NON-EXECUTIVE, functional roles. Do NOT return CEOs, Presidents, CFOs, COOs, CTOs, Chief Officers, Executive Vice Presidents, Senior Vice Presidents, or any other C-suite or executive leadership title. ONLY return people who hold roles closely matching: ${targetTitles}. If you cannot find anyone at those functional levels for this company, return an empty array [] rather than defaulting to executives.`
+      : ``;
+
+    const systemPrompt = `You are a contact discovery specialist finding B2B contacts who match specific role criteria.
+CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
+${csuiteExclusionInstruction}
+${knowledgeInstruction} Do NOT fabricate or invent people. Do NOT use placeholder names like "First", "Last", "John Doe", "Jane Smith", "John Smith", or any generic example name. Do NOT generate email addresses unless you found a specific confirmed email in the search results. Return an empty array [] if you genuinely cannot identify any real named individuals at this company who match the target roles.`;
+
+    const contactFraming = nonExecIcp
+      ? `Find contacts at ${account.name} (${account.industry || "health plan"} company, ${account.companySize || "mid-size"}) who specifically hold these functional roles — NOT executives or C-suite`
+      : `Find key decision-maker contacts at ${account.name} (${account.industry || "technology"} company, ${account.companySize || "mid-size"})`;
+
+    const userPrompt = `${contactFraming}.
+Target roles (ONLY return people whose titles closely match these): ${targetTitles}
 Company overview: ${account.companyOverview || account.description || "No description available"}
 ICP fit rationale for this company: ${account.icpFitRationale || "Good fit"}${icpContext}${buyingSignalsContext}
 ${searchContext}
 
-Return a JSON array of real named decision-makers at this company who hold relevant roles. Use the web research above for context, and supplement with your knowledge of this company's publicly known leadership. Do not fabricate contacts — only include people you know or can confirm are real. Return an empty array [] if you cannot identify any real individuals. Each object must have this shape:
+Return a JSON array of real named contacts at this company who hold the listed target roles. Use the web research above for context, and supplement with your knowledge of this company's publicly known staff in these functional areas. Do not fabricate contacts — only include people you know or can confirm are real. Return an empty array [] if you cannot identify any real individuals matching the target roles. Each object must have this shape:
 {
   "firstName": "<real first name>",
   "lastName": "<real last name>",
@@ -1088,7 +1115,12 @@ Return a JSON array of real named decision-makers at this company who hold relev
         `${r.title} ${r.snippet}`
       ).join(" ").toLowerCase();
 
-      for (const contactData of parsed.slice(0, 3)) {
+      // In non-exec ICP mode, allow up to 5 candidates from the LLM so that
+      // after filtering out any C-suite that slipped through, we still get up
+      // to 3 valid functional contacts.
+      const contactSlice = nonExecIcp ? parsed.slice(0, 5) : parsed.slice(0, 3);
+
+      for (const contactData of contactSlice) {
         if (!contactData.firstName || !contactData.lastName) continue;
 
         const firstNameNorm = contactData.firstName.toLowerCase().trim();
@@ -1102,6 +1134,19 @@ Return a JSON array of real named decision-makers at this company who hold relev
         ) {
           console.warn(`[Agent] Skipping placeholder contact: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
           continue;
+        }
+
+        // === POST-LLM ICP TITLE COMPLIANCE FILTER ===
+        // When the ICP targets non-executive roles, skip any contact whose
+        // title is clearly C-suite and does not match any target title keyword.
+        if (nonExecIcp) {
+          const titleLower = (contactData.title || "").toLowerCase();
+          const matchesTargetRole = targetTitleKeywords.some(kw => titleLower.includes(kw));
+          const isCSuite = C_SUITE_KEYWORDS.some(cs => titleLower.includes(cs));
+          if (isCSuite && !matchesTargetRole) {
+            console.warn(`[Agent] Skipping C-suite contact (ICP targets non-exec roles): "${contactData.firstName} ${contactData.lastName}" - "${contactData.title}" at ${account.name}`);
+            continue;
+          }
         }
 
         // === MULTI-SIGNAL GROUNDING ===
