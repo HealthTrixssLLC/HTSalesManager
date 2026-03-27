@@ -651,7 +651,10 @@ async function runMarketResearchPhase(
   const geos = icpVersion?.targetGeographies?.join(", ") || "North America";
 
   const primaryIndustry = icpVersion?.targetIndustries?.[0] || "technology";
-  const searchQuery = `${primaryIndustry} market trends growth 2024 2025 B2B software healthcare`;
+  const allIndustries = (icpVersion?.targetIndustries || [primaryIndustry]).join(" ");
+  const icpNotes = icpVersion?.notes?.trim() || icpProfile?.description?.trim() || "";
+  const marketSearchBase = icpNotes ? `${icpNotes.slice(0, 120)} market` : `${allIndustries} market`;
+  const searchQuery = `${marketSearchBase} trends regulatory changes growth 2025 2026`;
   const searchConfig = await getSearchConfig();
   const searchResults = searchConfig ? await performWebSearch(searchQuery) : [];
   const searchProvider = searchConfig?.provider || "none";
@@ -726,6 +729,7 @@ async function runCompanyDiscoveryPhase(
   config: ResolvedLlmConfig,
   playbook: schema.TaskPlaybook | null = null,
   playbookSteps: schema.TaskPlaybookStep[] = [],
+  seedCompanies: string[] = [],
 ): Promise<schema.CandidateAccount[]> {
   const industries = targetIndustries.length > 0
     ? targetIndustries
@@ -735,21 +739,76 @@ async function runCompanyDiscoveryPhase(
   const titles = icpVersion?.targetTitles?.join(", ") || "VP of Sales, CTO, CEO";
   const numCompanies = Math.min(targetCount, 20);
 
+  // ---- SEED COMPANIES: Insert pre-confirmed accounts before any search ----
+  // These are companies the user already knows are targets. They bypass the
+  // search/LLM grounding step entirely and are guaranteed to appear in results.
+  const seedAccounts: schema.CandidateAccount[] = [];
+  if (seedCompanies.length > 0) {
+    console.log(`[Agent] Inserting ${seedCompanies.length} seed companies pre-specified by user.`);
+    await logAgentStep(runId, "company_discovery", "seed_companies",
+      `User-specified seed companies: ${seedCompanies.join(", ")}`,
+      `${seedCompanies.length} companies pre-seeded`,
+      "user_input", "user_input", 0, true);
+    for (const companyName of seedCompanies) {
+      const trimmed = companyName.trim();
+      if (!trimmed) continue;
+      const [inserted] = await db.insert(schema.candidateAccounts).values({
+        runId,
+        name: trimmed,
+        domain: null,
+        website: null,
+        industry: industries[0] || null,
+        companySize: null,
+        geography: icpVersion?.targetGeographies?.[0] || null,
+        description: `User-specified target company for this run.`,
+        icpFitRationale: `Pre-confirmed as a target by the run creator.`,
+        companyOverview: null,
+        strategicApproach: null,
+        sourceAgentPhase: "company_discovery",
+        linkedinUrl: null,
+        citations: [],
+      }).returning();
+      if (inserted) seedAccounts.push(inserted);
+    }
+    console.log(`[Agent] ${seedAccounts.length} seed accounts inserted.`);
+  }
+
+  // ---- MULTI-QUERY SEARCH ----
   // Build a natural-language search query from ICP signals.
   // Size labels are filtering criteria, not search terms — omit them.
   // site: operators are avoided because Azure Responses API web_search treats
   // the input as natural language and site: restrictions prevent it from grounding results.
   const primaryIndustry = industries[0] || "technology";
   const secondaryIndustry = industries[1] || "";
+  const tertiaryIndustry = industries[2] || "";
   const topGeo = icpVersion?.targetGeographies?.[0] || "North America";
-  const industryPart = secondaryIndustry
-    ? `${primaryIndustry} ${secondaryIndustry}`
-    : primaryIndustry;
-  const searchQuery = [
-    industryPart,
-    "companies",
-    topGeo,
-  ].filter(Boolean).join(" ");
+  const allIndustriesText = industries.join(" ");
+  const icpNotes = icpVersion?.notes?.trim() || icpProfile?.description?.trim() || "";
+
+  // Query 1: Specific multi-keyword industry query. Uses all industry tags so niche
+  // markets (e.g. "Medicare Advantage dual eligible SNP") don't collapse to a generic term.
+  const query1 = [allIndustriesText, "companies", topGeo].filter(Boolean).join(" ");
+
+  // Query 2: News / trigger-events query. Finds companies with recent market activity.
+  const query2Parts = [
+    secondaryIndustry || primaryIndustry,
+    tertiaryIndustry || "",
+    "company new market growth expansion launch 2025 2026",
+  ].filter(Boolean);
+  const query2 = query2Parts.join(" ");
+
+  // Query 3: ICP-description-aware query. If there are ICP notes, use them to form a
+  // semantic search that surfaces more relevant niche players.
+  const query3 = icpNotes
+    ? `${icpNotes.slice(0, 100)} company organization list`
+    : `${primaryIndustry} ${secondaryIndustry} organizations provider companies list`.trim();
+
+  // Query 4: Industry-press / named-entity discovery. Targets trade publication results
+  // (Modern Healthcare, Becker's, AHIP etc.) that typically name real companies.
+  const query4 = `${allIndustriesText} companies news industry report named organizations 2024 2025`;
+
+  const searchQueries = [query1, query2, query3, query4];
+
   const searchConfig = await getSearchConfig();
   if (!searchConfig) {
     throw new Error(
@@ -757,13 +816,28 @@ async function runCompanyDiscoveryPhase(
     );
   }
 
-  const searchResults = await performWebSearch(searchQuery);
+  // Execute all queries and merge, deduplicating by URL.
+  const seenUrls = new Set<string>();
+  const searchResults: { title: string; url: string; snippet: string; citations?: { title: string; url: string }[] }[] = [];
 
   const searchProvider = searchConfig.provider;
-  // Log search query as a step in the audit trail
-  await logAgentStep(runId, "company_discovery", "web_search", searchQuery,
-    searchResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
-    searchProvider, searchProvider, 0, true);
+  for (const [qi, query] of searchQueries.entries()) {
+    const passResults = await performWebSearch(query);
+    const passLabel = `company_search_pass_${qi + 1}`;
+    await logAgentStep(runId, "company_discovery", passLabel, query,
+      passResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
+      searchProvider, searchProvider, 0, true);
+    console.log(`[Agent] Company discovery search pass ${qi + 1}: "${query}" → ${passResults.length} results`);
+    for (const r of passResults) {
+      const urlKey = r.url || r.snippet.slice(0, 60);
+      if (!seenUrls.has(urlKey)) {
+        seenUrls.add(urlKey);
+        searchResults.push(r);
+      }
+    }
+  }
+
+  console.log(`[Agent] Company discovery: ${searchResults.length} unique results across ${searchQueries.length} queries.`);
 
   // Detect useless search results: all have empty URLs (fallback text blob) or
   // the combined snippet content is suspiciously short / looks like an API error.
@@ -774,24 +848,47 @@ async function runCompanyDiscoveryPhase(
   const searchUsable = isUsefulSearch && !snippetTooShort && !snippetLooksLikeError;
 
   if (!searchUsable) {
-    console.warn(`[Agent] Company discovery search yielded unusable results (usefulURLs=${isUsefulSearch}, shortSnippet=${snippetTooShort}, looksLikeError=${snippetLooksLikeError}). Falling back to LLM training knowledge.`);
+    console.warn(`[Agent] Company discovery search yielded unusable results across all passes (usefulURLs=${isUsefulSearch}, shortSnippet=${snippetTooShort}, looksLikeError=${snippetLooksLikeError}). Falling back to LLM training knowledge.`);
   }
 
   if (searchResults.length === 0) {
-    console.warn("[Agent] No search results for company discovery — falling back to LLM training knowledge.");
+    console.warn("[Agent] No search results for company discovery across all queries — falling back to LLM training knowledge.");
+  }
+
+  // Detect whether the search results contain enough named company entities.
+  // Heuristic: look for capitalized proper-noun sequences in the snippets.
+  // If very few are found, activate knowledge fallback even when search returned text.
+  const properNounPattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g;
+  const properNouns = new Set((combinedSnippets.match(properNounPattern) || []).map(s => s.toLowerCase()));
+  // Filter out common English phrases that match the pattern but aren't company names
+  const commonPhrases = new Set(["United States", "North America", "New York", "Los Angeles", "San Francisco", "United Kingdom", "South Korea", "New Jersey"]);
+  const likelyCompanyNouns = [...properNouns].filter(n => !commonPhrases.has(n.replace(/\b\w/g, c => c.toUpperCase())));
+  const hasEnoughNamedEntities = likelyCompanyNouns.length >= 3;
+
+  if (!hasEnoughNamedEntities && searchUsable) {
+    console.warn(`[Agent] [knowledge_fallback] Search returned text but only ${likelyCompanyNouns.length} distinct named entities detected. Activating knowledge fallback for company discovery.`);
   }
 
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
   const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
+  // Determine whether to use strict grounding mode or knowledge fallback mode.
+  // Use knowledge fallback when: (a) search was not usable at all, or (b) search returned
+  // text but contained too few distinct named company entities (< 3 proper nouns).
+  const useKnowledgeFallback = !searchUsable || !hasEnoughNamedEntities;
+
+  if (useKnowledgeFallback && searchUsable && !hasEnoughNamedEntities) {
+    console.warn(`[Agent] [knowledge_fallback] Activating knowledge fallback: search usable but only ${likelyCompanyNouns.length} named entities in results.`);
+  }
+
   // Build search context and prompt mode based on whether the search was usable
   const searchContext = searchUsable
-    ? `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`
-    : `\n\nNote: Web search did not return usable results for this query. Use your training knowledge to identify real companies that match the ICP criteria below.`;
+    ? `\n\nWeb research results (${searchResults.length} results from ${searchQueries.length} targeted searches):\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`
+    : `\n\nNote: Web searches across ${searchQueries.length} targeted queries did not return usable results. Use your training knowledge to identify real companies that match the ICP criteria below.`;
 
-  const companySourceInstruction = searchUsable
-    ? `CRITICAL INSTRUCTION — Company names: Only include companies that are explicitly named in the web research results. Do NOT invent or hallucinate company names that are not mentioned in the search results. If the search results do not contain enough real company names, return fewer entries or an empty array rather than making up names.`
-    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. Only include companies that actually exist and fit the industry, size, and geography requirements. Common examples of real companies are acceptable when they are well-known in the target market.`;
+  const companySourceInstruction = !useKnowledgeFallback
+    ? `CRITICAL INSTRUCTION — Company names: Prefer companies that are explicitly named in the web research results. If the search results contain named companies, use those. You may supplement with your training knowledge for companies you are confident exist in this market — but clearly prioritize search-verified companies. Do NOT fabricate fictional company names.`
+    : `CRITICAL INSTRUCTION — Company names: Use your training knowledge to identify real, named companies that genuinely match the ICP criteria. Do NOT fabricate fictional companies. Only include companies that actually exist and fit the industry, size, and geography requirements. Well-known real companies in the target market are acceptable even without web search verification.`;
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
@@ -799,8 +896,8 @@ CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No p
 ${companySourceInstruction}
 CRITICAL INSTRUCTION — Company details: For every company you include, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
 
-  const companySourceUserInstruction = searchUsable
-    ? `Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:`
+  const companySourceUserInstruction = !useKnowledgeFallback
+    ? `Respond with a JSON array of up to ${numCompanies} companies. Prioritize companies named in the web research above; supplement with real companies from your training knowledge to reach the target count if needed. Each object must have this shape:`
     : `Respond with a JSON array of up to ${numCompanies} real companies from your training knowledge that best match the ICP. Return an empty array [] only if you genuinely cannot identify any real companies in this space. Each object must have this shape:`;
 
   const userPrompt = `Discover up to ${numCompanies} companies that match this ICP:
@@ -854,7 +951,11 @@ ${companySourceUserInstruction}
     }
 
     if (parsed.length === 0) {
-      console.warn("[Agent] company_discovery returned empty array — no companies found in search results, skipping.");
+      console.warn("[Agent] company_discovery returned empty array — no companies found in search results.");
+      if (seedAccounts.length > 0) {
+        console.log(`[Agent] Returning ${seedAccounts.length} seed accounts despite empty LLM response.`);
+        return seedAccounts;
+      }
       return [];
     }
 
@@ -905,12 +1006,12 @@ ${companySourceUserInstruction}
         continue;
       }
 
-      // Skip the search-grounding check when the search was unusable — the LLM was
+      // Skip the search-grounding check when knowledge fallback is active — the LLM was
       // explicitly told to use training knowledge, so requiring names to appear in
-      // a garbage search result would drop every company it correctly identifies.
+      // sparse search results would drop every company it correctly identifies.
       const domainInSearch = domain ? searchContextText.includes(domain) : false;
       const nameInSearch = searchContextText.includes(nameNorm);
-      if (searchUsable && !nameInSearch && !domainInSearch) {
+      if (!useKnowledgeFallback && !nameInSearch && !domainInSearch) {
         console.warn(`[Agent] Skipping ungrounded company not found in search results: "${companyName}"`);
         continue;
       }
@@ -992,11 +1093,22 @@ ${companySourceUserInstruction}
       }
     }
 
-    return accounts;
+    // Combine LLM-discovered accounts with pre-seeded accounts.
+    // Deduplicate: if a seed company name matches an LLM-discovered company, prefer the LLM version (richer data).
+    const llmAccountNames = new Set(accounts.map(a => a.name.toLowerCase()));
+    const dedupedSeedAccounts = seedAccounts.filter(sa => !llmAccountNames.has(sa.name.toLowerCase()));
+    const allAccounts = [...accounts, ...dedupedSeedAccounts];
+    console.log(`[Agent] Company discovery complete: ${accounts.length} LLM-discovered + ${dedupedSeedAccounts.length} seed-only = ${allAccounts.length} total accounts.`);
+    return allAccounts;
   } catch (err) {
     const durationMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : String(err);
     await logAgentStep(runId, "company_discovery", "discover_companies", userPrompt, response, config.model, config.provider, durationMs, false, errorMsg);
+    // Even on LLM error, return seed accounts so the pipeline can continue
+    if (seedAccounts.length > 0) {
+      console.warn(`[Agent] LLM error in company discovery — returning ${seedAccounts.length} seed accounts to allow pipeline to continue.`);
+      return seedAccounts;
+    }
     throw err;
   }
 }
@@ -2051,8 +2163,9 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
         keyTrends = result.keyTrends;
         buyingSignals = result.buyingSignals;
       } else if (phase === "company_discovery") {
+        const runSeedCompanies: string[] = Array.isArray(run.seedCompanies) ? run.seedCompanies.filter(Boolean) : [];
         discoveredAccounts = await runCompanyDiscoveryPhase(
-          runId, icpVersion, icpProfile, marketInsights, targetIndustries, targetCount, config, runPlaybook, runPlaybookSteps
+          runId, icpVersion, icpProfile, marketInsights, targetIndustries, targetCount, config, runPlaybook, runPlaybookSteps, runSeedCompanies
         );
       } else if (phase === "contact_discovery") {
         if (discoveredAccounts.length === 0) {

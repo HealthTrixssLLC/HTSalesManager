@@ -559,6 +559,7 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
   status: lgRunStatusEnum("status").notNull().default("draft"),
   ownerId: varchar("owner_id", { length: 50 }).references(() => users.id),
   targetCount: integer("target_count"),
+  seedCompanies: text("seed_companies").array(),
   candidateCount: integer("candidate_count").notNull().default(0),
   reviewedCount: integer("reviewed_count").notNull().default(0),
   approvedCount: integer("approved_count").notNull().default(0),

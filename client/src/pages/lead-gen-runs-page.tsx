@@ -27,7 +27,7 @@ export default function LeadGenRunsPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "" });
+  const [form, setForm] = useState({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "", seedCompanies: "" });
 
   const { data: runs, isLoading } = useQuery<LeadGenerationRun[]>({
     queryKey: ["/api/lead-gen/runs"],
@@ -56,13 +56,18 @@ export default function LeadGenRunsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const payload: Record<string, string | undefined> = {
+      const seedList = data.seedCompanies
+        .split("\n")
+        .map(s => s.trim())
+        .filter(Boolean);
+      const payload: Record<string, unknown> = {
         name: data.name,
         description: data.description || undefined,
       };
       if (data.icpProfileId) payload.icpProfileId = data.icpProfileId;
       if (data.icpVersionId) payload.icpVersionId = data.icpVersionId;
       if (data.playbookId) payload.playbookId = data.playbookId;
+      if (seedList.length > 0) payload.seedCompanies = seedList;
       const res = await apiRequest("POST", "/api/lead-gen/runs", payload);
       return await res.json();
     },
@@ -70,7 +75,7 @@ export default function LeadGenRunsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
       toast({ title: "Run created" });
       setIsCreateOpen(false);
-      setForm({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "" });
+      setForm({ name: "", description: "", icpProfileId: "", icpVersionId: "", playbookId: "", seedCompanies: "" });
       setLocation(`/lead-gen/runs/${run.id}`);
     },
     onError: () => toast({ title: "Failed to create run", variant: "destructive" }),
@@ -212,6 +217,20 @@ export default function LeadGenRunsPage() {
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
                 When a playbook is linked, Communication Drafting generates one message per step.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="seed-companies">Known Target Companies</Label>
+              <Textarea
+                id="seed-companies"
+                value={form.seedCompanies}
+                onChange={e => setForm(f => ({ ...f, seedCompanies: e.target.value }))}
+                placeholder={"Acme Health Plan\nUnitedHealthcare\nHumana"}
+                rows={4}
+                data-testid="input-seed-companies"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                One company per line. These are added directly as target accounts, bypassing the search step.
               </p>
             </div>
             {form.icpProfileId && (
