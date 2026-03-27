@@ -823,8 +823,9 @@ async function runCompanyDiscoveryPhase(
   for (const [qi, query] of searchQueries.entries()) {
     const passResults = await performWebSearch(query);
     const passLabel = `company_search_pass_${qi + 1}`;
+    const passResultLines = passResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n");
     await logAgentStep(runId, "company_discovery", passLabel, query,
-      passResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
+      `Pass ${qi + 1} of ${searchQueries.length}: ${passResults.length} result(s)\n${passResultLines || "(no results)"}`,
       searchProvider, searchProvider, 0, true);
     console.log(`[Agent] Company discovery search pass ${qi + 1}: "${query}" → ${passResults.length} results`);
     for (const r of passResults) {
@@ -1033,9 +1034,11 @@ ${companySourceUserInstruction}
 
       const nameNorm = companyName.toLowerCase();
 
-      // Deduplicate by normalized company name within this batch
-      if (accounts.some(a => a.name.toLowerCase() === nameNorm)) {
-        console.warn(`[Agent] Skipping duplicate company name: "${companyName}"`);
+      // Deduplicate by normalized company name: check both LLM-discovered accounts
+      // AND seed accounts already inserted into the DB to prevent duplicate DB rows.
+      if (accounts.some(a => a.name.toLowerCase() === nameNorm) ||
+          seedAccounts.some(a => a.name.toLowerCase() === nameNorm)) {
+        console.warn(`[Agent] Skipping duplicate company name: "${companyName}" (already inserted as seed or discovered account)`);
         continue;
       }
 
