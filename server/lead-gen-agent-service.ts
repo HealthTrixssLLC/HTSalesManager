@@ -710,22 +710,20 @@ async function runCompanyDiscoveryPhase(
   const titles = icpVersion?.targetTitles?.join(", ") || "VP of Sales, CTO, CEO";
   const numCompanies = Math.min(targetCount, 20);
 
-  // Build a more targeted search query using the most specific ICP signals
+  // Build a natural-language search query from ICP signals.
+  // Size labels are filtering criteria, not search terms — omit them.
+  // site: operators are avoided because Azure Responses API web_search treats
+  // the input as natural language and site: restrictions prevent it from grounding results.
   const primaryIndustry = industries[0] || "technology";
   const secondaryIndustry = industries[1] || "";
   const topGeo = icpVersion?.targetGeographies?.[0] || "North America";
   const industryPart = secondaryIndustry
-    ? `(${primaryIndustry} OR ${secondaryIndustry})`
+    ? `${primaryIndustry} ${secondaryIndustry}`
     : primaryIndustry;
-  // Include the first ICP size segment in the search query to surface appropriately-sized companies
-  const rawSizes = icpVersion?.targetCompanySizes || [];
-  const sizeLabel = rawSizes[0] || "";
   const searchQuery = [
     industryPart,
-    "company",
+    "companies",
     topGeo,
-    sizeLabel,
-    "site:linkedin.com OR site:crunchbase.com OR site:g2.com",
   ].filter(Boolean).join(" ");
   const searchConfig = await getSearchConfig();
   if (!searchConfig) {
@@ -962,7 +960,7 @@ async function runContactDiscoveryPhase(
   const lastError: string[] = [];
 
   for (const account of accountsToProcess) {
-    const searchQuery = `${account.name} executives decision makers ${targetTitles} site:linkedin.com`;
+    const searchQuery = `${account.name} executives decision makers ${targetTitles}`;
     const searchResults = await performWebSearch(searchQuery);
 
     // Log the search query itself as an evidence source
