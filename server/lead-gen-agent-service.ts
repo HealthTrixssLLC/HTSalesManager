@@ -638,7 +638,16 @@ async function runCompanyDiscoveryPhase(
   const industryPart = secondaryIndustry
     ? `(${primaryIndustry} OR ${secondaryIndustry})`
     : primaryIndustry;
-  const searchQuery = `${industryPart} company ${topGeo} site:linkedin.com OR site:crunchbase.com OR site:g2.com`;
+  // Include the first ICP size segment in the search query to surface appropriately-sized companies
+  const rawSizes = icpVersion?.targetCompanySizes || [];
+  const sizeLabel = rawSizes[0] || "";
+  const searchQuery = [
+    industryPart,
+    "company",
+    topGeo,
+    sizeLabel,
+    "site:linkedin.com OR site:crunchbase.com OR site:g2.com",
+  ].filter(Boolean).join(" ");
   const searchResults = await performWebSearch(searchQuery);
 
   // Log search query as a step in the audit trail
@@ -728,6 +737,11 @@ Respond with a JSON array containing only real companies found in the web resear
       `${r.title} ${r.url} ${r.snippet}`
     ).join(" ").toLowerCase();
 
+    // Normalize target geographies into tokens for a case-insensitive geo check
+    const targetGeoTokens = (icpVersion?.targetGeographies || [])
+      .flatMap(g => g.toLowerCase().split(/[\s,/]+/))
+      .filter(t => t.length > 2);
+
     const accounts: schema.CandidateAccount[] = [];
     for (const company of parsed.slice(0, numCompanies)) {
       const companyName: string | undefined = company.name;
@@ -755,6 +769,22 @@ Respond with a JSON array containing only real companies found in the web resear
       if (!nameInSearch && !domainInSearch) {
         console.warn(`[Agent] Skipping ungrounded company not found in search results: "${companyName}"`);
         continue;
+      }
+
+      // Geographic grounding check — warn (but do not skip) when the company's geography
+      // or the search evidence contains none of the target geography tokens.
+      // We log rather than skip to avoid false negatives from differing city/country naming.
+      if (targetGeoTokens.length > 0) {
+        const companyGeoNorm = (company.geography || "").toLowerCase();
+        const geoInCompany = targetGeoTokens.some(t => companyGeoNorm.includes(t));
+        const geoInSearch = targetGeoTokens.some(t => searchContextText.includes(t));
+        if (!geoInCompany && !geoInSearch) {
+          console.warn(
+            `[Agent] Geographic mismatch: "${companyName}" geography "${company.geography}" ` +
+            `does not match target geos [${icpVersion?.targetGeographies?.join(", ")}]. ` +
+            `Including with lower confidence.`,
+          );
+        }
       }
 
       const [inserted] = await db.insert(schema.candidateAccounts).values({
