@@ -259,7 +259,7 @@ export default function Dashboard() {
           },
           {
             label: "Win Rate",
-            sublabel: `${stats?.totalClosedDeals ?? 0} closed deals (all time)`,
+            sublabel: `${stats?.totalClosedDeals ?? 0} closed deals in ${selectedYear}`,
             value: `${stats?.winRate ?? 0}%`,
             icon: TrendingUp,
             testId: "stat-win-rate",

@@ -701,16 +701,26 @@ export class PostgresStorage implements IStorage {
         lte(schema.leads.createdAt, endOfMonth)
       ));
     
-    // Win rate = all-time closed_won / (closed_won + closed_lost).
-    // No year scoping and no includeInForecast filter — every closed deal counts;
-    // only active pipeline stages (prospecting, qualification, proposal, etc.) are excluded.
+    // Win rate = closed_won / (closed_won + closed_lost) for the selected year.
+    // Scoped to close date in the selected year; pipeline stages excluded.
+    // No includeInForecast filter — every won/lost deal in the year counts.
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.stage, "closed_won"));
+      .where(and(
+        eq(schema.opportunities.stage, "closed_won"),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
+      ));
     
     const closedLost = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
-      .where(eq(schema.opportunities.stage, "closed_lost"));
+      .where(and(
+        eq(schema.opportunities.stage, "closed_lost"),
+        isNotNull(schema.opportunities.closeDate),
+        gte(schema.opportunities.closeDate, yearStart),
+        lte(schema.opportunities.closeDate, yearEnd)
+      ));
     
     const totalClosed = (closedWon[0]?.count || 0) + (closedLost[0]?.count || 0);
     const winRate = totalClosed > 0 ? Math.round(((closedWon[0]?.count || 0) / totalClosed) * 100) : 0;
