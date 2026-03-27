@@ -1028,6 +1028,8 @@ async function runContactDiscoveryPhase(
     targetTitleKeywords.some(t => C_SUITE_KEYWORDS.some(cs => t.includes(cs)));
   const nonExecIcp = !icpTargetsCSuite;
 
+  console.log(`[Agent] ICP title compliance: targetTitles=${JSON.stringify(icpVersion?.targetTitles)}, targetTitleKeywords=${JSON.stringify(targetTitleKeywords)}, icpTargetsCSuite=${icpTargetsCSuite}, nonExecIcp=${nonExecIcp}`);
+
   for (const account of accountsToProcess) {
     // Build search queries based on ICP type
     type SourcedResult = { title: string; url: string; snippet: string; sourceType: "linkedin" | "press_release" | "conference" | "publication" | "general" };
@@ -1889,6 +1891,40 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
       .orderBy(desc(schema.icpProfileVersions.versionNumber))
       .limit(1);
     icpVersion = vRows[0] || null;
+  }
+
+  // WORKAROUND: Drizzle text[].array() deserialization silently returns empty arrays in some
+  // driver configurations (e.g. neon serverless). Reload all four array columns via raw SQL to
+  // guarantee the correct values are used for nonExecIcp detection and ICP context building.
+  if (icpVersion) {
+    try {
+      const rawResult: any = await db.execute(sql`
+        SELECT target_titles, target_industries, target_company_sizes, target_geographies
+        FROM icp_profile_versions WHERE id = ${icpVersion.id}
+      `);
+      const rawRows = Array.isArray(rawResult) ? rawResult : rawResult?.rows ?? [];
+      const rawRow = rawRows[0] as any;
+      if (rawRow) {
+        icpVersion = {
+          ...icpVersion,
+          targetTitles: (Array.isArray(rawRow.target_titles) && rawRow.target_titles.length > 0)
+            ? rawRow.target_titles
+            : (icpVersion.targetTitles ?? []),
+          targetIndustries: (Array.isArray(rawRow.target_industries) && rawRow.target_industries.length > 0)
+            ? rawRow.target_industries
+            : (icpVersion.targetIndustries ?? []),
+          targetCompanySizes: (Array.isArray(rawRow.target_company_sizes) && rawRow.target_company_sizes.length > 0)
+            ? rawRow.target_company_sizes
+            : (icpVersion.targetCompanySizes ?? []),
+          targetGeographies: (Array.isArray(rawRow.target_geographies) && rawRow.target_geographies.length > 0)
+            ? rawRow.target_geographies
+            : (icpVersion.targetGeographies ?? []),
+        };
+        console.log(`[Agent] ICP array fields reloaded via raw SQL: targetTitles=${JSON.stringify(icpVersion.targetTitles)}, targetIndustries=${JSON.stringify(icpVersion.targetIndustries)}, targetGeographies=${JSON.stringify(icpVersion.targetGeographies)}`);
+      }
+    } catch (e) {
+      console.warn('[Agent] Failed to reload ICP array fields via raw SQL:', e instanceof Error ? e.message : String(e));
+    }
   }
 
   // Load the parent ICP profile for its description field
