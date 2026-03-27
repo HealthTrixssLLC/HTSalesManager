@@ -1238,6 +1238,7 @@ Market Intelligence:
 
     const startTime = Date.now();
     let response = "";
+    let lastPrompt = "";
 
     try {
       let communicationPlan: unknown;
@@ -1283,6 +1284,7 @@ Guidelines:
 - Call / phone: talk-track outline with opening hook, key questions, value statement, and next step ask
 - Task / other: a clear action description`;
 
+        lastPrompt = userPrompt;
         response = await callLlm(config, systemPrompt, userPrompt);
         const durationMs = Date.now() - startTime;
         await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, true);
@@ -1300,15 +1302,20 @@ Guidelines:
         if (Array.isArray(parsedSteps) && parsedSteps.length > 0) {
           communicationPlan = parsedSteps
             .filter(s => s.draftMessage)
-            .map(s => ({
-              stepOrder: s.stepOrder ?? 1,
-              stepName: s.stepName ?? "",
-              channel: s.channel ?? "email",
-              dayOffset: s.dayOffset ?? 0,
-              activityType: s.activityType ?? "email",
-              subject: s.subject || undefined,
-              draftMessage: s.draftMessage!,
-            } as PlaybookStepDraft));
+            .map(s => {
+              const channel = (s.channel ?? "email").toLowerCase();
+              const isEmail = channel === "email";
+              return {
+                stepOrder: s.stepOrder ?? 1,
+                stepName: s.stepName ?? "",
+                channel,
+                dayOffset: s.dayOffset ?? 0,
+                activityType: s.activityType ?? (isEmail ? "email" : "task"),
+                // subject is only meaningful for email; strip it for other channel types
+                subject: isEmail ? (s.subject || undefined) : undefined,
+                draftMessage: s.draftMessage!,
+              } as PlaybookStepDraft;
+            });
         }
       } else {
         // ── LEGACY MODE: single communication plan (no playbook) ────────────
@@ -1329,6 +1336,7 @@ Respond with JSON:
   "followUpSequence": ["day 3: specific follow up action", "day 7: specific action"]
 }`;
 
+        lastPrompt = userPrompt;
         response = await callLlm(config, systemPrompt, userPrompt);
         const durationMs = Date.now() - startTime;
         await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, userPrompt, response, config.model, config.provider, durationMs, true);
@@ -1359,7 +1367,7 @@ Respond with JSON:
     } catch (err) {
       const durationMs = Date.now() - startTime;
       const errorMsg = err instanceof Error ? err.message : String(err);
-      await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, response ? "prompt sent" : "", response, config.model, config.provider, durationMs, false, errorMsg);
+      await logAgentStep(runId, "communication_drafting", `draft_${lead.id}`, lastPrompt || "", response, config.model, config.provider, durationMs, false, errorMsg);
       lastError.push(errorMsg);
       console.warn(`[Agent] Communication drafting failed for lead ${lead.id}: ${errorMsg}`);
     }
