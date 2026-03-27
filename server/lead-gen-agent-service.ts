@@ -1068,27 +1068,27 @@ Return a JSON array of real named decision-makers at this company who hold relev
 
         const firstNameNorm = contactData.firstName.toLowerCase().trim();
         const lastNameNorm = contactData.lastName.toLowerCase().trim();
-        const fullNameNorm = `${firstNameNorm} ${lastNameNorm}`;
+        const fullNameNormForPlaceholder = `${firstNameNorm} ${lastNameNorm}`;
 
         if (
           STRUCTURAL_PLACEHOLDER_NAMES.has(firstNameNorm) ||
           STRUCTURAL_PLACEHOLDER_NAMES.has(lastNameNorm) ||
-          PLACEHOLDER_FULL_NAMES.has(fullNameNorm)
+          PLACEHOLDER_FULL_NAMES.has(fullNameNormForPlaceholder)
         ) {
           console.warn(`[Agent] Skipping placeholder contact: "${contactData.firstName} ${contactData.lastName}" for ${account.name}`);
           continue;
         }
 
-        // === DUAL-PASS GROUNDING ===
-        // Pass 1: LLM-provided linkedin.com/in/ URL is an immediate grounding signal
+        // === MULTI-SIGNAL GROUNDING ===
+        // Signal 1: LLM-provided linkedin.com/in/ URL is an immediate grounding signal
         const hasLinkedInUrl = typeof contactData.linkedinUrl === "string" &&
           contactData.linkedinUrl.toLowerCase().includes("linkedin.com/in/");
 
-        // Pass 2: Name appears in the original company search context (fast, no extra API call)
+        // Signal 2: Name appears in the original company search context (fast, no extra API call)
         const inOriginalSearch = contactSearchContextText.includes(firstNameNorm) &&
           contactSearchContextText.includes(lastNameNorm);
 
-        // Pass 3: Targeted LinkedIn web search — only if passes 1 & 2 both failed
+        // Signal 3: Targeted LinkedIn web search — only triggered when signals 1 & 2 both fail
         let groundedViaLinkedIn = false;
         let linkedInSearchResults: { title: string; url: string; snippet: string }[] = [];
 
