@@ -159,7 +159,7 @@ function CommunicationPlanPanel({ plan }: { plan: CommunicationPlan }) {
   }
 
   if (Array.isArray(plan)) {
-    const steps = plan as PlaybookStepDraft[];
+    const steps = [...(plan as PlaybookStepDraft[])].sort((a, b) => a.stepOrder - b.stepOrder);
     return (
       <div className="space-y-3" data-testid="communication-plan-steps">
         <p className="text-sm text-muted-foreground">

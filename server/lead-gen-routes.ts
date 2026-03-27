@@ -266,7 +266,12 @@ export function registerLeadGenRoutes(app: Express) {
   app.get("/api/lead-gen/playbooks", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const playbooks = await db.select().from(schema.taskPlaybooks).orderBy(desc(schema.taskPlaybooks.createdAt));
-      return res.json(playbooks);
+      const stepCounts = await db.select({
+        playbookId: schema.taskPlaybookSteps.playbookId,
+        count: sql<number>`count(*)::int`,
+      }).from(schema.taskPlaybookSteps).groupBy(schema.taskPlaybookSteps.playbookId);
+      const countMap = Object.fromEntries(stepCounts.map(r => [r.playbookId, r.count]));
+      return res.json(playbooks.map(pb => ({ ...pb, stepCount: countMap[pb.id] ?? 0 })));
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch playbooks" });
     }

@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { LeadGenerationRun, CandidateLead, TaskPlaybook } from "@shared/schema";
 
+type PlaybookWithCount = TaskPlaybook & { stepCount: number };
+
 interface EnrichedCandidate extends CandidateLead {
   accountName?: string | null;
   contactName?: string | null;
@@ -218,7 +220,7 @@ export default function LeadGenRunDetailPage() {
     },
   });
 
-  const { data: playbooks } = useQuery<TaskPlaybook[]>({
+  const { data: playbooks } = useQuery<PlaybookWithCount[]>({
     queryKey: ["/api/lead-gen/playbooks"],
   });
 
@@ -566,7 +568,7 @@ export default function LeadGenRunDetailPage() {
             <ClipboardList className="h-4 w-4 shrink-0" />
             <span>Outreach playbook:</span>
             <span className="font-medium text-foreground">{pb.name}</span>
-            <span className="text-xs opacity-70">— communication drafts will be generated per playbook step</span>
+            <span className="text-xs opacity-70">({pb.stepCount} step{pb.stepCount !== 1 ? "s" : ""}) — one communication draft per step</span>
           </div>
         ) : null;
       })()}

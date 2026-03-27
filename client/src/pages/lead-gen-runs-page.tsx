@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { LeadGenerationRun, IcpProfile, IcpProfileVersion, User, TaskPlaybook } from "@shared/schema";
 
+type PlaybookWithCount = TaskPlaybook & { stepCount: number };
+
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
   active: "bg-blue-100 text-blue-700",
@@ -39,7 +41,7 @@ export default function LeadGenRunsPage() {
     queryKey: ["/api/users"],
   });
 
-  const { data: playbooks } = useQuery<TaskPlaybook[]>({
+  const { data: playbooks } = useQuery<PlaybookWithCount[]>({
     queryKey: ["/api/lead-gen/playbooks"],
   });
 
@@ -202,7 +204,9 @@ export default function LeadGenRunsPage() {
                 <SelectContent>
                   <SelectItem value="_none">None</SelectItem>
                   {(playbooks ?? []).filter(p => p.isActive).map(pb => (
-                    <SelectItem key={pb.id} value={pb.id}>{pb.name}</SelectItem>
+                    <SelectItem key={pb.id} value={pb.id}>
+                      {pb.name} ({pb.stepCount} step{pb.stepCount !== 1 ? "s" : ""})
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
