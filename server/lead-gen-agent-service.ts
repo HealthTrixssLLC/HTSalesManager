@@ -10,6 +10,8 @@
 import { db, eq, and, desc, sql } from "./db";
 import * as schema from "@shared/schema";
 import { decryptApiKey, isEncryptedKey } from "./llm-key-utils";
+import { isAzureWebSearchConfigured, AzureWebSearchProvider } from "./lib/research/providers/AzureWebSearchProvider";
+import { researchService } from "./lib/research/ResearchService";
 
 const PHASES = [
   "market_research",
@@ -285,6 +287,12 @@ let _cachedSearchConfig: SearchConfig | null | undefined = undefined;
 async function getSearchConfig(): Promise<SearchConfig | null> {
   if (_cachedSearchConfig !== undefined) return _cachedSearchConfig;
 
+  // Azure OpenAI web search takes priority when configured (uses AZURE_OPENAI_API_KEY/BASE_URL/MODEL)
+  if (isAzureWebSearchConfigured()) {
+    _cachedSearchConfig = { provider: "azure_web_search", apiKey: process.env.AZURE_OPENAI_API_KEY || "" };
+    return _cachedSearchConfig;
+  }
+
   // Look for a search config entry that uses apiKeyEnvVar (no plaintext key storage)
   const searchConfig = await db.select().from(schema.aiConfigs)
     .where(and(
@@ -318,15 +326,22 @@ async function getSearchConfig(): Promise<SearchConfig | null> {
   return null;
 }
 
-async function performWebSearch(query: string): Promise<{ title: string; url: string; snippet: string }[]> {
+async function performWebSearch(query: string): Promise<{ title: string; url: string; snippet: string; citations?: { title: string; url: string }[] }[]> {
+  const config = await getSearchConfig();
+
+  if (!config) {
+    console.log(`[Agent] Web search skipped (no search provider configured), query: ${query}`);
+    return [];
+  }
+
+  if (config.provider === "azure_web_search") {
+    // Azure errors propagate — callers decide how to handle failures
+    return await researchService.searchWithCitations(query);
+  }
+
+  // Brave and Serper: errors are logged and return empty rather than aborting the run,
+  // as these are legacy fallback providers and market research is best-effort.
   try {
-    const config = await getSearchConfig();
-
-    if (!config) {
-      console.log(`[Agent] Web search skipped (no search provider configured), query: ${query}`);
-      return [];
-    }
-
     if (config.provider === "brave") {
       const baseUrl = config.baseUrl || "https://api.search.brave.com/res/v1/web";
       const response = await fetch(`${baseUrl}/search?q=${encodeURIComponent(query)}&count=5`, {
@@ -380,7 +395,7 @@ async function performWebSearch(query: string): Promise<{ title: string; url: st
     console.warn(`[Agent] Unknown search provider: ${config.provider}`);
     return [];
   } catch (err) {
-    console.warn(`[Agent] Web search failed: ${err}`);
+    console.warn(`[Agent] Web search failed (${config.provider}): ${err}`);
     return [];
   }
 }
@@ -572,12 +587,14 @@ async function runMarketResearchPhase(
 
   const primaryIndustry = icpVersion?.targetIndustries?.[0] || "technology";
   const searchQuery = `${primaryIndustry} market trends growth 2024 2025 B2B software healthcare`;
-  const searchResults = await performWebSearch(searchQuery);
+  const searchConfig = await getSearchConfig();
+  const searchResults = searchConfig ? await performWebSearch(searchQuery) : [];
+  const searchProvider = searchConfig?.provider || "none";
 
   // Log search query as a step in the audit trail
   await logAgentStep(runId, "market_research", "web_search", searchQuery,
     searchResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
-    "brave-search", "brave", 0, true);
+    searchProvider, searchProvider, 0, true);
 
   const searchContext = searchResults.length > 0
     ? `\n\nRecent web research:\n${searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n")}`
@@ -670,12 +687,20 @@ async function runCompanyDiscoveryPhase(
     sizeLabel,
     "site:linkedin.com OR site:crunchbase.com OR site:g2.com",
   ].filter(Boolean).join(" ");
+  const searchConfig = await getSearchConfig();
+  if (!searchConfig) {
+    throw new Error(
+      "No search provider configured. Please set up Azure OpenAI web search or a Brave/Serper API key in Admin Console → AI Configuration."
+    );
+  }
+
   const searchResults = await performWebSearch(searchQuery);
 
+  const searchProvider = searchConfig.provider;
   // Log search query as a step in the audit trail
   await logAgentStep(runId, "company_discovery", "web_search", searchQuery,
     searchResults.map(r => `${r.title} (${r.url}): ${r.snippet}`).join("\n") || "(no results)",
-    "brave-search", "brave", 0, true);
+    searchProvider, searchProvider, 0, true);
 
   if (searchResults.length === 0) {
     console.warn("[Agent] No search results for company discovery — returning empty array to avoid hallucinations.");
@@ -810,6 +835,35 @@ Respond with a JSON array containing only real companies found in the web resear
         }
       }
 
+      // Collect only per-company grounded citations from search results that mention this company.
+      // Match on title, URL (domain), or snippet to maximize citation coverage for grounded companies.
+      const companyCitations: { title: string; url: string }[] = [];
+      const nameNormForCite = companyName.toLowerCase();
+      const domainNormForCite = company.domain?.toLowerCase() || "";
+      const relevantSearchResults = searchResults.filter(r => {
+        const titleMatch = r.title.toLowerCase().includes(nameNormForCite);
+        const urlMatch = domainNormForCite && r.url.toLowerCase().includes(domainNormForCite);
+        const snippetMatch = r.snippet.toLowerCase().includes(nameNormForCite);
+        return titleMatch || urlMatch || snippetMatch;
+      });
+      for (const r of relevantSearchResults) {
+        // Include the result URL itself as a citation if it's non-empty
+        if (r.url) {
+          const existing = companyCitations.some(ex => ex.url === r.url);
+          if (!existing) {
+            companyCitations.push({ title: r.title || r.url, url: r.url });
+          }
+        }
+        // Include any structured inline citations from this relevant result
+        if (r.citations) {
+          for (const c of r.citations) {
+            if (c.url && !companyCitations.some(ex => ex.url === c.url)) {
+              companyCitations.push(c);
+            }
+          }
+        }
+      }
+
       const [inserted] = await db.insert(schema.candidateAccounts).values({
         runId,
         name: companyName,
@@ -824,25 +878,20 @@ Respond with a JSON array containing only real companies found in the web resear
         strategicApproach: company.strategicApproach || null,
         sourceAgentPhase: "company_discovery",
         linkedinUrl: company.linkedinUrl || null,
+        citations: companyCitations,
       }).returning();
 
       if (inserted) {
         accounts.push(inserted);
 
-        if (searchResults.length > 0) {
-          const relevantSearch = searchResults.find(r =>
-            r.title.toLowerCase().includes(companyName.toLowerCase()) ||
-            (company.domain && r.url.includes(company.domain))
-          );
-          if (relevantSearch) {
-            await db.insert(schema.evidenceSources).values({
-              candidateAccountId: inserted.id,
-              sourceType: "other",
-              url: relevantSearch.url,
-              title: relevantSearch.title,
-              content: relevantSearch.snippet,
-            });
-          }
+        if (relevantSearchResults.length > 0) {
+          await db.insert(schema.evidenceSources).values({
+            candidateAccountId: inserted.id,
+            sourceType: "other",
+            url: relevantSearchResults[0].url,
+            title: relevantSearchResults[0].title,
+            content: relevantSearchResults[0].snippet,
+          });
         }
       }
     }

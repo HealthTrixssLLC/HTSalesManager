@@ -5346,6 +5346,62 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // GET /api/admin/research/status - return current active search provider
+  app.get("/api/admin/research/status", authenticate, requireRole("Admin"), readRateLimiter, async (_req: AuthRequest, res) => {
+    const azureConfigured = !!(
+      process.env.AZURE_OPENAI_API_KEY &&
+      process.env.AZURE_OPENAI_BASE_URL &&
+      process.env.AZURE_OPENAI_MODEL
+    );
+    const braveConfigured = !!process.env.BRAVE_SEARCH_API_KEY;
+    const serperConfigured = !!process.env.SERPER_API_KEY;
+
+    let activeProvider: string;
+    if (azureConfigured) activeProvider = "azure_web_search";
+    else if (braveConfigured) activeProvider = "brave";
+    else if (serperConfigured) activeProvider = "serper";
+    else activeProvider = "none";
+
+    return res.json({
+      activeProvider,
+      azure: { configured: azureConfigured },
+      brave: { configured: braveConfigured },
+      serper: { configured: serperConfigured },
+    });
+  });
+
+  // POST /api/admin/research/test - verify Azure web search connectivity via AzureWebSearchProvider
+  app.post("/api/admin/research/test", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (_req: AuthRequest, res) => {
+    try {
+      const { AzureWebSearchProvider } = await import("./lib/research/providers/AzureWebSearchProvider");
+      let provider: InstanceType<typeof AzureWebSearchProvider>;
+      try {
+        provider = new AzureWebSearchProvider();
+      } catch (configErr) {
+        return res.json({
+          success: false,
+          error: configErr instanceof Error ? configErr.message : String(configErr),
+        });
+      }
+
+      // Validate config (should be null since constructor threw if missing)
+      const configError = provider.validateConfig();
+      if (configError) {
+        return res.json({ success: false, error: configError });
+      }
+
+      // Do a lightweight live search to confirm connectivity
+      await provider.search("Azure OpenAI web search connectivity test");
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Azure web search test error:", error);
+      return res.json({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
   // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);

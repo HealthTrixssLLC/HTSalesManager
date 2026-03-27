@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff, Search } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
 import { Slider } from "@/components/ui/slider";
 import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
@@ -466,6 +466,122 @@ function AiConfigTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+interface ResearchStatus {
+  activeProvider: string;
+  azure: { configured: boolean };
+  brave: { configured: boolean };
+  serper: { configured: boolean };
+}
+
+const PROVIDER_LABELS: Record<string, string> = {
+  azure_web_search: "Azure OpenAI Web Search",
+  brave: "Brave Search",
+  serper: "Serper",
+  none: "None (pipeline will fail if run)",
+};
+
+function AzureWebSearchConfigSection() {
+  const { toast } = useToast();
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
+
+  const { data: status } = useQuery<ResearchStatus>({
+    queryKey: ["/api/admin/research/status"],
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/research/test", {});
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setTestResult(data);
+      if (data.success) {
+        toast({ title: "Azure web search connection successful" });
+      } else {
+        toast({ title: "Azure web search test failed", description: data.error, variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Test failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Web Search Provider
+        </CardTitle>
+        <CardDescription>
+          Controls which search engine powers the lead generation pipeline. Azure OpenAI Web Search takes priority
+          when configured, providing structured citation provenance per discovered company.
+          Falls back to Brave or Serper if only those env vars are set.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {status && (
+          <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="text-active-search-provider">
+            <span className="text-muted-foreground">Active provider:</span>
+            <Badge
+              variant={status.activeProvider === "none" ? "destructive" : "secondary"}
+              data-testid="badge-active-provider"
+            >
+              {PROVIDER_LABELS[status.activeProvider] ?? status.activeProvider}
+            </Badge>
+          </div>
+        )}
+
+        <div className="rounded-md bg-muted/50 border px-4 py-3 space-y-3 text-sm">
+          <p className="font-medium">Azure OpenAI Web Search (recommended)</p>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-0.5">
+              <code className="font-mono text-xs bg-background rounded px-1 py-0.5 w-fit">AZURE_OPENAI_API_KEY</code>
+              <span className="text-muted-foreground text-xs">Azure OpenAI API key with access to the Responses API</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <code className="font-mono text-xs bg-background rounded px-1 py-0.5 w-fit">AZURE_OPENAI_BASE_URL</code>
+              <span className="text-muted-foreground text-xs">Azure OpenAI endpoint, e.g. <span className="font-mono">https://your-resource.openai.azure.com</span></span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <code className="font-mono text-xs bg-background rounded px-1 py-0.5 w-fit">AZURE_OPENAI_MODEL</code>
+              <span className="text-muted-foreground text-xs">Deployment name that supports the web_search tool, e.g. <span className="font-mono">gpt-4o</span></span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Alternative: set <code className="font-mono">BRAVE_SEARCH_API_KEY</code> or <code className="font-mono">SERPER_API_KEY</code> as a fallback.
+            Azure takes priority when all three AZURE_OPENAI_* vars are present.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => testMutation.mutate()}
+            disabled={testMutation.isPending}
+            data-testid="button-test-azure-search"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {testMutation.isPending ? "Testing..." : "Test Azure Connection"}
+          </Button>
+          {testResult && (
+            <div
+              className={`flex items-start gap-2 text-sm rounded-md px-3 py-2 ${testResult.success ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400" : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400"}`}
+              data-testid="text-azure-search-test-result"
+            >
+              {testResult.success ? (
+                <><Check className="h-4 w-4 mt-0.5 shrink-0" /> Azure web search is configured and reachable</>
+              ) : (
+                <><X className="h-4 w-4 mt-0.5 shrink-0" /><pre className="whitespace-pre-wrap font-sans text-sm">{testResult.error}</pre></>
+              )}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1835,6 +1951,7 @@ export default function AdminConsole() {
         {isAdmin && (
           <TabsContent value="ai-config" className="space-y-4">
             <AiConfigTab />
+            <AzureWebSearchConfigSection />
           </TabsContent>
         )}
       </Tabs>

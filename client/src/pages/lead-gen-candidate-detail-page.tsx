@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus, ChevronDown, ChevronUp, Mail, Linkedin, Phone, CheckSquare } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus, ChevronDown, ChevronUp, Mail, Linkedin, Phone, CheckSquare, Link } from "lucide-react";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { TaskPlaybook } from "@shared/schema";
 
+interface Citation {
+  title: string;
+  url: string;
+}
+
 interface CandidateAccount {
   id: string;
   name: string;
@@ -26,6 +31,7 @@ interface CandidateAccount {
   companySize: string | null;
   geography: string | null;
   description: string | null;
+  citations?: Citation[];
 }
 
 interface CandidateContact {
@@ -534,6 +540,37 @@ export default function LeadGenCandidateDetailPage() {
               )}
             </CardContent>
           </Card>
+          {candidate.account?.citations && candidate.account.citations.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Link className="h-4 w-4" />
+                  Web Search Citations ({candidate.account.citations.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {candidate.account.citations.map((c: Citation, idx: number) => (
+                    <div key={idx} className="flex items-start gap-2 text-sm" data-testid={`citation-item-${idx}`}>
+                      <ExternalLink className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0">
+                        {c.title && <p className="font-medium truncate">{c.title}</p>}
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline text-xs break-all"
+                          data-testid={`citation-link-${idx}`}
+                        >
+                          {c.url}
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Research Documents */}
