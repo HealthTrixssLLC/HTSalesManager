@@ -527,10 +527,24 @@ function extractJsonFromText(text: string): unknown {
     try { return JSON.parse(anyFence[1].trim()); } catch { /* continue */ }
   }
 
-  // 3. Bracket-depth scanning — finds the first complete JSON array or object,
-  //    correctly handles nested brackets and brackets inside strings.
-  //    This avoids the greedy-regex trap where [first [ ... last ]] picks up wrong spans.
-  for (const startChar of ['[', '{']) {
+  // 3. Bracket-depth scanning — finds the first complete JSON structure in the text.
+  //    IMPORTANT: we start from whichever bracket ([/{) appears first in the text so that
+  //    nested arrays inside an outer object (e.g. {"objectives":[...]}) don't get extracted
+  //    before the outer object itself.
+  const firstBracket = text.indexOf('[');
+  const firstBrace = text.indexOf('{');
+  let startChars: Array<'[' | '{'>;
+  if (firstBracket === -1 && firstBrace === -1) {
+    startChars = [];
+  } else if (firstBracket === -1) {
+    startChars = ['{'];
+  } else if (firstBrace === -1) {
+    startChars = ['['];
+  } else {
+    startChars = firstBrace < firstBracket ? ['{', '['] : ['[', '{'];
+  }
+
+  for (const startChar of startChars) {
     const endChar = startChar === '[' ? ']' : '}';
     const startIdx = text.indexOf(startChar);
     if (startIdx === -1) continue;
@@ -1569,9 +1583,27 @@ Respond with JSON:
           .set({ communicationPlan, updatedAt: new Date() })
           .where(eq(schema.candidateLeads.id, lead.id));
 
-        const draftText = Array.isArray(communicationPlan)
-          ? (communicationPlan as PlaybookStepDraft[]).map(s => `[Day ${s.dayOffset} — ${s.channel}]\n${s.draftMessage}`).join("\n\n---\n\n")
-          : ((communicationPlan as Record<string, unknown>)?.draftedMessage as string | undefined) || response;
+        // Build human-readable draft text from the parsed communication plan.
+        // Defensively check the array case: items must be PlaybookStepDraft objects
+        // (with a draftMessage field), not plain strings (e.g. objectives arrays that
+        // could slip in if extractJsonFromText ever picks up a nested array).
+        let draftText: string;
+        if (Array.isArray(communicationPlan)) {
+          const firstItem = communicationPlan[0];
+          const isPlaybookDrafts =
+            typeof firstItem === "object" &&
+            firstItem !== null &&
+            "draftMessage" in (firstItem as object);
+          draftText = isPlaybookDrafts
+            ? (communicationPlan as PlaybookStepDraft[])
+                .map(s => `[Day ${s.dayOffset ?? "?"} — ${s.channel ?? "?"}]\n${s.draftMessage ?? ""}`)
+                .join("\n\n---\n\n")
+            : response; // Fallback: plain strings — use raw LLM response instead
+        } else {
+          draftText =
+            ((communicationPlan as Record<string, unknown>)?.draftedMessage as string | undefined) ||
+            response;
+        }
 
         await db.insert(schema.researchDocuments).values({
           entityType: "candidate_lead",
