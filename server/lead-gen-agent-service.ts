@@ -672,8 +672,7 @@ async function runMarketResearchPhase(
   const offersSection = formatOffersSection(offers);
   const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
-  const systemPrompt = `You are a market research specialist for a B2B sales team. 
-Your task is to analyze the target market and identify key insights for lead generation.
+  const systemPrompt = `You are a market research specialist working for Health Trixss, Inc. (also referred to as "Health Trixss"). Your task is to analyze the target market and identify key insights for the Health Trixss, Inc. sales team's lead generation efforts.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
   const userPrompt = `Analyze the B2B target market with these parameters:
@@ -907,8 +906,7 @@ async function runCompanyDiscoveryPhase(
       // Mode C: search completely unusable
       : `CRITICAL INSTRUCTION — Company names: Web search returned no usable results. Use your training knowledge to identify real, named companies that match the ICP. Set "sourceType": "knowledge_based" for every entry. Do NOT fabricate fictional companies.`;
 
-  const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
-You identify companies that match specific ideal customer profile criteria.
+  const systemPrompt = `You are a company discovery specialist working for Health Trixss, Inc. (also referred to as "Health Trixss"). You find target accounts — companies that could become customers of Health Trixss, Inc. — by matching them against a specific ideal customer profile.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
 ${companySourceInstruction}
 CRITICAL INSTRUCTION — Company details: For every company you include, you MUST populate all fields (domain, website, linkedinUrl, description, etc.) using your training knowledge. These are factual attributes of real, named companies — filling them in is not hallucination. Do NOT leave fields blank or use placeholder values like "company.com", "example.com", "Company Name", or "N/A". Every object in the array must be fully populated.`;
@@ -1366,7 +1364,7 @@ async function runContactDiscoveryPhase(
       ? `SOURCE GUIDANCE: The web research below is grouped by source type. LinkedIn profile snippets are the STRONGEST grounding signal — if a person's name and title appear in a LinkedIn result, they are almost certainly real and at that company. Press release and conference results are also strong signals when they name a specific individual. Industry publication mentions confirm a person's role and company. Use all source types to triangulate real contacts. If a name appears across multiple source types, that increases confidence.`
       : ``;
 
-    const systemPrompt = `You are a contact discovery specialist finding B2B contacts who match specific role criteria.
+    const systemPrompt = `You are a contact discovery specialist working for Health Trixss, Inc. (also referred to as "Health Trixss"). You find specific named people at target companies who are potential buyers or influencers for Health Trixss, Inc.'s offerings.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].
 ${csuiteExclusionInstruction}
 ${sourceGuidanceInstruction}
@@ -1668,7 +1666,7 @@ async function runStrategyPhase(
     : "";
 
   for (const account of accountsToProcess) {
-    const systemPrompt = `You are a B2B sales strategist. Create targeted strategic approach documents for accounts.
+    const systemPrompt = `You are a B2B sales strategist working for Health Trixss, Inc. (also referred to as "Health Trixss"). Create targeted strategic approach documents that guide the Health Trixss, Inc. sales team in engaging each target account.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
     const userPrompt = `Create a strategic sales approach for ${account.name}:
@@ -1870,7 +1868,7 @@ Market Intelligence:
           description: s.description || "",
         }));
 
-        const systemPrompt = `You are a B2B sales communication specialist.
+        const systemPrompt = `You are a B2B sales communication specialist working for Health Trixss, Inc. (also referred to as "Health Trixss"). All outreach messages you draft are sent ON BEHALF OF Health Trixss, Inc. — sign-offs, sender references, and company mentions should use "Health Trixss" or "Health Trixss, Inc." Never use the name "HealthTrixss" (one word) — it is always written as two words: "Health Trixss".
 Generate one personalised outreach draft per playbook step, channel-appropriate for each step type.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON array. No preamble, no explanation, no markdown, no code fences. Start your response with [ and end with ].`;
 
@@ -1935,7 +1933,7 @@ Guidelines:
         }
       } else {
         // ── LEGACY MODE: single communication plan (no playbook) ────────────
-        const systemPrompt = `You are a B2B sales communication specialist. 
+        const systemPrompt = `You are a B2B sales communication specialist working for Health Trixss, Inc. (also referred to as "Health Trixss"). All outreach messages you draft are sent ON BEHALF OF Health Trixss, Inc. — sign-offs, sender references, and company mentions should use "Health Trixss" or "Health Trixss, Inc." Never use the name "HealthTrixss" (one word) — it is always written as two words: "Health Trixss".
 Draft personalized outreach messages tailored to specific contacts.
 CRITICAL INSTRUCTION: Your entire response must be ONLY a valid JSON object. No preamble, no explanation, no markdown, no code fences. Start your response with { and end with }.`;
 
