@@ -549,10 +549,12 @@ function buildPlaybookContextSection(
   steps: schema.TaskPlaybookStep[],
 ): string {
   if (!playbook || steps.length === 0) return "";
-  const stepSummary = steps
-    .map(s => `Day ${s.dayOffset} — ${s.channel} (${s.activityType}): ${s.name}`)
-    .join(", ");
-  return `\n\nOutreach Sequence: This run uses the "${playbook.name}" playbook — ${steps.length} steps: ${stepSummary}. Keep this channel mix and timing in mind when assessing engagement styles and communication preferences.`;
+  const sortedSteps = [...steps].sort((a, b) => a.stepOrder - b.stepOrder);
+  const stepLines = sortedSteps.map(s => {
+    const base = `  - Day ${s.dayOffset} | ${s.channel} (${s.activityType}): ${s.name}`;
+    return s.description ? `${base} — ${s.description}` : base;
+  });
+  return `\n\nOutreach Sequence (Playbook: "${playbook.name}", ${steps.length} steps):\n${stepLines.join("\n")}\nKeep this channel mix, timing, and step intent in mind when assessing engagement fit and communication preferences.`;
 }
 
 async function runMarketResearchPhase(
@@ -640,6 +642,8 @@ async function runCompanyDiscoveryPhase(
   targetIndustries: string[],
   targetCount: number,
   config: ResolvedLlmConfig,
+  playbook: schema.TaskPlaybook | null = null,
+  playbookSteps: schema.TaskPlaybookStep[] = [],
 ): Promise<schema.CandidateAccount[]> {
   const industries = targetIndustries.length > 0
     ? targetIndustries
@@ -681,6 +685,7 @@ async function runCompanyDiscoveryPhase(
   const searchContext = `\n\nWeb research results:\n${searchResults.map(r => `- ${r.title} (${r.url}): ${r.snippet}`).join("\n")}`;
 
   const icpContext = buildIcpContextSection(icpProfile, icpVersion, true);
+  const playbookContext = buildPlaybookContextSection(playbook, playbookSteps);
 
   const systemPrompt = `You are a company discovery specialist finding target accounts for B2B sales.
 You identify companies that match specific ideal customer profile criteria.
@@ -693,7 +698,7 @@ CRITICAL INSTRUCTION: Only include companies that are explicitly mentioned or cl
 - Geographies: ${geos}
 - Decision-maker roles we target: ${titles}
 
-Market context: ${marketInsights}${icpContext}
+Market context: ${marketInsights}${icpContext}${playbookContext}
 ${searchContext}
 
 Respond with a JSON array containing only real companies found in the web research above (return fewer than ${numCompanies} or an empty array [] if not enough real companies are found). Each object must have this shape:
@@ -1514,7 +1519,7 @@ async function _runPipelineInternal(runId: string, startFromPhase?: string): Pro
         buyingSignals = result.buyingSignals;
       } else if (phase === "company_discovery") {
         discoveredAccounts = await runCompanyDiscoveryPhase(
-          runId, icpVersion, icpProfile, marketInsights, targetIndustries, targetCount, config
+          runId, icpVersion, icpProfile, marketInsights, targetIndustries, targetCount, config, runPlaybook, runPlaybookSteps
         );
       } else if (phase === "contact_discovery") {
         if (discoveredAccounts.length === 0) {
