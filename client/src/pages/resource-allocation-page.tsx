@@ -195,6 +195,16 @@ export default function ResourceAllocationPage() {
 
   const TIMELINE_WIDTH = 900;
 
+  const todayOffset = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const totalMs = timelineEnd.getTime() - timelineStart.getTime();
+    if (totalMs <= 0) return null;
+    const offset = ((today.getTime() - timelineStart.getTime()) / totalMs) * TIMELINE_WIDTH;
+    if (offset < 0 || offset > TIMELINE_WIDTH) return null;
+    return offset;
+  }, [timelineStart, timelineEnd]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -331,65 +341,74 @@ export default function ResourceAllocationPage() {
                   </div>
                 </div>
 
-                {filteredOpportunities.map(opp => {
-                  const startDate = new Date((opp.effectiveStartDate || opp.implementationStartDate)!);
-                  const endDate = new Date((opp.effectiveEndDate || opp.implementationEndDate)!);
-                  const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
-                  const canNavigate = canNavigateToOpportunity(opp);
+                <div className="relative">
+                  {todayOffset !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-red-500/60 pointer-events-none z-10"
+                      style={{ left: 220 + todayOffset }}
+                      data-testid="today-redline-pipeline"
+                    />
+                  )}
+                  {filteredOpportunities.map(opp => {
+                    const startDate = new Date((opp.effectiveStartDate || opp.implementationStartDate)!);
+                    const endDate = new Date((opp.effectiveEndDate || opp.implementationEndDate)!);
+                    const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
+                    const canNavigate = canNavigateToOpportunity(opp);
 
-                  return (
-                    <div key={opp.id} className="flex items-center mb-1.5 group">
-                      <div className="w-[220px] shrink-0 pr-2">
-                        {canNavigate ? (
-                          <button
-                            className="text-xs font-medium text-left truncate w-full hover:text-primary transition-colors"
-                            onClick={() => setLocation(`/opportunities/${opp.id}`)}
-                            data-testid={`link-pipeline-opp-${opp.id}`}
-                          >
-                            {opp.name}
-                          </button>
-                        ) : (
-                          <span className="text-xs font-medium truncate block" data-testid={`text-pipeline-opp-${opp.id}`}>
-                            {opp.name}
-                          </span>
-                        )}
-                        {opp.accountName && (
-                          <p className="text-[10px] text-muted-foreground truncate">{opp.accountName}</p>
-                        )}
+                    return (
+                      <div key={opp.id} className="flex items-center mb-1.5 group">
+                        <div className="w-[220px] shrink-0 pr-2">
+                          {canNavigate ? (
+                            <button
+                              className="text-xs font-medium text-left truncate w-full hover:text-primary transition-colors"
+                              onClick={() => setLocation(`/opportunities/${opp.id}`)}
+                              data-testid={`link-pipeline-opp-${opp.id}`}
+                            >
+                              {opp.name}
+                            </button>
+                          ) : (
+                            <span className="text-xs font-medium truncate block" data-testid={`text-pipeline-opp-${opp.id}`}>
+                              {opp.name}
+                            </span>
+                          )}
+                          {opp.accountName && (
+                            <p className="text-[10px] text-muted-foreground truncate">{opp.accountName}</p>
+                          )}
+                        </div>
+                        <div className="flex-1 relative h-7" style={{ width: TIMELINE_WIDTH }}>
+                          {months.map((_, i) => (
+                            <div
+                              key={i}
+                              className="absolute top-0 bottom-0 border-l border-border/20"
+                              style={{ left: `${(i / months.length) * 100}%` }}
+                            />
+                          ))}
+                          {bar && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={`absolute top-1 h-5 rounded-sm ${stageColors[opp.stage] || "bg-muted"} opacity-85 hover:opacity-100 transition-opacity cursor-pointer`}
+                                  style={{ left: bar.left, width: bar.width }}
+                                  data-testid={`bar-pipeline-opp-${opp.id}`}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <div className="text-xs space-y-0.5">
+                                  <p className="font-medium">{opp.name}</p>
+                                  <p>{stageLabels[opp.stage] || opp.stage}</p>
+                                  <p>{startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}</p>
+                                  {opp.resources.length > 0 && (
+                                    <p>{opp.resources.map(r => r.userName).join(", ")}</p>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-1 relative h-7" style={{ width: TIMELINE_WIDTH }}>
-                        {months.map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute top-0 bottom-0 border-l border-border/20"
-                            style={{ left: `${(i / months.length) * 100}%` }}
-                          />
-                        ))}
-                        {bar && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className={`absolute top-1 h-5 rounded-sm ${stageColors[opp.stage] || "bg-muted"} opacity-85 hover:opacity-100 transition-opacity cursor-pointer`}
-                                style={{ left: bar.left, width: bar.width }}
-                                data-testid={`bar-pipeline-opp-${opp.id}`}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <div className="text-xs space-y-0.5">
-                                <p className="font-medium">{opp.name}</p>
-                                <p>{stageLabels[opp.stage] || opp.stage}</p>
-                                <p>{startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}</p>
-                                {opp.resources.length > 0 && (
-                                  <p>{opp.resources.map(r => r.userName).join(", ")}</p>
-                                )}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -423,69 +442,78 @@ export default function ResourceAllocationPage() {
                   </div>
                 </div>
 
-                {filteredUsers.map(u => (
-                  <div key={u.id} className="mb-3" data-testid={`resource-row-${u.id}`}>
-                    <div className="flex items-center mb-1">
-                      <div className="w-[220px] shrink-0 pr-2 flex items-center gap-2">
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium truncate">{u.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{u.assignments.length} assignment{u.assignments.length !== 1 ? "s" : ""}</p>
+                <div className="relative">
+                  {todayOffset !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-red-500/60 pointer-events-none z-10"
+                      style={{ left: 220 + todayOffset }}
+                      data-testid="today-redline-resource"
+                    />
+                  )}
+                  {filteredUsers.map(u => (
+                    <div key={u.id} className="mb-3" data-testid={`resource-row-${u.id}`}>
+                      <div className="flex items-center mb-1">
+                        <div className="w-[220px] shrink-0 pr-2 flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{u.name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{u.assignments.length} assignment{u.assignments.length !== 1 ? "s" : ""}</p>
+                          </div>
                         </div>
                       </div>
+
+                      {u.assignments.map(assignment => {
+                        const startDate = new Date((assignment.effectiveStartDate || assignment.implementationStartDate)!);
+                        const endDate = new Date((assignment.effectiveEndDate || assignment.implementationEndDate)!);
+                        const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
+
+                        return (
+                          <div key={assignment.resourceId} className="flex items-center mb-0.5">
+                            <div className="w-[220px] shrink-0 pr-2 pl-8">
+                              <button
+                                className="text-[11px] text-muted-foreground truncate w-full text-left hover:text-primary transition-colors"
+                                onClick={() => setLocation(`/opportunities/${assignment.opportunityId}`)}
+                                data-testid={`link-resource-opp-${assignment.opportunityId}`}
+                              >
+                                {assignment.opportunityName}
+                                <span className="ml-1 text-[10px]">({assignment.role})</span>
+                              </button>
+                            </div>
+                            <div className="flex-1 relative h-5" style={{ width: TIMELINE_WIDTH }}>
+                              {months.map((_, i) => (
+                                <div
+                                  key={i}
+                                  className="absolute top-0 bottom-0 border-l border-border/20"
+                                  style={{ left: `${(i / months.length) * 100}%` }}
+                                />
+                              ))}
+                              {bar && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className={`absolute top-0.5 h-4 rounded-sm ${stageColors[assignment.stage] || "bg-muted"} opacity-80 hover:opacity-100 transition-opacity cursor-pointer`}
+                                      style={{ left: bar.left, width: bar.width }}
+                                      data-testid={`bar-resource-${assignment.resourceId}`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <div className="text-xs space-y-0.5">
+                                      <p className="font-medium">{assignment.opportunityName}</p>
+                                      <p>Role: {assignment.role}</p>
+                                      <p>{startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}</p>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {u.assignments.map(assignment => {
-                      const startDate = new Date((assignment.effectiveStartDate || assignment.implementationStartDate)!);
-                      const endDate = new Date((assignment.effectiveEndDate || assignment.implementationEndDate)!);
-                      const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
-
-                      return (
-                        <div key={assignment.resourceId} className="flex items-center mb-0.5">
-                          <div className="w-[220px] shrink-0 pr-2 pl-8">
-                            <button
-                              className="text-[11px] text-muted-foreground truncate w-full text-left hover:text-primary transition-colors"
-                              onClick={() => setLocation(`/opportunities/${assignment.opportunityId}`)}
-                              data-testid={`link-resource-opp-${assignment.opportunityId}`}
-                            >
-                              {assignment.opportunityName}
-                              <span className="ml-1 text-[10px]">({assignment.role})</span>
-                            </button>
-                          </div>
-                          <div className="flex-1 relative h-5" style={{ width: TIMELINE_WIDTH }}>
-                            {months.map((_, i) => (
-                              <div
-                                key={i}
-                                className="absolute top-0 bottom-0 border-l border-border/20"
-                                style={{ left: `${(i / months.length) * 100}%` }}
-                              />
-                            ))}
-                            {bar && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div
-                                    className={`absolute top-0.5 h-4 rounded-sm ${stageColors[assignment.stage] || "bg-muted"} opacity-80 hover:opacity-100 transition-opacity cursor-pointer`}
-                                    style={{ left: bar.left, width: bar.width }}
-                                    data-testid={`bar-resource-${assignment.resourceId}`}
-                                  />
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <div className="text-xs space-y-0.5">
-                                    <p className="font-medium">{assignment.opportunityName}</p>
-                                    <p>Role: {assignment.role}</p>
-                                    <p>{startDate.toLocaleDateString()} - {endDate.toLocaleDateString()}</p>
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
