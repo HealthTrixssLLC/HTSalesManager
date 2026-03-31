@@ -124,8 +124,14 @@ export default function ResourceAllocationPage() {
     queryKey: ["/api/resource-allocation"],
   });
 
-  const timelineStart = useMemo(() => new Date(dateRangeStart), [dateRangeStart]);
-  const timelineEnd = useMemo(() => new Date(dateRangeEnd), [dateRangeEnd]);
+  const timelineStart = useMemo(() => {
+    const [y, m, d] = dateRangeStart.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [dateRangeStart]);
+  const timelineEnd = useMemo(() => {
+    const [y, m, d] = dateRangeEnd.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }, [dateRangeEnd]);
   const months = useMemo(() => getMonthsBetween(timelineStart, timelineEnd), [timelineStart, timelineEnd]);
 
   const filteredOpportunities = useMemo(() => {
