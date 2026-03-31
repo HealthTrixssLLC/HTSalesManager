@@ -547,6 +547,7 @@ export default function OpportunityDetailPage() {
                     <SelectItem value="Project Manager">Project Manager</SelectItem>
                     <SelectItem value="Business Analyst">Business Analyst</SelectItem>
                     <SelectItem value="QA Engineer">QA Engineer</SelectItem>
+                    <SelectItem value="Executive Sponsor">Executive Sponsor</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
