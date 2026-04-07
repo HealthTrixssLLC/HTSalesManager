@@ -353,7 +353,13 @@ export default function ResourceAllocationPage() {
                       className="absolute top-0 bottom-0 w-px bg-red-500/60 pointer-events-none z-10"
                       style={{ left: 220 + todayOffset }}
                       data-testid="today-redline-pipeline"
-                    />
+                    >
+                      <span
+                        className="absolute top-0 left-0 -translate-x-1/2 text-[9px] font-semibold text-red-500 whitespace-nowrap bg-background/90 border border-red-500/25 rounded px-1 leading-4"
+                      >
+                        {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
                   )}
                   {filteredOpportunities.map(opp => {
                     const startDate = new Date((opp.effectiveStartDate || opp.implementationStartDate)!);
@@ -454,7 +460,13 @@ export default function ResourceAllocationPage() {
                       className="absolute top-0 bottom-0 w-px bg-red-500/60 pointer-events-none z-10"
                       style={{ left: 220 + todayOffset }}
                       data-testid="today-redline-resource"
-                    />
+                    >
+                      <span
+                        className="absolute top-0 left-0 -translate-x-1/2 text-[9px] font-semibold text-red-500 whitespace-nowrap bg-background/90 border border-red-500/25 rounded px-1 leading-4"
+                      >
+                        {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
                   )}
                   {filteredUsers.map(u => (
                     <div key={u.id} className="mb-3" data-testid={`resource-row-${u.id}`}>
