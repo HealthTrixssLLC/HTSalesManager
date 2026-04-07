@@ -1310,7 +1310,7 @@ export async function registerRoutes(app: Express) {
       if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
         return res.status(400).json({ error: "Implementation start date must be before end date" });
       }
-      
+
       const opportunity = await storage.updateOpportunity(req.params.id, updateData);
       
       await createAudit(req, "update", "Opportunity", opportunity.id, before, opportunity);

@@ -37,6 +37,9 @@ const isNeonDatabase = process.env.DATABASE_URL.includes('neon.tech') ||
 
 // Initialize database connection based on environment
 let db: any;
+// Expose a module-level raw pg Pool for operations that need direct parameterized queries
+// (e.g., updating PostgreSQL text[] array columns which Drizzle sql template can't handle)
+let rawPgPool: PgPool | null = null;
 
 if (isNeonDatabase) {
   // Use Neon serverless driver (WebSocket-based) for Replit
@@ -61,6 +64,7 @@ if (isNeonDatabase) {
     idleTimeoutMillis: 30000,   // Close idle connections after 30s
     connectionTimeoutMillis: 10000, // 10s timeout for new connections
   });
+  rawPgPool = pool;
   db = pgDrizzle(pool, { schema });
 }
 
@@ -435,11 +439,78 @@ export class PostgresStorage implements IStorage {
   }
   
   async updateOpportunity(id: string, opportunity: Partial<InsertOpportunity>): Promise<Opportunity> {
-    const result = await db.update(schema.opportunities)
-      .set({ ...opportunity, updatedAt: new Date() })
-      .where(eq(schema.opportunities.id, id))
-      .returning();
-    return result[0];
+    // Extract the fields that need explicit SQL handling (array columns + description)
+    const { categories, operationalAreas, description, ...rest } = opportunity;
+
+    // Step 1: update all standard scalar fields via Drizzle ORM
+    await db.update(schema.opportunities)
+      .set({ ...rest, updatedAt: new Date() })
+      .where(eq(schema.opportunities.id, id));
+
+    // Step 2: explicitly update array/text fields using raw SQL to guarantee correct persistence
+    // (Drizzle ORM can have issues with PostgreSQL text[] array columns in .set())
+    const hasCategories = categories !== undefined;
+    const hasOperationalAreas = operationalAreas !== undefined;
+    const hasDescription = description !== undefined;
+
+    // Build a raw parameterized query for the array/text fields
+    // Drizzle's sql template serializes JS arrays as pg records (not text[]),
+    // so we use rawPgPool.query() for direct parameterized execution
+    const setClauses: string[] = [];
+    const params: any[] = [];
+
+    if (hasCategories) {
+      const catVal = (categories && categories.length > 0) ? categories : null;
+      params.push(catVal);
+      setClauses.push(`categories = $${params.length}`);
+    }
+    if (hasOperationalAreas) {
+      const areaVal = (operationalAreas && operationalAreas.length > 0) ? operationalAreas : null;
+      params.push(areaVal);
+      setClauses.push(`operational_areas = $${params.length}`);
+    }
+    if (hasDescription) {
+      params.push(description ?? null);
+      setClauses.push(`description = $${params.length}`);
+    }
+
+    if (setClauses.length > 0) {
+      params.push(id);
+      const rawSql = `UPDATE opportunities SET ${setClauses.join(', ')} WHERE id = $${params.length}`;
+
+      if (rawPgPool) {
+        // Standard pg driver: pass arrays as JS arrays — pg serializes them correctly as text[]
+        await rawPgPool.query(rawSql, params);
+      } else {
+        // Neon: build ARRAY[...] literal strings to avoid record serialization
+        const neonClauses: string[] = [];
+        if (hasCategories) {
+          const catVal = (categories && categories.length > 0) ? categories : null;
+          const arrLit = catVal
+            ? `ARRAY[${catVal.map((c: string) => `'${c.replace(/'/g, "''")}'`).join(',')}]::text[]`
+            : 'NULL';
+          neonClauses.push(`categories = ${arrLit}`);
+        }
+        if (hasOperationalAreas) {
+          const areaVal = (operationalAreas && operationalAreas.length > 0) ? operationalAreas : null;
+          const arrLit = areaVal
+            ? `ARRAY[${areaVal.map((a: string) => `'${a.replace(/'/g, "''")}'`).join(',')}]::text[]`
+            : 'NULL';
+          neonClauses.push(`operational_areas = ${arrLit}`);
+        }
+        if (hasDescription) {
+          const escaped = description ? description.replace(/'/g, "''") : null;
+          neonClauses.push(`description = ${escaped !== null ? `'${escaped}'` : 'NULL'}`);
+        }
+        if (neonClauses.length > 0) {
+          await db.execute(sql.raw(`UPDATE opportunities SET ${neonClauses.join(', ')} WHERE id = '${id.replace(/'/g, "''")}'`));
+        }
+      }
+    }
+
+    // Return the fully updated record
+    const [updated] = await db.select().from(schema.opportunities).where(eq(schema.opportunities.id, id)).limit(1);
+    return updated;
   }
   
   async deleteOpportunity(id: string): Promise<void> {
