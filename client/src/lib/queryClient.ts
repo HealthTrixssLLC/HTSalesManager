@@ -1,43 +1,41 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const CSRF_COOKIE_NAME = "csrf_token";
+
 /**
- * CSRF Token Management
- * Fetches and caches the CSRF token for use in state-changing requests
+ * Reads the CSRF token directly from document.cookie.
+ * The server sets a readable (non-httpOnly) cookie so JS can mirror it in the header —
+ * this is the standard Double Submit Cookie pattern.
  */
-let csrfToken: string | null = null;
-
-export async function fetchCsrfToken(): Promise<string> {
-  // Return cached token if available
-  if (csrfToken) {
-    return csrfToken;
-  }
-
-  try {
-    const res = await fetch('/api/csrf-token', {
-      credentials: 'include',
-    });
-
-    if (!res.ok) {
-      throw new Error('Failed to fetch CSRF token');
-    }
-
-    const data = await res.json();
-    csrfToken = data.csrfToken;
-    
-    if (!csrfToken) {
-      throw new Error('CSRF token not returned from server');
-    }
-    
-    return csrfToken;
-  } catch (error) {
-    console.error('Error fetching CSRF token:', error);
-    throw error;
-  }
+function getCsrfTokenFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(CSRF_COOKIE_NAME + "="));
+  return match ? match.split("=")[1] : null;
 }
 
-// Reset CSRF token cache (useful after login/logout)
+/**
+ * Ensures a CSRF cookie exists by calling /api/csrf-token if needed,
+ * then returns the token value from the cookie.
+ */
+export async function fetchCsrfToken(): Promise<string> {
+  let token = getCsrfTokenFromCookie();
+  if (token) return token;
+
+  const res = await fetch("/api/csrf-token", { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch CSRF token");
+
+  token = getCsrfTokenFromCookie();
+  if (!token) throw new Error("CSRF token cookie not set after fetch");
+
+  return token;
+}
+
+/** Force a fresh CSRF cookie on next mutation (call after login/logout). */
 export function resetCsrfToken() {
-  csrfToken = null;
+  // Nothing to reset in memory — the cookie is the source of truth.
+  // The next call to fetchCsrfToken will re-fetch from the server if cookie is missing.
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -54,15 +52,16 @@ export async function apiRequest(
 ): Promise<Response> {
   const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
 
-  // Include CSRF token for state-changing requests (not for login/register)
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase()) &&
-      url !== '/api/login' && url !== '/api/register') {
+  if (
+    ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) &&
+    url !== "/api/login" &&
+    url !== "/api/register"
+  ) {
     try {
       const token = await fetchCsrfToken();
-      headers['X-CSRF-Token'] = token;
+      headers["X-CSRF-Token"] = token;
     } catch (error) {
-      console.error('Failed to get CSRF token for request:', error);
-      // Continue without token - server will reject the request
+      console.error("Failed to get CSRF token for request:", error);
     }
   }
 
