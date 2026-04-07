@@ -1997,6 +1997,50 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // Get ALL activity associations in one bulk request (avoids N+1 on list page)
+  app.get("/api/activity-associations", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const rows = await db
+        .select({
+          id: activityAssociations.id,
+          activityId: activityAssociations.activityId,
+          entityType: activityAssociations.entityType,
+          entityId: activityAssociations.entityId,
+          createdAt: activityAssociations.createdAt,
+        })
+        .from(activityAssociations);
+
+      // Collect unique entity ids per type to resolve names
+      const accountIds = [...new Set(rows.filter(r => r.entityType === "Account").map(r => r.entityId))];
+      const contactIds = [...new Set(rows.filter(r => r.entityType === "Contact").map(r => r.entityId))];
+      const opportunityIds = [...new Set(rows.filter(r => r.entityType === "Opportunity").map(r => r.entityId))];
+      const leadIds = [...new Set(rows.filter(r => r.entityType === "Lead").map(r => r.entityId))];
+
+      const [accts, ctcts, opps, lds] = await Promise.all([
+        accountIds.length ? db.select({ id: accounts.id, name: accounts.name }).from(accounts).where(inArray(accounts.id, accountIds)) : [],
+        contactIds.length ? db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(inArray(contacts.id, contactIds)) : [],
+        opportunityIds.length ? db.select({ id: opportunities.id, name: opportunities.name }).from(opportunities).where(inArray(opportunities.id, opportunityIds)) : [],
+        leadIds.length ? db.select({ id: leads.id, name: leads.name }).from(leads).where(inArray(leads.id, leadIds)) : [],
+      ]);
+
+      const nameMap: Record<string, string> = {};
+      for (const a of accts) nameMap[`Account:${a.id}`] = a.name;
+      for (const c of ctcts) nameMap[`Contact:${c.id}`] = c.name;
+      for (const o of opps) nameMap[`Opportunity:${o.id}`] = o.name;
+      for (const l of lds) nameMap[`Lead:${l.id}`] = l.name;
+
+      const enriched = rows.map(r => ({
+        ...r,
+        entityName: nameMap[`${r.entityType}:${r.entityId}`] ?? r.entityId,
+      }));
+
+      return res.json(enriched);
+    } catch (error) {
+      console.error("Failed to fetch all activity associations:", error);
+      return res.status(500).json({ error: "Failed to fetch activity associations" });
+    }
+  });
+
   // Delete an association
   app.delete("/api/activity-associations/:id", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {

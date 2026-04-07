@@ -145,35 +145,9 @@ export default function ActivitiesPage() {
     queryKey: ["/api/users"],
   });
 
-  // Fetch all activity associations for list display
+  // Fetch all activity associations in a single bulk request (avoids N+1 rate-limit blowout)
   const { data: allActivityAssociations } = useQuery<Array<{ activityId: string; entityType: string; entityId: string; entityName: string }>>({
-    queryKey: ["/api/activity-associations-all"],
-    queryFn: async () => {
-      interface AssociationResponse {
-        id: string;
-        activityId: string;
-        entityType: string;
-        entityId: string;
-        entityName: string;
-        createdAt: string;
-      }
-      const assocPromises = (activities || []).map(async (activity) => {
-        const res = await fetch(`/api/activities/${activity.id}/associations`, {
-          credentials: "include",
-        });
-        if (!res.ok) return [];
-        const assocs: AssociationResponse[] = await res.json();
-        return assocs.map((a) => ({
-          activityId: activity.id,
-          entityType: a.entityType,
-          entityId: a.entityId,
-          entityName: a.entityName,
-        }));
-      });
-      const results = await Promise.all(assocPromises);
-      return results.flat();
-    },
-    enabled: !!activities && activities.length > 0,
+    queryKey: ["/api/activity-associations"],
   });
 
   // Fetch all tags for display
@@ -220,7 +194,7 @@ export default function ActivitiesPage() {
       
       queryClient.invalidateQueries({ queryKey: ["/api/activities"] });
       queryClient.invalidateQueries({ queryKey: ["/api/activities/summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/activity-associations-all"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/activity-associations"] });
       toast({ title: "Activity created successfully" });
       setIsCreateDialogOpen(false);
       setAssociations([]);
