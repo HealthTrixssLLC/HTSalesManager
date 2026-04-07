@@ -188,6 +188,9 @@ export const opportunities = pgTable("opportunities", {
   includeInForecast: boolean("include_in_forecast").notNull().default(true), // Exclude internal/test opportunities from sales metrics
   implementationStartDate: timestamp("implementation_start_date"),
   implementationEndDate: timestamp("implementation_end_date"),
+  categories: text("categories").array(),
+  operationalAreas: text("operational_areas").array(),
+  description: text("description"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({

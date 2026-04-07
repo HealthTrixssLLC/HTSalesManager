@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -32,6 +33,25 @@ import { SavedFiltersBar } from "@/components/saved-filters-bar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 type PendingResource = { userId: string; role: string; userName: string };
+
+const CATEGORY_OPTIONS = [
+  "SW Development",
+  "SME Advisory",
+  "Discovery",
+  "Data Analytics and Reporting",
+  "Data Submission",
+];
+
+const OPERATIONAL_AREA_OPTIONS = [
+  "Enrollment",
+  "Risk Adjustment",
+  "HEDIS / STARS / Quality",
+  "Compliance",
+  "MTM",
+  "Finance",
+  "In Home",
+  "Retro Review",
+];
 
 const stages = [
   { id: "prospecting",   label: "Prospecting",   color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
@@ -79,8 +99,10 @@ export default function OpportunitiesPage() {
   const [filterRating, setFilterRating] = useState<string>("");
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [filterIncludeInForecast, setFilterIncludeInForecast] = useState<string>("all");
+  const [filterCategories, setFilterCategories] = useState<string[]>([]);
+  const [filterOperationalAreas, setFilterOperationalAreas] = useState<string[]>([]);
 
-  const hasActiveFilters = !!(searchText || filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all");
+  const hasActiveFilters = !!(searchText || filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all" || filterCategories.length > 0 || filterOperationalAreas.length > 0);
 
   const currentOpportunityFilters = {
     searchText,
@@ -92,6 +114,8 @@ export default function OpportunitiesPage() {
     filterRating,
     filterTagIds,
     filterIncludeInForecast,
+    filterCategories,
+    filterOperationalAreas,
   };
 
   const handleApplySavedFilter = (saved: Record<string, any>) => {
@@ -104,6 +128,8 @@ export default function OpportunitiesPage() {
     setFilterRating(saved.filterRating ?? "");
     setFilterTagIds(Array.isArray(saved.filterTagIds) ? saved.filterTagIds : []);
     setFilterIncludeInForecast(saved.filterIncludeInForecast ?? "all");
+    setFilterCategories(Array.isArray(saved.filterCategories) ? saved.filterCategories : []);
+    setFilterOperationalAreas(Array.isArray(saved.filterOperationalAreas) ? saved.filterOperationalAreas : []);
   };
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
@@ -223,6 +249,9 @@ export default function OpportunitiesPage() {
       includeInForecast: true,
       implementationStartDate: null,
       implementationEndDate: null,
+      categories: [],
+      operationalAreas: [],
+      description: null,
     },
   });
 
@@ -398,6 +427,18 @@ export default function OpportunitiesPage() {
       // Include in Forecast filter
       if (filterIncludeInForecast === "included" && opp.includeInForecast !== true) return false;
       if (filterIncludeInForecast === "excluded" && opp.includeInForecast !== false) return false;
+
+      // Category filter - opp must have at least one of the selected categories
+      if (filterCategories.length > 0) {
+        const oppCategories = opp.categories || [];
+        if (!filterCategories.some(cat => oppCategories.includes(cat))) return false;
+      }
+
+      // Operational Area filter - opp must have at least one of the selected areas
+      if (filterOperationalAreas.length > 0) {
+        const oppAreas = opp.operationalAreas || [];
+        if (!filterOperationalAreas.some(area => oppAreas.includes(area))) return false;
+      }
       
       return true;
     });
@@ -412,7 +453,7 @@ export default function OpportunitiesPage() {
     }
 
     return result;
-  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, filterIncludeInForecast]);
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, filterIncludeInForecast, filterCategories, filterOperationalAreas]);
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
@@ -787,6 +828,82 @@ export default function OpportunitiesPage() {
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="categories"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <div className="flex flex-wrap gap-2" data-testid="toggle-categories">
+                        {CATEGORY_OPTIONS.map((cat) => {
+                          const selected = (field.value || []).includes(cat);
+                          return (
+                            <Badge
+                              key={cat}
+                              variant={selected ? "default" : "outline"}
+                              className="cursor-pointer select-none"
+                              onClick={() => {
+                                const current = field.value || [];
+                                field.onChange(selected ? current.filter(c => c !== cat) : [...current, cat]);
+                              }}
+                              data-testid={`badge-category-${cat.replace(/\s+/g, "-").toLowerCase()}`}
+                            >
+                              {cat}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="operationalAreas"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Operational Area</FormLabel>
+                      <div className="flex flex-wrap gap-2" data-testid="toggle-operational-areas">
+                        {OPERATIONAL_AREA_OPTIONS.map((area) => {
+                          const selected = (field.value || []).includes(area);
+                          return (
+                            <Badge
+                              key={area}
+                              variant={selected ? "default" : "outline"}
+                              className="cursor-pointer select-none"
+                              onClick={() => {
+                                const current = field.value || [];
+                                field.onChange(selected ? current.filter(a => a !== area) : [...current, area]);
+                              }}
+                              data-testid={`badge-area-${area.replace(/\s+/g, "-").replace(/\//g, "").toLowerCase()}`}
+                            >
+                              {area}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Add a description..."
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-opportunity-description"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="rounded-lg border p-4 space-y-3" data-testid="section-create-resources">
                   <p className="text-sm font-medium">Resource Assignments</p>
                   {pendingResources.length > 0 ? (
@@ -1036,9 +1153,53 @@ export default function OpportunitiesPage() {
                   onTagIdsChange={setFilterTagIds}
                 />
               </div>
+
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-medium">Category</label>
+                <div className="flex flex-wrap gap-2" data-testid="filter-categories">
+                  {CATEGORY_OPTIONS.map((cat) => {
+                    const selected = filterCategories.includes(cat);
+                    return (
+                      <Badge
+                        key={cat}
+                        variant={selected ? "default" : "outline"}
+                        className="cursor-pointer select-none"
+                        onClick={() => setFilterCategories(prev =>
+                          prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                        )}
+                        data-testid={`filter-badge-category-${cat.replace(/\s+/g, "-").toLowerCase()}`}
+                      >
+                        {cat}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-medium">Operational Area</label>
+                <div className="flex flex-wrap gap-2" data-testid="filter-operational-areas">
+                  {OPERATIONAL_AREA_OPTIONS.map((area) => {
+                    const selected = filterOperationalAreas.includes(area);
+                    return (
+                      <Badge
+                        key={area}
+                        variant={selected ? "default" : "outline"}
+                        className="cursor-pointer select-none"
+                        onClick={() => setFilterOperationalAreas(prev =>
+                          prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
+                        )}
+                        data-testid={`filter-badge-area-${area.replace(/\s+/g, "-").replace(/\//g, "").toLowerCase()}`}
+                      >
+                        {area}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             
-            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterIncludeInForecast !== "all" || filterTagIds.length > 0) && (
+            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterIncludeInForecast !== "all" || filterTagIds.length > 0 || filterCategories.length > 0 || filterOperationalAreas.length > 0) && (
               <div className="flex gap-2 mt-4">
                 <Button 
                   variant="outline" 
@@ -1053,6 +1214,8 @@ export default function OpportunitiesPage() {
                     setFilterRating("");
                     setFilterTagIds([]);
                     setFilterIncludeInForecast("all");
+                    setFilterCategories([]);
+                    setFilterOperationalAreas([]);
                   }}
                   data-testid="button-clear-filters"
                 >

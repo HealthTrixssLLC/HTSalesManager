@@ -43,6 +43,13 @@
       "when": 1774563600000,
       "tag": "0006_add_stopped_run_status",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775512800000,
+      "tag": "0008_add_opportunity_category_area_description",
+      "breakpoints": true
     }
   ]
 }

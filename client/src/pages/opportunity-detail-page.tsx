@@ -2,6 +2,25 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Loader2, Check, ChevronsUpDown, Plus, X, Users } from "lucide-react";
+
+const CATEGORY_OPTIONS = [
+  "SW Development",
+  "SME Advisory",
+  "Discovery",
+  "Data Analytics and Reporting",
+  "Data Submission",
+];
+
+const OPERATIONAL_AREA_OPTIONS = [
+  "Enrollment",
+  "Risk Adjustment",
+  "HEDIS / STARS / Quality",
+  "Compliance",
+  "MTM",
+  "Finance",
+  "In Home",
+  "Retro Review",
+];
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
@@ -199,6 +218,9 @@ export default function OpportunityDetailPage() {
       includeInForecast: true,
       implementationStartDate: null,
       implementationEndDate: null,
+      categories: [],
+      operationalAreas: [],
+      description: null,
     },
   });
 
@@ -339,6 +361,9 @@ export default function OpportunityDetailPage() {
         includeInForecast: opportunity.includeInForecast ?? true,
         implementationStartDate: toDateValue(opportunity.implementationStartDate),
         implementationEndDate: toDateValue(opportunity.implementationEndDate),
+        categories: opportunity.categories || [],
+        operationalAreas: opportunity.operationalAreas || [],
+        description: opportunity.description || null,
       });
       setIsEditDialogOpen(true);
     }
@@ -421,6 +446,32 @@ export default function OpportunityDetailPage() {
                 })()}
               </div>
             </div>
+            {opportunity.categories && opportunity.categories.length > 0 && (
+              <div className="col-span-full">
+                <label className="text-sm font-medium text-muted-foreground">Category</label>
+                <div className="mt-1 flex flex-wrap gap-1" data-testid="field-categories">
+                  {opportunity.categories.map(cat => (
+                    <Badge key={cat} variant="secondary" className="text-xs" data-testid={`badge-view-category-${cat.replace(/\s+/g, "-").toLowerCase()}`}>{cat}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {opportunity.operationalAreas && opportunity.operationalAreas.length > 0 && (
+              <div className="col-span-full">
+                <label className="text-sm font-medium text-muted-foreground">Operational Area</label>
+                <div className="mt-1 flex flex-wrap gap-1" data-testid="field-operational-areas">
+                  {opportunity.operationalAreas.map(area => (
+                    <Badge key={area} variant="secondary" className="text-xs" data-testid={`badge-view-area-${area.replace(/\s+/g, "-").replace(/\//g, "").toLowerCase()}`}>{area}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {opportunity.description && (
+              <div className="col-span-full">
+                <label className="text-sm font-medium text-muted-foreground">Description</label>
+                <p className="mt-1 text-sm" data-testid="field-description">{opportunity.description}</p>
+              </div>
+            )}
             <div className="col-span-full">
               <label className="text-sm font-medium text-muted-foreground">Forecast Status</label>
               <div className="mt-1">
@@ -900,6 +951,82 @@ export default function OpportunityDetailPage() {
                         data-testid="switch-edit-include-in-forecast"
                       />
                     </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="categories"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <div className="flex flex-wrap gap-2" data-testid="edit-toggle-categories">
+                      {CATEGORY_OPTIONS.map((cat) => {
+                        const selected = (field.value || []).includes(cat);
+                        return (
+                          <Badge
+                            key={cat}
+                            variant={selected ? "default" : "outline"}
+                            className="cursor-pointer select-none"
+                            onClick={() => {
+                              const current = field.value || [];
+                              field.onChange(selected ? current.filter(c => c !== cat) : [...current, cat]);
+                            }}
+                            data-testid={`edit-badge-category-${cat.replace(/\s+/g, "-").toLowerCase()}`}
+                          >
+                            {cat}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="operationalAreas"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Operational Area</FormLabel>
+                    <div className="flex flex-wrap gap-2" data-testid="edit-toggle-operational-areas">
+                      {OPERATIONAL_AREA_OPTIONS.map((area) => {
+                        const selected = (field.value || []).includes(area);
+                        return (
+                          <Badge
+                            key={area}
+                            variant={selected ? "default" : "outline"}
+                            className="cursor-pointer select-none"
+                            onClick={() => {
+                              const current = field.value || [];
+                              field.onChange(selected ? current.filter(a => a !== area) : [...current, area]);
+                            }}
+                            data-testid={`edit-badge-area-${area.replace(/\s+/g, "-").replace(/\//g, "").toLowerCase()}`}
+                          >
+                            {area}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Add a description..."
+                        {...field}
+                        value={field.value || ""}
+                        data-testid="input-edit-opportunity-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
