@@ -155,12 +155,18 @@ export async function callLlmForResearch(
   throw new Error(`Unsupported LLM provider: ${config.provider}`);
 }
 
-export function isWebSearchConfiguredForResearch(): boolean {
+export async function isWebSearchConfiguredForResearch(): Promise<boolean> {
   if (isAzureWebSearchConfigured()) return true;
   if (process.env.BRAVE_SEARCH_API_KEY) return true;
   if (process.env.SERPER_API_KEY) return true;
-  // Azure LLM can also be used as web search provider when configured
   if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_BASE_URL) return true;
+
+  // Also check if the DB-configured LLM is Azure (can be used as web search provider)
+  const llmConfig = await getLlmConfigForResearch();
+  if (llmConfig && llmConfig.provider === "azure" && llmConfig.baseUrl && llmConfig.apiKey) {
+    return true;
+  }
+
   return false;
 }
 

@@ -5601,7 +5601,7 @@ export async function registerRoutes(app: Express) {
         });
       }
 
-      if (!isWebSearchConfiguredForResearch()) {
+      if (!(await isWebSearchConfiguredForResearch())) {
         return res.status(503).json({
           error: "No web search provider is configured. Please configure Azure AI Search, Brave Search, or Serper in environment settings.",
         });
