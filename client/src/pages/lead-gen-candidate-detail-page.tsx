@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, ExternalLink, Pencil, Plus, ChevronDown, ChevronUp, Mail, Linkedin, Phone, CheckSquare, Link } from "lucide-react";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
+import { ContactResearchButton } from "@/components/contact-research-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -362,6 +363,18 @@ export default function LeadGenCandidateDetailPage() {
     onError: () => toast({ title: "Failed to add evidence", variant: "destructive" }),
   });
 
+  const patchCandidateContactMutation = useMutation({
+    mutationFn: async ({ contactId, fields }: { contactId: string; fields: Record<string, string> }) => {
+      const res = await apiRequest("PATCH", `/api/lead-gen/candidate-contacts/${contactId}`, fields);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/candidates", id] });
+      toast({ title: "Contact info updated" });
+    },
+    onError: (err: Error) => toast({ title: "Failed to update contact", description: err.message, variant: "destructive" }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full p-12">
@@ -504,11 +517,21 @@ export default function LeadGenCandidateDetailPage() {
                 <p className="text-sm text-muted-foreground">No contacts</p>
               ) : (
                 candidate.contacts.map((c: CandidateContact) => (
-                  <div key={c.id} className="text-sm space-y-1 mb-3 pb-3 border-b last:border-0">
+                  <div key={c.id} className="text-sm space-y-2 mb-4 pb-4 border-b last:border-0">
                     <p className="font-medium">{c.firstName} {c.lastName}</p>
                     {c.title && <p className="text-muted-foreground">{c.title}</p>}
                     {c.email && <p>{c.email}</p>}
                     {c.phone && <p>{c.phone}</p>}
+                    <div className="pt-1">
+                      <ContactResearchButton
+                        entityType="candidate_contact"
+                        entityId={c.id}
+                        entityName={`${c.firstName} ${c.lastName}`}
+                        onConfirm={(accepted) => {
+                          patchCandidateContactMutation.mutate({ contactId: c.id, fields: accepted });
+                        }}
+                      />
+                    </div>
                   </div>
                 ))
               )}

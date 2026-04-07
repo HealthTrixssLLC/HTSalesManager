@@ -9,6 +9,7 @@ import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd } from "@/components/global-quick-add";
+import { ContactResearchButton } from "@/components/contact-research-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -188,6 +189,25 @@ export default function LeadDetailPage() {
               <DetailField label="Phone" value={lead.phone} type="phone" />
               <DetailField label="Topic" value={lead.topic} />
               <DetailField label="Source" value={lead.source} />
+              <div className="col-span-full flex justify-end pt-2">
+                <ContactResearchButton
+                  entityType="lead"
+                  entityId={lead.id}
+                  entityName={fullName}
+                  onConfirm={(accepted) => {
+                    const allowedFields: Array<keyof typeof accepted> = ["email", "phone"];
+                    const patch: Partial<InsertLead> = {};
+                    for (const field of allowedFields) {
+                      if (accepted[field] !== undefined) {
+                        (patch as Record<string, string>)[field] = accepted[field];
+                      }
+                    }
+                    if (Object.keys(patch).length > 0) {
+                      editMutation.mutate({ id: lead.id, firstName: lead.firstName, lastName: lead.lastName, status: lead.status, ...patch });
+                    }
+                  }}
+                />
+              </div>
             </DetailSection>
 
             <Card data-testid="section-tags">

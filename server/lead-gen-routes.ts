@@ -647,6 +647,28 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
+  const candidateContactPatchSchema = z.object({
+    email: z.string().email().optional().nullable(),
+    phone: z.string().optional().nullable(),
+  });
+
+  app.patch("/api/lead-gen/candidate-contacts/:id", authenticate, requireRole("Admin", "SalesManager", "SalesOperator", "Reviewer"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const parsed = candidateContactPatchSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
+      const before = await db.select().from(schema.candidateContacts).where(eq(schema.candidateContacts.id, req.params.id)).limit(1);
+      if (!before[0]) return res.status(404).json({ error: "Candidate contact not found" });
+      const result = await db.update(schema.candidateContacts)
+        .set(parsed.data)
+        .where(eq(schema.candidateContacts.id, req.params.id))
+        .returning();
+      await createAuditLog(req.user?.id, "update", "CandidateContact", req.params.id, before[0] as unknown as Record<string, unknown>, result[0] as unknown as Record<string, unknown>, req);
+      return res.json(result[0]);
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to update candidate contact" });
+    }
+  });
+
 
   app.post("/api/lead-gen/runs/:runId/candidates", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {

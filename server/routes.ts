@@ -5565,6 +5565,229 @@ export async function registerRoutes(app: Express) {
     }
   });
 
+  // ========== CONTACT INFO RESEARCH ==========
+
+  app.post("/api/contact-research", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    const bodySchema = z.object({
+      entityType: z.enum(["lead", "contact", "candidate_contact"]),
+      entityId: z.string().min(1),
+    });
+
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid request", details: parsed.error.errors });
+    }
+
+    const { entityType, entityId } = parsed.data;
+
+    // Enforce entity-type-specific read permissions
+    if (entityType === "lead" && !(await hasPermission(req.user!.id, "Lead", "read"))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (entityType === "contact" && !(await hasPermission(req.user!.id, "Contact", "read"))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    if (entityType === "candidate_contact" && !(await hasAnyRole(req.user!.id, ["Admin", "SalesManager", "SalesOperator", "Reviewer"]))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    try {
+      const { getLlmConfigForResearch, callLlmForResearch, performWebSearchForResearch, isWebSearchConfiguredForResearch } = await import("./contact-research-service");
+
+      const llmConfig = await getLlmConfigForResearch();
+      if (!llmConfig) {
+        return res.status(503).json({
+          error: "No LLM provider is configured. Please configure an AI provider in Admin Console → AI Configuration.",
+        });
+      }
+
+      if (!isWebSearchConfiguredForResearch()) {
+        return res.status(503).json({
+          error: "No web search provider is configured. Please configure Azure AI Search, Brave Search, or Serper in environment settings.",
+        });
+      }
+
+      let firstName = "";
+      let lastName = "";
+      let company = "";
+      let currentEmail = "";
+      let currentPhone = "";
+      let currentMobile: string | undefined;
+      let currentMailingStreet: string | undefined;
+      let currentMailingCity: string | undefined;
+      let currentMailingState: string | undefined;
+      let currentMailingPostalCode: string | undefined;
+      let currentMailingCountry: string | undefined;
+      let entityLabel = "";
+
+      if (entityType === "lead") {
+        const [record] = await db.select().from(leads).where(eq(leads.id, entityId)).limit(1);
+        if (!record) return res.status(404).json({ error: "Lead not found" });
+        firstName = record.firstName;
+        lastName = record.lastName;
+        company = record.company || "";
+        currentEmail = record.email || "";
+        currentPhone = record.phone || "";
+        entityLabel = `${firstName} ${lastName}${company ? ` at ${company}` : ""}`;
+      } else if (entityType === "contact") {
+        const [record] = await db.select().from(contacts).where(eq(contacts.id, entityId)).limit(1);
+        if (!record) return res.status(404).json({ error: "Contact not found" });
+        firstName = record.firstName;
+        lastName = record.lastName;
+        currentEmail = record.email || "";
+        currentPhone = record.phone || "";
+        currentMobile = record.mobile || undefined;
+        currentMailingStreet = record.mailingStreet || undefined;
+        currentMailingCity = record.mailingCity || undefined;
+        currentMailingState = record.mailingState || undefined;
+        currentMailingPostalCode = record.mailingPostalCode || undefined;
+        currentMailingCountry = record.mailingCountry || undefined;
+
+        if (record.accountId) {
+          const [acct] = await db.select({ name: accounts.name }).from(accounts).where(eq(accounts.id, record.accountId)).limit(1);
+          company = acct?.name || "";
+        }
+        entityLabel = `${firstName} ${lastName}${company ? ` at ${company}` : ""}`;
+      } else {
+        const { candidateContacts: candidateContactsTable, candidateAccounts } = await import("@shared/schema");
+        const [record] = await db.select().from(candidateContactsTable).where(eq(candidateContactsTable.id, entityId)).limit(1);
+        if (!record) return res.status(404).json({ error: "Candidate contact not found" });
+        firstName = record.firstName;
+        lastName = record.lastName;
+        currentEmail = record.email || "";
+        currentPhone = record.phone || "";
+
+        if (record.candidateAccountId) {
+          const [acct] = await db.select({ name: candidateAccounts.name }).from(candidateAccounts).where(eq(candidateAccounts.id, record.candidateAccountId)).limit(1);
+          company = acct?.name || "";
+        }
+        entityLabel = `${firstName} ${lastName}${company ? ` at ${company}` : ""}`;
+      }
+
+      const searchQuery = company
+        ? `${firstName} ${lastName} ${company} email phone contact information`
+        : `${firstName} ${lastName} professional contact email phone`;
+
+      const searchResults = await performWebSearchForResearch(searchQuery);
+
+      const searchContext = searchResults.length > 0
+        ? searchResults.map(r => `Source: ${r.title}\nURL: ${r.url}\nContent: ${r.snippet}`).join("\n\n---\n\n")
+        : "No web search results available.";
+
+      const sourceUrls = searchResults
+        .filter(r => r.url)
+        .map(r => ({ title: r.title, url: r.url }))
+        .slice(0, 5);
+
+      const isContact = entityType === "contact";
+
+      const systemPrompt = `You are a professional contact information researcher. Given a person's name and company, you extract verified contact details from publicly available sources. You return ONLY valid JSON with no markdown, no explanations, and no extra text.`;
+
+      const userPrompt = `Research contact information for: ${entityLabel}
+
+Web search results:
+${searchContext}
+
+Based on the search results above, extract the following contact fields if they can be found with reasonable confidence:
+- email: professional email address
+- phone: work/office phone number
+- ${isContact ? "mobile: mobile/cell phone number\n- mailingStreet: street address\n- mailingCity: city\n- mailingState: state/province\n- mailingPostalCode: postal/zip code\n- mailingCountry: country" : ""}
+
+For each field found, also provide a source note (e.g., "found on LinkedIn", "found on company website").
+
+Return a JSON object with this exact structure:
+{
+  "suggestions": {
+    "email": { "value": "...", "source": "..." } | null,
+    "phone": { "value": "...", "source": "..." } | null${isContact ? `,
+    "mobile": { "value": "...", "source": "..." } | null,
+    "mailingStreet": { "value": "...", "source": "..." } | null,
+    "mailingCity": { "value": "...", "source": "..." } | null,
+    "mailingState": { "value": "...", "source": "..." } | null,
+    "mailingPostalCode": { "value": "...", "source": "..." } | null,
+    "mailingCountry": { "value": "...", "source": "..." } | null` : ""}
+  },
+  "confidence": "high" | "medium" | "low",
+  "summary": "Brief summary of what was found"
+}
+
+Set a field to null if you cannot find that information with sufficient confidence. Do not guess or fabricate contact information.`;
+
+      const rawResponse = await callLlmForResearch(llmConfig, systemPrompt, userPrompt);
+
+      let parsed2: {
+        suggestions: Record<string, { value: string; source: string } | null>;
+        confidence: string;
+        summary: string;
+      };
+
+      try {
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        parsed2 = JSON.parse(jsonMatch ? jsonMatch[0] : rawResponse);
+      } catch {
+        return res.status(500).json({ error: "AI returned an unexpected response format. Please try again." });
+      }
+
+      // Whitelist allowed suggestion fields per entity type to prevent injection
+      const allowedFields = isContact
+        ? ["email", "phone", "mobile", "mailingStreet", "mailingCity", "mailingState", "mailingPostalCode", "mailingCountry"]
+        : ["email", "phone"];
+
+      const rawSuggestions = parsed2.suggestions || {};
+      const suggestions: Record<string, { value: string; source: string } | null> = {};
+      for (const field of allowedFields) {
+        const suggestion = rawSuggestions[field];
+        if (suggestion !== null && suggestion !== undefined) {
+          if (
+            typeof suggestion === "object" &&
+            typeof (suggestion as { value: string; source: string }).value === "string" &&
+            typeof (suggestion as { value: string; source: string }).source === "string"
+          ) {
+            suggestions[field] = { value: suggestion.value, source: suggestion.source };
+          }
+        }
+      }
+
+      const confidence = ["high", "medium", "low"].includes(parsed2.confidence) ? parsed2.confidence : "low";
+      const summary = typeof parsed2.summary === "string" ? parsed2.summary.slice(0, 500) : "";
+
+      const hasSuggestions = Object.keys(suggestions).length > 0;
+      if (!hasSuggestions) {
+        return res.json({
+          suggestions: {},
+          confidence,
+          summary: summary || "No new information found.",
+          sources: sourceUrls,
+          noResults: true,
+        });
+      }
+
+      return res.json({
+        suggestions,
+        confidence,
+        summary,
+        sources: sourceUrls,
+        noResults: false,
+        currentValues: {
+          email: currentEmail,
+          phone: currentPhone,
+          ...(isContact ? {
+            mobile: currentMobile,
+            mailingStreet: currentMailingStreet,
+            mailingCity: currentMailingCity,
+            mailingState: currentMailingState,
+            mailingPostalCode: currentMailingPostalCode,
+            mailingCountry: currentMailingCountry,
+          } : {}),
+        },
+      });
+    } catch (err) {
+      console.error("[ContactResearch] Error:", err);
+      const message = err instanceof Error ? err.message : "An unexpected error occurred";
+      return res.status(500).json({ error: message });
+    }
+  });
+
   // ========== LEAD GENERATION MODULE ROUTES ==========
   const { registerLeadGenRoutes } = await import("./lead-gen-routes");
   registerLeadGenRoutes(app);

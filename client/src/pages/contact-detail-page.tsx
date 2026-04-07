@@ -8,6 +8,7 @@ import { CommentSystem } from "@/components/comment-system";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
+import { ContactResearchButton } from "@/components/contact-research-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
@@ -162,6 +163,34 @@ export default function ContactDetailPage() {
             <DetailField label="Phone" value={contact.phone} type="phone" />
             <DetailField label="Mobile" value={contact.mobile} type="phone" />
             <DetailField label="Department" value={contact.department} />
+            <DetailField label="Street" value={contact.mailingStreet} />
+            <DetailField label="City" value={contact.mailingCity} />
+            <DetailField label="State" value={contact.mailingState} />
+            <DetailField label="Postal Code" value={contact.mailingPostalCode} />
+            <DetailField label="Country" value={contact.mailingCountry} />
+            <div className="col-span-full flex justify-end pt-2">
+              <ContactResearchButton
+                entityType="contact"
+                entityId={contact.id}
+                entityName={fullName}
+                onConfirm={(accepted) => {
+                  const allowedFields = ["email", "phone", "mobile", "mailingStreet", "mailingCity", "mailingState", "mailingPostalCode", "mailingCountry"] as const;
+                  const patch: Record<string, string> = {};
+                  for (const field of allowedFields) {
+                    if (accepted[field] !== undefined) {
+                      patch[field] = accepted[field];
+                    }
+                  }
+                  if (Object.keys(patch).length > 0) {
+                    updateMutation.mutate({
+                      firstName: contact.firstName,
+                      lastName: contact.lastName,
+                      ...patch,
+                    });
+                  }
+                }}
+              />
+            </div>
           </DetailSection>
 
           {contact.description && (
