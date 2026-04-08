@@ -9,6 +9,7 @@ const CATEGORY_OPTIONS = [
   "Discovery",
   "Data Analytics and Reporting",
   "Data Submission",
+  "Incubator Candidate",
 ];
 
 const OPERATIONAL_AREA_OPTIONS = [
@@ -20,6 +21,7 @@ const OPERATIONAL_AREA_OPTIONS = [
   "Finance",
   "In Home",
   "Retro Review",
+  "Patient Experience",
 ];
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";

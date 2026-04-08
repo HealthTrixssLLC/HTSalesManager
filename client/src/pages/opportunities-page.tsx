@@ -40,6 +40,7 @@ const CATEGORY_OPTIONS = [
   "Discovery",
   "Data Analytics and Reporting",
   "Data Submission",
+  "Incubator Candidate",
 ];
 
 const OPERATIONAL_AREA_OPTIONS = [
@@ -51,6 +52,7 @@ const OPERATIONAL_AREA_OPTIONS = [
   "Finance",
   "In Home",
   "Retro Review",
+  "Patient Experience",
 ];
 
 const stages = [
