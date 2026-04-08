@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, fetchCsrfToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -6,12 +6,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   FileText, FileImage, FileSpreadsheet, FileCode, File,
-  Upload, Download, Trash2, Paperclip,
+  Upload, Download, Trash2, Paperclip, Eye, Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface DocumentRecord {
   id: string;
@@ -57,6 +60,166 @@ function formatFileName(name: string, maxLen = 40): string {
   return `${name.slice(0, maxLen - 3)}...`;
 }
 
+type ViewableType = "pdf" | "docx" | "text" | "markdown";
+
+function getViewableType(contentType: string, fileName: string): ViewableType | null {
+  const name = fileName.toLowerCase();
+  if (contentType === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (
+    contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    name.endsWith(".docx")
+  ) return "docx";
+  if (name.endsWith(".md") || name.endsWith(".markdown") || contentType === "text/markdown" || contentType === "text/x-markdown") return "markdown";
+  if (contentType.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".log") || name.endsWith(".csv")) return "text";
+  return null;
+}
+
+// ── Document Viewer Dialog ─────────────────────────────────────────────────
+
+interface ViewerState {
+  doc: DocumentRecord;
+  type: ViewableType;
+}
+
+function DocumentViewerDialog({ state, onClose }: { state: ViewerState | null; onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [textContent, setTextContent] = useState<string | null>(null);
+  const [fetchedDocId, setFetchedDocId] = useState<string | null>(null);
+
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      onClose();
+    }
+  }, [pdfUrl, onClose]);
+
+  // Fetch and render when the target document changes
+  useEffect(() => {
+    if (!state) return;
+    const { doc, type } = state;
+    if (fetchedDocId === doc.id) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setPdfUrl(null);
+    setHtmlContent(null);
+    setTextContent(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch document");
+
+        if (type === "pdf") {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+          if (!cancelled) setPdfUrl(url);
+        } else if (type === "docx") {
+          const arrayBuffer = await res.arrayBuffer();
+          const mammoth = await import("mammoth");
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          if (!cancelled) setHtmlContent(result.value);
+        } else {
+          const text = await res.text();
+          if (!cancelled) setTextContent(text);
+        }
+        if (!cancelled) setFetchedDocId(doc.id);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load document");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [state?.doc.id]);
+
+  const isOpen = !!state;
+  const title = state?.doc.fileName ?? "";
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="max-w-4xl w-full"
+        style={{ maxHeight: "90vh", display: "flex", flexDirection: "column" }}
+        data-testid="dialog-document-viewer"
+      >
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="truncate pr-6" title={title}>
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto min-h-0">
+          {loading && (
+            <div className="flex items-center justify-center h-48">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading document...</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center justify-center h-48 text-destructive text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* PDF */}
+          {!loading && !error && pdfUrl && (
+            <iframe
+              src={pdfUrl}
+              className="w-full border-0 rounded"
+              style={{ height: "70vh" }}
+              title={title}
+              data-testid="viewer-pdf"
+            />
+          )}
+
+          {/* DOCX rendered as HTML */}
+          {!loading && !error && htmlContent !== null && state?.type === "docx" && (
+            <div
+              className="prose prose-sm max-w-none p-4 overflow-auto"
+              style={{ maxHeight: "70vh" }}
+              dangerouslySetInnerHTML={{ __html: htmlContent }}
+              data-testid="viewer-docx"
+            />
+          )}
+
+          {/* Markdown */}
+          {!loading && !error && textContent !== null && state?.type === "markdown" && (
+            <div
+              className="prose prose-sm max-w-none p-4 overflow-auto"
+              style={{ maxHeight: "70vh" }}
+              data-testid="viewer-markdown"
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {textContent}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Plain text */}
+          {!loading && !error && textContent !== null && state?.type === "text" && (
+            <pre
+              className="p-4 text-sm font-mono whitespace-pre-wrap break-all overflow-auto bg-muted/40 rounded"
+              style={{ maxHeight: "70vh" }}
+              data-testid="viewer-text"
+            >
+              {textContent}
+            </pre>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────
+
 export function DocumentsSection({ entityType, entityId, canEdit: canEditProp }: DocumentsSectionProps) {
   const { user } = useAuth();
   const userRoles = (user?.roles ?? []).map((r: { name: string }) => r.name);
@@ -66,6 +229,7 @@ export function DocumentsSection({ entityType, entityId, canEdit: canEditProp }:
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+  const [viewerState, setViewerState] = useState<ViewerState | null>(null);
 
   const queryKey = ["/api/documents", entityType, entityId];
 
@@ -153,137 +317,162 @@ export function DocumentsSection({ entityType, entityId, canEdit: canEditProp }:
     document.body.removeChild(a);
   };
 
+  const handleView = (doc: DocumentRecord) => {
+    const type = getViewableType(doc.contentType, doc.fileName);
+    if (!type) return;
+    setViewerState({ doc, type });
+  };
+
   const docToDelete = documents.find((d) => d.id === deleteDocId);
 
   return (
-    <Card data-testid="section-documents">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <Paperclip className="h-4 w-4" />
-          Documents
-        </CardTitle>
-        {canEdit && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadMutation.isPending}
-            data-testid="button-upload-document"
-          >
-            <Upload className="h-4 w-4 mr-1" />
-            Upload
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-          data-testid="input-document-file"
-        />
+    <>
+      <Card data-testid="section-documents">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+          <CardTitle className="flex items-center gap-2">
+            <Paperclip className="h-4 w-4" />
+            Documents
+          </CardTitle>
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadMutation.isPending}
+              data-testid="button-upload-document"
+            >
+              <Upload className="h-4 w-4 mr-1" />
+              Upload
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+            data-testid="input-document-file"
+          />
 
-        {canEdit && (
-          <div
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-colors ${
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-muted-foreground/30 hover:border-muted-foreground/60"
-            }`}
-            data-testid="dropzone-documents"
-          >
-            <Upload className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              {uploadMutation.isPending ? "Uploading..." : "Drag & drop files here, or click to browse"}
+          {canEdit && (
+            <div
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-md p-4 text-center cursor-pointer transition-colors ${
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/30 hover:border-muted-foreground/60"
+              }`}
+              data-testid="dropzone-documents"
+            >
+              <Upload className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {uploadMutation.isPending ? "Uploading..." : "Drag & drop files here, or click to browse"}
+              </p>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : documents.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-2" data-testid="text-no-documents">
+              No documents attached yet.
             </p>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        ) : documents.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2" data-testid="text-no-documents">
-            No documents attached yet.
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {documents.map((doc) => {
-              const Icon = getFileIcon(doc.contentType);
-              return (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-2 p-2 rounded-md hover-elevate group"
-                  data-testid={`document-item-${doc.id}`}
-                >
-                  <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" title={doc.fileName} data-testid={`text-doc-name-${doc.id}`}>
-                      {formatFileName(doc.fileName)}
-                    </p>
-                    <p className="text-xs text-muted-foreground" data-testid={`text-doc-meta-${doc.id}`}>
-                      {formatFileSize(doc.size)} &middot; {doc.uploaderName} &middot;{" "}
-                      {format(new Date(doc.createdAt), "MMM d, yyyy")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDownload(doc)}
-                      title="Download"
-                      data-testid={`button-download-doc-${doc.id}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    {canEdit && (
+          ) : (
+            <div className="space-y-1">
+              {documents.map((doc) => {
+                const Icon = getFileIcon(doc.contentType);
+                const viewableType = getViewableType(doc.contentType, doc.fileName);
+                return (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-2 p-2 rounded-md hover-elevate group"
+                    data-testid={`document-item-${doc.id}`}
+                  >
+                    <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" title={doc.fileName} data-testid={`text-doc-name-${doc.id}`}>
+                        {formatFileName(doc.fileName)}
+                      </p>
+                      <p className="text-xs text-muted-foreground" data-testid={`text-doc-meta-${doc.id}`}>
+                        {formatFileSize(doc.size)} &middot; {doc.uploaderName} &middot;{" "}
+                        {format(new Date(doc.createdAt), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {viewableType && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleView(doc)}
+                          title="View"
+                          data-testid={`button-view-doc-${doc.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setDeleteDocId(doc.id)}
-                        title="Delete"
-                        data-testid={`button-delete-doc-${doc.id}`}
+                        onClick={() => handleDownload(doc)}
+                        title="Download"
+                        data-testid={`button-download-doc-${doc.id}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Download className="h-4 w-4" />
                       </Button>
-                    )}
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteDocId(doc.id)}
+                          title="Delete"
+                          data-testid={`button-delete-doc-${doc.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
 
-      <AlertDialog open={!!deleteDocId} onOpenChange={(open) => !open && setDeleteDocId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Document</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{docToDelete?.fileName}"? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteDocId && deleteMutation.mutate(deleteDocId)}
-              className="bg-destructive text-destructive-foreground"
-              data-testid="button-confirm-delete-doc"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </Card>
+        <AlertDialog open={!!deleteDocId} onOpenChange={(open) => !open && setDeleteDocId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Document</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{docToDelete?.fileName}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteDocId && deleteMutation.mutate(deleteDocId)}
+                className="bg-destructive text-destructive-foreground"
+                data-testid="button-confirm-delete-doc"
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Card>
+
+      <DocumentViewerDialog
+        state={viewerState}
+        onClose={() => setViewerState(null)}
+      />
+    </>
   );
 }
