@@ -5496,23 +5496,11 @@ export async function registerRoutes(app: Express) {
 
   // ========== CRM DOCUMENT ATTACHMENTS ==========
   // File attachments for Lead, Account, Contact, and Opportunity records.
-  // Files stored on disk under uploads/documents/; metadata in crm_documents table.
+  // File content stored as base64 in the crm_documents.file_data column (no disk I/O).
   // RBAC: upload/delete require "update" permission; list/download require "read" permission.
 
-  const documentUploadDir = "uploads/documents";
-  const documentStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      const fs = require("fs");
-      fs.mkdirSync(documentUploadDir, { recursive: true });
-      cb(null, documentUploadDir);
-    },
-    filename: (_req, _file, cb) => {
-      const crypto = require("crypto");
-      cb(null, crypto.randomUUID());
-    },
-  });
   const documentUpload = multer({
-    storage: documentStorage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
   });
 
@@ -5522,48 +5510,39 @@ export async function registerRoutes(app: Express) {
   const VALID_CRM_ENTITY_TYPES = ["lead", "account", "contact", "opportunity"] as const;
 
   // POST /api/documents/upload — upload a file attachment
-  // Multer runs first (multipart req.body isn't available until parsed); RBAC checked after.
-  // On any auth/validation failure the uploaded temp file is immediately removed from disk.
+  // Multer (memory storage) runs first (multipart req.body isn't available until parsed); RBAC checked after.
+  // File bytes are base64-encoded and stored in the fileData DB column; no disk writes occur.
   app.post("/api/documents/upload", authenticate, crudRateLimiter, documentUpload.single("file"), async (req: AuthRequest, res) => {
-    const cleanupFile = () => {
-      if (req.file?.path) {
-        const fs = require("fs");
-        try { fs.unlinkSync(req.file!.path); } catch (_e) {}
-      }
-    };
     try {
       const { entityType, entityId } = req.body as { entityType?: string; entityId?: string };
       if (!entityType || !entityId) {
-        cleanupFile();
         return res.status(400).json({ error: "entityType and entityId are required" });
       }
       if (!VALID_CRM_ENTITY_TYPES.includes(entityType as typeof VALID_CRM_ENTITY_TYPES[number])) {
-        cleanupFile();
         return res.status(400).json({ error: "Invalid entityType" });
       }
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[entityType], "update")) {
-        cleanupFile();
         return res.status(403).json({ error: "You do not have permission to upload documents to this record" });
       }
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
+      const fileData = req.file.buffer.toString("base64");
       const { insertCrmDocumentSchema } = await import("@shared/schema");
       const docData = insertCrmDocumentSchema.parse({
         entityType: entityType as CrmDocumentEntityType,
         entityId,
         fileName: req.file.originalname,
-        filePath: req.file.path,
+        fileData,
         contentType: req.file.mimetype,
         size: req.file.size,
         uploadedBy: req.user!.id,
       });
       const doc = await storage.createDocument(docData);
-      await createAudit(req, "create", "CrmDocument", doc.id, null, { ...doc, filePath: undefined });
-      const { filePath: _fp, ...safeDoc } = doc;
+      await createAudit(req, "create", "CrmDocument", doc.id, null, { ...doc, filePath: undefined, fileData: undefined });
+      const { filePath: _fp, fileData: _fd, ...safeDoc } = doc;
       return res.json(safeDoc);
     } catch (error) {
-      cleanupFile();
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
@@ -5591,7 +5570,7 @@ export async function registerRoutes(app: Express) {
       const allUsers = await db.select({ id: users.id, name: users.name }).from(users);
       const userMap = new Map(allUsers.map((u: { id: string; name: string }) => [u.id, u.name]));
       const enriched = docs.map((d) => {
-        const { filePath: _fp, ...safe } = d;
+        const { filePath: _fp, fileData: _fd, ...safe } = d;
         return { ...safe, uploaderName: userMap.get(d.uploadedBy) ?? "Unknown" };
       });
       return res.json(enriched);
@@ -5609,22 +5588,21 @@ export async function registerRoutes(app: Express) {
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "read")) {
         return res.status(403).json({ error: "Forbidden" });
       }
-      const fs = require("fs");
-      if (!fs.existsSync(doc.filePath)) {
-        return res.status(404).json({ error: "File not found on disk" });
+      if (!doc.fileData) {
+        return res.status(404).json({ error: "File data not found" });
       }
+      const buffer = Buffer.from(doc.fileData, "base64");
       res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName)}"`);
       res.setHeader("Content-Type", doc.contentType);
-      res.setHeader("Content-Length", doc.size);
-      fs.createReadStream(doc.filePath).pipe(res);
+      res.setHeader("Content-Length", buffer.length);
+      res.end(buffer);
     } catch (error) {
       console.error("Error downloading document:", error);
       return res.status(500).json({ error: "Failed to download document" });
     }
   });
 
-  // DELETE /api/documents/:id — delete file attachment from disk and DB
-  // File is deleted from disk first so a disk failure does not leave an orphan DB record.
+  // DELETE /api/documents/:id — delete file attachment from DB
   app.delete("/api/documents/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const doc = await storage.getDocumentById(req.params.id);
@@ -5632,12 +5610,8 @@ export async function registerRoutes(app: Express) {
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "update")) {
         return res.status(403).json({ error: "You do not have permission to delete documents from this record" });
       }
-      const fs = require("fs");
-      if (fs.existsSync(doc.filePath)) {
-        fs.unlinkSync(doc.filePath);
-      }
       await storage.deleteDocument(req.params.id);
-      await createAudit(req, "delete", "CrmDocument", req.params.id, { ...doc, filePath: undefined }, null);
+      await createAudit(req, "delete", "CrmDocument", req.params.id, { ...doc, filePath: undefined, fileData: undefined }, null);
       return res.json({ success: true });
     } catch (error) {
       console.error("Error deleting document:", error);
