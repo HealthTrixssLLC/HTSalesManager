@@ -1080,7 +1080,7 @@ export async function registerRoutes(app: Express) {
         lastName: lead.lastName,
         email: lead.email || null,
         phone: lead.phone || null,
-        title: null,
+        title: lead.title || null,
         accountId: accountId,
         ownerId: lead.ownerId,
       });

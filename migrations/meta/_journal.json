@@ -57,6 +57,13 @@
       "when": 1775652000000,
       "tag": "0009_add_crm_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775858400000,
+      "tag": "0010_add_title_to_leads",
+      "breakpoints": true
     }
   ]
 }

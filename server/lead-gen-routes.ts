@@ -926,6 +926,7 @@ export function registerLeadGenRoutes(app: Express) {
         id: crmLeadId,
         firstName: contactData?.firstName || accountData?.name || "Unknown",
         lastName: contactData?.lastName || "",
+        title: contactData?.title || null,
         company: accountData?.name || "",
         email: contactData?.email || null,
         phone: contactData?.phone || null,

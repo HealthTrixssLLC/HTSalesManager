@@ -3573,6 +3573,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "company": {
           "name": "company",
           "type": "text",

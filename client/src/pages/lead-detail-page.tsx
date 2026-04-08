@@ -101,6 +101,7 @@ export default function LeadDetailPage() {
       id: "",
       firstName: "",
       lastName: "",
+      title: "",
       company: "",
       email: "",
       phone: "",
@@ -118,6 +119,7 @@ export default function LeadDetailPage() {
         id: lead.id,
         firstName: lead.firstName,
         lastName: lead.lastName,
+        title: lead.title || "",
         company: lead.company || "",
         email: lead.email || "",
         phone: lead.phone || "",
@@ -183,6 +185,7 @@ export default function LeadDetailPage() {
             <DetailSection title="Lead Information">
               <DetailField label="First Name" value={lead.firstName} />
               <DetailField label="Last Name" value={lead.lastName} />
+              <DetailField label="Title" value={lead.title} />
               <DetailField label="Lead ID" value={lead.id} />
               <DetailField label="Status" value={lead.status} />
               <DetailField label="Company" value={lead.company} />
@@ -382,19 +385,34 @@ export default function LeadDetailPage() {
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="company"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Company</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Acme Corp" {...field} value={field.value || ""} data-testid="input-edit-company" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Company</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Acme Corp" {...field} value={field.value || ""} data-testid="input-edit-company" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Title</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Job title" {...field} value={field.value || ""} data-testid="input-edit-title" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

@@ -47,6 +47,7 @@ const ratingColors: Record<string, string> = {
 const AVAILABLE_COLUMNS: Column[] = [
   { id: "id", label: "ID" },
   { id: "name", label: "Name" },
+  { id: "title", label: "Title" },
   { id: "email", label: "Email" },
   { id: "phone", label: "Phone" },
   { id: "company", label: "Company" },
@@ -106,9 +107,9 @@ export default function LeadsPage() {
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  // Column visibility state
+  // Column visibility state — title is hidden by default
   const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    AVAILABLE_COLUMNS.map(c => c.id)
+    AVAILABLE_COLUMNS.filter(c => c.id !== "title").map(c => c.id)
   );
 
   // Build query string for API
@@ -409,19 +410,34 @@ export default function LeadsPage() {
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="company"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Company</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Acme Corp" {...field} value={field.value || ""} data-testid="input-lead-company" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="company"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Company</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Acme Corp" {...field} value={field.value || ""} data-testid="input-lead-company" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Title</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Job title" {...field} value={field.value || ""} data-testid="input-lead-title" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -747,6 +763,15 @@ export default function LeadsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("title") && (
+                  <SortableTableHeader
+                    label="Title"
+                    field="title"
+                    currentSortBy={sortBy}
+                    currentSortOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                )}
                 {isColumnVisible("email") && (
                   <SortableTableHeader
                     label="Email"
@@ -862,6 +887,11 @@ export default function LeadsPage() {
                     {isColumnVisible("name") && (
                       <TableCell className="font-medium" data-testid={`cell-name-${lead.id}`}>
                         {lead.firstName} {lead.lastName}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("title") && (
+                      <TableCell data-testid={`cell-title-${lead.id}`}>
+                        {lead.title || "-"}
                       </TableCell>
                     )}
                     {isColumnVisible("email") && (

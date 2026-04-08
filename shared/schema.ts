@@ -138,6 +138,7 @@ export const leads = pgTable("leads", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: LEAD-000001
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
+  title: text("title"),
   company: text("company"),
   email: text("email"),
   phone: text("phone"),
