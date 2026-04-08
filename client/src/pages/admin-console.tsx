@@ -738,7 +738,7 @@ export default function AdminConsole() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `healthtrixss-backup-${Date.now()}.htb`;
+      a.download = `healthtrixss-backup-${Date.now()}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -1602,7 +1602,8 @@ export default function AdminConsole() {
                   {createBackupMutation.isPending ? "Creating..." : "Create Backup"}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  The backup covers all database records including document attachment metadata. Binary files uploaded as document attachments are stored in the <code>uploads/documents/</code> directory on disk and are <strong>not</strong> included in the backup file — those files must be backed up separately (e.g., via filesystem snapshot or rsync).
+                  The backup is a ZIP file containing all database records <strong>and</strong> all uploaded document attachments. Restoring it will fully recover both the database and the document files.
+                  Prior backups in the legacy <code>.htb</code> format are still supported — they will restore the database only (document files are not present in the older format).
                 </p>
               </CardContent>
             </Card>
@@ -1633,7 +1634,7 @@ export default function AdminConsole() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".htb"
+                  accept=".htb,.zip"
                   onChange={handleFileSelect}
                   style={{ display: "none" }}
                   data-testid="input-restore-file"

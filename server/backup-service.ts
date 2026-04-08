@@ -3,9 +3,14 @@ import * as schema from "@shared/schema";
 import crypto from "crypto";
 import zlib from "zlib";
 import { promisify } from "util";
+import fs from "fs";
+import path from "path";
+import JSZip from "jszip";
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
+
+const DOCUMENT_UPLOAD_DIR = "uploads/documents";
 
 export interface BackupData {
   version: string;
@@ -157,18 +162,13 @@ export class BackupService {
   }
 
   /**
-   * Creates a full backup of all CRM data with embedded checksum
-   * File format: [checksum (64 bytes hex)][data]
-   * @throws Error if encryptionKey is not provided
+   * Builds the encrypted, compressed, checksum-prepended .htb buffer.
+   * Internal helper shared by createBackup().
    */
-  async createBackup(encryptionKey: string): Promise<{
-    data: Buffer;
+  private async createHtbBuffer(encryptionKey: string): Promise<{
+    htbBuffer: Buffer;
     checksum: string;
-    size: number;
   }> {
-    if (!encryptionKey) {
-      throw new Error("BACKUP_ENCRYPTION_KEY is required for secure backups");
-    }
     
     // Export all data from database in batches to avoid overwhelming Neon serverless
     // Batch 1: Auth & RBAC (smaller tables)
@@ -323,18 +323,78 @@ export class BackupService {
 
     // Prepend checksum to the buffer (64 bytes for hex checksum + newline)
     const checksumBuffer = Buffer.from(checksum + "\n", "utf-8");
-    const finalBuffer = Buffer.concat([checksumBuffer, buffer]);
+    const htbBuffer = Buffer.concat([checksumBuffer, buffer]);
+
+    return { htbBuffer, checksum };
+  }
+
+  /**
+   * Creates a full backup as a ZIP archive.
+   * The ZIP contains:
+   *   backup.htb  — encrypted/compressed/checksummed database JSON (legacy format inside)
+   *   documents/  — all uploaded CRM document files from uploads/documents/
+   *
+   * @throws Error if encryptionKey is not provided
+   */
+  async createBackup(encryptionKey: string): Promise<{
+    data: Buffer;
+    checksum: string;
+    size: number;
+  }> {
+    if (!encryptionKey) {
+      throw new Error("BACKUP_ENCRYPTION_KEY is required for secure backups");
+    }
+
+    // Build the encrypted DB snapshot (.htb)
+    const { htbBuffer, checksum } = await this.createHtbBuffer(encryptionKey);
+
+    // Pack into a ZIP
+    const zip = new JSZip();
+    zip.file("backup.htb", htbBuffer);
+
+    // Include all uploaded document files
+    if (fs.existsSync(DOCUMENT_UPLOAD_DIR)) {
+      const files = fs.readdirSync(DOCUMENT_UPLOAD_DIR);
+      let docCount = 0;
+      for (const filename of files) {
+        const fullPath = path.join(DOCUMENT_UPLOAD_DIR, filename);
+        if (fs.statSync(fullPath).isFile()) {
+          const fileData = fs.readFileSync(fullPath);
+          zip.file(`documents/${filename}`, fileData);
+          docCount++;
+        }
+      }
+      console.log(`[Backup] Added ${docCount} document file(s) to ZIP`);
+    }
+
+    const zipBuffer = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "STORE", // htb is already compressed; docs benefit little
+    });
 
     return {
-      data: finalBuffer,
+      data: zipBuffer,
       checksum,
-      size: finalBuffer.length,
+      size: zipBuffer.length,
     };
   }
 
   /**
-   * Restores data from a backup (extracts embedded checksum and verifies)
-   * Accepts v1.x and v2.x backups. Missing tables in older backups default to empty.
+   * Detects whether a buffer is a ZIP archive by checking for the PK magic bytes.
+   */
+  private isZipBuffer(buf: Buffer): boolean {
+    return buf.length >= 4 &&
+      buf[0] === 0x50 && buf[1] === 0x4B &&
+      (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07) &&
+      (buf[3] === 0x04 || buf[3] === 0x06 || buf[3] === 0x08);
+  }
+
+  /**
+   * Restores data from a backup.
+   * Accepts:
+   *   - New format: ZIP containing backup.htb + documents/ (created by createBackup())
+   *   - Legacy format: raw .htb file (checksum + encrypted + gzipped JSON)
+   * Missing tables in older backups default to empty.
    * @throws Error if encryptionKey is not provided
    */
   async restoreBackup(
@@ -348,14 +408,53 @@ export class BackupService {
     if (!encryptionKey) {
       throw new Error("BACKUP_ENCRYPTION_KEY is required to restore backups");
     }
-    
+
     const errors: string[] = [];
+
+    // --- Format detection: ZIP (new) vs .htb (legacy) ---
+    let htbBuffer = backupBuffer;
+    let documentsFromZip: { filename: string; data: Buffer }[] = [];
+
+    if (this.isZipBuffer(backupBuffer)) {
+      console.log("[Backup] Detected ZIP format — extracting backup.htb and documents...");
+      try {
+        const zip = await JSZip.loadAsync(backupBuffer);
+
+        // Extract backup.htb
+        const htbFile = zip.file("backup.htb");
+        if (!htbFile) {
+          throw new Error("ZIP does not contain backup.htb");
+        }
+        htbBuffer = await htbFile.async("nodebuffer");
+        console.log("[Backup] Extracted backup.htb from ZIP");
+
+        // Extract document files
+        zip.forEach((relativePath, zipEntry) => {
+          if (!zipEntry.dir && relativePath.startsWith("documents/")) {
+            documentsFromZip.push({ filename: path.basename(relativePath), data: null as any });
+          }
+        });
+        // Load the actual file data
+        for (const entry of documentsFromZip) {
+          const zipEntry = zip.file(`documents/${entry.filename}`);
+          if (zipEntry) {
+            entry.data = await zipEntry.async("nodebuffer");
+          }
+        }
+        console.log(`[Backup] Found ${documentsFromZip.length} document file(s) in ZIP`);
+      } catch (zipError) {
+        const msg = zipError instanceof Error ? zipError.message : String(zipError);
+        throw new Error(`Failed to read ZIP backup: ${msg}`);
+      }
+    } else {
+      console.log("[Backup] Detected legacy .htb format — restoring database only");
+    }
 
     try {
       // Extract embedded checksum (first 65 bytes: 64 hex chars + newline)
-      const checksumLine = backupBuffer.subarray(0, 65).toString("utf-8");
+      const checksumLine = htbBuffer.subarray(0, 65).toString("utf-8");
       const embeddedChecksum = checksumLine.trim();
-      const dataBuffer = backupBuffer.subarray(65);
+      const dataBuffer = htbBuffer.subarray(65);
 
       // Verify checksum
       const actualChecksum = crypto
@@ -853,7 +952,7 @@ export class BackupService {
         }
 
         // Restore CRM document attachment metadata (depend on users and CRM entities)
-        // Note: Binary files in uploads/documents/ are NOT included in the backup
+        // Binary files are restored from the ZIP after this transaction completes.
         try {
           await this.batchInsert(tx, schema.crmDocuments, backupData.data.crmDocuments || [], "CRM document metadata");
           recordsRestored += (backupData.data.crmDocuments || []).length;
@@ -861,6 +960,20 @@ export class BackupService {
           throw new Error(`Failed to restore CRM document metadata: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
+
+      // Restore document files from ZIP (after DB transaction so it's only run on success)
+      if (documentsFromZip.length > 0) {
+        fs.mkdirSync(DOCUMENT_UPLOAD_DIR, { recursive: true });
+        let filesWritten = 0;
+        for (const { filename, data } of documentsFromZip) {
+          if (data) {
+            const destPath = path.join(DOCUMENT_UPLOAD_DIR, filename);
+            fs.writeFileSync(destPath, data);
+            filesWritten++;
+          }
+        }
+        console.log(`[Backup] Restored ${filesWritten} document file(s) to ${DOCUMENT_UPLOAD_DIR}`);
+      }
 
       return {
         success: true,

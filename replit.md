@@ -28,7 +28,7 @@ The design adheres to the official Health Trixss Design System, incorporating sp
 *   **Activity Management**: Supports bulk operations, real-time statistics, and a pending activities dashboard with list/calendar views.
 *   **Authentication & Authorization**: Custom JWT-based authentication with bcrypt hashing and Role-Based Access Control (RBAC) supporting roles like Admin, SalesManager, SalesRep, ReadOnly, and ProductDeveloper. Microsoft Entra ID SSO is also integrated.
 *   **Opportunity Management**: Includes a Kanban board, Sales Waterfall Dashboard, required close dates, Implementation Start/End Dates, and an `opportunity_resources` join table for user assignments. A Resource Allocation page provides Pipeline and Resource Timeline views.
-*   **Data Management**: Features configurable ID patterns, audit logging, encrypted backup/restore, CSV import/export with validation, and Dynamics 365 migration tools.
+*   **Data Management**: Features configurable ID patterns, audit logging, encrypted backup/restore (ZIP format including all uploaded document files, with backward-compatible support for legacy .htb backups), CSV import/export with validation, and Dynamics 365 migration tools.
 *   **Admin Console**: Centralized management for users, roles, ID patterns, backups, database reset, account categories, and API Access Logs.
 *   **Dashboard & Analytics**: Provides key insights like pipeline status, win rates, forecasts, an OKR-driven analytics platform, various forecasting models, and sales forecast reports.
 *   **Comments & Tagging**: Threaded commenting with reactions and RBAC, and a multi-tagging system with custom colors.

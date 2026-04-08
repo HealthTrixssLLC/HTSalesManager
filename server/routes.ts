@@ -2619,8 +2619,8 @@ export async function registerRoutes(app: Express) {
         await createAudit(req, "create", "BackupJob", job.id, null, { ...job, status: "completed", checksum, size });
         
         // Send backup file as download
-        res.setHeader("Content-Type", "application/octet-stream");
-        res.setHeader("Content-Disposition", `attachment; filename="healthtrixss-backup-${Date.now()}.htb"`);
+        res.setHeader("Content-Type", "application/zip");
+        res.setHeader("Content-Disposition", `attachment; filename="healthtrixss-backup-${Date.now()}.zip"`);
         res.setHeader("X-Backup-Checksum", checksum);
         return res.send(data);
       } catch (backupError) {
