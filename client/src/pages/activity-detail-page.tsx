@@ -21,6 +21,13 @@ import { AssociationManager, Association } from "@/components/association-manage
 import { Badge } from "@/components/ui/badge";
 import { TagSelector } from "@/components/tag-selector";
 
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 interface ActivityAssociation {
   id: string;
   activityId: string;
@@ -158,8 +165,8 @@ export default function ActivityDetailPage() {
       subject: activity?.subject || "",
       status: activity?.status || "pending",
       priority: activity?.priority || "medium",
-      dueAt: activity?.dueAt ? new Date(activity.dueAt).toISOString().split('T')[0] : null,
-      completedAt: activity?.completedAt ? new Date(activity.completedAt).toISOString().split('T')[0] : null,
+      dueAt: activity?.dueAt ? toLocalDateString(new Date(activity.dueAt)) : null,
+      completedAt: activity?.completedAt ? toLocalDateString(new Date(activity.completedAt)) : null,
       ownerId: activity?.ownerId || "",
       notes: activity?.notes || "",
     },
@@ -168,8 +175,8 @@ export default function ActivityDetailPage() {
   const onSubmit = (data: InsertActivity) => {
     const submitData = {
       ...data,
-      dueAt: data.dueAt ? new Date(data.dueAt).toISOString() : null,
-      completedAt: data.completedAt ? new Date(data.completedAt).toISOString() : null,
+      dueAt: data.dueAt ? new Date(data.dueAt + 'T00:00:00').toISOString() : null,
+      completedAt: data.completedAt ? new Date(data.completedAt + 'T00:00:00').toISOString() : null,
     };
     updateMutation.mutate(submitData as any);
   };
@@ -250,8 +257,8 @@ export default function ActivityDetailPage() {
           subject: activity.subject,
           status: activity.status,
           priority: activity.priority,
-          dueAt: activity.dueAt ? new Date(activity.dueAt).toISOString().split('T')[0] : null,
-          completedAt: activity.completedAt ? new Date(activity.completedAt).toISOString().split('T')[0] : null,
+          dueAt: activity.dueAt ? toLocalDateString(new Date(activity.dueAt)) : null,
+          completedAt: activity.completedAt ? toLocalDateString(new Date(activity.completedAt)) : null,
           ownerId: activity.ownerId,
           notes: activity.notes || "",
         } as any);

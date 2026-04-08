@@ -65,6 +65,15 @@ interface SortConfig {
   direction: "asc" | "desc";
 }
 
+function toLocalDateTimeString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export default function ActivitiesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -548,7 +557,7 @@ export default function ActivitiesPage() {
                           <Input 
                             type="datetime-local" 
                             {...field} 
-                            value={field.value ? new Date(field.value).toISOString().slice(0, 16) : ""}
+                            value={field.value ? toLocalDateTimeString(new Date(field.value)) : ""}
                             onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value).toISOString() : null)}
                             data-testid="input-activity-due-date" 
                           />
