@@ -55,6 +55,9 @@ export interface BackupData {
     researchDocuments?: any[];
     llmConfigurations?: any[];
     aiConfigs?: any[];
+    // CRM Document Attachments metadata
+    // Note: Binary files stored in uploads/documents/ must be backed up separately
+    crmDocuments?: any[];
   };
 }
 
@@ -250,6 +253,11 @@ export class BackupService {
       db.select().from(schema.aiConfigs),
     ]);
 
+    // Batch 11: CRM Document Attachment metadata
+    const [crmDocuments] = await Promise.all([
+      db.select().from(schema.crmDocuments),
+    ]);
+
     const backupData: BackupData = {
       version: this.BACKUP_VERSION,
       timestamp: new Date().toISOString(),
@@ -296,6 +304,7 @@ export class BackupService {
         researchDocuments,
         llmConfigurations,
         aiConfigs,
+        crmDocuments,
       },
     };
 
@@ -413,6 +422,9 @@ export class BackupService {
 
           // Lead generation runs (depend on ICP profiles)
           await tx.delete(schema.leadGenerationRuns);
+
+          // CRM document attachments (reference users and CRM entities)
+          await tx.delete(schema.crmDocuments);
 
           // Research documents (independent, but reference users/runs)
           await tx.delete(schema.researchDocuments);
@@ -838,6 +850,15 @@ export class BackupService {
           recordsRestored += (backupData.data.researchDocuments || []).length;
         } catch (error) {
           throw new Error(`Failed to restore research documents: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore CRM document attachment metadata (depend on users and CRM entities)
+        // Note: Binary files in uploads/documents/ are NOT included in the backup
+        try {
+          await this.batchInsert(tx, schema.crmDocuments, backupData.data.crmDocuments || [], "CRM document metadata");
+          recordsRestored += (backupData.data.crmDocuments || []).length;
+        } catch (error) {
+          throw new Error(`Failed to restore CRM document metadata: ${error instanceof Error ? error.message : String(error)}`);
         }
       });
 

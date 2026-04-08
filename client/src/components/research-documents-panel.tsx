@@ -79,9 +79,9 @@ export function ResearchDocumentsPanel({ entityType, entityId, canManage = true,
   });
 
   const { data: documents = [], isLoading } = useQuery<ResearchDocument[]>({
-    queryKey: ["/api/documents", entityType, entityId],
+    queryKey: ["/api/research-documents", entityType, entityId],
     queryFn: async () => {
-      const res = await fetch(`/api/documents?entityType=${entityType}&entityId=${entityId}`, { credentials: "include" });
+      const res = await fetch(`/api/research-documents?entityType=${entityType}&entityId=${entityId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load documents");
       return res.json();
     },
@@ -90,7 +90,7 @@ export function ResearchDocumentsPanel({ entityType, entityId, canManage = true,
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const res = await apiRequest("POST", "/api/documents", {
+      const res = await apiRequest("POST", "/api/research-documents", {
         ...data,
         entityType,
         entityId,
@@ -98,7 +98,7 @@ export function ResearchDocumentsPanel({ entityType, entityId, canManage = true,
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents", entityType, entityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/research-documents", entityType, entityId] });
       toast({ title: "Document added" });
       setAddOpen(false);
       setForm({ documentType: "manual_note", title: "", content: "" });
@@ -110,11 +110,11 @@ export function ResearchDocumentsPanel({ entityType, entityId, canManage = true,
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await apiRequest("DELETE", `/api/documents/${id}`);
+      const res = await apiRequest("DELETE", `/api/research-documents/${id}`);
       return await res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents", entityType, entityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/research-documents", entityType, entityId] });
       toast({ title: "Document deleted" });
       setDeleteId(null);
     },

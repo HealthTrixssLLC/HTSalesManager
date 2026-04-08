@@ -127,11 +127,11 @@ function ResearchDocsSummary({ candidateAccountId, candidateContactId, candidate
   ].filter(Boolean) as Array<{ key: string; entityType: string; entityId: string }>;
 
   const { data: allDocs = [] } = useQuery<ResearchDocument[]>({
-    queryKey: ["/api/documents/bulk", candidateAccountId, candidateContactId, candidateLeadId],
+    queryKey: ["/api/research-documents/bulk", candidateAccountId, candidateContactId, candidateLeadId],
     queryFn: async () => {
       const results = await Promise.all(
         queries.map(q =>
-          fetch(`/api/documents?entityType=${q.entityType}&entityId=${q.entityId}`, { credentials: "include" })
+          fetch(`/api/research-documents?entityType=${q.entityType}&entityId=${q.entityId}`, { credentials: "include" })
             .then(r => r.ok ? r.json() : [])
         )
       );

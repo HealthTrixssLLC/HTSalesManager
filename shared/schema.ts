@@ -1168,3 +1168,27 @@ export type ResearchDocument = typeof researchDocuments.$inferSelect;
 export const insertAiConfigSchema = createInsertSchema(aiConfigs).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAiConfig = z.infer<typeof insertAiConfigSchema>;
 export type AiConfig = typeof aiConfigs.$inferSelect;
+
+// ========== CRM DOCUMENT ATTACHMENTS ==========
+
+export const crmDocumentEntityTypeEnum = pgEnum("crm_document_entity_type", ["lead", "account", "contact", "opportunity"]);
+
+export const crmDocuments = pgTable("crm_documents", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  entityType: crmDocumentEntityTypeEnum("entity_type").notNull(),
+  entityId: varchar("entity_id", { length: 100 }).notNull(),
+  fileName: text("file_name").notNull(),
+  filePath: text("file_path").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  uploadedBy: varchar("uploaded_by", { length: 50 }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  entityIdx: index("crm_documents_entity_idx").on(table.entityType, table.entityId),
+  uploadedByIdx: index("crm_documents_uploaded_by_idx").on(table.uploadedBy),
+}));
+
+export const insertCrmDocumentSchema = createInsertSchema(crmDocuments).omit({ id: true, createdAt: true });
+export type InsertCrmDocument = z.infer<typeof insertCrmDocumentSchema>;
+export type CrmDocument = typeof crmDocuments.$inferSelect;
+export type CrmDocumentEntityType = "lead" | "account" | "contact" | "opportunity";

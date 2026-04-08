@@ -18,6 +18,7 @@ import type {
   LlmConfiguration, InsertLlmConfiguration,
   Tag, InsertTag,
   EntityTag,
+  CrmDocument, InsertCrmDocument, CrmDocumentEntityType,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -125,6 +126,12 @@ export interface IStorage {
   getLlmConfiguration(): Promise<LlmConfiguration | undefined>;
   upsertLlmConfiguration(config: Partial<InsertLlmConfiguration> & { updatedBy?: string }): Promise<LlmConfiguration>;
   
+  // ========== CRM DOCUMENT ATTACHMENTS ==========
+  getDocuments(entityType: CrmDocumentEntityType, entityId: string): Promise<CrmDocument[]>;
+  getDocumentById(id: string): Promise<CrmDocument | undefined>;
+  createDocument(data: InsertCrmDocument): Promise<CrmDocument>;
+  deleteDocument(id: string): Promise<void>;
+
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;
   

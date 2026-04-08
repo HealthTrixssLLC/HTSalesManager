@@ -1090,6 +1090,38 @@ export class PostgresStorage implements IStorage {
     }
   }
   
+  // ========== CRM DOCUMENT ATTACHMENTS ==========
+
+  async getDocuments(entityType: schema.CrmDocumentEntityType, entityId: string): Promise<schema.CrmDocument[]> {
+    return await db
+      .select()
+      .from(schema.crmDocuments)
+      .where(
+        and(
+          eq(schema.crmDocuments.entityType, entityType),
+          eq(schema.crmDocuments.entityId, entityId)
+        )
+      )
+      .orderBy(desc(schema.crmDocuments.createdAt));
+  }
+
+  async getDocumentById(id: string): Promise<schema.CrmDocument | undefined> {
+    const [doc] = await db
+      .select()
+      .from(schema.crmDocuments)
+      .where(eq(schema.crmDocuments.id, id));
+    return doc;
+  }
+
+  async createDocument(data: schema.InsertCrmDocument): Promise<schema.CrmDocument> {
+    const [doc] = await db.insert(schema.crmDocuments).values(data).returning();
+    return doc;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    await db.delete(schema.crmDocuments).where(eq(schema.crmDocuments.id, id));
+  }
+
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {

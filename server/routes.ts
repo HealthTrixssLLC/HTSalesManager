@@ -47,6 +47,7 @@ import {
   activities,
   activityAssociations,
   auditLogs,
+  type CrmDocumentEntityType,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
 import * as analyticsService from "./analytics-service";
@@ -5493,14 +5494,167 @@ export async function registerRoutes(app: Express) {
   // Mount external API routes under /api/v1/external
   app.use("/api/v1/external", externalApiRoutes);
 
+  // ========== CRM DOCUMENT ATTACHMENTS ==========
+  // File attachments for Lead, Account, Contact, and Opportunity records.
+  // Files stored on disk under uploads/documents/; metadata in crm_documents table.
+  // RBAC: upload/delete require "update" permission; list/download require "read" permission.
+
+  const documentUploadDir = "uploads/documents";
+  const documentStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      const fs = require("fs");
+      fs.mkdirSync(documentUploadDir, { recursive: true });
+      cb(null, documentUploadDir);
+    },
+    filename: (_req, _file, cb) => {
+      const crypto = require("crypto");
+      cb(null, crypto.randomUUID());
+    },
+  });
+  const documentUpload = multer({
+    storage: documentStorage,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+  });
+
+  const CRM_ENTITY_RESOURCE_MAP: Record<string, string> = {
+    lead: "Lead", account: "Account", contact: "Contact", opportunity: "Opportunity",
+  };
+  const VALID_CRM_ENTITY_TYPES = ["lead", "account", "contact", "opportunity"] as const;
+
+  // POST /api/documents/upload — upload a file attachment
+  // Multer runs first (multipart req.body isn't available until parsed); RBAC checked after.
+  // On any auth/validation failure the uploaded temp file is immediately removed from disk.
+  app.post("/api/documents/upload", authenticate, crudRateLimiter, documentUpload.single("file"), async (req: AuthRequest, res) => {
+    const cleanupFile = () => {
+      if (req.file?.path) {
+        const fs = require("fs");
+        try { fs.unlinkSync(req.file!.path); } catch (_e) {}
+      }
+    };
+    try {
+      const { entityType, entityId } = req.body as { entityType?: string; entityId?: string };
+      if (!entityType || !entityId) {
+        cleanupFile();
+        return res.status(400).json({ error: "entityType and entityId are required" });
+      }
+      if (!VALID_CRM_ENTITY_TYPES.includes(entityType as typeof VALID_CRM_ENTITY_TYPES[number])) {
+        cleanupFile();
+        return res.status(400).json({ error: "Invalid entityType" });
+      }
+      if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[entityType], "update")) {
+        cleanupFile();
+        return res.status(403).json({ error: "You do not have permission to upload documents to this record" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+      const { insertCrmDocumentSchema } = await import("@shared/schema");
+      const docData = insertCrmDocumentSchema.parse({
+        entityType: entityType as CrmDocumentEntityType,
+        entityId,
+        fileName: req.file.originalname,
+        filePath: req.file.path,
+        contentType: req.file.mimetype,
+        size: req.file.size,
+        uploadedBy: req.user!.id,
+      });
+      const doc = await storage.createDocument(docData);
+      await createAudit(req, "create", "CrmDocument", doc.id, null, { ...doc, filePath: undefined });
+      const { filePath: _fp, ...safeDoc } = doc;
+      return res.json(safeDoc);
+    } catch (error) {
+      cleanupFile();
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Error uploading document:", error);
+      return res.status(500).json({ error: "Failed to upload document" });
+    }
+  });
+
+  // GET /api/documents?entityType=X&entityId=Y — list file attachments for a record
+  app.get("/api/documents", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const rawEntityType = req.query.entityType as string | undefined;
+      const entityId = req.query.entityId as string | undefined;
+      if (!rawEntityType || !entityId) {
+        return res.status(400).json({ error: "entityType and entityId are required" });
+      }
+      if (!VALID_CRM_ENTITY_TYPES.includes(rawEntityType as typeof VALID_CRM_ENTITY_TYPES[number])) {
+        return res.status(400).json({ error: "Invalid entityType" });
+      }
+      const entityType = rawEntityType as CrmDocumentEntityType;
+      if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[entityType], "read")) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const docs = await storage.getDocuments(entityType, entityId);
+      const allUsers = await db.select({ id: users.id, name: users.name }).from(users);
+      const userMap = new Map(allUsers.map((u: { id: string; name: string }) => [u.id, u.name]));
+      const enriched = docs.map((d) => {
+        const { filePath: _fp, ...safe } = d;
+        return { ...safe, uploaderName: userMap.get(d.uploadedBy) ?? "Unknown" };
+      });
+      return res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+      return res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // GET /api/documents/:id/download — stream file attachment to client
+  app.get("/api/documents/:id/download", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const doc = await storage.getDocumentById(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Document not found" });
+      if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "read")) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const fs = require("fs");
+      if (!fs.existsSync(doc.filePath)) {
+        return res.status(404).json({ error: "File not found on disk" });
+      }
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.fileName)}"`);
+      res.setHeader("Content-Type", doc.contentType);
+      res.setHeader("Content-Length", doc.size);
+      fs.createReadStream(doc.filePath).pipe(res);
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      return res.status(500).json({ error: "Failed to download document" });
+    }
+  });
+
+  // DELETE /api/documents/:id — delete file attachment from disk and DB
+  // File is deleted from disk first so a disk failure does not leave an orphan DB record.
+  app.delete("/api/documents/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const doc = await storage.getDocumentById(req.params.id);
+      if (!doc) return res.status(404).json({ error: "Document not found" });
+      if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "update")) {
+        return res.status(403).json({ error: "You do not have permission to delete documents from this record" });
+      }
+      const fs = require("fs");
+      if (fs.existsSync(doc.filePath)) {
+        fs.unlinkSync(doc.filePath);
+      }
+      await storage.deleteDocument(req.params.id);
+      await createAudit(req, "delete", "CrmDocument", req.params.id, { ...doc, filePath: undefined }, null);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      return res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
   // ========== RESEARCH DOCUMENTS ==========
+  // NOTE: Research document routes are at /api/research-documents/* to avoid conflict
+  // with the CRM file attachment routes at /api/documents/* (task #37 contract).
 
   const VALID_ENTITY_TYPES = ["candidate_account", "candidate_contact", "candidate_lead", "lead", "account", "contact", "opportunity"] as const;
   type ResearchDocEntityType = typeof VALID_ENTITY_TYPES[number];
   const entityTypeSchema = z.enum(VALID_ENTITY_TYPES);
 
-  // GET /api/documents?entityType=&entityId= — list documents for a record
-  app.get("/api/documents", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  // GET /api/research-documents?entityType=&entityId= — list research documents for a record
+  app.get("/api/research-documents", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const parsed = entityTypeSchema.safeParse(req.query.entityType);
       if (!parsed.success) {
@@ -5522,13 +5676,13 @@ export async function registerRoutes(app: Express) {
         .orderBy(desc(researchDocuments.createdAt));
       return res.json(docs);
     } catch (error) {
-      console.error("Error fetching documents:", error);
+      console.error("Error fetching research documents:", error);
       return res.status(500).json({ error: "Failed to fetch documents" });
     }
   });
 
-  // POST /api/documents — create a manual document
-  app.post("/api/documents", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+  // POST /api/research-documents — create a manual research document
+  app.post("/api/research-documents", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { researchDocuments, insertResearchDocumentSchema } = await import("@shared/schema");
       const data = insertResearchDocumentSchema.parse({ ...req.body, createdBy: req.user?.id });
@@ -5539,18 +5693,17 @@ export async function registerRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation failed", details: error.errors });
       }
-      console.error("Error creating document:", error);
+      console.error("Error creating research document:", error);
       return res.status(500).json({ error: "Failed to create document" });
     }
   });
 
-  // DELETE /api/documents/:id — delete a document
-  app.delete("/api/documents/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
+  // DELETE /api/research-documents/:id — delete a research document
+  app.delete("/api/research-documents/:id", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { researchDocuments } = await import("@shared/schema");
       const [existing] = await db.select().from(researchDocuments).where(eq(researchDocuments.id, req.params.id));
       if (!existing) return res.status(404).json({ error: "Document not found" });
-      // Only admins/managers or the document creator can delete
       const user = req.user!;
       const isAdmin = await hasAnyRole(user.id, ["Admin", "SalesManager"]);
       if (!isAdmin && existing.createdBy !== user.id) {
@@ -5560,7 +5713,7 @@ export async function registerRoutes(app: Express) {
       await createAudit(req, "delete", "ResearchDocument", req.params.id, existing, null);
       return res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting document:", error);
+      console.error("Error deleting research document:", error);
       return res.status(500).json({ error: "Failed to delete document" });
     }
   });

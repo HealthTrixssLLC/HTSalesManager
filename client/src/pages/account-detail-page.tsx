@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
+import { DocumentsSection } from "@/components/documents-section";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { QuickLogActivity } from "@/components/quick-log-activity";
 import { GlobalQuickAdd, type QuickAddContext } from "@/components/global-quick-add";
@@ -199,6 +200,11 @@ export default function AccountDetailPage() {
               />
             </CardContent>
           </Card>
+
+          <DocumentsSection
+            entityType="account"
+            entityId={account.id}
+          />
 
           <CommentSystem entity="accounts" entityId={account.id} />
 

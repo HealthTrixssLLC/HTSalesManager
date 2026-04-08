@@ -50,6 +50,13 @@
       "when": 1775512800000,
       "tag": "0008_add_opportunity_category_area_description",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775652000000,
+      "tag": "0009_add_crm_documents",
+      "breakpoints": true
     }
   ]
 }

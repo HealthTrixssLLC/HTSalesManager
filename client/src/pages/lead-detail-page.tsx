@@ -5,6 +5,7 @@ import { Loader2, ArrowRight } from "lucide-react";
 import { DetailPageLayout, DetailSection, DetailField } from "@/components/detail-page-layout";
 import { RelatedEntitiesSection } from "@/components/related-entities-section";
 import { CommentSystem } from "@/components/comment-system";
+import { DocumentsSection } from "@/components/documents-section";
 import { ResearchDocumentsPanel } from "@/components/research-documents-panel";
 import { LeadConversionWizard } from "@/components/lead-conversion-wizard";
 import { QuickLogActivity } from "@/components/quick-log-activity";
@@ -223,6 +224,11 @@ export default function LeadDetailPage() {
                 />
               </CardContent>
             </Card>
+
+            <DocumentsSection
+              entityType="lead"
+              entityId={lead.id}
+            />
 
             <CommentSystem entity="leads" entityId={lead.id} />
 

@@ -1592,7 +1592,7 @@ export default function AdminConsole() {
                 </CardTitle>
                 <CardDescription>Export complete database snapshot</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
                 <Button
                   onClick={() => createBackupMutation.mutate()}
                   disabled={createBackupMutation.isPending}
@@ -1601,6 +1601,9 @@ export default function AdminConsole() {
                   <Download className="h-4 w-4 mr-2" />
                   {createBackupMutation.isPending ? "Creating..." : "Create Backup"}
                 </Button>
+                <p className="text-xs text-muted-foreground">
+                  The backup covers all database records including document attachment metadata. Binary files uploaded as document attachments are stored in the <code>uploads/documents/</code> directory on disk and are <strong>not</strong> included in the backup file — those files must be backed up separately (e.g., via filesystem snapshot or rsync).
+                </p>
               </CardContent>
             </Card>
 
