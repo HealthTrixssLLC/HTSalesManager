@@ -127,7 +127,7 @@ export default function AccountsPage() {
   });
 
   const { data: categories } = useQuery<AccountCategory[]>({
-    queryKey: ["/api/admin/categories"],
+    queryKey: ["/api/account-categories"],
   });
 
   const { data: users } = useQuery<Array<{ id: string; name: string }>>({
