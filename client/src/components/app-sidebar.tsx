@@ -57,8 +57,10 @@ export function AppSidebar() {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
-  const visibleMenuItems = isProductDeveloper ? productDeveloperMenuItems : menuItems;
-  const visibleAdminItems = isProductDeveloper ? [] : adminItems;
+  const isResourceOnly = user?.roles?.some(r => r.name === "Resource") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly", "ProductDeveloper"].includes(r.name));
+  const isLimitedRole = isProductDeveloper || isResourceOnly;
+  const visibleMenuItems = isLimitedRole ? productDeveloperMenuItems : menuItems;
+  const visibleAdminItems = isLimitedRole ? [] : adminItems;
 
   const routeMatch = useMemo(() => {
     const patterns = [
@@ -162,7 +164,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {!isProductDeveloper && (
+          {!isLimitedRole && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-white/40 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
               Lead Generation
@@ -232,7 +234,7 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="px-4 py-4 border-t border-white/10">
-          {!isProductDeveloper && (
+          {!isLimitedRole && (
           <Button
             variant="ghost"
             className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-2 mb-3"

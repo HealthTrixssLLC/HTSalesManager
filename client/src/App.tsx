@@ -98,7 +98,9 @@ function CrmGuardedRoute({
     );
   }
 
-  const isLimitedRole = user.roles?.some(r => r.name === "ProductDeveloper") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly", "Resource"].includes(r.name));
+  const isLimitedRole =
+    (user.roles?.some(r => r.name === "ProductDeveloper") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly", "Resource"].includes(r.name))) ||
+    (user.roles?.some(r => r.name === "Resource") && !user.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly", "ProductDeveloper"].includes(r.name)));
 
   if (isLimitedRole) {
     return (
