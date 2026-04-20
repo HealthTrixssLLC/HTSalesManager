@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff, Search } from "lucide-react";
+import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff, Search, GitMerge } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
 import { Slider } from "@/components/ui/slider";
 import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
@@ -597,6 +599,9 @@ export default function AdminConsole() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editUserData, setEditUserData] = useState<{name: string; email: string; roleId: string}>({name: "", email: "", roleId: ""});
   const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [mergePrimaryUserId, setMergePrimaryUserId] = useState<string>("");
   const [newUserData, setNewUserData] = useState<{name: string; email: string; password: string; roleId: string}>({
     name: "", email: "", password: "", roleId: ""
   });
@@ -698,6 +703,27 @@ export default function AdminConsole() {
     },
   });
   
+  const mergeUsersMutation = useMutation({
+    mutationFn: async (data: { primaryUserId: string; secondaryUserIds: string[] }) => {
+      const res = await apiRequest("POST", "/api/admin/users/merge", data);
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      toast({ title: "Users merged successfully" });
+      setMergeDialogOpen(false);
+      setSelectedUserIds(new Set());
+      setMergePrimaryUserId("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to merge users",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const updatePatternMutation = useMutation({
     mutationFn: async (data: { id: string; pattern: string; startValue?: number }) => {
       const res = await apiRequest("PATCH", `/api/admin/id-patterns/${data.id}`, { 
@@ -1164,21 +1190,50 @@ export default function AdminConsole() {
         <TabsContent value="users" className="space-y-4">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
                   <CardTitle>User Management</CardTitle>
                   <CardDescription>Manage user accounts and access</CardDescription>
                 </div>
-                <Button onClick={() => setCreateUserOpen(true)} data-testid="button-create-user">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add User
-                </Button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {selectedUserIds.size >= 2 && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setMergePrimaryUserId("");
+                        setMergeDialogOpen(true);
+                      }}
+                      data-testid="button-merge-users"
+                    >
+                      <GitMerge className="h-4 w-4 mr-2" />
+                      Merge Users ({selectedUserIds.size})
+                    </Button>
+                  )}
+                  <Button onClick={() => setCreateUserOpen(true)} data-testid="button-create-user">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add User
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={users && users.length > 0 && users.every(u => selectedUserIds.has(u.id))}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedUserIds(new Set(users?.map(u => u.id) ?? []));
+                          } else {
+                            setSelectedUserIds(new Set());
+                          }
+                        }}
+                        data-testid="checkbox-select-all-users"
+                        aria-label="Select all users"
+                      />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
@@ -1190,8 +1245,25 @@ export default function AdminConsole() {
                 <TableBody>
                   {users?.map((user) => {
                     const isEditing = editingUserId === user.id;
+                    const isSelected = selectedUserIds.has(user.id);
                     return (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedUserIds);
+                              if (checked) {
+                                next.add(user.id);
+                              } else {
+                                next.delete(user.id);
+                              }
+                              setSelectedUserIds(next);
+                            }}
+                            data-testid={`checkbox-user-${user.id}`}
+                            aria-label={`Select ${user.name}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           {isEditing ? (
                             <Input 
@@ -2408,6 +2480,97 @@ export default function AdminConsole() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Merge Users Dialog */}
+      <Dialog
+        open={mergeDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMergeDialogOpen(false);
+            setMergePrimaryUserId("");
+          }
+        }}
+      >
+        <DialogContent data-testid="dialog-merge-users">
+          <DialogHeader>
+            <DialogTitle>Merge Users</DialogTitle>
+            <DialogDescription>
+              Select the primary (surviving) user. All CRM records owned by the other users will be
+              re-attributed to the primary user. The other accounts will be permanently deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-md border p-3 flex items-start gap-2 bg-destructive/10 text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <p className="text-sm">
+                This action is irreversible. The secondary user accounts will be permanently deleted after the merge.
+              </p>
+            </div>
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Choose the primary (surviving) user:</Label>
+              <RadioGroup
+                value={mergePrimaryUserId}
+                onValueChange={setMergePrimaryUserId}
+                data-testid="radio-group-merge-primary"
+              >
+                {users?.filter(u => selectedUserIds.has(u.id)).map((user) => (
+                  <div key={user.id} className="flex items-start gap-3 rounded-md border p-3">
+                    <RadioGroupItem
+                      value={user.id}
+                      id={`merge-primary-${user.id}`}
+                      data-testid={`radio-merge-primary-${user.id}`}
+                    />
+                    <Label htmlFor={`merge-primary-${user.id}`} className="flex-1 cursor-pointer space-y-0.5">
+                      <div className="font-medium">{user.name}</div>
+                      <div className="text-xs text-muted-foreground">{user.email}</div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Badge variant="secondary" className={getRoleBadgeClass(user.roles[0]?.name)}>
+                          {user.roles[0]?.name || "No role"}
+                        </Badge>
+                        {mergePrimaryUserId !== user.id && (
+                          <Badge variant="outline" className="text-destructive border-destructive/40 text-xs">
+                            Will be deleted
+                          </Badge>
+                        )}
+                        {mergePrimaryUserId === user.id && (
+                          <Badge variant="outline" className="text-xs">
+                            Primary
+                          </Badge>
+                        )}
+                      </div>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMergeDialogOpen(false);
+                setMergePrimaryUserId("");
+              }}
+              data-testid="button-merge-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!mergePrimaryUserId || mergeUsersMutation.isPending}
+              onClick={() => {
+                if (!mergePrimaryUserId) return;
+                const secondaryUserIds = Array.from(selectedUserIds).filter(id => id !== mergePrimaryUserId);
+                mergeUsersMutation.mutate({ primaryUserId: mergePrimaryUserId, secondaryUserIds });
+              }}
+              data-testid="button-merge-confirm"
+            >
+              <GitMerge className="h-4 w-4 mr-2" />
+              {mergeUsersMutation.isPending ? "Merging..." : "Confirm Merge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -132,6 +132,9 @@ export interface IStorage {
   createDocument(data: InsertCrmDocument): Promise<CrmDocument>;
   deleteDocument(id: string): Promise<void>;
 
+  // ========== USER MERGE ==========
+  mergeUsers(primaryId: string, secondaryIds: string[]): Promise<void>;
+
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;
   

@@ -2464,6 +2464,60 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  app.post("/api/admin/users/merge", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const { primaryUserId, secondaryUserIds } = req.body;
+
+      if (!primaryUserId || !Array.isArray(secondaryUserIds) || secondaryUserIds.length === 0) {
+        return res.status(400).json({ error: "primaryUserId and at least one secondaryUserId are required" });
+      }
+
+      // Guard: primary must not appear in secondary list
+      if (secondaryUserIds.includes(primaryUserId)) {
+        return res.status(400).json({ error: "primaryUserId cannot also appear in secondaryUserIds" });
+      }
+
+      // Guard: no duplicate secondary IDs
+      const uniqueSecondaryIds = [...new Set(secondaryUserIds)];
+      if (uniqueSecondaryIds.length !== secondaryUserIds.length) {
+        return res.status(400).json({ error: "secondaryUserIds must not contain duplicates" });
+      }
+
+      // Guard: prevent the currently logged-in admin from appearing in the merge at all (primary or secondary)
+      const actorId = req.user?.id;
+      if (actorId && (primaryUserId === actorId || secondaryUserIds.includes(actorId))) {
+        return res.status(400).json({ error: "Cannot merge your own account" });
+      }
+
+      // Guard: primary user must exist
+      const primaryUser = await storage.getUserById(primaryUserId);
+      if (!primaryUser) {
+        return res.status(404).json({ error: "Primary user not found" });
+      }
+
+      // Guard: all secondary users must exist
+      for (const secondaryId of secondaryUserIds) {
+        const secondaryUser = await storage.getUserById(secondaryId);
+        if (!secondaryUser) {
+          return res.status(404).json({ error: `Secondary user ${secondaryId} not found` });
+        }
+      }
+
+      await storage.mergeUsers(primaryUserId, secondaryUserIds);
+
+      await createAudit(req, "merge", "User", primaryUserId, null, {
+        primaryUserId,
+        secondaryUserIds,
+        message: `Merged ${secondaryUserIds.length} user(s) into primary user`,
+      });
+
+      return res.json({ success: true, primaryUserId, mergedCount: secondaryUserIds.length });
+    } catch (error) {
+      console.error("Error merging users:", error);
+      return res.status(500).json({ error: "Failed to merge users" });
+    }
+  });
+
   app.get("/api/admin/roles", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const roles = await storage.getAllRoles();

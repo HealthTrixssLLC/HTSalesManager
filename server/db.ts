@@ -150,7 +150,80 @@ export class PostgresStorage implements IStorage {
     await db.delete(schema.userRoles).where(eq(schema.userRoles.userId, userId));
     await db.insert(schema.userRoles).values({ userId, roleId: newRoleId });
   }
-  
+
+  async mergeUsers(primaryId: string, secondaryIds: string[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      // Re-attribute core CRM FK references
+      await tx.update(schema.accounts).set({ ownerId: primaryId }).where(inArray(schema.accounts.ownerId, secondaryIds));
+      await tx.update(schema.contacts).set({ ownerId: primaryId }).where(inArray(schema.contacts.ownerId, secondaryIds));
+      await tx.update(schema.leads).set({ ownerId: primaryId }).where(inArray(schema.leads.ownerId, secondaryIds));
+      await tx.update(schema.opportunities).set({ ownerId: primaryId }).where(inArray(schema.opportunities.ownerId, secondaryIds));
+      await tx.update(schema.activities).set({ ownerId: primaryId }).where(inArray(schema.activities.ownerId, secondaryIds));
+      await tx.update(schema.auditLogs).set({ actorId: primaryId }).where(inArray(schema.auditLogs.actorId, secondaryIds));
+      await tx.update(schema.comments).set({ createdBy: primaryId }).where(inArray(schema.comments.createdBy, secondaryIds));
+      await tx.update(schema.comments).set({ editedBy: primaryId }).where(inArray(schema.comments.editedBy, secondaryIds));
+      await tx.update(schema.commentAttachments).set({ uploadedBy: primaryId }).where(inArray(schema.commentAttachments.uploadedBy, secondaryIds));
+      await tx.update(schema.apiKeys).set({ createdBy: primaryId }).where(inArray(schema.apiKeys.createdBy, secondaryIds));
+      await tx.update(schema.apiKeys).set({ revokedBy: primaryId }).where(inArray(schema.apiKeys.revokedBy, secondaryIds));
+      await tx.update(schema.tags).set({ createdBy: primaryId }).where(inArray(schema.tags.createdBy, secondaryIds));
+      await tx.update(schema.entityTags).set({ createdBy: primaryId }).where(inArray(schema.entityTags.createdBy, secondaryIds));
+      await tx.update(schema.backupJobs).set({ initiatedBy: primaryId }).where(inArray(schema.backupJobs.initiatedBy, secondaryIds));
+      await tx.update(schema.crmDocuments).set({ uploadedBy: primaryId }).where(inArray(schema.crmDocuments.uploadedBy, secondaryIds));
+      await tx.update(schema.llmConfigurations).set({ updatedBy: primaryId }).where(inArray(schema.llmConfigurations.updatedBy, secondaryIds));
+
+      // Re-attribute lead-generation module FK references
+      await tx.update(schema.researchDocuments).set({ createdBy: primaryId }).where(inArray(schema.researchDocuments.createdBy, secondaryIds));
+      await tx.update(schema.icpProfiles).set({ createdBy: primaryId }).where(inArray(schema.icpProfiles.createdBy, secondaryIds));
+      await tx.update(schema.icpProfileVersions).set({ createdBy: primaryId }).where(inArray(schema.icpProfileVersions.createdBy, secondaryIds));
+      await tx.update(schema.offers).set({ createdBy: primaryId }).where(inArray(schema.offers.createdBy, secondaryIds));
+      await tx.update(schema.taskPlaybooks).set({ createdBy: primaryId }).where(inArray(schema.taskPlaybooks.createdBy, secondaryIds));
+      await tx.update(schema.leadGenerationRuns).set({ ownerId: primaryId }).where(inArray(schema.leadGenerationRuns.ownerId, secondaryIds));
+      await tx.update(schema.leadGenerationRuns).set({ createdBy: primaryId }).where(inArray(schema.leadGenerationRuns.createdBy, secondaryIds));
+      await tx.update(schema.candidateLeads).set({ reviewedBy: primaryId }).where(inArray(schema.candidateLeads.reviewedBy, secondaryIds));
+      await tx.update(schema.candidateLeads).set({ createdBy: primaryId }).where(inArray(schema.candidateLeads.createdBy, secondaryIds));
+      await tx.update(schema.reviewDecisions).set({ decidedBy: primaryId }).where(inArray(schema.reviewDecisions.decidedBy, secondaryIds));
+      await tx.update(schema.lgAuditEvents).set({ actorId: primaryId }).where(inArray(schema.lgAuditEvents.actorId, secondaryIds));
+      await tx.update(schema.aiConfigs).set({ createdBy: primaryId }).where(inArray(schema.aiConfigs.createdBy, secondaryIds));
+
+      // Re-attribute savedFilters (CASCADE DELETE, must re-attribute before user delete)
+      await tx.update(schema.savedFilters).set({ userId: primaryId }).where(inArray(schema.savedFilters.userId, secondaryIds));
+
+      // Handle opportunityResources: respect unique constraint on (opportunityId, userId)
+      for (const secondaryId of secondaryIds) {
+        const secondaryResources = await tx.select().from(schema.opportunityResources).where(eq(schema.opportunityResources.userId, secondaryId));
+        for (const resource of secondaryResources) {
+          const existing = await tx.select().from(schema.opportunityResources)
+            .where(and(
+              eq(schema.opportunityResources.opportunityId, resource.opportunityId),
+              eq(schema.opportunityResources.userId, primaryId)
+            ))
+            .limit(1);
+          if (existing.length > 0) {
+            await tx.delete(schema.opportunityResources).where(eq(schema.opportunityResources.id, resource.id));
+          } else {
+            await tx.update(schema.opportunityResources).set({ userId: primaryId }).where(eq(schema.opportunityResources.id, resource.id));
+          }
+        }
+      }
+
+      // Handle userRoles: add secondary users' roles to primary if not already assigned
+      const primaryRoles = await tx.select().from(schema.userRoles).where(eq(schema.userRoles.userId, primaryId));
+      const primaryRoleIds = new Set(primaryRoles.map(r => r.roleId));
+      for (const secondaryId of secondaryIds) {
+        const secondaryRoles = await tx.select().from(schema.userRoles).where(eq(schema.userRoles.userId, secondaryId));
+        for (const role of secondaryRoles) {
+          if (!primaryRoleIds.has(role.roleId)) {
+            await tx.insert(schema.userRoles).values({ userId: primaryId, roleId: role.roleId });
+            primaryRoleIds.add(role.roleId);
+          }
+        }
+      }
+
+      // Delete secondary users (cascades: user_roles, comment_reactions, comment_subscriptions)
+      await tx.delete(schema.users).where(inArray(schema.users.id, secondaryIds));
+    });
+  }
+
   async assignPermissionToRole(roleId: string, permissionId: string): Promise<void> {
     await db.insert(schema.rolePermissions).values({ roleId, permissionId });
   }
