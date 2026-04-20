@@ -47,6 +47,7 @@ import {
   activities,
   activityAssociations,
   auditLogs,
+  llmConfigurations,
   type CrmDocumentEntityType,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
@@ -5406,10 +5407,10 @@ export async function registerRoutes(app: Express) {
     let azureSource: "env" | "db_llm_config" | null = null;
     try {
       const llmRows = await db.select({
-        provider: schema.llmConfigurations.provider,
-        encryptedApiKey: schema.llmConfigurations.encryptedApiKey,
-        baseUrl: schema.llmConfigurations.baseUrl,
-      }).from(schema.llmConfigurations).orderBy(desc(schema.llmConfigurations.updatedAt)).limit(1);
+        provider: llmConfigurations.provider,
+        encryptedApiKey: llmConfigurations.encryptedApiKey,
+        baseUrl: llmConfigurations.baseUrl,
+      }).from(llmConfigurations).orderBy(desc(llmConfigurations.updatedAt)).limit(1);
       const llmCfg = llmRows[0];
       if (llmCfg && llmCfg.provider === "azure" && llmCfg.encryptedApiKey && llmCfg.baseUrl) {
         azureDbConfigured = true;
@@ -5448,8 +5449,8 @@ export async function registerRoutes(app: Express) {
           provider = new AzureWebSearchProvider();
         } else {
           // Fall back to DB LLM config
-          const llmRows = await db.select().from(schema.llmConfigurations)
-            .orderBy(desc(schema.llmConfigurations.updatedAt)).limit(1);
+          const llmRows = await db.select().from(llmConfigurations)
+            .orderBy(desc(llmConfigurations.updatedAt)).limit(1);
           const cfg = llmRows[0];
           if (!cfg || cfg.provider !== "azure" || !cfg.encryptedApiKey || !cfg.baseUrl) {
             return res.json({
