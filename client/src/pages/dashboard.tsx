@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save, Download } from "lucide-react";
+import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign, Save, Download, Lock } from "lucide-react";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
 import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
 import { useToast } from "@/hooks/use-toast";
@@ -83,6 +84,7 @@ export default function Dashboard() {
     endDate: ""
   });
   const { toast } = useToast();
+  const canViewFinancials = useFinancialAccess();
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", selectedYear],
@@ -222,10 +224,12 @@ export default function Dashboard() {
           <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Overview of your sales pipeline and activities</p>
         </div>
-        <Button onClick={() => setIsReportDialogOpen(true)} data-testid="button-download-forecast">
-          <Download className="h-4 w-4 mr-2" />
-          Download Sales Forecast
-        </Button>
+        {canViewFinancials && (
+          <Button onClick={() => setIsReportDialogOpen(true)} data-testid="button-download-forecast">
+            <Download className="h-4 w-4 mr-2" />
+            Download Sales Forecast
+          </Button>
+        )}
       </div>
 
       {/* VR-006: Stat Cards — teal icon squares, bold metrics */}
@@ -289,6 +293,15 @@ export default function Dashboard() {
 
       {/* Charts */}
       <div className="grid gap-4 md:grid-cols-2">
+        {!canViewFinancials ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-muted-foreground font-medium">Not available for your role</p>
+              <p className="text-sm text-muted-foreground mt-1">Sales pipeline financials are restricted to commercial roles.</p>
+            </CardContent>
+          </Card>
+        ) : (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -434,6 +447,7 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -461,14 +475,16 @@ export default function Dashboard() {
                   fontSize={12}
                   label={{ value: 'Count', angle: -90, position: 'insideLeft', fontSize: 11 }}
                 />
-                <YAxis 
-                  yAxisId="right"
-                  orientation="right"
-                  stroke="hsl(var(--muted-foreground))" 
-                  fontSize={12}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                  label={{ value: 'Value', angle: 90, position: 'insideRight', fontSize: 11 }}
-                />
+                {canViewFinancials && (
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12}
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                    label={{ value: 'Value', angle: 90, position: 'insideRight', fontSize: 11 }}
+                  />
+                )}
                 <Tooltip 
                   contentStyle={{
                     backgroundColor: "hsl(var(--card))",
@@ -477,6 +493,7 @@ export default function Dashboard() {
                   }}
                   formatter={(value: number, name: string) => {
                     if (name === "count") return [value, "Opportunities"];
+                    if (!canViewFinancials) return null;
                     return [`$${value.toLocaleString()}`, "Total Value"];
                   }}
                   labelFormatter={(label) => {
@@ -493,15 +510,17 @@ export default function Dashboard() {
                   radius={[4, 4, 0, 0]}
                   name="count"
                 />
-                <Line 
-                  yAxisId="right"
-                  type="monotone" 
-                  dataKey="value" 
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                  name="value"
-                />
+                {canViewFinancials && (
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="value" 
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                    name="value"
+                  />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>

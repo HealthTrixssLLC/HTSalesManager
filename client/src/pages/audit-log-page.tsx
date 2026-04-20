@@ -1,7 +1,7 @@
 // Audit Log page with detailed activity tracking
 // Based on design_guidelines.md enterprise SaaS patterns
 
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, History, ChevronDown, ChevronRight } from "lucide-react";
 import { AuditLog } from "@shared/schema";
@@ -116,8 +116,8 @@ export default function AuditLogPage() {
                 {auditLogs.map((log) => {
                   const isExpanded = expandedRows.has(log.id);
                   return (
-                    <>
-                      <TableRow key={log.id} data-testid={`row-audit-${log.id}`}>
+                    <Fragment key={log.id}>
+                      <TableRow data-testid={`row-audit-${log.id}`}>
                         <TableCell>
                           <Button
                             size="icon"
@@ -162,7 +162,7 @@ export default function AuditLogPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>

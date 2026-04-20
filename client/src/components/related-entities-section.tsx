@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Plus, ChevronRight, Building2, Users, UserPlus, Target, Calendar } from "lucide-react";
 import type { Account, Contact, Opportunity, Lead, Activity } from "@shared/schema";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 
 interface RelatedEntitiesSectionProps {
   title: string;
@@ -94,6 +95,7 @@ function getInitials(name: string): string {
 function RelatedEntityCard({ entity, entityType }: RelatedEntityCardProps) {
   const colors = typeAvatarColors[entityType];
   const Icon = typeIcons[entityType];
+  const canViewFinancials = useFinancialAccess();
 
   const getEntityInfo = () => {
     if (entityType === "accounts") {
@@ -117,12 +119,15 @@ function RelatedEntityCard({ entity, entityType }: RelatedEntityCardProps) {
       };
     } else if (entityType === "opportunities") {
       const opp = entity as Opportunity;
+      const formattedAmount = !canViewFinancials
+        ? "—"
+        : opp.amount
+          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(opp.amount)
+          : undefined;
       return {
         title: opp.name,
         initials: getInitials(opp.name),
-        subtitle: opp.amount
-          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(opp.amount)
-          : undefined,
+        subtitle: formattedAmount,
         badge: opp.stage,
         link: `/opportunities/${opp.id}`,
       };

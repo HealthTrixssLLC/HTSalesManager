@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, Filter } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, Filter, Lock } from "lucide-react";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 import {
   AreaChart,
   Area,
@@ -28,6 +29,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 const DEFAULT_SELECTED_ROLES = ["Admin", "SalesRep"];
 
 export default function AnalyticsPage() {
+  const canViewFinancials = useFinancialAccess();
   const [selectedRoles, setSelectedRoles] = useState<string[]>(DEFAULT_SELECTED_ROLES);
 
   const { data: availableRoles } = useQuery<string[]>({ queryKey: ["/api/analytics/role-names"] });
@@ -87,36 +89,38 @@ export default function AnalyticsPage() {
       </div>
 
       <Tabs defaultValue="executive" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${canViewFinancials ? "grid-cols-4" : "grid-cols-2"}`}>
           <TabsTrigger value="executive" data-testid="tab-executive">Executive</TabsTrigger>
-          <TabsTrigger value="forecast" data-testid="tab-forecast">Forecast</TabsTrigger>
-          <TabsTrigger value="velocity" data-testid="tab-velocity">Velocity</TabsTrigger>
+          {canViewFinancials && <TabsTrigger value="forecast" data-testid="tab-forecast">Forecast</TabsTrigger>}
+          {canViewFinancials && <TabsTrigger value="velocity" data-testid="tab-velocity">Velocity</TabsTrigger>}
           <TabsTrigger value="reps" data-testid="tab-reps">Rep Performance</TabsTrigger>
         </TabsList>
 
         {/* EXECUTIVE DASHBOARD */}
         <TabsContent value="executive" className="space-y-6">
           {/* Key Metrics Row */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Revenue (This Month)</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-revenue">
-                  {forecast ? formatCurrency(forecast.closedRevenue) : "—"}
-                </div>
-                {forecast && (
-                  <p className="text-xs text-muted-foreground">
-                    +{formatCurrency(forecast.forecasts.mostLikely)} forecast remaining
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+          <div className={`grid gap-4 ${canViewFinancials ? "md:grid-cols-2 lg:grid-cols-4" : "md:grid-cols-2"}`}>
+            {canViewFinancials && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Revenue (This Month)</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-revenue">
+                    {forecast ? formatCurrency(forecast.closedRevenue) : "—"}
+                  </div>
+                  {forecast && (
+                    <p className="text-xs text-muted-foreground">
+                      +{formatCurrency(forecast.forecasts.mostLikely)} forecast remaining
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
                 <Target className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -130,23 +134,25 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Deal Size</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-avgdeal">
-                  {historical ? formatCurrency(historical.avgDealSize) : "—"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Based on last 90 days
-                </p>
-              </CardContent>
-            </Card>
+            {canViewFinancials && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Avg Deal Size</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-avgdeal">
+                    {historical ? formatCurrency(historical.avgDealSize) : "—"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Based on last 90 days
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Sales Cycle</CardTitle>
                 <Zap className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -235,7 +241,16 @@ export default function AnalyticsPage() {
 
         {/* FORECAST DASHBOARD */}
         <TabsContent value="forecast" className="space-y-6">
-          {forecast && (
+          {!canViewFinancials && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-muted-foreground font-medium">Not available for your role</p>
+                <p className="text-sm text-muted-foreground mt-1">Forecast data is restricted to commercial roles.</p>
+              </CardContent>
+            </Card>
+          )}
+          {canViewFinancials && forecast && (
             <>
               {/* Forecast Overview */}
               <div className="grid gap-4 md:grid-cols-3">
@@ -364,7 +379,16 @@ export default function AnalyticsPage() {
 
         {/* VELOCITY DASHBOARD */}
         <TabsContent value="velocity" className="space-y-6">
-          {velocity && conversions && (
+          {!canViewFinancials && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-muted-foreground font-medium">Not available for your role</p>
+                <p className="text-sm text-muted-foreground mt-1">Velocity data is restricted to commercial roles.</p>
+              </CardContent>
+            </Card>
+          )}
+          {canViewFinancials && velocity && conversions && (
             <>
               <div className="grid gap-4 md:grid-cols-3">
                 <Card>
@@ -464,7 +488,17 @@ export default function AnalyticsPage() {
             ))}
           </div>
 
-          {repLoading && (
+          {!canViewFinancials && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-muted-foreground font-medium">Not available for your role</p>
+                <p className="text-sm text-muted-foreground mt-1">Rep performance data is restricted to commercial roles.</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {canViewFinancials && repLoading && (
             <Card>
               <CardContent className="py-8">
                 <div className="text-center text-muted-foreground" data-testid="rep-loading">Loading performance data...</div>
@@ -472,7 +506,7 @@ export default function AnalyticsPage() {
             </Card>
           )}
 
-          {!repLoading && selectedRoles.length === 0 && (
+          {canViewFinancials && !repLoading && selectedRoles.length === 0 && (
             <Card>
               <CardContent className="py-8">
                 <div className="text-center text-muted-foreground" data-testid="rep-no-roles">
@@ -482,7 +516,7 @@ export default function AnalyticsPage() {
             </Card>
           )}
 
-          {repTimeseries && repTimeseries.repNames.length > 0 && (
+          {canViewFinancials && repTimeseries && repTimeseries.repNames.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Revenue Won Over Time</CardTitle>
@@ -536,7 +570,7 @@ export default function AnalyticsPage() {
             </Card>
           )}
 
-          {repPipelineStages && repPipelineStages.pipelineStages.length > 0 && (
+          {canViewFinancials && repPipelineStages && repPipelineStages.pipelineStages.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Open Pipeline by Stage</CardTitle>
@@ -585,7 +619,7 @@ export default function AnalyticsPage() {
             </Card>
           )}
 
-          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length > 0 && (
+          {canViewFinancials && !repLoading && hasRolesSelected && repPerformance && repPerformance.length > 0 && (
             <>
               <Card>
                 <CardHeader>
@@ -670,7 +704,7 @@ export default function AnalyticsPage() {
             </>
           )}
 
-          {!repLoading && hasRolesSelected && repPerformance && repPerformance.length === 0 && (
+          {canViewFinancials && !repLoading && hasRolesSelected && repPerformance && repPerformance.length === 0 && (
             <Card>
               <CardContent className="py-8">
                 <div className="text-center text-muted-foreground" data-testid="rep-empty">

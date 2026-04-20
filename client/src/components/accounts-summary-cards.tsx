@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, CheckCircle2, TrendingUp, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 
 interface Account {
   id: string;
@@ -22,6 +23,7 @@ interface AccountsSummaryCardsProps {
 }
 
 export function AccountsSummaryCards({ onCardClick }: AccountsSummaryCardsProps) {
+  const canViewFinancials = useFinancialAccess();
   const { data: accounts, isLoading: accountsLoading } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
   });
@@ -156,14 +158,17 @@ export function AccountsSummaryCards({ onCardClick }: AccountsSummaryCardsProps)
           <CardTitle className="text-sm font-medium text-muted-foreground">
             High Value
           </CardTitle>
-          <DollarSign className="h-4 w-4 text-muted-foreground" />
+          {canViewFinancials
+            ? <DollarSign className="h-4 w-4 text-muted-foreground" />
+            : <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          }
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-semibold" data-testid="text-high-value">
-            {highValueCount}
+            {canViewFinancials ? highValueCount : "—"}
           </div>
           <p className="text-xs text-muted-foreground">
-            Most opportunities
+            {canViewFinancials ? "Most opportunities" : "Not available for your role"}
           </p>
         </CardContent>
       </Card>

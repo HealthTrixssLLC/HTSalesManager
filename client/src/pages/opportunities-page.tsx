@@ -9,6 +9,8 @@ import { Opportunity, InsertOpportunity, insertOpportunitySchema, Account } from
 
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
 import { useAuth } from "@/hooks/use-auth";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
+import { FinancialValue } from "@/components/financial-value";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +68,7 @@ const stages = [
 
 export default function OpportunitiesPage() {
   const { user } = useAuth();
+  const canViewFinancials = useFinancialAccess();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -528,10 +531,12 @@ export default function OpportunitiesPage() {
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? "Hide Filters" : "Show Filters"}
           </Button>
-          <Button variant="outline" onClick={handleExport} data-testid="button-export-opportunities">
-            <Download className="h-4 w-4 mr-2" />
-            Export to CSV
-          </Button>
+          {canViewFinancials && (
+            <Button variant="outline" onClick={handleExport} data-testid="button-export-opportunities">
+              <Download className="h-4 w-4 mr-2" />
+              Export to CSV
+            </Button>
+          )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-create-opportunity">
@@ -696,19 +701,21 @@ export default function OpportunitiesPage() {
                   )}
                 />
                 <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Amount</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="50000" {...field} value={field.value || ""} data-testid="input-opportunity-amount" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {canViewFinancials && (
+                    <FormField
+                      control={form.control}
+                      name="amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Amount</FormLabel>
+                          <FormControl>
+                            <Input type="number" placeholder="50000" {...field} value={field.value || ""} data-testid="input-opportunity-amount" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="probability"
@@ -1378,8 +1385,8 @@ export default function OpportunitiesPage() {
                       )}
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" />
-                          {parseFloat(opp.amount || "0").toLocaleString()}
+                          {canViewFinancials && <DollarSign className="h-3 w-3" />}
+                          <FinancialValue value={opp.amount} format="number" />
                         </span>
                         <span>{opp.probability}%</span>
                       </div>

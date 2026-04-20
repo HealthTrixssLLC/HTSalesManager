@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { RelationshipChainBar, type EntityType } from "@/components/relationship-chain-bar";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 
 interface DetailPageLayoutProps {
   title: string;
@@ -95,17 +96,31 @@ interface DetailFieldProps {
 }
 
 export function DetailField({ label, value, type = "text" }: DetailFieldProps) {
+  const canViewFinancials = useFinancialAccess();
+
   if (!value && value !== 0) {
     return null;
   }
 
-  let displayValue = value;
-  
-  if (type === "currency" && typeof value === "number") {
-    displayValue = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(value);
+  let displayValue: string | number | null | undefined = value as string | number | null | undefined;
+
+  if (type === "currency") {
+    if (!canViewFinancials) {
+      displayValue = "—";
+    } else if (typeof value === "number") {
+      displayValue = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(value);
+    } else if (typeof value === "string" && value !== "") {
+      const num = parseFloat(value);
+      if (!isNaN(num)) {
+        displayValue = new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(num);
+      }
+    }
   } else if (type === "percent" && typeof value === "number") {
     displayValue = `${value}%`;
   } else if (type === "date" && typeof value === "string") {

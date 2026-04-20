@@ -53,12 +53,14 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Opportunity, Account, Contact, Activity, InsertOpportunity, InsertActivity } from "@shared/schema";
 import { insertOpportunitySchema, insertActivitySchema } from "@shared/schema";
 import { z } from "zod";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 
 export default function OpportunityDetailPage() {
   const [, params] = useRoute("/opportunities/:id");
   const [, setLocation] = useLocation();
   const opportunityId = params?.id;
   const { toast } = useToast();
+  const canViewFinancials = useFinancialAccess();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
@@ -475,25 +477,27 @@ export default function OpportunityDetailPage() {
                 <p className="mt-1 text-sm" data-testid="field-description">{opportunity.description}</p>
               </div>
             )}
-            <div className="col-span-full">
-              <label className="text-sm font-medium text-muted-foreground">Forecast Status</label>
-              <div className="mt-1">
-                {opportunity.includeInForecast !== false ? (
-                  <Badge variant="outline" className="text-xs" data-testid="badge-forecast-included">
-                    ✓ Included in forecast
-                  </Badge>
-                ) : (
-                  <div className="space-y-1">
-                    <Badge variant="secondary" className="text-xs" data-testid="badge-forecast-excluded">
-                      Excluded from forecast
+            {canViewFinancials && (
+              <div className="col-span-full">
+                <label className="text-sm font-medium text-muted-foreground">Forecast Status</label>
+                <div className="mt-1">
+                  {opportunity.includeInForecast !== false ? (
+                    <Badge variant="outline" className="text-xs" data-testid="badge-forecast-included">
+                      Included in forecast
                     </Badge>
-                    <p className="text-xs text-muted-foreground">
-                      This opportunity is excluded from all sales metrics, dashboards, and forecast reports.
-                    </p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="space-y-1">
+                      <Badge variant="secondary" className="text-xs" data-testid="badge-forecast-excluded">
+                        Excluded from forecast
+                      </Badge>
+                      <p className="text-xs text-muted-foreground">
+                        This opportunity is excluded from all sales metrics, dashboards, and forecast reports.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </DetailSection>
 
           <Card data-testid="section-tags">
@@ -695,19 +699,21 @@ export default function OpportunityDetailPage() {
                 )}
               />
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="amount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Amount</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="50000" {...field} value={field.value || ""} data-testid="input-edit-opportunity-amount" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {canViewFinancials && (
+                  <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Amount</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="50000" {...field} value={field.value || ""} data-testid="input-edit-opportunity-amount" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="probability"
@@ -941,27 +947,29 @@ export default function OpportunityDetailPage() {
                   }}
                 />
               </div>
-              <FormField
-                control={form.control}
-                name="includeInForecast"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Include in Forecast</FormLabel>
-                      <div className="text-sm text-muted-foreground">
-                        When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+              {canViewFinancials && (
+                <FormField
+                  control={form.control}
+                  name="includeInForecast"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Include in Forecast</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+                        </div>
                       </div>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-edit-include-in-forecast"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-edit-include-in-forecast"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="categories"
