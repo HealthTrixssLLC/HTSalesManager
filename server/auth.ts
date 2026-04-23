@@ -32,6 +32,29 @@ export function generateToken(user: User): string {
 // Verify JWT token and attach user to request
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    // Check for API key authentication first (for MCP server and external integrations)
+    const apiKeyHeader = req.headers["x-api-key"] as string | undefined;
+    if (apiKeyHeader) {
+      const { validateApiKeyFormat, verifyApiKey } = await import("./api-key-utils");
+      if (validateApiKeyFormat(apiKeyHeader)) {
+        const apiKeys = await storage.getAllApiKeys();
+        const activeKeys = apiKeys.filter(k => k.isActive && !k.revokedAt);
+        for (const key of activeKeys) {
+          if (key.expiresAt && new Date(key.expiresAt) < new Date()) continue;
+          const isValid = await verifyApiKey(apiKeyHeader, key.hashedKey);
+          if (isValid) {
+            const user = await storage.getUserById(key.createdBy);
+            if (user) {
+              req.user = user;
+              storage.updateApiKeyLastUsed(key.id).catch(() => {});
+              return next();
+            }
+          }
+        }
+      }
+      return res.status(401).json({ error: "Invalid or expired API key" });
+    }
+
     const token = req.headers.authorization?.replace("Bearer ", "") || req.cookies?.token;
     
     if (!token) {

@@ -57,6 +57,13 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
+  // Requests authenticated via API key (MCP server, external integrations) are
+  // exempt from CSRF because they do not rely on browser cookies — they send an
+  // explicit x-api-key header which a cross-origin attacker cannot forge.
+  if (req.headers["x-api-key"]) {
+    return next();
+  }
+
   const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
   const headerToken = req.headers["x-csrf-token"] as string;
 
