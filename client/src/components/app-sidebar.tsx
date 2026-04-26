@@ -3,6 +3,7 @@ import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, 
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { OrgSwitcher } from "@/components/org-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -128,6 +129,9 @@ export function AppSidebar() {
               <p className="text-white font-semibold text-sm leading-none">Health Trixss</p>
               <p className="text-white/50 text-xs mt-0.5">CRM Platform</p>
             </div>
+          </div>
+          <div className="mt-3 -mx-1">
+            <OrgSwitcher />
           </div>
         </SidebarHeader>
 

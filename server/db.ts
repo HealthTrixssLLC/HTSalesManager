@@ -75,7 +75,7 @@ export class PostgresStorage implements IStorage {
   
   async getUserByEmail(email: string): Promise<(User & { password: string }) | undefined> {
     const result = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
-    return result[0] as any;
+    return result[0] as (User & { password: string }) | undefined;
   }
   
   async getUserById(id: string): Promise<User | undefined> {
@@ -230,9 +230,10 @@ export class PostgresStorage implements IStorage {
   
   // ========== ACCOUNTS ==========
   
-  async getAllAccounts(): Promise<Account[]> {
+  async getAllAccounts(orgId?: string): Promise<Account[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
+      const orgFilter = orgId ? sql`WHERE a.organization_id = ${orgId}` : sql``;
       const result: any = await db.execute(sql`
         SELECT 
           a.*,
@@ -252,6 +253,7 @@ export class PostgresStorage implements IStorage {
         FROM accounts a
         LEFT JOIN entity_tags et ON et.entity_id = a.id AND et.entity = 'Account'
         LEFT JOIN tags t ON t.id = et.tag_id
+        ${orgFilter}
         GROUP BY a.id
         ORDER BY a.created_at DESC
       `);
@@ -275,15 +277,16 @@ export class PostgresStorage implements IStorage {
   async createAccount(account: InsertAccount): Promise<Account> {
     // Generate ID if not provided
     if (!account.id || account.id === "") {
-      account.id = await this.generateId("Account");
+      account.id = await this.generateId("Account", account.organizationId || undefined);
     }
     const result = await db.insert(schema.accounts).values(account).returning();
     return result[0];
   }
   
   async updateAccount(id: string, account: Partial<InsertAccount>): Promise<Account> {
+    const { organizationId: _orgId, ...safeUpdates } = account;
     const result = await db.update(schema.accounts)
-      .set({ ...account, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(schema.accounts.id, id))
       .returning();
     return result[0];
@@ -295,9 +298,10 @@ export class PostgresStorage implements IStorage {
   
   // ========== CONTACTS ==========
   
-  async getAllContacts(): Promise<Contact[]> {
+  async getAllContacts(orgId?: string): Promise<Contact[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
+      const orgFilter = orgId ? sql`WHERE c.organization_id = ${orgId}` : sql``;
       const result: any = await db.execute(sql`
         SELECT 
           c.id,
@@ -326,6 +330,7 @@ export class PostgresStorage implements IStorage {
         FROM contacts c
         LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity = 'Contact'
         LEFT JOIN tags t ON t.id = et.tag_id
+        ${orgFilter}
         GROUP BY c.id, c.account_id, c.first_name, c.last_name, c.email, c.phone, c.title, c.owner_id, c.created_at, c.updated_at
         ORDER BY c.created_at DESC
       `);
@@ -348,15 +353,16 @@ export class PostgresStorage implements IStorage {
   
   async createContact(contact: InsertContact): Promise<Contact> {
     if (!contact.id || contact.id === "") {
-      contact.id = await this.generateId("Contact");
+      contact.id = await this.generateId("Contact", contact.organizationId || undefined);
     }
     const result = await db.insert(schema.contacts).values(contact).returning();
     return result[0];
   }
   
   async updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact> {
+    const { organizationId: _orgId, ...safeUpdates } = contact;
     const result = await db.update(schema.contacts)
-      .set({ ...contact, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(schema.contacts.id, id))
       .returning();
     return result[0];
@@ -368,9 +374,10 @@ export class PostgresStorage implements IStorage {
   
   // ========== LEADS ==========
   
-  async getAllLeads(): Promise<Lead[]> {
+  async getAllLeads(orgId?: string): Promise<Lead[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
+      const orgFilter = orgId ? sql`WHERE l.organization_id = ${orgId}` : sql``;
       const result: any = await db.execute(sql`
         SELECT 
           l.*,
@@ -390,6 +397,7 @@ export class PostgresStorage implements IStorage {
         FROM leads l
         LEFT JOIN entity_tags et ON et.entity_id = l.id AND et.entity = 'Lead'
         LEFT JOIN tags t ON t.id = et.tag_id
+        ${orgFilter}
         GROUP BY l.id
         ORDER BY l.created_at DESC
       `);
@@ -412,15 +420,16 @@ export class PostgresStorage implements IStorage {
   
   async createLead(lead: InsertLead): Promise<Lead> {
     if (!lead.id || lead.id === "") {
-      lead.id = await this.generateId("Lead");
+      lead.id = await this.generateId("Lead", lead.organizationId || undefined);
     }
     const result = await db.insert(schema.leads).values(lead).returning();
     return result[0];
   }
   
   async updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead> {
+    const { organizationId: _orgId, ...safeUpdates } = lead;
     const result = await db.update(schema.leads)
-      .set({ ...lead, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(schema.leads.id, id))
       .returning();
     return result[0];
@@ -432,10 +441,11 @@ export class PostgresStorage implements IStorage {
   
   // ========== OPPORTUNITIES ==========
   
-  async getAllOpportunities(): Promise<Opportunity[]> {
+  async getAllOpportunities(orgId?: string): Promise<Opportunity[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
       // Explicitly alias all columns to ensure proper snake_case to camelCase conversion
+      const orgFilter = orgId ? sql`WHERE o.organization_id = ${orgId}` : sql``;
       const result: any = await db.execute(sql`
         SELECT 
           o.id,
@@ -483,6 +493,7 @@ export class PostgresStorage implements IStorage {
         LEFT JOIN accounts a ON a.id = o.account_id
         LEFT JOIN entity_tags et ON et.entity_id = o.id AND et.entity = 'Opportunity'
         LEFT JOIN tags t ON t.id = et.tag_id
+        ${orgFilter}
         GROUP BY o.id, a.name
         ORDER BY o.created_at DESC
       `);
@@ -505,7 +516,7 @@ export class PostgresStorage implements IStorage {
   
   async createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity> {
     if (!opportunity.id || opportunity.id === "") {
-      opportunity.id = await this.generateId("Opportunity");
+      opportunity.id = await this.generateId("Opportunity", opportunity.organizationId || undefined);
     }
     const result = await db.insert(schema.opportunities).values(opportunity).returning();
     return result[0];
@@ -513,7 +524,8 @@ export class PostgresStorage implements IStorage {
   
   async updateOpportunity(id: string, opportunity: Partial<InsertOpportunity>): Promise<Opportunity> {
     // Extract the fields that need explicit SQL handling (array columns + description)
-    const { categories, operationalAreas, description, ...rest } = opportunity;
+    // Also strip organizationId to prevent cross-org record movement via updates
+    const { categories, operationalAreas, description, organizationId: _orgId, ...rest } = opportunity;
 
     // Step 1: update all standard scalar fields via Drizzle ORM
     await db.update(schema.opportunities)
@@ -592,7 +604,10 @@ export class PostgresStorage implements IStorage {
   
   // ========== ACTIVITIES ==========
   
-  async getAllActivities(): Promise<Activity[]> {
+  async getAllActivities(orgId?: string): Promise<Activity[]> {
+    if (orgId) {
+      return await db.select().from(schema.activities).where(eq(schema.activities.organizationId, orgId));
+    }
     return await db.select().from(schema.activities);
   }
   
@@ -602,16 +617,21 @@ export class PostgresStorage implements IStorage {
   }
   
   async createActivity(activity: InsertActivity): Promise<Activity> {
-    if (!activity.id || activity.id === "") {
-      activity.id = await this.generateId("Activity");
-    }
-    const result = await db.insert(schema.activities).values(activity).returning();
+    const id = await this.generateId("Activity", activity.organizationId || undefined);
+    const result = await db.insert(schema.activities).values({
+      ...activity,
+      id,
+      // Convert ISO string dates to Date objects for Drizzle timestamp columns
+      dueAt: activity.dueAt ? new Date(activity.dueAt) : null,
+      completedAt: activity.completedAt ? new Date(activity.completedAt) : null,
+    } as typeof schema.activities.$inferInsert).returning();
     return result[0];
   }
   
   async updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity> {
+    const { organizationId: _orgId, ...safeUpdates } = activity;
     const result = await db.update(schema.activities)
-      .set({ ...activity, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(schema.activities.id, id))
       .returning();
     return result[0];
@@ -657,12 +677,26 @@ export class PostgresStorage implements IStorage {
     }
   }
   
-  async getAllIdPatterns(): Promise<IdPattern[]> {
-    return await db.select().from(schema.idPatterns);
+  async getAllIdPatterns(orgId?: string): Promise<IdPattern[]> {
+    if (orgId) {
+      // Return only org-specific patterns (strict tenant isolation, no global fallback)
+      return await db.select().from(schema.idPatterns)
+        .where(eq(schema.idPatterns.organizationId, orgId))
+        .orderBy(schema.idPatterns.entity);
+    }
+    return await db.select().from(schema.idPatterns).orderBy(schema.idPatterns.entity);
   }
   
-  async getIdPattern(entity: string): Promise<IdPattern | undefined> {
-    const result = await db.select().from(schema.idPatterns).where(eq(schema.idPatterns.entity, entity)).limit(1);
+  async getIdPattern(entity: string, orgId?: string): Promise<IdPattern | undefined> {
+    if (orgId) {
+      // Return only org-specific pattern (strict tenant isolation, no global fallback)
+      const result = await db.select().from(schema.idPatterns)
+        .where(and(eq(schema.idPatterns.entity, entity), eq(schema.idPatterns.organizationId, orgId))).limit(1);
+      return result[0];
+    }
+    // Admin/global context: return the unscoped global pattern
+    const result = await db.select().from(schema.idPatterns)
+      .where(and(eq(schema.idPatterns.entity, entity), isNull(schema.idPatterns.organizationId))).limit(1);
     return result[0];
   }
   
@@ -674,69 +708,86 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
   
-  async generateId(entity: string): Promise<string> {
-    // Get the ID pattern for this entity
-    let pattern = await this.getIdPattern(entity);
-    
-    // If no pattern exists, create a default one
-    if (!pattern) {
-      const defaultPatterns: Record<string, string> = {
-        "Account": "ACCT-{YYYY}-{SEQ:5}",
-        "Contact": "CONT-{YY}{MM}-{SEQ:5}",
-        "Lead": "LEAD-{SEQ:6}",
-        "Opportunity": "OPP-{YYYY}-{SEQ:6}",
-        "Activity": "ACT-{YY}{MM}-{SEQ:5}",
-      };
-      
-      const defaultPattern = defaultPatterns[entity] || `${entity.toUpperCase()}-{SEQ:6}`;
-      
-      const result = await db.insert(schema.idPatterns).values({
+  async generateId(entity: string, orgId?: string): Promise<string> {
+    const defaultPatterns: Record<string, string> = {
+      "Account": "ACCT-{YYYY}-{SEQ:5}",
+      "Contact": "CONT-{YY}{MM}-{SEQ:5}",
+      "Lead": "LEAD-{SEQ:6}",
+      "Opportunity": "OPP-{YYYY}-{SEQ:6}",
+      "Activity": "ACT-{YY}{MM}-{SEQ:5}",
+    };
+
+    // --- Step 1: Resolve the global (null-org) counter pattern ---
+    // The GLOBAL pattern is always the authoritative counter to ensure IDs are
+    // globally unique across all orgs. Per-org patterns only customize the format string.
+    let globalPattern = await this.getIdPattern(entity, undefined);
+    if (!globalPattern) {
+      const defaultFmt = defaultPatterns[entity] || `${entity.toUpperCase()}-{SEQ:6}`;
+      const inserted = await db.insert(schema.idPatterns).values({
         entity,
-        pattern: defaultPattern,
+        pattern: defaultFmt,
         counter: 0,
         startValue: 1,
+        organizationId: null,
       }).returning();
-      pattern = result[0];
+      globalPattern = inserted[0];
     }
-    
-    // Atomically increment counter and get new value
-    const result = await db.update(schema.idPatterns)
-      .set({ 
-        counter: sql`${schema.idPatterns.counter} + 1`,
-        updatedAt: new Date()
-      })
-      .where(eq(schema.idPatterns.id, pattern.id))
+    if (!globalPattern) {
+      throw new Error(`Failed to find or create global ID pattern for entity: ${entity}`);
+    }
+
+    // --- Step 2: Atomically increment the GLOBAL counter ---
+    const [updatedGlobal] = await db.update(schema.idPatterns)
+      .set({ counter: sql`${schema.idPatterns.counter} + 1`, updatedAt: new Date() })
+      .where(eq(schema.idPatterns.id, globalPattern.id))
       .returning();
-    
-    const updatedPattern = result[0];
-    const counter = updatedPattern.counter;
-    const startValue = updatedPattern.startValue || 1;
-    
-    // Calculate actual sequence number: startValue + (counter - 1)
-    // This allows users to set custom starting values like 1000
+
+    const counter = updatedGlobal.counter;
+    const startValue = updatedGlobal.startValue || 1;
     const sequenceNumber = startValue + (counter - 1);
-    
-    // Parse pattern and generate ID
+
+    // --- Step 3: Resolve format string ---
+    // Prefer org-specific format (for custom prefixes) but NEVER use its counter.
+    let formatPattern = updatedGlobal.pattern;
+    if (orgId) {
+      const orgSpecific = await this.getIdPattern(entity, orgId);
+      if (orgSpecific) {
+        formatPattern = orgSpecific.pattern;
+        // Mirror lastIssued on the org-specific row for UI display purposes only
+        await db.update(schema.idPatterns)
+          .set({ lastIssued: null, updatedAt: new Date() })
+          .where(eq(schema.idPatterns.id, orgSpecific.id));
+      }
+    }
+
+    // --- Step 4: Generate the ID string ---
     const now = new Date();
-    let generatedId = updatedPattern.pattern
+    const generatedId = formatPattern
       .replace("{PREFIX}", entity.substring(0, 4).toUpperCase())
       .replace("{YYYY}", now.getFullYear().toString())
       .replace("{YY}", now.getFullYear().toString().slice(2))
       .replace("{MM}", (now.getMonth() + 1).toString().padStart(2, "0"))
-      .replace(/{SEQ:(\d+)}/g, (_, len) => sequenceNumber.toString().padStart(parseInt(len), "0"));
-    
-    // Update last issued
+      .replace(/{SEQ:(\d+)}/g, (_: string, len: string) => sequenceNumber.toString().padStart(parseInt(len), "0"));
+
+    // Update lastIssued on global pattern for admin visibility
     await db.update(schema.idPatterns)
       .set({ lastIssued: generatedId })
-      .where(eq(schema.idPatterns.id, pattern.id));
-    
+      .where(eq(schema.idPatterns.id, updatedGlobal.id));
+
     return generatedId;
   }
   
   // ========== ACCOUNT CATEGORIES ==========
   
-  async getAllAccountCategories(): Promise<AccountCategory[]> {
-    return await db.select().from(schema.accountCategories).orderBy(asc(schema.accountCategories.name));
+  async getAllAccountCategories(orgId?: string): Promise<AccountCategory[]> {
+    // Strict tenant isolation: return only org-specific categories when orgId is provided.
+    // When orgId is not provided: return only global categories (null org) for admin/bootstrap contexts.
+    const condition = orgId
+      ? eq(schema.accountCategories.organizationId, orgId)
+      : isNull(schema.accountCategories.organizationId);
+    return await db.select().from(schema.accountCategories)
+      .where(condition)
+      .orderBy(asc(schema.accountCategories.name));
   }
   
   async getAccountCategory(id: string): Promise<AccountCategory | undefined> {
@@ -782,7 +833,7 @@ export class PostgresStorage implements IStorage {
   
   // ========== DASHBOARD & STATS ==========
   
-  async getDashboardStats(year: number): Promise<{
+  async getDashboardStats(year: number, orgId?: string): Promise<{
     totalAccounts: number;
     totalContacts: number;
     totalLeads: number;
@@ -797,14 +848,25 @@ export class PostgresStorage implements IStorage {
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
 
+    // Org filter helpers
+    const accountOrgFilter = orgId ? eq(schema.accounts.organizationId, orgId) : undefined;
+    const contactOrgFilter = orgId ? eq(schema.contacts.organizationId, orgId) : undefined;
+    const leadOrgFilter = orgId ? eq(schema.leads.organizationId, orgId) : undefined;
+    const oppOrgFilter = orgId ? eq(schema.opportunities.organizationId, orgId) : undefined;
+
     // Get counts (accounts and contacts are all-time)
-    const accounts = await db.select({ count: sql<number>`count(*)` }).from(schema.accounts);
-    const contacts = await db.select({ count: sql<number>`count(*)` }).from(schema.contacts);
+    const accounts = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.accounts)
+      .where(accountOrgFilter);
+    const contacts = await db.select({ count: sql<number>`count(*)` })
+      .from(schema.contacts)
+      .where(contactOrgFilter);
 
     // Leads created in the selected year
     const leads = await db.select({ count: sql<number>`count(*)` })
       .from(schema.leads)
       .where(and(
+        leadOrgFilter,
         gte(schema.leads.createdAt, yearStart),
         lte(schema.leads.createdAt, yearEnd)
       ));
@@ -813,6 +875,7 @@ export class PostgresStorage implements IStorage {
     const opportunities = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
+        oppOrgFilter,
         eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         gte(schema.opportunities.closeDate, yearStart),
@@ -828,6 +891,7 @@ export class PostgresStorage implements IStorage {
       })
       .from(schema.opportunities)
       .where(and(
+        oppOrgFilter,
         eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
         gte(schema.opportunities.closeDate, yearStart),
@@ -844,6 +908,7 @@ export class PostgresStorage implements IStorage {
     const newLeads = await db.select({ count: sql<number>`count(*)` })
       .from(schema.leads)
       .where(and(
+        leadOrgFilter,
         gte(schema.leads.createdAt, startOfMonth),
         lte(schema.leads.createdAt, endOfMonth)
       ));
@@ -853,6 +918,7 @@ export class PostgresStorage implements IStorage {
     const closedWon = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
+        oppOrgFilter,
         eq(schema.opportunities.stage, "closed_won"),
         eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
@@ -863,6 +929,7 @@ export class PostgresStorage implements IStorage {
     const closedLost = await db.select({ count: sql<number>`count(*)` })
       .from(schema.opportunities)
       .where(and(
+        oppOrgFilter,
         eq(schema.opportunities.stage, "closed_lost"),
         eq(schema.opportunities.includeInForecast, true),
         isNotNull(schema.opportunities.closeDate),
@@ -892,6 +959,7 @@ export class PostgresStorage implements IStorage {
       .from(schema.opportunities)
       .where(
         and(
+          oppOrgFilter,
           eq(schema.opportunities.includeInForecast, true),
           notInArray(schema.opportunities.stage, ["closed_won", "closed_lost"]),
           or(
@@ -963,7 +1031,7 @@ export class PostgresStorage implements IStorage {
     };
   }
   
-  async getSalesWaterfallData(year: number): Promise<{
+  async getSalesWaterfallData(year: number, orgId?: string): Promise<{
     name: string;
     amount: number;
     stage: string;
@@ -973,6 +1041,8 @@ export class PostgresStorage implements IStorage {
     const startOfYear = new Date(year, 0, 1);
     const endOfYear = new Date(year, 11, 31, 23, 59, 59);
     
+    const oppOrgFilter = orgId ? eq(schema.opportunities.organizationId, orgId) : undefined;
+
     const opps = await db
       .select({
         id: schema.opportunities.id,
@@ -983,10 +1053,13 @@ export class PostgresStorage implements IStorage {
       })
       .from(schema.opportunities)
       .where(
-        sql`${schema.opportunities.includeInForecast} = true AND (
-          (${schema.opportunities.closeDate} >= ${startOfYear} AND ${schema.opportunities.closeDate} <= ${endOfYear})
-          OR (${schema.opportunities.closeDate} IS NULL AND ${schema.opportunities.createdAt} >= ${startOfYear})
-        )`
+        and(
+          oppOrgFilter,
+          sql`${schema.opportunities.includeInForecast} = true AND (
+            (${schema.opportunities.closeDate} >= ${startOfYear} AND ${schema.opportunities.closeDate} <= ${endOfYear})
+            OR (${schema.opportunities.closeDate} IS NULL AND ${schema.opportunities.createdAt} >= ${startOfYear})
+          )`
+        )
       )
       .orderBy(schema.opportunities.createdAt);
     
@@ -1000,8 +1073,10 @@ export class PostgresStorage implements IStorage {
   
   // ========== API KEYS ==========
   
-  async getAllApiKeys(): Promise<schema.ApiKey[]> {
-    return await db.select().from(schema.apiKeys).orderBy(desc(schema.apiKeys.createdAt));
+  async getAllApiKeys(orgId?: string): Promise<schema.ApiKey[]> {
+    return await db.select().from(schema.apiKeys)
+      .where(orgId ? eq(schema.apiKeys.organizationId, orgId) : undefined)
+      .orderBy(desc(schema.apiKeys.createdAt));
   }
   
   async getApiKeyById(id: string): Promise<schema.ApiKey | undefined> {
@@ -1135,14 +1210,22 @@ export class PostgresStorage implements IStorage {
   
   // ========== LLM CONFIGURATION ==========
   
-  async getLlmConfiguration(): Promise<schema.LlmConfiguration | undefined> {
-    const results = await db.select().from(schema.llmConfigurations).limit(1);
-    return results[0];
+  async getLlmConfiguration(orgId?: string): Promise<schema.LlmConfiguration | undefined> {
+    if (orgId) {
+      // Return only org-specific config (strict tenant isolation, no global fallback)
+      const result = await db.select().from(schema.llmConfigurations)
+        .where(eq(schema.llmConfigurations.organizationId, orgId)).limit(1);
+      return result[0];
+    }
+    // Admin/global context: return unscoped global config
+    const result = await db.select().from(schema.llmConfigurations)
+      .where(isNull(schema.llmConfigurations.organizationId)).limit(1);
+    return result[0];
   }
   
-  async upsertLlmConfiguration(config: Partial<schema.InsertLlmConfiguration> & { updatedBy?: string }): Promise<schema.LlmConfiguration> {
-    const existing = await this.getLlmConfiguration();
-    if (existing) {
+  async upsertLlmConfiguration(config: Partial<schema.InsertLlmConfiguration> & { updatedBy?: string }, orgId?: string): Promise<schema.LlmConfiguration> {
+    const existing = await this.getLlmConfiguration(orgId);
+    if (existing && existing.organizationId === (orgId || null)) {
       const result = await db.update(schema.llmConfigurations)
         .set({ ...config, updatedAt: new Date() })
         .where(eq(schema.llmConfigurations.id, existing.id))
@@ -1158,6 +1241,7 @@ export class PostgresStorage implements IStorage {
         enabledAgents: ["market_research", "company_discovery", "lead_discovery", "strategy", "communication_drafting"],
         agentModelOverrides: {},
         ...config,
+        organizationId: orgId || null,
       }).returning();
       return result[0];
     }
@@ -1193,6 +1277,143 @@ export class PostgresStorage implements IStorage {
 
   async deleteDocument(id: string): Promise<void> {
     await db.delete(schema.crmDocuments).where(eq(schema.crmDocuments.id, id));
+  }
+
+  // ========== ORGANIZATIONS ==========
+
+  async getAllOrganizations(): Promise<schema.Organization[]> {
+    return await db.select().from(schema.organizations).orderBy(asc(schema.organizations.name));
+  }
+
+  async getOrganizationById(id: string): Promise<schema.Organization | undefined> {
+    const result = await db.select().from(schema.organizations).where(eq(schema.organizations.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createOrganization(org: schema.InsertOrganization): Promise<schema.Organization> {
+    const result = await db.insert(schema.organizations).values(org).returning();
+    return result[0];
+  }
+
+  async updateOrganization(id: string, org: Partial<schema.InsertOrganization>): Promise<schema.Organization> {
+    const result = await db.update(schema.organizations)
+      .set({ ...org, updatedAt: new Date() })
+      .where(eq(schema.organizations.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteOrganization(id: string): Promise<void> {
+    await db.delete(schema.organizations).where(eq(schema.organizations.id, id));
+  }
+
+  async getOrganizationMembers(organizationId: string): Promise<(schema.UserOrganization & { user: schema.User; roleName: string })[]> {
+    const result = await db
+      .select({
+        id: schema.userOrganizations.id,
+        userId: schema.userOrganizations.userId,
+        organizationId: schema.userOrganizations.organizationId,
+        roleId: schema.userOrganizations.roleId,
+        isDefault: schema.userOrganizations.isDefault,
+        createdAt: schema.userOrganizations.createdAt,
+        user: {
+          id: schema.users.id,
+          name: schema.users.name,
+          email: schema.users.email,
+          status: schema.users.status,
+          createdAt: schema.users.createdAt,
+          updatedAt: schema.users.updatedAt,
+        },
+        roleName: schema.roles.name,
+      })
+      .from(schema.userOrganizations)
+      .innerJoin(schema.users, eq(schema.userOrganizations.userId, schema.users.id))
+      .innerJoin(schema.roles, eq(schema.userOrganizations.roleId, schema.roles.id))
+      .where(eq(schema.userOrganizations.organizationId, organizationId));
+    return result as unknown as (schema.UserOrganization & { user: User; roleName: string })[];
+  }
+
+  async getUserOrganizations(userId: string): Promise<(schema.UserOrganization & { organization: schema.Organization; roleName: string })[]> {
+    const result = await db
+      .select({
+        id: schema.userOrganizations.id,
+        userId: schema.userOrganizations.userId,
+        organizationId: schema.userOrganizations.organizationId,
+        roleId: schema.userOrganizations.roleId,
+        isDefault: schema.userOrganizations.isDefault,
+        createdAt: schema.userOrganizations.createdAt,
+        organization: schema.organizations,
+        roleName: schema.roles.name,
+      })
+      .from(schema.userOrganizations)
+      .innerJoin(schema.organizations, eq(schema.userOrganizations.organizationId, schema.organizations.id))
+      .innerJoin(schema.roles, eq(schema.userOrganizations.roleId, schema.roles.id))
+      .where(eq(schema.userOrganizations.userId, userId));
+    return result as unknown as (schema.UserOrganization & { organization: schema.Organization; roleName: string })[];
+  }
+
+  async addOrganizationMember(entry: schema.InsertUserOrganization): Promise<schema.UserOrganization> {
+    const result = await db.insert(schema.userOrganizations).values(entry).returning();
+    return result[0];
+  }
+
+  async updateOrganizationMember(userId: string, organizationId: string, roleId: string): Promise<schema.UserOrganization> {
+    const result = await db.update(schema.userOrganizations)
+      .set({ roleId })
+      .where(and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ))
+      .returning();
+    return result[0];
+  }
+
+  async removeOrganizationMember(userId: string, organizationId: string): Promise<void> {
+    await db.delete(schema.userOrganizations)
+      .where(and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ));
+  }
+
+  async setDefaultOrganization(userId: string, organizationId: string): Promise<void> {
+    // Clear all defaults for this user, then set the new default
+    await db.update(schema.userOrganizations)
+      .set({ isDefault: false })
+      .where(eq(schema.userOrganizations.userId, userId));
+    await db.update(schema.userOrganizations)
+      .set({ isDefault: true })
+      .where(and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ));
+  }
+
+  async getDefaultOrganization(userId: string): Promise<schema.Organization | undefined> {
+    const result = await db
+      .select({ organization: schema.organizations })
+      .from(schema.userOrganizations)
+      .innerJoin(schema.organizations, eq(schema.userOrganizations.organizationId, schema.organizations.id))
+      .where(and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.isDefault, true)
+      ))
+      .limit(1);
+    return result[0]?.organization;
+  }
+
+  async getOrgMembership(userId: string, organizationId: string): Promise<(schema.UserOrganization & { roleName: string }) | undefined> {
+    const result = await db
+      .select({ membership: schema.userOrganizations, roleName: schema.roles.name })
+      .from(schema.userOrganizations)
+      .innerJoin(schema.roles, eq(schema.userOrganizations.roleId, schema.roles.id))
+      .where(and(
+        eq(schema.userOrganizations.userId, userId),
+        eq(schema.userOrganizations.organizationId, organizationId)
+      ))
+      .limit(1);
+    if (!result[0]) return undefined;
+    return { ...result[0].membership, roleName: result[0].roleName };
   }
 
   // ========== ADMIN OPERATIONS ==========

@@ -12,6 +12,7 @@ export interface ApiKeyRequest extends Request {
     name: string;
     description: string | null;
     rateLimitPerMin: number | null;
+    organizationId: string | null;
   };
 }
 
@@ -153,12 +154,13 @@ export async function authenticateApiKey(
       console.error("[API-AUTH] Failed to log auth success:", err);
     });
     
-    // Attach API key info to request
+    // Attach API key info to request (including org scope for tenant isolation)
     req.apiKey = {
       id: matchedKey.id,
       name: matchedKey.name,
       description: matchedKey.description,
       rateLimitPerMin: matchedKey.rateLimitPerMin,
+      organizationId: matchedKey.organizationId ?? null,
     };
     
     next();

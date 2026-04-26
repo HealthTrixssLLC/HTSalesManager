@@ -2,7 +2,7 @@
 // Based on design_guidelines.md enterprise SaaS patterns
 
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ import { useFinancialAccess } from "@/hooks/use-financial-access";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
 import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
 import { useToast } from "@/hooks/use-toast";
+import { useOrg, type OrgSettings } from "@/contexts/org-context";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type DashboardStats = {
   totalAccounts: number;
@@ -71,11 +73,6 @@ const STAGE_COLORS = [
 export default function Dashboard() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [salesTarget, setSalesTarget] = useState<number>(() => {
-    const saved = localStorage.getItem(`salesTarget_${currentYear}`);
-    return saved ? parseFloat(saved) : 1000000;
-  });
-  const [targetInput, setTargetInput] = useState(salesTarget.toString());
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState({
     accountId: "",
@@ -85,11 +82,49 @@ export default function Dashboard() {
   });
   const { toast } = useToast();
   const canViewFinancials = useFinancialAccess();
+  const { activeOrg, activeOrgId, activeOrgRole } = useOrg();
+
+  // Annual sales target from org settings
+  const orgSettings = activeOrg?.settings as OrgSettings | undefined;
+  const orgSalesTargets: Record<string, number> = orgSettings?.annualSalesTargets || {};
+  const salesTarget = orgSalesTargets[selectedYear.toString()] || 1000000;
+  const [targetInput, setTargetInput] = useState(salesTarget.toString());
+
+  // Keep input in sync when org or year changes
+  useEffect(() => {
+    setTargetInput((orgSalesTargets[selectedYear.toString()] || 1000000).toString());
+  }, [activeOrgId, selectedYear]);
+
+  const isAdmin = activeOrgRole === "Admin";
+
+  const saveTargetMutation = useMutation({
+    mutationFn: async (newTarget: number) => {
+      if (!activeOrgId) return;
+      const newSettings: OrgSettings = {
+        ...(orgSettings || {}),
+        annualSalesTargets: {
+          ...orgSalesTargets,
+          [selectedYear.toString()]: newTarget,
+        },
+      };
+      await apiRequest("PUT", `/api/organizations/${activeOrgId}`, { settings: newSettings });
+    },
+    onSuccess: () => {
+      toast({ title: "Sales target saved" });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/organizations"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to save target", variant: "destructive" });
+    },
+  });
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
-    queryKey: ["/api/dashboard/stats", selectedYear],
+    queryKey: ["/api/dashboard/stats", selectedYear, activeOrgId],
     queryFn: async () => {
-      const res = await fetch(`/api/dashboard/stats?year=${selectedYear}`, { credentials: "include" });
+      const orgId = localStorage.getItem("activeOrgId");
+      const headers: Record<string, string> = {};
+      if (orgId) headers["X-Organization-Id"] = orgId;
+      const res = await fetch(`/api/dashboard/stats?year=${selectedYear}`, { credentials: "include", headers });
       if (!res.ok) {
         const text = (await res.text()) || res.statusText;
         throw new Error(`${res.status}: ${text}`);
@@ -99,24 +134,27 @@ export default function Dashboard() {
   });
 
   const { data: opportunities } = useQuery<OpportunityData[]>({
-    queryKey: ["/api/dashboard/sales-waterfall", selectedYear],
+    queryKey: ["/api/dashboard/sales-waterfall", selectedYear, activeOrgId],
+    queryFn: async () => {
+      const orgId = localStorage.getItem("activeOrgId");
+      const headers: Record<string, string> = {};
+      if (orgId) headers["X-Organization-Id"] = orgId;
+      const res = await fetch(`/api/dashboard/sales-waterfall/${selectedYear}`, { credentials: "include", headers });
+      if (!res.ok) {
+        const text = (await res.text()) || res.statusText;
+        throw new Error(`${res.status}: ${text}`);
+      }
+      return res.json();
+    },
   });
 
   const { data: accounts } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/accounts"],
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem(`salesTarget_${selectedYear}`);
-    const target = saved ? parseFloat(saved) : 1000000;
-    setSalesTarget(target);
-    setTargetInput(target.toString());
-  }, [selectedYear]);
-
   const handleSaveTarget = () => {
     const newTarget = parseFloat(targetInput) || 1000000;
-    setSalesTarget(newTarget);
-    localStorage.setItem(`salesTarget_${selectedYear}`, newTarget.toString());
+    saveTargetMutation.mutate(newTarget);
   };
 
   const handleDownloadReport = async () => {
@@ -127,8 +165,12 @@ export default function Dashboard() {
       if (reportFilters.startDate) params.append("startDate", reportFilters.startDate);
       if (reportFilters.endDate) params.append("endDate", reportFilters.endDate);
       
+      const orgId = localStorage.getItem("activeOrgId");
+      const reportHeaders: Record<string, string> = {};
+      if (orgId) reportHeaders["X-Organization-Id"] = orgId;
       const response = await fetch(`/api/reports/sales-forecast?${params.toString()}`, {
-        credentials: "include"
+        credentials: "include",
+        headers: reportHeaders,
       });
       
       if (!response.ok) {
@@ -321,17 +363,23 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2 mt-4">
               <Label className="text-sm">Annual Target ($):</Label>
-              <Input
-                type="number"
-                value={targetInput}
-                onChange={(e) => setTargetInput(e.target.value)}
-                className="w-32"
-                data-testid="input-sales-target"
-              />
-              <Button size="sm" onClick={handleSaveTarget} data-testid="button-save-target">
-                <Save className="h-3 w-3 mr-1" />
-                Save
-              </Button>
+              {isAdmin ? (
+                <>
+                  <Input
+                    type="number"
+                    value={targetInput}
+                    onChange={(e) => setTargetInput(e.target.value)}
+                    className="w-32"
+                    data-testid="input-sales-target"
+                  />
+                  <Button size="sm" onClick={handleSaveTarget} disabled={saveTargetMutation.isPending} data-testid="button-save-target">
+                    <Save className="h-3 w-3 mr-1" />
+                    {saveTargetMutation.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </>
+              ) : (
+                <span className="text-sm font-medium" data-testid="text-sales-target">${salesTarget.toLocaleString()}</span>
+              )}
             </div>
           </CardHeader>
           <CardContent>

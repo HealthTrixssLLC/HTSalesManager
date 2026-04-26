@@ -8,6 +8,7 @@ import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
 import { Slider } from "@/components/ui/slider";
 import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
+import { OrganizationsTab } from "@/components/admin/organizations-tab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1184,6 +1185,7 @@ export default function AdminConsole() {
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
           {isAdmin && <TabsTrigger value="ai-config" data-testid="tab-ai-config">AI Configuration</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="organizations" data-testid="tab-organizations">Organizations</TabsTrigger>}
         </TabsList>
 
         {/* Users Tab */}
@@ -2028,6 +2030,13 @@ export default function AdminConsole() {
           <TabsContent value="ai-config" className="space-y-4">
             <AiConfigTab />
             <AzureWebSearchConfigSection />
+          </TabsContent>
+        )}
+
+        {/* Organizations Tab — Admin only */}
+        {isAdmin && (
+          <TabsContent value="organizations" className="space-y-4">
+            <OrganizationsTab />
           </TabsContent>
         )}
       </Tabs>

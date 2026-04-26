@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
+import { initializeDefaultOrganization } from "./seed";
 import { storage, fixEntityTagsEntityNames } from "./db";
 import { csrfProtection, generateCsrfToken } from "./csrf-protection";
 
@@ -80,6 +81,10 @@ app.use((req, res, next) => {
   // Initialize default ID patterns
   await storage.initializeIdPatterns();
   console.log("ID patterns initialized");
+  
+  // Initialize default organization (multi-tenant support)
+  await initializeDefaultOrganization();
+  console.log("Organization initialized");
   
   // Fix any entity_tags rows with wrong entity name format
   await fixEntityTagsEntityNames();

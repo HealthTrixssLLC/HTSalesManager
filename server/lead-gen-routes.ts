@@ -10,7 +10,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { NeonDatabase } from "drizzle-orm/neon-serverless";
 import { authenticate, type AuthRequest } from "./auth";
 
-import { requireRole } from "./rbac";
+import { requireRole, requireGlobalRole } from "./rbac";
 import { crudRateLimiter, readRateLimiter } from "./rate-limiters";
 import * as schema from "@shared/schema";
 import {
@@ -93,7 +93,9 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.get("/api/lead-gen/icps", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const profiles = await db.select().from(schema.icpProfiles).orderBy(desc(schema.icpProfiles.createdAt));
+      const profiles = await db.select().from(schema.icpProfiles)
+        .where(req.activeOrgId ? eq(schema.icpProfiles.organizationId, req.activeOrgId) : undefined)
+        .orderBy(desc(schema.icpProfiles.createdAt));
       return res.json(profiles);
     } catch (err) {
       console.error(err);
@@ -105,6 +107,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const profile = await db.select().from(schema.icpProfiles).where(eq(schema.icpProfiles.id, req.params.id)).limit(1);
       if (!profile[0]) return res.status(404).json({ error: "ICP profile not found" });
+      if (req.activeOrgId && profile[0].organizationId && profile[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "ICP profile not found" });
+      }
 
       const versions = await db.select().from(schema.icpProfileVersions)
         .where(eq(schema.icpProfileVersions.icpProfileId, req.params.id))
@@ -125,7 +130,11 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.post("/api/lead-gen/icps", authenticate, requireRole("Admin", "SalesManager"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const data = insertIcpProfileSchema.parse({ ...req.body, createdBy: req.user?.id });
+      const data = insertIcpProfileSchema.parse({ 
+        ...req.body, 
+        createdBy: req.user?.id,
+        ...(req.activeOrgId ? { organizationId: req.activeOrgId } : {}),
+      });
       const result = await db.insert(schema.icpProfiles).values(data).returning();
       await createLgAudit(req.user?.id, "icp_profile_created", "IcpProfile", result[0].id, null, result[0]);
       await createAuditLog(req.user?.id, "create", "IcpProfile", result[0].id, null, result[0] as unknown as Record<string, unknown>, req);
@@ -148,6 +157,9 @@ export function registerLeadGenRoutes(app: Express) {
       if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
       const before = await db.select().from(schema.icpProfiles).where(eq(schema.icpProfiles.id, req.params.id)).limit(1);
       if (!before[0]) return res.status(404).json({ error: "ICP profile not found" });
+      if (req.activeOrgId && before[0].organizationId && before[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "ICP profile not found" });
+      }
       const result = await db.update(schema.icpProfiles)
         .set({ ...parsed.data, updatedAt: new Date() })
         .where(eq(schema.icpProfiles.id, req.params.id))
@@ -163,8 +175,12 @@ export function registerLeadGenRoutes(app: Express) {
   app.delete("/api/lead-gen/icps/:id", authenticate, requireRole("Admin", "SalesManager"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const toDelete = await db.select().from(schema.icpProfiles).where(eq(schema.icpProfiles.id, req.params.id)).limit(1);
+      if (!toDelete[0]) return res.status(404).json({ error: "ICP profile not found" });
+      if (req.activeOrgId && toDelete[0].organizationId && toDelete[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "ICP profile not found" });
+      }
       await db.delete(schema.icpProfiles).where(eq(schema.icpProfiles.id, req.params.id));
-      if (toDelete[0]) await createAuditLog(req.user?.id, "delete", "IcpProfile", req.params.id, toDelete[0] as unknown as Record<string, unknown>, null, req);
+      await createAuditLog(req.user?.id, "delete", "IcpProfile", req.params.id, toDelete[0] as unknown as Record<string, unknown>, null, req);
       return res.json({ success: true });
     } catch (err) {
       return res.status(500).json({ error: "Failed to delete ICP profile" });
@@ -265,7 +281,9 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.get("/api/lead-gen/playbooks", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const playbooks = await db.select().from(schema.taskPlaybooks).orderBy(desc(schema.taskPlaybooks.createdAt));
+      const playbooks = await db.select().from(schema.taskPlaybooks)
+        .where(req.activeOrgId ? eq(schema.taskPlaybooks.organizationId, req.activeOrgId) : undefined)
+        .orderBy(desc(schema.taskPlaybooks.createdAt));
       const stepCounts = await db.select({
         playbookId: schema.taskPlaybookSteps.playbookId,
         count: sql<number>`count(*)::int`,
@@ -281,6 +299,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const playbook = await db.select().from(schema.taskPlaybooks).where(eq(schema.taskPlaybooks.id, req.params.id)).limit(1);
       if (!playbook[0]) return res.status(404).json({ error: "Playbook not found" });
+      if (req.activeOrgId && playbook[0].organizationId && playbook[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Playbook not found" });
+      }
       const steps = await db.select().from(schema.taskPlaybookSteps)
         .where(eq(schema.taskPlaybookSteps.playbookId, req.params.id))
         .orderBy(schema.taskPlaybookSteps.stepOrder);
@@ -292,7 +313,11 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.post("/api/lead-gen/playbooks", authenticate, requireRole("Admin", "SalesManager"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const data = insertTaskPlaybookSchema.parse({ ...req.body, createdBy: req.user?.id });
+      const data = insertTaskPlaybookSchema.parse({ 
+        ...req.body, 
+        createdBy: req.user?.id,
+        ...(req.activeOrgId ? { organizationId: req.activeOrgId } : {}),
+      });
       const result = await db.insert(schema.taskPlaybooks).values(data).returning();
       await createLgAudit(req.user?.id, "playbook_created", "TaskPlaybook", result[0].id, null, result[0]);
       await createAuditLog(req.user?.id, "create", "TaskPlaybook", result[0].id, null, result[0] as unknown as Record<string, unknown>, req);
@@ -314,6 +339,11 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const parsed = playbookPatchSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
+      const existing = await db.select().from(schema.taskPlaybooks).where(eq(schema.taskPlaybooks.id, req.params.id)).limit(1);
+      if (!existing[0]) return res.status(404).json({ error: "Playbook not found" });
+      if (req.activeOrgId && existing[0].organizationId && existing[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Playbook not found" });
+      }
       const result = await db.update(schema.taskPlaybooks)
         .set({ ...parsed.data, updatedAt: new Date() })
         .where(eq(schema.taskPlaybooks.id, req.params.id))
@@ -329,6 +359,10 @@ export function registerLeadGenRoutes(app: Express) {
   app.delete("/api/lead-gen/playbooks/:id", authenticate, requireRole("Admin", "SalesManager"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const toDelete = await db.select().from(schema.taskPlaybooks).where(eq(schema.taskPlaybooks.id, req.params.id)).limit(1);
+      if (!toDelete[0]) return res.status(404).json({ error: "Playbook not found" });
+      if (req.activeOrgId && toDelete[0].organizationId && toDelete[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Playbook not found" });
+      }
       await db.delete(schema.taskPlaybooks).where(eq(schema.taskPlaybooks.id, req.params.id));
       if (toDelete[0]) {
         await createLgAudit(req.user?.id, "playbook_deleted", "TaskPlaybook", req.params.id, null, toDelete[0]);
@@ -390,7 +424,9 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.get("/api/lead-gen/runs", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const runs = await db.select().from(schema.leadGenerationRuns).orderBy(desc(schema.leadGenerationRuns.createdAt));
+      const runs = await db.select().from(schema.leadGenerationRuns)
+        .where(req.activeOrgId ? eq(schema.leadGenerationRuns.organizationId, req.activeOrgId) : undefined)
+        .orderBy(desc(schema.leadGenerationRuns.createdAt));
       return res.json(runs);
     } catch (err) {
       return res.status(500).json({ error: "Failed to fetch runs" });
@@ -401,6 +437,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && run[0].organizationId && run[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
 
       const rawCandidates = await db.select({
         candidate: schema.candidateLeads,
@@ -432,7 +471,12 @@ export function registerLeadGenRoutes(app: Express) {
 
   app.post("/api/lead-gen/runs", authenticate, requireRole("Admin", "SalesManager", "SalesOperator"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const body = { ...req.body, createdBy: req.user?.id, ownerId: req.user?.id };
+      const body = { 
+        ...req.body, 
+        createdBy: req.user?.id, 
+        ownerId: req.user?.id,
+        ...(req.activeOrgId ? { organizationId: req.activeOrgId } : {}),
+      };
       if (body.icpProfileId && !body.icpVersionId) {
         const activeVersion = await db.select().from(schema.icpProfileVersions)
           .where(and(
@@ -460,6 +504,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && run[0].organizationId && run[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
       if (run[0].status !== "draft") return res.status(400).json({ error: "Run must be in draft status to start" });
 
       const result = await db.update(schema.leadGenerationRuns)
@@ -492,6 +539,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && run[0].organizationId && run[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
       if (run[0].status !== "active" && run[0].status !== "error" && run[0].status !== "stopped") return res.status(400).json({ error: "Run must be active, stopped, or in error state to retry a phase" });
 
       if (isRunPipelineActive(req.params.id)) {
@@ -536,6 +586,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && run[0].organizationId && run[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
       if (run[0].status !== "active") return res.status(400).json({ error: "Only active runs can be stopped" });
 
       markRunStopped(req.params.id);
@@ -560,6 +613,9 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const run = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
       if (!run[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && run[0].organizationId && run[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
 
       const transitions: Record<string, schema.LeadGenerationRun["status"]> = {
         active: "reviewing",
@@ -596,6 +652,11 @@ export function registerLeadGenRoutes(app: Express) {
     try {
       const parsed = runPatchSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
+      const existing = await db.select().from(schema.leadGenerationRuns).where(eq(schema.leadGenerationRuns.id, req.params.id)).limit(1);
+      if (!existing[0]) return res.status(404).json({ error: "Run not found" });
+      if (req.activeOrgId && existing[0].organizationId && existing[0].organizationId !== req.activeOrgId) {
+        return res.status(404).json({ error: "Run not found" });
+      }
       const result = await db.update(schema.leadGenerationRuns)
         .set({ ...parsed.data, updatedAt: new Date() })
         .where(eq(schema.leadGenerationRuns.id, req.params.id))
@@ -1401,7 +1462,7 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  app.post("/api/lead-gen/ai-configs", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/lead-gen/ai-configs", authenticate, requireGlobalRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertAiConfigSchema.parse({ ...req.body, createdBy: req.user?.id });
       if (data.isDefault) {
@@ -1430,7 +1491,7 @@ export function registerLeadGenRoutes(app: Express) {
     metadata: z.record(z.unknown()).optional().nullable(),
   });
 
-  app.patch("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.patch("/api/lead-gen/ai-configs/:id", authenticate, requireGlobalRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const parsed = aiConfigPatchSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: "Invalid fields", details: parsed.error.errors });
@@ -1449,7 +1510,7 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/lead-gen/ai-configs/:id", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.delete("/api/lead-gen/ai-configs/:id", authenticate, requireGlobalRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       await db.delete(schema.aiConfigs).where(eq(schema.aiConfigs.id, req.params.id));
       await createLgAudit(req.user?.id, "ai_config_deleted", "AiConfig", req.params.id, null, {});
@@ -1673,7 +1734,7 @@ export function registerLeadGenRoutes(app: Express) {
     }
   });
 
-  app.post("/api/lead-gen/ai-configs", authenticate, requireRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/lead-gen/ai-configs", authenticate, requireGlobalRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertAiConfigSchema.parse({ ...req.body, createdBy: req.user?.id });
       if (data.isDefault) {

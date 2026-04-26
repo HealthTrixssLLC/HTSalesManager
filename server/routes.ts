@@ -14,8 +14,8 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
-import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, type AuthRequest } from "./auth";
-import { requirePermission, requireRole, DEFAULT_ROLE, hasPermission, hasAnyRole } from "./rbac";
+import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, attachActiveOrg, type AuthRequest } from "./auth";
+import { requirePermission, requireRole, requireGlobalRole, DEFAULT_ROLE, hasPermission, hasAnyRole } from "./rbac";
 import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter, readRateLimiter } from "./rate-limiters";
 import {
   insertUserSchema,
@@ -40,6 +40,7 @@ import {
   commentAttachments,
   commentSubscriptions,
   users,
+  userOrganizations,
   accounts,
   contacts,
   leads,
@@ -57,6 +58,7 @@ import { generateApiKey } from "./api-key-utils";
 import { encryptApiKey, decryptApiKey } from "./llm-key-utils";
 import externalApiRoutes from "./external-api-routes";
 import { registerEntraRoutes } from "./entra-auth";
+import { registerOrgRoutes } from "./org-routes";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
@@ -94,10 +96,40 @@ async function createAudit(req: AuthRequest, action: string, resource: string, r
   }
 }
 
+// Verify that a fetched record belongs to the active org (prevents cross-org IDOR)
+function assertOrgOwnership(record: { organizationId?: string | null } | null | undefined, orgId: string | undefined): boolean {
+  if (!orgId) return true;
+  if (!record) return false;
+  // When an active org is set, only exact matches are permitted — unscoped records do not belong to any tenant
+  return record.organizationId === orgId;
+}
+
+// Resolve a CRM entity by type+id and verify it belongs to the active org.
+// Returns false if entity is not found or belongs to a different org.
+async function assertEntityOrgOwnership(entity: string, entityId: string, orgId: string | undefined): Promise<boolean> {
+  if (!orgId) return true;
+  let record: { organizationId?: string | null } | undefined | null;
+  switch (entity) {
+    case "Account":     record = await storage.getAccountById(entityId); break;
+    case "Contact":     record = await storage.getContactById(entityId); break;
+    case "Lead":        record = await storage.getLeadById(entityId); break;
+    case "Opportunity": record = await storage.getOpportunityById(entityId); break;
+    case "Activity":    record = await storage.getActivityById(entityId); break;
+    default:            return true;
+  }
+  return assertOrgOwnership(record, orgId);
+}
+
 export async function registerRoutes(app: Express) {
+
+  // Attach active org ID from X-Organization-Id header to all requests
+  app.use(attachActiveOrg);
 
   // ========== MICROSOFT ENTRA ID SSO ROUTES ==========
   registerEntraRoutes(app);
+
+  // ========== ORGANIZATION ROUTES ==========
+  registerOrgRoutes(app);
 
   // ========== AUTHENTICATION ROUTES ==========
   
@@ -252,16 +284,33 @@ export async function registerRoutes(app: Express) {
   // Get all users (for dropdowns)
   app.get("/api/users", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allUsers = await db
-        .select({
-          id: users.id,
-          name: users.name,
-          email: users.email,
-        })
-        .from(users)
-        .where(eq(users.status, "active"));
+      // Global admins always see all active users so they can assign users across orgs.
+      // Org-scoped (non-admin) users see only members of their active org.
+      const isGlobalAdmin = await hasAnyRole(req.user!.id, ["Admin"]);
+      let query;
+      if (isGlobalAdmin) {
+        query = db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(eq(users.status, "active"));
+      } else if (req.activeOrgId) {
+        query = db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .innerJoin(userOrganizations, and(
+            eq(userOrganizations.userId, users.id),
+            eq(userOrganizations.organizationId, req.activeOrgId),
+          ))
+          .where(eq(users.status, "active"));
+      } else {
+        // No active org and not a global admin — return own record only
+        query = db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(and(eq(users.status, "active"), eq(users.id, req.user!.id)));
+      }
       
-      return res.json(allUsers);
+      return res.json(await query);
     } catch (error) {
       console.error("Failed to fetch users:", error);
       return res.status(500).json({ error: "Failed to fetch users" });
@@ -273,7 +322,7 @@ export async function registerRoutes(app: Express) {
   // Get accounts summary statistics
   app.get("/api/accounts/summary", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allAccounts = await storage.getAllAccounts();
+      const allAccounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       const allUsers = await storage.getAllUsers();
       
       // Total count
@@ -339,7 +388,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/accounts", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      let accounts = await storage.getAllAccounts();
+      let accounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       
       // Apply search filter
       const search = req.query.search as string | undefined;
@@ -406,7 +455,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/accounts/:id", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const account = await storage.getAccountById(req.params.id);
-      if (!account) {
+      if (!account || !assertOrgOwnership(account, req.activeOrgId)) {
         return res.status(404).json({ error: "Account not found" });
       }
       return res.json(account);
@@ -418,6 +467,7 @@ export async function registerRoutes(app: Express) {
   app.post("/api/accounts", authenticate, requirePermission("Account", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertAccountSchema.parse(req.body);
+      if (req.activeOrgId) data.organizationId = req.activeOrgId;
       const account = await storage.createAccount(data);
       
       await createAudit(req, "create", "Account", account.id, null, account);
@@ -434,7 +484,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/accounts/:id", authenticate, requirePermission("Account", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getAccountById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Account not found" });
       }
       
@@ -451,7 +501,7 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/accounts/:id", authenticate, requirePermission("Account", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getAccountById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Account not found" });
       }
       
@@ -470,17 +520,17 @@ export async function registerRoutes(app: Express) {
     try {
       const accountId = req.params.id;
       
-      // Verify account exists
+      // Verify account exists and belongs to active org
       const account = await storage.getAccountById(accountId);
-      if (!account) {
+      if (!account || !assertOrgOwnership(account, req.activeOrgId)) {
         return res.status(404).json({ error: "Account not found" });
       }
       
       // Fetch related data
       const [allContacts, allOpportunities, allActivities, activityAssocs] = await Promise.all([
-        storage.getAllContacts(),
-        storage.getAllOpportunities(),
-        storage.getAllActivities(),
+        storage.getAllContacts(req.activeOrgId || undefined),
+        storage.getAllOpportunities(req.activeOrgId || undefined),
+        storage.getAllActivities(req.activeOrgId || undefined),
         // Fetch activity associations for this account
         db.select().from(activityAssociations).where(
           and(
@@ -531,7 +581,7 @@ export async function registerRoutes(app: Express) {
       let updatedCount = 0;
       for (const accountId of accountIds) {
         const account = await storage.getAccountById(accountId);
-        if (account) {
+        if (account && assertOrgOwnership(account, req.activeOrgId || undefined)) {
           const updatedAccount = await storage.updateAccount(accountId, updates);
           await createAudit(req, "bulk_update", "Account", accountId, account, updatedAccount);
           updatedCount++;
@@ -550,8 +600,8 @@ export async function registerRoutes(app: Express) {
   // Get contacts summary statistics
   app.get("/api/contacts/summary", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allContacts = await storage.getAllContacts();
-      const allAccounts = await storage.getAllAccounts();
+      const allContacts = await storage.getAllContacts(req.activeOrgId || undefined);
+      const allAccounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       
       // Total count
       const totalCount = allContacts.length;
@@ -614,7 +664,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/contacts", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      let contacts = await storage.getAllContacts();
+      let contacts = await storage.getAllContacts(req.activeOrgId || undefined);
       
       // Apply search filter
       const search = req.query.search as string | undefined;
@@ -684,7 +734,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/contacts/:id", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const contact = await storage.getContactById(req.params.id);
-      if (!contact) {
+      if (!contact || !assertOrgOwnership(contact, req.activeOrgId)) {
         return res.status(404).json({ error: "Contact not found" });
       }
       return res.json(contact);
@@ -696,6 +746,16 @@ export async function registerRoutes(app: Express) {
   app.post("/api/contacts", authenticate, requirePermission("Contact", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertContactSchema.parse(req.body);
+      if (req.activeOrgId) data.organizationId = req.activeOrgId;
+      
+      // Validate referenced account belongs to the same org
+      if (data.accountId) {
+        const account = await storage.getAccountById(data.accountId);
+        if (!account || !assertOrgOwnership(account, req.activeOrgId)) {
+          return res.status(400).json({ error: "Referenced account not found in this organization" });
+        }
+      }
+      
       const contact = await storage.createContact(data);
       
       await createAudit(req, "create", "Contact", contact.id, null, contact);
@@ -712,7 +772,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/contacts/:id", authenticate, requirePermission("Contact", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getContactById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Contact not found" });
       }
       
@@ -737,14 +797,14 @@ export async function registerRoutes(app: Express) {
       const contactId = req.params.id;
       
       const contact = await storage.getContactById(contactId);
-      if (!contact) {
+      if (!contact || !assertOrgOwnership(contact, req.activeOrgId)) {
         return res.status(404).json({ error: "Contact not found" });
       }
       
       const [account, allOpportunities, allActivities, activityAssocs] = await Promise.all([
         contact.accountId ? storage.getAccountById(contact.accountId) : Promise.resolve(null),
-        storage.getAllOpportunities(),
-        storage.getAllActivities(),
+        storage.getAllOpportunities(req.activeOrgId || undefined),
+        storage.getAllActivities(req.activeOrgId || undefined),
         // Fetch activity associations for this contact
         db.select().from(activityAssociations).where(
           and(
@@ -794,7 +854,7 @@ export async function registerRoutes(app: Express) {
       let updatedCount = 0;
       for (const contactId of contactIds) {
         const contact = await storage.getContactById(contactId);
-        if (contact) {
+        if (contact && assertOrgOwnership(contact, req.activeOrgId || undefined)) {
           const updatedContact = await storage.updateContact(contactId, updates);
           await createAudit(req, "bulk_update", "Contact", contactId, contact, updatedContact);
           updatedCount++;
@@ -813,7 +873,7 @@ export async function registerRoutes(app: Express) {
   // Get leads summary statistics
   app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allLeads = await storage.getAllLeads();
+      const allLeads = await storage.getAllLeads(req.activeOrgId || undefined);
       
       // Total count
       const totalCount = allLeads.length;
@@ -874,7 +934,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      let leads = await storage.getAllLeads();
+      let leads = await storage.getAllLeads(req.activeOrgId || undefined);
       
       // Apply search filter
       const search = req.query.search as string | undefined;
@@ -949,7 +1009,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/leads/:id", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const lead = await storage.getLeadById(req.params.id);
-      if (!lead) {
+      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
       return res.json(lead);
@@ -961,6 +1021,7 @@ export async function registerRoutes(app: Express) {
   app.post("/api/leads", authenticate, requirePermission("Lead", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
+      if (req.activeOrgId) data.organizationId = req.activeOrgId;
       const lead = await storage.createLead(data);
       
       await createAudit(req, "create", "Lead", lead.id, null, lead);
@@ -980,12 +1041,12 @@ export async function registerRoutes(app: Express) {
       const leadId = req.params.id;
       
       const lead = await storage.getLeadById(leadId);
-      if (!lead) {
+      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
       
       const [allActivities, activityAssocs] = await Promise.all([
-        storage.getAllActivities(),
+        storage.getAllActivities(req.activeOrgId || undefined),
         // Fetch activity associations for this lead
         db.select().from(activityAssociations).where(
           and(
@@ -1045,7 +1106,7 @@ export async function registerRoutes(app: Express) {
       } = req.body;
       
       const lead = await storage.getLeadById(leadId);
-      if (!lead) {
+      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
       
@@ -1057,6 +1118,8 @@ export async function registerRoutes(app: Express) {
       let contactId = null;
       let opportunityId = null;
       
+      const conversionOrgId = (lead.organizationId || req.activeOrgId) as string;
+
       // Create Account if requested (backwards compatible with old wizard)
       if (createAccount || (!accountId && accountData)) {
         const account = await storage.createAccount({
@@ -1069,6 +1132,7 @@ export async function registerRoutes(app: Express) {
           billingAddress: accountData?.billingAddress || null,
           shippingAddress: accountData?.shippingAddress || null,
           ownerId: lead.ownerId,
+          organizationId: conversionOrgId,
         });
         accountId = account.id;
         await createAudit(req, "create", "Account", account.id, null, account);
@@ -1084,34 +1148,40 @@ export async function registerRoutes(app: Express) {
         title: lead.title || null,
         accountId: accountId,
         ownerId: lead.ownerId,
+        organizationId: conversionOrgId,
       });
       contactId = contact.id;
       await createAudit(req, "create", "Contact", contact.id, null, contact);
       
       // Create Opportunity if requested (backwards compatible with old wizard)
       if (createOpportunity && accountId) {
-        const opportunity = await storage.createOpportunity({
+        // Default close date is 90 days from now if not provided
+        const defaultCloseDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+        // Use the schema's parse to get proper types (handles date preprocessing etc.)
+        const oppCreateData = insertOpportunitySchema.parse({
           id: "",
           name: opportunityData?.name || opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`,
           accountId,
           stage: opportunityData?.stage || "prospecting",
           amount: opportunityData?.amount || opportunityAmount || "0",
           probability: opportunityData?.probability !== undefined ? opportunityData.probability : 10,
-          closeDate: opportunityData?.closeDate || null,
+          closeDate: opportunityData?.closeDate || defaultCloseDate.toISOString(),
           ownerId: lead.ownerId,
+          organizationId: conversionOrgId,
         });
+        const opportunity = await storage.createOpportunity(oppCreateData);
         opportunityId = opportunity.id;
         await createAudit(req, "create", "Opportunity", opportunity.id, null, opportunity);
       }
       
-      // Update lead status
-      const updatedLead = await storage.updateLead(leadId, {
+      // Update lead status — use db directly to set convertedAt which is omitted from InsertLead
+      const [updatedLead] = await db.update(leads).set({
         status: "converted",
-        convertedAccountId: accountId,
-        convertedContactId: contactId,
-        convertedOpportunityId: opportunityId,
+        convertedAccountId: accountId ?? null,
+        convertedContactId: contactId ?? null,
+        convertedOpportunityId: opportunityId ?? null,
         convertedAt: new Date(),
-      } as any);
+      }).where(eq(leads.id, leadId)).returning();
       
       await createAudit(req, "convert", "Lead", leadId, lead, updatedLead);
       
@@ -1133,7 +1203,7 @@ export async function registerRoutes(app: Express) {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
       
-      if (!lead) {
+      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
 
@@ -1153,7 +1223,7 @@ export async function registerRoutes(app: Express) {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
       
-      if (!lead) {
+      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
 
@@ -1183,7 +1253,7 @@ export async function registerRoutes(app: Express) {
       let updatedCount = 0;
       for (const leadId of leadIds) {
         const lead = await storage.getLeadById(leadId);
-        if (lead) {
+        if (lead && assertOrgOwnership(lead, req.activeOrgId || undefined)) {
           const updatedLead = await storage.updateLead(leadId, updates);
           await createAudit(req, "bulk_update", "Lead", leadId, lead, updatedLead);
           updatedCount++;
@@ -1201,7 +1271,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      let allOpportunities = await storage.getAllOpportunities();
+      let allOpportunities = await storage.getAllOpportunities(req.activeOrgId || undefined);
       
       const search = req.query.search as string | undefined;
       if (search) {
@@ -1223,15 +1293,15 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/opportunities/:id", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const canReadAll = await hasPermission(req.user!.id, "Opportunity", "read");
-      const canReadOwn = await hasPermission(req.user!.id, "Opportunity", "readOwn");
+      const canReadAll = await hasPermission(req.user!.id, "Opportunity", "read", req.activeOrgId || undefined);
+      const canReadOwn = await hasPermission(req.user!.id, "Opportunity", "readOwn", req.activeOrgId || undefined);
 
       if (!canReadAll && !canReadOwn) {
         return res.status(403).json({ error: "Forbidden", message: "You do not have permission to read Opportunity" });
       }
 
       const opportunity = await storage.getOpportunityById(req.params.id);
-      if (!opportunity) {
+      if (!opportunity || !assertOrgOwnership(opportunity, req.activeOrgId)) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
 
@@ -1258,6 +1328,16 @@ export async function registerRoutes(app: Express) {
       if (data.implementationStartDate && data.implementationEndDate && new Date(data.implementationStartDate) > new Date(data.implementationEndDate)) {
         return res.status(400).json({ error: "Implementation start date must be before end date" });
       }
+      if (req.activeOrgId) data.organizationId = req.activeOrgId;
+      
+      // Validate referenced account belongs to the same org
+      if (data.accountId) {
+        const account = await storage.getAccountById(data.accountId);
+        if (!account || !assertOrgOwnership(account, req.activeOrgId)) {
+          return res.status(400).json({ error: "Referenced account not found in this organization" });
+        }
+      }
+      
       const opportunity = await storage.createOpportunity(data);
       
       await createAudit(req, "create", "Opportunity", opportunity.id, null, opportunity);
@@ -1274,7 +1354,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getOpportunityById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
@@ -1327,7 +1407,7 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/opportunities/:id", authenticate, requirePermission("Opportunity", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getOpportunityById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
@@ -1348,14 +1428,14 @@ export async function registerRoutes(app: Express) {
       const opportunityId = req.params.id;
       
       const opportunity = await storage.getOpportunityById(opportunityId);
-      if (!opportunity) {
+      if (!opportunity || !assertOrgOwnership(opportunity, req.activeOrgId)) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
       
       const [account, allContacts, allActivities, activityAssocs] = await Promise.all([
         storage.getAccountById(opportunity.accountId),
-        storage.getAllContacts(),
-        storage.getAllActivities(),
+        storage.getAllContacts(req.activeOrgId || undefined),
+        storage.getAllActivities(req.activeOrgId || undefined),
         // Fetch activity associations for this opportunity
         db.select().from(activityAssociations).where(
           and(
@@ -1459,6 +1539,18 @@ export async function registerRoutes(app: Express) {
 
   app.delete("/api/opportunity-resources/:id", authenticate, requirePermission("Opportunity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
+      // Verify parent opportunity belongs to active org before deleting
+      const [resourceRow] = await db
+        .select({ oppOrgId: opportunities.organizationId })
+        .from(opportunityResources)
+        .innerJoin(opportunities, eq(opportunityResources.opportunityId, opportunities.id))
+        .where(eq(opportunityResources.id, req.params.id));
+      if (!resourceRow) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+      if (!assertOrgOwnership({ organizationId: resourceRow.oppOrgId }, req.activeOrgId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       await storage.removeOpportunityResource(req.params.id);
       return res.json({ success: true });
     } catch (error) {
@@ -1469,7 +1561,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/resource-allocation", authenticate, requirePermission("ResourceAllocation", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const [allOpportunities, allResources, allUsers] = await Promise.all([
-        storage.getAllOpportunities(),
+        storage.getAllOpportunities(req.activeOrgId || undefined),
         storage.getAllOpportunityResources(),
         storage.getAllUsers(),
       ]);
@@ -1559,7 +1651,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      let allActivities = await storage.getAllActivities();
+      let allActivities = await storage.getAllActivities(req.activeOrgId || undefined);
       
       const search = req.query.search as string | undefined;
       if (search) {
@@ -1580,11 +1672,13 @@ export async function registerRoutes(app: Express) {
     try {
       const now = new Date();
       const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const activeOrgId = req.activeOrgId || undefined;
       
       const upcomingActivities = await db.select()
         .from(activities)
         .where(
           and(
+            activeOrgId ? eq(activities.organizationId, activeOrgId) : undefined,
             gte(activities.dueAt, now),
             lte(activities.dueAt, thirtyDaysFromNow),
             ne(activities.status, 'completed')
@@ -1602,10 +1696,16 @@ export async function registerRoutes(app: Express) {
 
   app.get("/api/activities/pending", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
+      const activeOrgId = req.activeOrgId || undefined;
       // Get all activities that are not completed (pending or cancelled)
       const pendingActivities = await db.select()
         .from(activities)
-        .where(ne(activities.status, 'completed'))
+        .where(
+          and(
+            activeOrgId ? eq(activities.organizationId, activeOrgId) : undefined,
+            ne(activities.status, 'completed')
+          )
+        )
         .orderBy(asc(activities.dueAt))
         .limit(100);
       
@@ -1618,7 +1718,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/activities/summary", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allActivities = await storage.getAllActivities();
+      const allActivities = await storage.getAllActivities(req.activeOrgId || undefined);
       const allUsers = await storage.getAllUsers();
       
       // Total count
@@ -1713,7 +1813,7 @@ export async function registerRoutes(app: Express) {
   app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activity = await storage.getActivityById(req.params.id);
-      if (!activity) {
+      if (!activity || !assertOrgOwnership(activity, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       return res.json(activity);
@@ -1726,14 +1826,25 @@ export async function registerRoutes(app: Express) {
     try {
       const data = insertActivitySchema.parse(req.body);
       
-      // Convert string dates to Date objects for database storage
-      const activityData = {
+      // Validate that the relatedId entity belongs to the same org (prevents cross-org associations)
+      if (data.relatedType && data.relatedId) {
+        let relatedEntity: { organizationId?: string | null } | undefined;
+        if (data.relatedType === "Account") relatedEntity = await storage.getAccountById(data.relatedId);
+        else if (data.relatedType === "Contact") relatedEntity = await storage.getContactById(data.relatedId);
+        else if (data.relatedType === "Opportunity") relatedEntity = await storage.getOpportunityById(data.relatedId);
+        else if (data.relatedType === "Lead") relatedEntity = await storage.getLeadById(data.relatedId);
+        if (relatedEntity !== undefined && !assertOrgOwnership(relatedEntity, req.activeOrgId)) {
+          return res.status(400).json({ error: "Referenced entity not found in this organization" });
+        }
+      }
+      
+      // Build activity data with org override (date strings are converted in the storage layer)
+      const activityData: typeof data = {
         ...data,
-        dueAt: data.dueAt ? new Date(data.dueAt) : null,
-        completedAt: data.completedAt ? new Date(data.completedAt) : null,
+        organizationId: req.activeOrgId || data.organizationId,
       };
       
-      const activity = await storage.createActivity(activityData as any);
+      const activity = await storage.createActivity(activityData);
       
       // IMPORTANT: Also create activity_associations entry if relatedType and relatedId are provided
       // This ensures the activity shows up on entity detail pages
@@ -1788,7 +1899,7 @@ export async function registerRoutes(app: Express) {
       
       for (const activityId of activityIds) {
         const before = await storage.getActivityById(activityId);
-        if (before) {
+        if (before && assertOrgOwnership(before, req.activeOrgId || undefined)) {
           const activity = await storage.updateActivity(activityId, processedUpdates);
           await createAudit(req, "update", "Activity", activity.id, before, activity);
           updatedActivities.push(activity);
@@ -1809,7 +1920,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/activities/:id", authenticate, requirePermission("Activity", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getActivityById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
@@ -1836,7 +1947,7 @@ export async function registerRoutes(app: Express) {
   app.delete("/api/activities/:id", authenticate, requirePermission("Activity", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const before = await storage.getActivityById(req.params.id);
-      if (!before) {
+      if (!before || !assertOrgOwnership(before, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
@@ -1856,7 +1967,7 @@ export async function registerRoutes(app: Express) {
       const activityId = req.params.id;
       
       const activity = await storage.getActivityById(activityId);
-      if (!activity) {
+      if (!activity || !assertOrgOwnership(activity, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
@@ -1871,6 +1982,11 @@ export async function registerRoutes(app: Express) {
           relatedEntity = await storage.getOpportunityById(activity.relatedId);
         } else if (activity.relatedType === "Lead") {
           relatedEntity = await storage.getLeadById(activity.relatedId);
+        }
+        // Verify the related entity belongs to the same org (prevents cross-org leakage
+        // via corrupt/legacy relatedId references)
+        if (relatedEntity && !assertOrgOwnership(relatedEntity, req.activeOrgId)) {
+          relatedEntity = null;
         }
       }
       
@@ -1889,9 +2005,9 @@ export async function registerRoutes(app: Express) {
     try {
       const activityId = req.params.id;
       
-      // Verify activity exists
+      // Verify activity exists and belongs to the active org
       const activity = await storage.getActivityById(activityId);
-      if (!activity) {
+      if (!activity || !assertOrgOwnership(activity, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
@@ -1901,25 +2017,39 @@ export async function registerRoutes(app: Express) {
         .from(activityAssociations)
         .where(eq(activityAssociations.activityId, activityId));
       
-      // Fetch entity details for each association
+      // Fetch entity details for each association, filtering to same org only
       const associationsWithDetails = await Promise.all(
         associations.map(async (assoc: any) => {
           let entityDetails: any = null;
           let entityName = "";
           
           if (assoc.entityType === "Account") {
-            entityDetails = await storage.getAccountById(assoc.entityId);
-            entityName = entityDetails?.name || assoc.entityId;
+            const entity = await storage.getAccountById(assoc.entityId);
+            if (entity && assertOrgOwnership(entity, req.activeOrgId)) {
+              entityDetails = entity;
+              entityName = entity.name;
+            }
           } else if (assoc.entityType === "Contact") {
-            entityDetails = await storage.getContactById(assoc.entityId);
-            entityName = entityDetails ? `${entityDetails.firstName} ${entityDetails.lastName}` : assoc.entityId;
+            const entity = await storage.getContactById(assoc.entityId);
+            if (entity && assertOrgOwnership(entity, req.activeOrgId)) {
+              entityDetails = entity;
+              entityName = `${entity.firstName} ${entity.lastName}`;
+            }
           } else if (assoc.entityType === "Lead") {
-            entityDetails = await storage.getLeadById(assoc.entityId);
-            entityName = entityDetails ? `${entityDetails.firstName} ${entityDetails.lastName}` : assoc.entityId;
+            const entity = await storage.getLeadById(assoc.entityId);
+            if (entity && assertOrgOwnership(entity, req.activeOrgId)) {
+              entityDetails = entity;
+              entityName = `${entity.firstName} ${entity.lastName}`;
+            }
           } else if (assoc.entityType === "Opportunity") {
-            entityDetails = await storage.getOpportunityById(assoc.entityId);
-            entityName = entityDetails?.name || assoc.entityId;
+            const entity = await storage.getOpportunityById(assoc.entityId);
+            if (entity && assertOrgOwnership(entity, req.activeOrgId)) {
+              entityDetails = entity;
+              entityName = entity.name;
+            }
           }
+          
+          entityName = entityName || assoc.entityId;
           
           return {
             ...assoc,
@@ -1941,9 +2071,9 @@ export async function registerRoutes(app: Express) {
     try {
       const activityId = req.params.id;
       
-      // Verify activity exists
+      // Verify activity exists and belongs to the active org
       const activity = await storage.getActivityById(activityId);
-      if (!activity) {
+      if (!activity || !assertOrgOwnership(activity, req.activeOrgId)) {
         return res.status(404).json({ error: "Activity not found" });
       }
       
@@ -1952,16 +2082,20 @@ export async function registerRoutes(app: Express) {
         activityId,
       });
       
-      // Verify entity exists
+      // Verify entity exists and belongs to the same org (prevents cross-org linking)
       let entityExists = false;
       if (data.entityType === "Account") {
-        entityExists = !!(await storage.getAccountById(data.entityId));
+        const entity = await storage.getAccountById(data.entityId);
+        entityExists = !!(entity && assertOrgOwnership(entity, req.activeOrgId));
       } else if (data.entityType === "Contact") {
-        entityExists = !!(await storage.getContactById(data.entityId));
+        const entity = await storage.getContactById(data.entityId);
+        entityExists = !!(entity && assertOrgOwnership(entity, req.activeOrgId));
       } else if (data.entityType === "Lead") {
-        entityExists = !!(await storage.getLeadById(data.entityId));
+        const entity = await storage.getLeadById(data.entityId);
+        entityExists = !!(entity && assertOrgOwnership(entity, req.activeOrgId));
       } else if (data.entityType === "Opportunity") {
-        entityExists = !!(await storage.getOpportunityById(data.entityId));
+        const entity = await storage.getOpportunityById(data.entityId);
+        entityExists = !!(entity && assertOrgOwnership(entity, req.activeOrgId));
       }
       
       if (!entityExists) {
@@ -2002,6 +2136,7 @@ export async function registerRoutes(app: Express) {
   // Get ALL activity associations in one bulk request (avoids N+1 on list page)
   app.get("/api/activity-associations", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
+      const activeOrgId = req.activeOrgId || undefined;
       const rows = await db
         .select({
           id: activityAssociations.id,
@@ -2010,26 +2145,28 @@ export async function registerRoutes(app: Express) {
           entityId: activityAssociations.entityId,
           createdAt: activityAssociations.createdAt,
         })
-        .from(activityAssociations);
+        .from(activityAssociations)
+        .innerJoin(activities, eq(activityAssociations.activityId, activities.id))
+        .where(activeOrgId ? eq(activities.organizationId, activeOrgId) : undefined);
 
-      // Collect unique entity ids per type to resolve names
-      const accountIds = [...new Set(rows.filter(r => r.entityType === "Account").map(r => r.entityId))];
-      const contactIds = [...new Set(rows.filter(r => r.entityType === "Contact").map(r => r.entityId))];
-      const opportunityIds = [...new Set(rows.filter(r => r.entityType === "Opportunity").map(r => r.entityId))];
-      const leadIds = [...new Set(rows.filter(r => r.entityType === "Lead").map(r => r.entityId))];
+      // Collect unique entity ids per type to resolve names (filter nulls for type safety)
+      const accountIds = Array.from(new Set(rows.filter(r => r.entityType === "Account").map(r => r.entityId))).filter((id): id is string => id != null);
+      const contactIds = Array.from(new Set(rows.filter(r => r.entityType === "Contact").map(r => r.entityId))).filter((id): id is string => id != null);
+      const opportunityIds = Array.from(new Set(rows.filter(r => r.entityType === "Opportunity").map(r => r.entityId))).filter((id): id is string => id != null);
+      const leadIds = Array.from(new Set(rows.filter(r => r.entityType === "Lead").map(r => r.entityId))).filter((id): id is string => id != null);
 
       const [accts, ctcts, opps, lds] = await Promise.all([
         accountIds.length ? db.select({ id: accounts.id, name: accounts.name }).from(accounts).where(inArray(accounts.id, accountIds)) : [],
-        contactIds.length ? db.select({ id: contacts.id, name: contacts.name }).from(contacts).where(inArray(contacts.id, contactIds)) : [],
+        contactIds.length ? db.select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName }).from(contacts).where(inArray(contacts.id, contactIds)) : [],
         opportunityIds.length ? db.select({ id: opportunities.id, name: opportunities.name }).from(opportunities).where(inArray(opportunities.id, opportunityIds)) : [],
-        leadIds.length ? db.select({ id: leads.id, name: leads.name }).from(leads).where(inArray(leads.id, leadIds)) : [],
+        leadIds.length ? db.select({ id: leads.id, firstName: leads.firstName, lastName: leads.lastName }).from(leads).where(inArray(leads.id, leadIds)) : [],
       ]);
 
       const nameMap: Record<string, string> = {};
       for (const a of accts) nameMap[`Account:${a.id}`] = a.name;
-      for (const c of ctcts) nameMap[`Contact:${c.id}`] = c.name;
+      for (const c of ctcts) nameMap[`Contact:${c.id}`] = `${c.firstName} ${c.lastName}`.trim();
       for (const o of opps) nameMap[`Opportunity:${o.id}`] = o.name;
-      for (const l of lds) nameMap[`Lead:${l.id}`] = l.name;
+      for (const l of lds) nameMap[`Lead:${l.id}`] = `${l.firstName} ${l.lastName}`.trim();
 
       const enriched = rows.map(r => ({
         ...r,
@@ -2048,14 +2185,20 @@ export async function registerRoutes(app: Express) {
     try {
       const associationId = req.params.id;
       
-      // Get association before deleting
-      const [association] = await db
-        .select()
+      // Fetch association AND join to parent activity to enforce org ownership
+      const [row] = await db
+        .select({ association: activityAssociations, activityOrgId: activities.organizationId })
         .from(activityAssociations)
+        .innerJoin(activities, eq(activityAssociations.activityId, activities.id))
         .where(eq(activityAssociations.id, associationId));
       
-      if (!association) {
+      if (!row) {
         return res.status(404).json({ error: "Association not found" });
+      }
+      
+      // Enforce org ownership via parent activity
+      if (!assertOrgOwnership({ organizationId: row.activityOrgId }, req.activeOrgId)) {
+        return res.status(403).json({ error: "Access denied" });
       }
       
       // Delete association
@@ -2063,7 +2206,7 @@ export async function registerRoutes(app: Express) {
         .delete(activityAssociations)
         .where(eq(activityAssociations.id, associationId));
       
-      await createAudit(req, "delete", "ActivityAssociation", associationId, association, null);
+      await createAudit(req, "delete", "ActivityAssociation", associationId, row.association, null);
       
       return res.json({ success: true });
     } catch (error) {
@@ -2084,6 +2227,8 @@ export async function registerRoutes(app: Express) {
       const searchTerm = `%${q.toLowerCase()}%`;
       const results: any[] = [];
       
+      const activeOrgId = req.activeOrgId || undefined;
+
       // Search accounts (if type not specified or type is Account)
       if (!type || type === "Account") {
         const accountResults = await db
@@ -2095,7 +2240,10 @@ export async function registerRoutes(app: Express) {
           })
           .from(accounts)
           .where(
-            sql`LOWER(${accounts.name}) LIKE ${searchTerm} OR LOWER(${accounts.id}) LIKE ${searchTerm}`
+            and(
+              activeOrgId ? eq(accounts.organizationId, activeOrgId) : undefined,
+              sql`LOWER(${accounts.name}) LIKE ${searchTerm} OR LOWER(${accounts.id}) LIKE ${searchTerm}`
+            )
           )
           .limit(10);
         results.push(...accountResults);
@@ -2112,7 +2260,10 @@ export async function registerRoutes(app: Express) {
           })
           .from(contacts)
           .where(
-            sql`LOWER(${contacts.firstName} || ' ' || ${contacts.lastName}) LIKE ${searchTerm} OR LOWER(${contacts.id}) LIKE ${searchTerm} OR LOWER(${contacts.email}) LIKE ${searchTerm}`
+            and(
+              activeOrgId ? eq(contacts.organizationId, activeOrgId) : undefined,
+              sql`LOWER(${contacts.firstName} || ' ' || ${contacts.lastName}) LIKE ${searchTerm} OR LOWER(${contacts.id}) LIKE ${searchTerm} OR LOWER(${contacts.email}) LIKE ${searchTerm}`
+            )
           )
           .limit(10);
         results.push(...contactResults);
@@ -2129,7 +2280,10 @@ export async function registerRoutes(app: Express) {
           })
           .from(leads)
           .where(
-            sql`LOWER(${leads.firstName} || ' ' || ${leads.lastName}) LIKE ${searchTerm} OR LOWER(${leads.company}) LIKE ${searchTerm} OR LOWER(${leads.id}) LIKE ${searchTerm}`
+            and(
+              activeOrgId ? eq(leads.organizationId, activeOrgId) : undefined,
+              sql`LOWER(${leads.firstName} || ' ' || ${leads.lastName}) LIKE ${searchTerm} OR LOWER(${leads.company}) LIKE ${searchTerm} OR LOWER(${leads.id}) LIKE ${searchTerm}`
+            )
           )
           .limit(10);
         results.push(...leadResults);
@@ -2146,7 +2300,10 @@ export async function registerRoutes(app: Express) {
           })
           .from(opportunities)
           .where(
-            sql`LOWER(${opportunities.name}) LIKE ${searchTerm} OR LOWER(${opportunities.id}) LIKE ${searchTerm}`
+            and(
+              activeOrgId ? eq(opportunities.organizationId, activeOrgId) : undefined,
+              sql`LOWER(${opportunities.name}) LIKE ${searchTerm} OR LOWER(${opportunities.id}) LIKE ${searchTerm}`
+            )
           )
           .limit(10);
         results.push(...opportunityResults);
@@ -2161,7 +2318,7 @@ export async function registerRoutes(app: Express) {
   
   // ========== DASHBOARD ROUTES ==========
   
-  app.get("/api/dashboard/stats", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/dashboard/stats", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const currentYear = new Date().getFullYear();
       const rawYear = req.query.year;
@@ -2173,7 +2330,7 @@ export async function registerRoutes(app: Express) {
         }
         year = parsedYear;
       }
-      const stats = await storage.getDashboardStats(year);
+      const stats = await storage.getDashboardStats(year, req.activeOrgId || undefined);
       return res.json(stats);
     } catch (error) {
       console.error("Dashboard stats error:", error);
@@ -2181,14 +2338,14 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/dashboard/sales-waterfall/:year", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/dashboard/sales-waterfall/:year", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const year = parseInt(req.params.year);
       if (isNaN(year) || year < 2000 || year > 2100) {
         return res.status(400).json({ error: "Invalid year" });
       }
       
-      const waterfallData = await storage.getSalesWaterfallData(year);
+      const waterfallData = await storage.getSalesWaterfallData(year, req.activeOrgId || undefined);
       return res.json(waterfallData);
     } catch (error) {
       console.error("Sales waterfall error:", error);
@@ -2265,6 +2422,9 @@ export async function registerRoutes(app: Express) {
     try {
       const { entityId } = req.params;
       const entity = normalizeEntityName(req.params.entity);
+      if (!await assertEntityOrgOwnership(entity, entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${entity} not found` });
+      }
       const tags = await storage.getEntityTags(entity, entityId);
       return res.json(tags);
     } catch (error) {
@@ -2276,6 +2436,9 @@ export async function registerRoutes(app: Express) {
     try {
       const { entityId } = req.params;
       const entity = normalizeEntityName(req.params.entity);
+      if (!await assertEntityOrgOwnership(entity, entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${entity} not found` });
+      }
       const { tagIds } = req.body;
       await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
       return res.json({ success: true });
@@ -2288,6 +2451,9 @@ export async function registerRoutes(app: Express) {
     try {
       const { entityId, tagId } = req.params;
       const entity = normalizeEntityName(req.params.entity);
+      if (!await assertEntityOrgOwnership(entity, entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${entity} not found` });
+      }
       await storage.removeEntityTag(entity, entityId, tagId);
       return res.json({ success: true });
     } catch (error) {
@@ -2301,11 +2467,18 @@ export async function registerRoutes(app: Express) {
       const entity = normalizeEntityName(req.params.entity);
       const { entityIds, tagIds } = req.body;
       
+      const validIds: string[] = [];
       for (const entityId of entityIds) {
+        if (await assertEntityOrgOwnership(entity, entityId, req.activeOrgId)) {
+          validIds.push(entityId);
+        }
+      }
+      
+      for (const entityId of validIds) {
         await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
       }
       
-      return res.json({ success: true, count: entityIds.length });
+      return res.json({ success: true, count: validIds.length });
     } catch (error) {
       console.error("Bulk tag assignment error:", error);
       return res.status(500).json({ error: "Failed to assign tags" });
@@ -2316,10 +2489,10 @@ export async function registerRoutes(app: Express) {
 
   app.get("/api/resource-allocation/opportunities", authenticate, requirePermission("ResourceAllocation", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const allOpps = await storage.getAllOpportunities();
+      const allOpps = await storage.getAllOpportunities(req.activeOrgId || undefined);
       const allResources = await db.select().from(opportunityResources);
       const allUsers = await storage.getAllUsers();
-      const allAccounts = await storage.getAllAccounts();
+      const allAccounts = await storage.getAllAccounts(req.activeOrgId || undefined);
 
       const oppsWithResources = allOpps.map(opp => {
         const resources = allResources
@@ -2346,6 +2519,11 @@ export async function registerRoutes(app: Express) {
   app.post("/api/resource-allocation", authenticate, requirePermission("ResourceAllocation", "write"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertOpportunityResourceSchema.parse(req.body);
+      // Verify the target opportunity belongs to the active org before creating the allocation
+      const parentOpp = await storage.getOpportunityById(data.opportunityId);
+      if (!parentOpp || !assertOrgOwnership(parentOpp, req.activeOrgId || undefined)) {
+        return res.status(403).json({ error: "Opportunity not found or access denied" });
+      }
       const [created] = await db.insert(opportunityResources).values(data).returning();
       await createAudit(req, "create", "OpportunityResource", created.id, null, created);
       return res.json(created);
@@ -2360,13 +2538,22 @@ export async function registerRoutes(app: Express) {
 
   app.delete("/api/resource-allocation/:id", authenticate, requirePermission("ResourceAllocation", "write"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
+      // Verify parent opportunity belongs to active org before deleting
+      const [resourceRow] = await db
+        .select({ resource: opportunityResources, oppOrgId: opportunities.organizationId })
+        .from(opportunityResources)
+        .innerJoin(opportunities, eq(opportunityResources.opportunityId, opportunities.id))
+        .where(eq(opportunityResources.id, req.params.id));
+      if (!resourceRow) {
+        return res.status(404).json({ error: "Resource allocation not found" });
+      }
+      if (!assertOrgOwnership({ organizationId: resourceRow.oppOrgId }, req.activeOrgId)) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const [deleted] = await db.delete(opportunityResources)
         .where(eq(opportunityResources.id, req.params.id))
         .returning();
-      if (!deleted) {
-        return res.status(404).json({ error: "Resource allocation not found" });
-      }
-      await createAudit(req, "delete", "OpportunityResource", req.params.id, deleted, null);
+      await createAudit(req, "delete", "OpportunityResource", req.params.id, deleted ?? null, null);
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: "Failed to delete resource allocation" });
@@ -2375,7 +2562,7 @@ export async function registerRoutes(app: Express) {
 
   // ========== ADMIN ROUTES ==========
   
-  app.get("/api/admin/users", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/users", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const users = await storage.getAllUsers();
       // Fetch roles for each user
@@ -2391,7 +2578,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/users", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/users", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, email, password, roleId } = req.body;
       
@@ -2419,6 +2606,20 @@ export async function registerRoutes(app: Express) {
       
       // Assign role
       await storage.assignRoleToUser(newUser.id, roleId);
+
+      // Auto-add new user to the admin's active org (if any) with the specified role
+      if (req.activeOrgId) {
+        try {
+          await storage.addOrganizationMember({
+            userId: newUser.id,
+            organizationId: req.activeOrgId,
+            roleId,
+            isDefault: true,
+          });
+        } catch (_e) {
+          // Non-fatal: org membership may already exist or org may not exist
+        }
+      }
       
       // Create audit log
       await createAudit(req, "create", "User", newUser.id, null, { ...newUser, roleId });
@@ -2430,7 +2631,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/admin/users/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.patch("/api/admin/users/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
       const { name, email, status, roleId } = req.body;
@@ -2464,7 +2665,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/users/merge", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/users/merge", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { primaryUserId, secondaryUserIds } = req.body;
 
@@ -2518,7 +2719,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/roles", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/roles", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const roles = await storage.getAllRoles();
       return res.json(roles);
@@ -2527,16 +2728,16 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/admin/id-patterns", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/id-patterns", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const patterns = await storage.getAllIdPatterns();
+      const patterns = await storage.getAllIdPatterns(req.activeOrgId || undefined);
       return res.json(patterns);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch ID patterns" });
     }
   });
   
-  app.patch("/api/admin/id-patterns/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.patch("/api/admin/id-patterns/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { pattern, startValue, counter } = req.body;
       const updates: any = {};
@@ -2560,7 +2761,7 @@ export async function registerRoutes(app: Express) {
   // Public endpoint for account categories (used in account edit forms by all users)
   app.get("/api/account-categories", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const categories = await storage.getAllAccountCategories();
+      const categories = await storage.getAllAccountCategories(req.activeOrgId || undefined);
       return res.json(categories);
     } catch (error) {
       console.error("Error fetching account categories:", error);
@@ -2569,16 +2770,16 @@ export async function registerRoutes(app: Express) {
   });
   
   // Admin-only endpoint for category management
-  app.get("/api/admin/categories", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/categories", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const categories = await storage.getAllAccountCategories();
+      const categories = await storage.getAllAccountCategories(req.activeOrgId || undefined);
       return res.json(categories);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch categories" });
     }
   });
   
-  app.post("/api/admin/categories", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/categories", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, description, isActive } = req.body;
       
@@ -2590,6 +2791,7 @@ export async function registerRoutes(app: Express) {
         name: name.trim(),
         description: description || null,
         isActive: isActive !== undefined ? isActive : true,
+        organizationId: req.activeOrgId || undefined,
       });
       
       await createAudit(req, "create", "AccountCategory", category.id, null, category);
@@ -2603,7 +2805,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.patch("/api/admin/categories/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.patch("/api/admin/categories/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { name, description, isActive } = req.body;
       const updates: any = {};
@@ -2626,7 +2828,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.delete("/api/admin/categories/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.delete("/api/admin/categories/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const category = await storage.getAccountCategory(req.params.id);
       if (!category) {
@@ -2643,7 +2845,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/backup", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/backup", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const job = await storage.createBackupJob({
         status: "in_progress",
@@ -2693,7 +2895,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/restore", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/restore", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Body should be a Buffer from express.raw() middleware
       let backupBuffer = req.body;
@@ -2764,7 +2966,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/reset-database", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/reset-database", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Delete CRM entity data (in reverse dependency order)
       await storage.resetDatabase();
@@ -2781,7 +2983,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/clear-accounts", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/clear-accounts", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Delete all accounts and related data (in reverse dependency order)
       // Delete comments related to accounts
@@ -2811,7 +3013,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/system-reset", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/system-reset", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       // Create audit log BEFORE deleting users
       await createAudit(req, "reset", "System", null, null, { 
@@ -2847,7 +3049,7 @@ export async function registerRoutes(app: Express) {
   
   // ========== DYNAMICS 365 IMPORT ROUTES ==========
   
-  app.post("/api/admin/dynamics/transform-accounts", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
+  app.post("/api/admin/dynamics/transform-accounts", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2907,7 +3109,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-contacts", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
+  app.post("/api/admin/dynamics/transform-contacts", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -2968,7 +3170,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-leads", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
+  app.post("/api/admin/dynamics/transform-leads", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -3023,7 +3225,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-opportunities", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
+  app.post("/api/admin/dynamics/transform-opportunities", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -3048,7 +3250,7 @@ export async function registerRoutes(app: Express) {
       const excelBuffer = files.excelFile[0].buffer;
 
       // Fetch existing accounts for accountId lookup
-      const existingAccounts = await storage.getAllAccounts();
+      const existingAccounts = await storage.getAllAccounts(req.activeOrgId || undefined);
 
       // Create mapper and transform
       const mapper = new DynamicsMapper(config);
@@ -3084,7 +3286,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/admin/dynamics/transform-activities", authenticate, requireRole("Admin"), sensitiveRateLimiter, upload.fields([
+  app.post("/api/admin/dynamics/transform-activities", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, upload.fields([
     { name: 'excelFile', maxCount: 1 },
     { name: 'mappingConfig', maxCount: 1 },
     { name: 'templateCsv', maxCount: 1 }
@@ -3255,7 +3457,7 @@ export async function registerRoutes(app: Express) {
   
   // ========== DATABASE DIAGNOSTICS ENDPOINT ==========
   
-  app.get("/api/admin/diagnostics/database", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/diagnostics/database", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       console.log('\n=== DATABASE DIAGNOSTICS ===');
       console.log('[DB-DIAGNOSTIC] Starting database diagnostics');
@@ -3448,7 +3650,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/export/accounts", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const accounts = await storage.getAllAccounts();
+      const accounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       
       const headers = [
         "id", "name", "accountNumber", "type", "category", "industry", "website", "phone",
@@ -3468,10 +3670,10 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/export/contacts", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const contacts = await storage.getAllContacts();
+      const contacts = await storage.getAllContacts(req.activeOrgId || undefined);
       
       // Get account names for reference
-      const accounts = await storage.getAllAccounts();
+      const accounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       const accountMap = new Map(accounts.map((a: any) => [a.id, a.name]));
       
       // Add account name to contacts
@@ -3494,7 +3696,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/export/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const leads = await storage.getAllLeads();
+      const leads = await storage.getAllLeads(req.activeOrgId || undefined);
       
       const headers = ["id", "firstName", "lastName", "company", "email", "phone", "topic", "status", "source", "externalId", "sourceSystem", "sourceRecordId", "importStatus", "importNotes", "ownerId", "convertedAccountId", "convertedContactId", "convertedOpportunityId", "convertedAt", "createdAt"];
       const csv = arrayToCSV(leads, headers);
@@ -3510,10 +3712,10 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/export/opportunities", authenticate, requirePermission("Opportunity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const opportunities = await storage.getAllOpportunities();
+      const opportunities = await storage.getAllOpportunities(req.activeOrgId || undefined);
       
       // Get account names for reference
-      const accounts = await storage.getAllAccounts();
+      const accounts = await storage.getAllAccounts(req.activeOrgId || undefined);
       const accountMap = new Map(accounts.map((a: any) => [a.id, a.name]));
       
       // Add account name to opportunities
@@ -3536,7 +3738,7 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/export/activities", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const activities = await storage.getAllActivities();
+      const activities = await storage.getAllActivities(req.activeOrgId || undefined);
       
       const headers = ["id", "type", "subject", "description", "dueDate", "status", "priority", "relatedToType", "relatedToId", "assignedToId", "createdAt"];
       const csv = arrayToCSV(activities, headers);
@@ -3582,7 +3784,7 @@ export async function registerRoutes(app: Express) {
           const row = accountCsvRowSchema.parse(rawRow);
           
           // Auto-generate ID if not provided
-          const generatedAccountId = (!row.id || row.id.trim() === "") ? await storage.generateId("Account") : row.id;
+          const generatedAccountId = (!row.id || row.id.trim() === "") ? await storage.generateId("Account", req.activeOrgId || undefined) : row.id;
           
           // Prepare account data
           const accountData: any = {
@@ -3602,13 +3804,14 @@ export async function registerRoutes(app: Express) {
             importStatus: row.importStatus || "",
             importNotes: row.importNotes || "",
             ownerId: req.user!.id,
+            organizationId: req.activeOrgId || undefined,
           };
           
-          // Check for duplicate by externalId
+          // Check for duplicate by externalId (scoped to org)
           if (accountData.externalId && accountData.externalId.trim() !== "") {
             const [existingByExternalId] = await db.select()
               .from(accounts)
-              .where(eq(accounts.externalId, accountData.externalId))
+              .where(and(eq(accounts.externalId, accountData.externalId), req.activeOrgId ? eq(accounts.organizationId, req.activeOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {
@@ -3678,7 +3881,7 @@ export async function registerRoutes(app: Express) {
           // Validate and parse CSV row with Zod schema
           const row = contactCsvRowSchema.parse(rawRow);
           
-          const generatedContactId = (!row.id || row.id.trim() === "") ? await storage.generateId("Contact") : row.id;
+          const generatedContactId = (!row.id || row.id.trim() === "") ? await storage.generateId("Contact", req.activeOrgId || undefined) : row.id;
           
           const contactData: any = {
             id: generatedContactId,
@@ -3694,13 +3897,14 @@ export async function registerRoutes(app: Express) {
             importStatus: row.importStatus,
             importNotes: row.importNotes,
             ownerId: req.user!.id,
+            organizationId: req.activeOrgId || undefined,
           };
           
-          // Check for duplicate by externalId
+          // Check for duplicate by externalId (scoped to org)
           if (contactData.externalId) {
             const [existingByExternalId] = await db.select()
               .from(contacts)
-              .where(eq(contacts.externalId, contactData.externalId))
+              .where(and(eq(contacts.externalId, contactData.externalId), req.activeOrgId ? eq(contacts.organizationId, req.activeOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {
@@ -3787,7 +3991,7 @@ export async function registerRoutes(app: Express) {
             throw new Error(`Invalid source: "${row.source}". Expected one of: ${validSources.join(", ")}. Note: values must be lowercase.`);
           }
           
-          const generatedId = (!row.id || row.id.trim() === "") ? await storage.generateId("Lead") : row.id;
+          const generatedId = (!row.id || row.id.trim() === "") ? await storage.generateId("Lead", req.activeOrgId || undefined) : row.id;
           
           const leadData: any = {
             id: generatedId,
@@ -3805,13 +4009,14 @@ export async function registerRoutes(app: Express) {
             sourceRecordId: row.sourceRecordId,
             importStatus: row.importStatus,
             importNotes: row.importNotes,
+            organizationId: req.activeOrgId || undefined,
           };
           
-          // Check for duplicate by externalId
+          // Check for duplicate by externalId (scoped to org)
           if (leadData.externalId) {
             const [existingByExternalId] = await db.select()
               .from(leads)
-              .where(eq(leads.externalId, leadData.externalId))
+              .where(and(eq(leads.externalId, leadData.externalId), req.activeOrgId ? eq(leads.organizationId, req.activeOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {
@@ -3897,7 +4102,7 @@ export async function registerRoutes(app: Express) {
             stage = row.stage.toLowerCase();
           }
           
-          const generatedOppId = (!row.id || row.id.trim() === "") ? await storage.generateId("Opportunity") : row.id;
+          const generatedOppId = (!row.id || row.id.trim() === "") ? await storage.generateId("Opportunity", req.activeOrgId || undefined) : row.id;
           
           const oppData: any = {
             id: generatedOppId,
@@ -3919,13 +4124,14 @@ export async function registerRoutes(app: Express) {
             sourceRecordId: row.sourceRecordId,
             importStatus: row.importStatus,
             importNotes: row.importNotes,
+            organizationId: req.activeOrgId || undefined,
           };
           
-          // Check for duplicate by externalId
+          // Check for duplicate by externalId (scoped to org)
           if (oppData.externalId) {
             const [existingByExternalId] = await db.select()
               .from(opportunities)
-              .where(eq(opportunities.externalId, oppData.externalId))
+              .where(and(eq(opportunities.externalId, oppData.externalId), req.activeOrgId ? eq(opportunities.organizationId, req.activeOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {
@@ -4023,7 +4229,7 @@ export async function registerRoutes(app: Express) {
           
           const completedAtDate = parseDynamicsDate(row.completedAt);
           
-          const generatedActivityId = (!row.id || row.id.trim() === "") ? await storage.generateId("Activity") : row.id;
+          const generatedActivityId = (!row.id || row.id.trim() === "") ? await storage.generateId("Activity", req.activeOrgId || undefined) : row.id;
           
           const activityData: any = {
             id: generatedActivityId,
@@ -4042,13 +4248,14 @@ export async function registerRoutes(app: Express) {
             importStatus: row.importStatus,
             importNotes: row.importNotes,
             ownerId: req.user!.id,
+            organizationId: req.activeOrgId || undefined,
           };
           
-          // Check for duplicate by externalId (for Dynamics imports) or id
+          // Check for duplicate by externalId (for Dynamics imports) or id (scoped to org)
           if (activityData.externalId) {
             const [existingByExternalId] = await db.select()
               .from(activities)
-              .where(eq(activities.externalId, activityData.externalId))
+              .where(and(eq(activities.externalId, activityData.externalId), req.activeOrgId ? eq(activities.organizationId, req.activeOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {
@@ -4379,7 +4586,13 @@ export async function registerRoutes(app: Express) {
   // Delete a comment
   app.delete("/api/:entity/:id/comments/:commentId", authenticate, crudRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { commentId } = req.params;
+      const { commentId, id: entityId } = req.params;
+      const entity = normalizeEntityName(req.params.entity);
+      
+      // Enforce org ownership on the parent entity before allowing comment deletion
+      if (!await assertEntityOrgOwnership(entity, entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${entity} not found` });
+      }
       
       const [existingComment] = await db.select().from(comments).where(eq(comments.id, commentId)).limit(1);
       if (!existingComment) {
@@ -4554,13 +4767,13 @@ export async function registerRoutes(app: Express) {
   // ========== ANALYTICS & FORECASTING ROUTES ==========
 
   // Get comprehensive forecast
-  app.get("/api/analytics/forecast", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/forecast", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const targetDate = req.query.targetDate 
         ? new Date(req.query.targetDate as string)
         : undefined;
 
-      const forecast = await analyticsService.calculateForecasts(targetDate);
+      const forecast = await analyticsService.calculateForecasts(targetDate, req.activeOrgId || undefined);
       return res.json(forecast);
     } catch (error: any) {
       console.error("Forecast error:", error);
@@ -4569,14 +4782,14 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get historical performance metrics
-  app.get("/api/analytics/historical", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/historical", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - daysBack);
 
-      const metrics = await analyticsService.getHistoricalMetrics({ start, end });
+      const metrics = await analyticsService.getHistoricalMetrics({ start, end }, req.activeOrgId || undefined);
       return res.json(metrics);
     } catch (error: any) {
       console.error("Historical metrics error:", error);
@@ -4585,14 +4798,14 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get pipeline velocity metrics
-  app.get("/api/analytics/velocity", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/velocity", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - daysBack);
 
-      const velocity = await analyticsService.getPipelineVelocity({ start, end });
+      const velocity = await analyticsService.getPipelineVelocity({ start, end }, req.activeOrgId || undefined);
       return res.json(velocity);
     } catch (error: any) {
       console.error("Velocity error:", error);
@@ -4601,14 +4814,14 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get stage conversion rates
-  app.get("/api/analytics/conversions", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/conversions", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - daysBack);
 
-      const conversions = await analyticsService.getStageConversionRates({ start, end });
+      const conversions = await analyticsService.getStageConversionRates({ start, end }, req.activeOrgId || undefined);
       return res.json(conversions);
     } catch (error: any) {
       console.error("Conversions error:", error);
@@ -4617,10 +4830,10 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get deal closing predictions
-  app.get("/api/analytics/predictions", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/predictions", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysAhead = parseInt(req.query.days as string) || 30;
-      const predictions = await analyticsService.predictDealClosing(daysAhead);
+      const predictions = await analyticsService.predictDealClosing(daysAhead, req.activeOrgId || undefined);
       return res.json(predictions);
     } catch (error: any) {
       console.error("Predictions error:", error);
@@ -4628,7 +4841,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/analytics/role-names", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/role-names", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const roles = await storage.getAllRoles();
       return res.json(roles.map(r => r.name));
@@ -4638,7 +4851,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // Get rep performance metrics
-  app.get("/api/analytics/rep-performance", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/rep-performance", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 90;
       const end = new Date();
@@ -4648,7 +4861,7 @@ export async function registerRoutes(app: Express) {
       const rolesParam = req.query.roles as string | undefined;
       const roleNames = rolesParam ? rolesParam.split(",").map(r => r.trim()).filter(Boolean) : undefined;
 
-      const performance = await analyticsService.getRepPerformance({ start, end }, roleNames);
+      const performance = await analyticsService.getRepPerformance({ start, end }, roleNames, req.activeOrgId || undefined);
       return res.json(performance);
     } catch (error: any) {
       console.error("Rep performance error:", error);
@@ -4656,14 +4869,14 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/analytics/rep-performance/timeseries", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/rep-performance/timeseries", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const daysBack = parseInt(req.query.days as string) || 365;
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - daysBack);
 
-      const data = await analyticsService.getRepPerformanceTimeseries({ start, end });
+      const data = await analyticsService.getRepPerformanceTimeseries({ start, end }, req.activeOrgId || undefined);
       return res.json(data);
     } catch (error: any) {
       console.error("Rep timeseries error:", error);
@@ -4671,9 +4884,9 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/analytics/rep-performance/pipeline-stages", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/rep-performance/pipeline-stages", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const data = await analyticsService.getRepPipelineStages();
+      const data = await analyticsService.getRepPipelineStages(req.activeOrgId || undefined);
       return res.json(data);
     } catch (error: any) {
       console.error("Rep pipeline stages error:", error);
@@ -4681,9 +4894,9 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/analytics/pipeline-health", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/analytics/pipeline-health", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const health = await analyticsService.calculatePipelineHealth();
+      const health = await analyticsService.calculatePipelineHealth(req.activeOrgId || undefined);
       return res.json(health);
     } catch (error: any) {
       console.error("Pipeline health error:", error);
@@ -4693,12 +4906,15 @@ export async function registerRoutes(app: Express) {
 
   // ========== SALES FORECAST REPORT ==========
   
-  app.get("/api/reports/sales-forecast", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/reports/sales-forecast", authenticate, requireRole("Admin", "SalesManager", "SalesRep", "ReadOnly", "SalesOperator", "Reviewer"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { accountId, rating, startDate, endDate } = req.query;
       
-      // Build filter conditions (always filter by includeInForecast = true)
+      // Build filter conditions (always filter by includeInForecast = true and active org)
       const filters: any[] = [eq(opportunities.includeInForecast, true)];
+      if (req.activeOrgId) {
+        filters.push(eq(opportunities.organizationId, req.activeOrgId));
+      }
       if (accountId && typeof accountId === "string") {
         filters.push(eq(opportunities.accountId, accountId));
       }
@@ -4715,9 +4931,10 @@ export async function registerRoutes(app: Express) {
       // Fetch opportunities with filters (always include includeInForecast filter)
       const opps = await db.select().from(opportunities).where(and(...filters));
       
-      // Fetch all accounts and users for lookups
+      // Fetch accounts and users for lookups (scoped to org when active)
+      const accountFilter = req.activeOrgId ? eq(accounts.organizationId, req.activeOrgId) : undefined;
       const [allAccounts, allUsers] = await Promise.all([
-        db.select().from(accounts),
+        db.select().from(accounts).where(accountFilter),
         db.select().from(users)
       ]);
       
@@ -4880,9 +5097,9 @@ export async function registerRoutes(app: Express) {
   // ========== API KEY MANAGEMENT ROUTES ==========
   
   // Get all API keys (admin only)
-  app.get("/api/admin/api-keys", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-keys", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const keys = await storage.getAllApiKeys();
+      const keys = await storage.getAllApiKeys(req.activeOrgId || undefined);
       
       // Don't send hashed keys to client
       const sanitized = keys.map(k => ({
@@ -4906,7 +5123,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Generate a new API key (admin only)
-  app.post("/api/admin/api-keys", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/api-keys", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertApiKeySchema.omit({ hashedKey: true, createdBy: true }).parse(req.body);
       
@@ -4918,6 +5135,7 @@ export async function registerRoutes(app: Express) {
         ...data,
         hashedKey,
         createdBy: req.user!.id,
+        organizationId: req.activeOrgId || undefined,
       });
       
       // Return public key (only shown once!) and key info
@@ -4940,7 +5158,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Revoke an API key (admin only)
-  app.delete("/api/admin/api-keys/:id", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.delete("/api/admin/api-keys/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const apiKey = await storage.revokeApiKey(req.params.id, req.user!.id);
       return res.json({ success: true, apiKey });
@@ -4951,7 +5169,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Get API access logs (admin only) - for debugging external API calls
-  app.get("/api/admin/api-access-logs", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-access-logs", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { 
         startDate, 
@@ -5025,7 +5243,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Export API access logs to CSV (admin only) - server-side processing for large datasets
-  app.get("/api/admin/api-access-logs/export", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/api-access-logs/export", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { startDate, endDate, apiKeyId, status, action } = req.query;
       
@@ -5248,9 +5466,9 @@ export async function registerRoutes(app: Express) {
   type OpenAiResponseBody = { model?: string; error?: { message?: string } };
 
   // GET /api/admin/llm-config - fetch current LLM configuration (API key never sent)
-  app.get("/api/admin/llm-config", authenticate, requireRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/admin/llm-config", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const config = await storage.getLlmConfiguration();
+      const config = await storage.getLlmConfiguration(req.activeOrgId || undefined);
       if (!config) {
         return res.json(null);
       }
@@ -5263,7 +5481,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // PUT /api/admin/llm-config - save LLM configuration; API key encrypted with AES-256-GCM
-  app.put("/api/admin/llm-config", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.put("/api/admin/llm-config", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const parsed = llmConfigPutSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -5290,7 +5508,7 @@ export async function registerRoutes(app: Express) {
         updateData.apiKeyHint = plainKey.slice(-4);
       }
 
-      const config = await storage.upsertLlmConfiguration(updateData);
+      const config = await storage.upsertLlmConfiguration(updateData, req.activeOrgId || undefined);
       const { encryptedApiKey: _omit, ...safeConfig } = config;
       return res.json({ ...safeConfig, hasApiKey: !!config.encryptedApiKey });
     } catch (error) {
@@ -5300,9 +5518,9 @@ export async function registerRoutes(app: Express) {
   });
 
   // POST /api/admin/llm-config/test - ping the configured LLM and return latency / model
-  app.post("/api/admin/llm-config/test", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/admin/llm-config/test", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const config = await storage.getLlmConfiguration();
+      const config = await storage.getLlmConfiguration(req.activeOrgId || undefined);
       if (!config || !config.encryptedApiKey) {
         return res.json({
           success: false,
@@ -5447,7 +5665,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // GET /api/admin/research/status - return current active search provider
-  app.get("/api/admin/research/status", authenticate, requireRole("Admin"), readRateLimiter, async (_req: AuthRequest, res) => {
+  app.get("/api/admin/research/status", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (_req: AuthRequest, res) => {
     const azureEnvConfigured = !!(
       process.env.AZURE_OPENAI_API_KEY &&
       process.env.AZURE_OPENAI_BASE_URL &&
@@ -5492,7 +5710,7 @@ export async function registerRoutes(app: Express) {
   });
 
   // POST /api/admin/research/test - verify Azure web search connectivity via AzureWebSearchProvider
-  app.post("/api/admin/research/test", authenticate, requireRole("Admin"), sensitiveRateLimiter, async (_req: AuthRequest, res) => {
+  app.post("/api/admin/research/test", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (_req: AuthRequest, res) => {
     try {
       const { AzureWebSearchProvider, isAzureWebSearchConfigured } = await import("./lib/research/providers/AzureWebSearchProvider");
       const { decryptApiKey, isEncryptedKey } = await import("./llm-key-utils");
@@ -5579,6 +5797,10 @@ export async function registerRoutes(app: Express) {
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[entityType], "update")) {
         return res.status(403).json({ error: "You do not have permission to upload documents to this record" });
       }
+      // Verify entity belongs to active org before attaching a document
+      if (!await assertEntityOrgOwnership(CRM_ENTITY_RESOURCE_MAP[entityType], entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${CRM_ENTITY_RESOURCE_MAP[entityType]} not found` });
+      }
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
@@ -5621,6 +5843,10 @@ export async function registerRoutes(app: Express) {
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[entityType], "read")) {
         return res.status(403).json({ error: "Forbidden" });
       }
+      // Verify entity belongs to active org before returning its documents
+      if (!await assertEntityOrgOwnership(CRM_ENTITY_RESOURCE_MAP[entityType], entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${CRM_ENTITY_RESOURCE_MAP[entityType]} not found` });
+      }
       const docs = await storage.getDocuments(entityType, entityId);
       const allUsers = await db.select({ id: users.id, name: users.name }).from(users);
       const userMap = new Map(allUsers.map((u: { id: string; name: string }) => [u.id, u.name]));
@@ -5642,6 +5868,10 @@ export async function registerRoutes(app: Express) {
       if (!doc) return res.status(404).json({ error: "Document not found" });
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "read")) {
         return res.status(403).json({ error: "Forbidden" });
+      }
+      // Verify parent entity belongs to active org
+      if (!await assertEntityOrgOwnership(CRM_ENTITY_RESOURCE_MAP[doc.entityType], doc.entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: "Document not found" });
       }
       if (!doc.fileData) {
         return res.status(404).json({ error: "File data not found" });
@@ -5665,6 +5895,10 @@ export async function registerRoutes(app: Express) {
       if (!await hasPermission(req.user!.id, CRM_ENTITY_RESOURCE_MAP[doc.entityType], "update")) {
         return res.status(403).json({ error: "You do not have permission to delete documents from this record" });
       }
+      // Verify parent entity belongs to active org before deleting document
+      if (!await assertEntityOrgOwnership(CRM_ENTITY_RESOURCE_MAP[doc.entityType], doc.entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: "Document not found" });
+      }
       await storage.deleteDocument(req.params.id);
       await createAudit(req, "delete", "CrmDocument", req.params.id, { ...doc, filePath: undefined, fileData: undefined }, null);
       return res.json({ success: true });
@@ -5681,6 +5915,10 @@ export async function registerRoutes(app: Express) {
   const VALID_ENTITY_TYPES = ["candidate_account", "candidate_contact", "candidate_lead", "lead", "account", "contact", "opportunity"] as const;
   type ResearchDocEntityType = typeof VALID_ENTITY_TYPES[number];
   const entityTypeSchema = z.enum(VALID_ENTITY_TYPES);
+  // Map from research-doc CRM entity types to the entity names used in assertEntityOrgOwnership
+  const RESEARCH_DOC_CRM_ENTITY_MAP: Partial<Record<ResearchDocEntityType, string>> = {
+    lead: "Lead", account: "Account", contact: "Contact", opportunity: "Opportunity",
+  };
 
   // GET /api/research-documents?entityType=&entityId= — list research documents for a record
   app.get("/api/research-documents", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
@@ -5693,6 +5931,11 @@ export async function registerRoutes(app: Express) {
       const entityId = req.query.entityId as string | undefined;
       if (!entityId) {
         return res.status(400).json({ error: "entityId is required" });
+      }
+      // For CRM entity types, verify the entity belongs to the active org
+      const crmEntityName = RESEARCH_DOC_CRM_ENTITY_MAP[entityType];
+      if (crmEntityName && !await assertEntityOrgOwnership(crmEntityName, entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${crmEntityName} not found` });
       }
       const { researchDocuments } = await import("@shared/schema");
       const docs = await db
@@ -5715,6 +5958,11 @@ export async function registerRoutes(app: Express) {
     try {
       const { researchDocuments, insertResearchDocumentSchema } = await import("@shared/schema");
       const data = insertResearchDocumentSchema.parse({ ...req.body, createdBy: req.user?.id });
+      // For CRM entity types, verify entity belongs to active org before creating research doc
+      const crmEntityName = RESEARCH_DOC_CRM_ENTITY_MAP[data.entityType as ResearchDocEntityType];
+      if (crmEntityName && !await assertEntityOrgOwnership(crmEntityName, data.entityId, req.activeOrgId)) {
+        return res.status(404).json({ error: `${crmEntityName} not found` });
+      }
       const [doc] = await db.insert(researchDocuments).values(data).returning();
       await createAudit(req, "create", "ResearchDocument", doc.id, null, doc);
       return res.json(doc);
@@ -5762,14 +6010,14 @@ export async function registerRoutes(app: Express) {
 
     const { entityType, entityId } = parsed.data;
 
-    // Enforce entity-type-specific read permissions
-    if (entityType === "lead" && !(await hasPermission(req.user!.id, "Lead", "read"))) {
+    // Enforce entity-type-specific read permissions scoped to active org
+    if (entityType === "lead" && !(await hasPermission(req.user!.id, "Lead", "read", req.activeOrgId || undefined))) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    if (entityType === "contact" && !(await hasPermission(req.user!.id, "Contact", "read"))) {
+    if (entityType === "contact" && !(await hasPermission(req.user!.id, "Contact", "read", req.activeOrgId || undefined))) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    if (entityType === "candidate_contact" && !(await hasAnyRole(req.user!.id, ["Admin", "SalesManager", "SalesOperator", "Reviewer"]))) {
+    if (entityType === "candidate_contact" && !(await hasAnyRole(req.user!.id, ["Admin", "SalesManager", "SalesOperator", "Reviewer"], req.activeOrgId || undefined))) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -5803,7 +6051,9 @@ export async function registerRoutes(app: Express) {
       let entityLabel = "";
 
       if (entityType === "lead") {
-        const [record] = await db.select().from(leads).where(eq(leads.id, entityId)).limit(1);
+        const [record] = await db.select().from(leads)
+          .where(and(eq(leads.id, entityId), eq(leads.organizationId, req.activeOrgId!)))
+          .limit(1);
         if (!record) return res.status(404).json({ error: "Lead not found" });
         firstName = record.firstName;
         lastName = record.lastName;
@@ -5812,7 +6062,9 @@ export async function registerRoutes(app: Express) {
         currentPhone = record.phone || "";
         entityLabel = `${firstName} ${lastName}${company ? ` at ${company}` : ""}`;
       } else if (entityType === "contact") {
-        const [record] = await db.select().from(contacts).where(eq(contacts.id, entityId)).limit(1);
+        const [record] = await db.select().from(contacts)
+          .where(and(eq(contacts.id, entityId), eq(contacts.organizationId, req.activeOrgId!)))
+          .limit(1);
         if (!record) return res.status(404).json({ error: "Contact not found" });
         firstName = record.firstName;
         lastName = record.lastName;
@@ -5831,9 +6083,19 @@ export async function registerRoutes(app: Express) {
         }
         entityLabel = `${firstName} ${lastName}${company ? ` at ${company}` : ""}`;
       } else {
-        const { candidateContacts: candidateContactsTable, candidateAccounts } = await import("@shared/schema");
-        const [record] = await db.select().from(candidateContactsTable).where(eq(candidateContactsTable.id, entityId)).limit(1);
-        if (!record) return res.status(404).json({ error: "Candidate contact not found" });
+        const { candidateContacts: candidateContactsTable, candidateAccounts, leadGenerationRuns: lgRuns } = await import("@shared/schema");
+        // Enforce org ownership via parent run's organizationId
+        const [row] = await db
+          .select({ contact: candidateContactsTable })
+          .from(candidateContactsTable)
+          .innerJoin(lgRuns, and(
+            eq(lgRuns.id, candidateContactsTable.runId),
+            eq(lgRuns.organizationId, req.activeOrgId!),
+          ))
+          .where(eq(candidateContactsTable.id, entityId))
+          .limit(1);
+        if (!row) return res.status(404).json({ error: "Candidate contact not found" });
+        const record = row.contact;
         firstName = record.firstName;
         lastName = record.lastName;
         currentEmail = record.email || "";

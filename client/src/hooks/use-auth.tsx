@@ -48,6 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: User) => {
       queryClient.setQueryData(["/api/user"], user);
+      // Ensure org list is fetched now that we're authenticated
+      queryClient.invalidateQueries({ queryKey: ["/api/user/organizations"] });
     },
     onError: (error: Error) => {
       toast({
@@ -65,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: (user: User) => {
       queryClient.setQueryData(["/api/user"], user);
+      // Ensure org list is fetched now that we're authenticated
+      queryClient.invalidateQueries({ queryKey: ["/api/user/organizations"] });
     },
     onError: (error: Error) => {
       toast({

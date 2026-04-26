@@ -5,6 +5,18 @@ import { Router, Response, NextFunction } from "express";
 import { storage } from "./db";
 import { authenticateApiKey, createApiKeyRateLimiter, ApiKeyRequest } from "./api-key-auth";
 
+/** Extract org ID from API key (null = system key, no org restriction) */
+function getKeyOrgId(req: ApiKeyRequest): string | undefined {
+  return req.apiKey?.organizationId ?? undefined;
+}
+
+/** Enforce org ownership on a fetched record — returns false if cross-org */
+function keyOrgOwns(record: { organizationId?: string | null } | null | undefined, orgId: string | undefined): boolean {
+  if (!orgId) return true; // System key: no restriction
+  if (!record) return false;
+  return record.organizationId === orgId;
+}
+
 const router = Router();
 
 // Apply API key authentication to all external routes
@@ -149,9 +161,10 @@ router.get("/accounts", async (req: ApiKeyRequest, res) => {
     const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
     const offsetNum = parseInt(offset as string) || 0;
     const expandList = (expand as string).split(",").filter(Boolean);
+    const orgId = getKeyOrgId(req);
     
-    // Get all accounts
-    let accounts = await storage.getAllAccounts();
+    // Get accounts scoped to the API key's org
+    let accounts = await storage.getAllAccounts(orgId);
     
     // Filter by updatedSince if provided
     if (updatedSince) {
@@ -182,9 +195,9 @@ router.get("/accounts", async (req: ApiKeyRequest, res) => {
         updatedAt: account.updatedAt,
       };
       
-      // Optionally include related opportunities
+      // Optionally include related opportunities (scoped to same org)
       if (expandList.includes("opportunities")) {
-        const allOpps = await storage.getAllOpportunities();
+        const allOpps = await storage.getAllOpportunities(orgId);
         leanAccount.opportunities = allOpps
           .filter(o => o.accountId === account.id && o.includeInForecast)
           .map(o => ({
@@ -229,10 +242,11 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
   try {
     const { expand = "" } = req.query;
     const expandList = (expand as string).split(",").filter(Boolean);
+    const orgId = getKeyOrgId(req);
     
     const account = await storage.getAccountById(req.params.id);
     
-    if (!account) {
+    if (!account || !keyOrgOwns(account, orgId)) {
       return res.status(404).json({
         error: "Account not found",
         message: `No account found with ID: ${req.params.id}`
@@ -255,9 +269,9 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
       updatedAt: account.updatedAt,
     };
     
-    // Optionally include related data
+    // Optionally include related data (scoped to same org)
     if (expandList.includes("opportunities")) {
-      const allOpps = await storage.getAllOpportunities();
+      const allOpps = await storage.getAllOpportunities(orgId);
       response.opportunities = allOpps
         .filter(o => o.accountId === account.id && o.includeInForecast)
         .map(o => ({
@@ -272,7 +286,7 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
     }
     
     if (expandList.includes("contacts")) {
-      const allContacts = await storage.getAllContacts();
+      const allContacts = await storage.getAllContacts(orgId);
       response.contacts = allContacts
         .filter(c => c.accountId === account.id)
         .map(c => ({
@@ -323,9 +337,10 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
     const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
     const offsetNum = parseInt(offset as string) || 0;
     const expandList = (expand as string).split(",").filter(Boolean);
+    const orgId = getKeyOrgId(req);
     
-    // Get all opportunities
-    let opportunities = await storage.getAllOpportunities();
+    // Get opportunities scoped to the API key's org
+    let opportunities = await storage.getAllOpportunities(orgId);
     
     // Filter by includeInForecast (default to true for forecasting app)
     if (includeInForecast !== "all") {
@@ -370,10 +385,10 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
         updatedAt: opp.updatedAt,
       };
       
-      // Optionally include account data
+      // Optionally include account data (only if it belongs to the same org)
       if (expandList.includes("account")) {
         const account = await storage.getAccountById(opp.accountId);
-        if (account) {
+        if (account && keyOrgOwns(account, orgId)) {
           leanOpp.account = {
             id: account.id,
             name: account.name,
@@ -416,10 +431,11 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
   try {
     const { expand = "" } = req.query;
     const expandList = (expand as string).split(",").filter(Boolean);
+    const orgId = getKeyOrgId(req);
     
     const opp = await storage.getOpportunityById(req.params.id);
     
-    if (!opp) {
+    if (!opp || !keyOrgOwns(opp, orgId)) {
       return res.status(404).json({
         error: "Opportunity not found",
         message: `No opportunity found with ID: ${req.params.id}`
@@ -448,10 +464,10 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
       updatedAt: opp.updatedAt,
     };
     
-    // Optionally include account data
+    // Optionally include account data (only if it belongs to the same org)
     if (expandList.includes("account")) {
       const account = await storage.getAccountById(opp.accountId);
-      if (account) {
+      if (account && keyOrgOwns(account, orgId)) {
         response.account = {
           id: account.id,
           name: account.name,

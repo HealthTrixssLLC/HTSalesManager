@@ -4,8 +4,6 @@ const CSRF_COOKIE_NAME = "csrf_token";
 
 /**
  * Reads the CSRF token directly from document.cookie.
- * The server sets a readable (non-httpOnly) cookie so JS can mirror it in the header —
- * this is the standard Double Submit Cookie pattern.
  */
 function getCsrfTokenFromCookie(): string | null {
   if (typeof document === "undefined") return null;
@@ -16,8 +14,7 @@ function getCsrfTokenFromCookie(): string | null {
 }
 
 /**
- * Ensures a CSRF cookie exists by calling /api/csrf-token if needed,
- * then returns the token value from the cookie.
+ * Ensures a CSRF cookie exists by calling /api/csrf-token if needed.
  */
 export async function fetchCsrfToken(): Promise<string> {
   let token = getCsrfTokenFromCookie();
@@ -32,10 +29,35 @@ export async function fetchCsrfToken(): Promise<string> {
   return token;
 }
 
-/** Force a fresh CSRF cookie on next mutation (call after login/logout). */
 export function resetCsrfToken() {
-  // Nothing to reset in memory — the cookie is the source of truth.
-  // The next call to fetchCsrfToken will re-fetch from the server if cookie is missing.
+  // Nothing to reset - cookie is source of truth
+}
+
+/** Get active org ID from localStorage */
+function getActiveOrgId(): string | null {
+  try {
+    return localStorage.getItem("activeOrgId");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Paths that must NOT receive X-Organization-Id header.
+ * These are bootstrap/global endpoints used to recover org context;
+ * sending a stale org header to them would cause a 403 lockout.
+ */
+const ORG_AGNOSTIC_PATHS: string[] = [
+  "/api/user/organizations",
+  "/api/user",
+  "/api/login",
+  "/api/register",
+  "/api/csrf-token",
+  "/api/logout",
+];
+
+function isOrgAgnosticPath(url: string): boolean {
+  return ORG_AGNOSTIC_PATHS.some(p => url === p || url.startsWith(p + "?") || url.startsWith(p + "/"));
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -51,6 +73,12 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const headers: Record<string, string> = data ? { "Content-Type": "application/json" } : {};
+
+  // Inject active org header for org-scoped endpoints (skip bootstrap/global paths)
+  const orgId = getActiveOrgId();
+  if (orgId && !isOrgAgnosticPath(url)) {
+    headers["X-Organization-Id"] = orgId;
+  }
 
   if (
     ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase()) &&
@@ -82,8 +110,16 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = queryKey.join("/") as string;
+    const orgId = getActiveOrgId();
+    const headers: Record<string, string> = {};
+    if (orgId && !isOrgAgnosticPath(url)) {
+      headers["X-Organization-Id"] = orgId;
+    }
+
+    const res = await fetch(url, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

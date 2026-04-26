@@ -30,8 +30,9 @@ interface DateRange {
 
 // ========== HISTORICAL PERFORMANCE ==========
 
-export async function getHistoricalMetrics(dateRange: DateRange) {
+export async function getHistoricalMetrics(dateRange: DateRange, orgId?: string) {
   const { start, end } = dateRange;
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // Get closed/won opportunities in date range (only those included in forecast)
   const wonOpportunities = await db
@@ -42,7 +43,8 @@ export async function getHistoricalMetrics(dateRange: DateRange) {
         eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_won"),
         gte(schema.opportunities.updatedAt, start),
-        lte(schema.opportunities.updatedAt, end)
+        lte(schema.opportunities.updatedAt, end),
+        ...orgFilter
       )
     );
 
@@ -55,7 +57,8 @@ export async function getHistoricalMetrics(dateRange: DateRange) {
         eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_lost"),
         gte(schema.opportunities.updatedAt, start),
-        lte(schema.opportunities.updatedAt, end)
+        lte(schema.opportunities.updatedAt, end),
+        ...orgFilter
       )
     );
 
@@ -95,14 +98,15 @@ export async function getHistoricalMetrics(dateRange: DateRange) {
 
 // ========== STAGE CONVERSION RATES ==========
 
-export async function getStageConversionRates(dateRange: DateRange) {
+export async function getStageConversionRates(dateRange: DateRange, orgId?: string) {
   const { start, end } = dateRange;
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // First, get all opportunity IDs that are included in forecast
   const includedOpps = await db
     .select({ id: schema.opportunities.id })
     .from(schema.opportunities)
-    .where(eq(schema.opportunities.includeInForecast, true));
+    .where(and(eq(schema.opportunities.includeInForecast, true), ...orgFilter));
   
   const includedOppIds = new Set(includedOpps.map(o => o.id));
 
@@ -208,7 +212,7 @@ export async function getStageConversionRates(dateRange: DateRange) {
     : 0;
 
   // Current snapshot for reference (not used in conversion calculations, only those included in forecast)
-  const currentOpps = await db.select().from(schema.opportunities).where(eq(schema.opportunities.includeInForecast, true));
+  const currentOpps = await db.select().from(schema.opportunities).where(and(eq(schema.opportunities.includeInForecast, true), ...orgFilter));
   const stageCount: Record<string, number> = {
     prospecting: 0,
     qualification: 0,
@@ -233,9 +237,10 @@ export async function getStageConversionRates(dateRange: DateRange) {
 
 // ========== PIPELINE VELOCITY ==========
 
-export async function getPipelineVelocity(dateRange: DateRange) {
+export async function getPipelineVelocity(dateRange: DateRange, orgId?: string) {
   const { start, end } = dateRange;
   const days = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // Get opportunities that moved in this period (only those included in forecast)
   const movedOpps = await db
@@ -249,7 +254,8 @@ export async function getPipelineVelocity(dateRange: DateRange) {
         or(
           eq(schema.opportunities.stage, "closed_won"),
           eq(schema.opportunities.stage, "closed_lost")
-        )
+        ),
+        ...orgFilter
       )
     );
 
@@ -270,9 +276,10 @@ export async function getPipelineVelocity(dateRange: DateRange) {
 
 // ========== FORECASTING MODELS ==========
 
-export async function calculateForecasts(targetDate?: Date) {
+export async function calculateForecasts(targetDate?: Date, orgId?: string) {
   const now = new Date();
   const target = targetDate || new Date(now.getFullYear(), now.getMonth() + 1, 0); // End of current month
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // Get all open opportunities (only those included in forecast)
   const openOpps = await db
@@ -288,7 +295,8 @@ export async function calculateForecasts(targetDate?: Date) {
           eq(schema.opportunities.stage, "qualification"),
           eq(schema.opportunities.stage, "proposal"),
           eq(schema.opportunities.stage, "negotiation")
-        )
+        ),
+        ...orgFilter
       )
     );
 
@@ -319,7 +327,7 @@ export async function calculateForecasts(targetDate?: Date) {
   const historicalMetrics = await getHistoricalMetrics({
     start: last90Days,
     end: now,
-  });
+  }, orgId);
 
   const totalPipelineValue = openOpps.reduce(
     (sum, opp) => sum + parseFloat(opp.amount || "0"),
@@ -332,7 +340,7 @@ export async function calculateForecasts(targetDate?: Date) {
   const velocityData = await getPipelineVelocity({
     start: last90Days,
     end: now,
-  });
+  }, orgId);
   
   const daysToTarget = (target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
   const velocityForecast = velocityData.velocityPerDay * daysToTarget * historicalMetrics.winRate;
@@ -367,7 +375,8 @@ export async function calculateForecasts(targetDate?: Date) {
         eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_won"),
         gte(schema.opportunities.updatedAt, firstDayOfMonth),
-        lte(schema.opportunities.updatedAt, now)
+        lte(schema.opportunities.updatedAt, now),
+        ...orgFilter
       )
     );
 
@@ -395,10 +404,11 @@ export async function calculateForecasts(targetDate?: Date) {
 
 // ========== DEAL PREDICTIONS ==========
 
-export async function predictDealClosing(daysAhead: number = 30) {
+export async function predictDealClosing(daysAhead: number = 30, orgId?: string) {
   const now = new Date();
   const targetDate = new Date(now);
   targetDate.setDate(targetDate.getDate() + daysAhead);
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // Get opportunities closing in the next X days
   const upcomingOpps = await db
@@ -423,7 +433,8 @@ export async function predictDealClosing(daysAhead: number = 30) {
         or(
           eq(schema.opportunities.stage, "proposal"),
           eq(schema.opportunities.stage, "negotiation")
-        )
+        ),
+        ...orgFilter
       )
     )
     .orderBy(asc(schema.opportunities.closeDate));
@@ -490,8 +501,9 @@ export async function predictDealClosing(daysAhead: number = 30) {
 
 // ========== REP PERFORMANCE ==========
 
-export async function getRepPerformance(dateRange: DateRange, roleNames?: string[]) {
+export async function getRepPerformance(dateRange: DateRange, roleNames?: string[], orgId?: string) {
   const { start, end } = dateRange;
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   let reps;
   if (roleNames && roleNames.length > 0) {
@@ -545,7 +557,8 @@ export async function getRepPerformance(dateRange: DateRange, roleNames?: string
             eq(schema.opportunities.ownerId, rep.id),
             eq(schema.opportunities.stage, "closed_won"),
             gte(schema.opportunities.updatedAt, start),
-            lte(schema.opportunities.updatedAt, end)
+            lte(schema.opportunities.updatedAt, end),
+            ...orgFilter
           )
         );
 
@@ -559,7 +572,8 @@ export async function getRepPerformance(dateRange: DateRange, roleNames?: string
             eq(schema.opportunities.ownerId, rep.id),
             eq(schema.opportunities.stage, "closed_lost"),
             gte(schema.opportunities.updatedAt, start),
-            lte(schema.opportunities.updatedAt, end)
+            lte(schema.opportunities.updatedAt, end),
+            ...orgFilter
           )
         );
 
@@ -576,7 +590,8 @@ export async function getRepPerformance(dateRange: DateRange, roleNames?: string
               eq(schema.opportunities.stage, "qualification"),
               eq(schema.opportunities.stage, "proposal"),
               eq(schema.opportunities.stage, "negotiation")
-            )
+            ),
+            ...orgFilter
           )
         );
 
@@ -616,8 +631,9 @@ export async function getRepPerformance(dateRange: DateRange, roleNames?: string
 
 // ========== REP PERFORMANCE TIMESERIES ==========
 
-export async function getRepPerformanceTimeseries(dateRange: DateRange) {
+export async function getRepPerformanceTimeseries(dateRange: DateRange, orgId?: string) {
   const { start, end } = dateRange;
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   const reps = await db
     .select({
@@ -634,7 +650,8 @@ export async function getRepPerformanceTimeseries(dateRange: DateRange) {
         eq(schema.opportunities.includeInForecast, true),
         eq(schema.opportunities.stage, "closed_won"),
         gte(schema.opportunities.updatedAt, start),
-        lte(schema.opportunities.updatedAt, end)
+        lte(schema.opportunities.updatedAt, end),
+        ...orgFilter
       )
     );
 
@@ -678,7 +695,8 @@ export async function getRepPerformanceTimeseries(dateRange: DateRange) {
 
 // ========== REP PIPELINE STAGE BREAKDOWN ==========
 
-export async function getRepPipelineStages() {
+export async function getRepPipelineStages(orgId?: string) {
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
   const reps = await db
     .select({
       id: schema.users.id,
@@ -697,7 +715,8 @@ export async function getRepPipelineStages() {
           eq(schema.opportunities.stage, "qualification"),
           eq(schema.opportunities.stage, "proposal"),
           eq(schema.opportunities.stage, "negotiation")
-        )
+        ),
+        ...orgFilter
       )
     );
 
@@ -735,8 +754,9 @@ export async function getRepPipelineStages() {
 
 // ========== PIPELINE HEALTH SCORE ==========
 
-export async function calculatePipelineHealth() {
+export async function calculatePipelineHealth(orgId?: string) {
   const now = new Date();
+  const orgFilter = orgId ? [eq(schema.opportunities.organizationId, orgId)] : [];
 
   // Get all open opportunities
   const openOpps = await db
@@ -750,7 +770,8 @@ export async function calculatePipelineHealth() {
           eq(schema.opportunities.stage, "qualification"),
           eq(schema.opportunities.stage, "proposal"),
           eq(schema.opportunities.stage, "negotiation")
-        )
+        ),
+        ...orgFilter
       )
     );
 

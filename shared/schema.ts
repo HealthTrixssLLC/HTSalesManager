@@ -79,6 +79,7 @@ export const rolePermissions = pgTable("role_permissions", {
 
 export const accounts = pgTable("accounts", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACCT-2025-00001
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   accountNumber: text("account_number"), // External account number (e.g., from Dynamics)
   type: accountTypeEnum("type"),
@@ -97,6 +98,7 @@ export const accounts = pgTable("accounts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
+  orgIdIdx: index("accounts_org_id_idx").on(table.organizationId),
   ownerIdIdx: index("accounts_owner_id_idx").on(table.ownerId),
   nameIdx: index("accounts_name_idx").on(table.name),
   accountNumberIdx: index("accounts_account_number_idx").on(table.accountNumber),
@@ -105,6 +107,7 @@ export const accounts = pgTable("accounts", {
 
 export const contacts = pgTable("contacts", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: CONT-2501-00001
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   accountId: varchar("account_id", { length: 100 }).references(() => accounts.id, { onDelete: "set null" }),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
@@ -128,6 +131,7 @@ export const contacts = pgTable("contacts", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
+  orgIdIdx: index("contacts_org_id_idx").on(table.organizationId),
   accountIdIdx: index("contacts_account_id_idx").on(table.accountId),
   ownerIdIdx: index("contacts_owner_id_idx").on(table.ownerId),
   emailIdx: index("contacts_email_idx").on(table.email),
@@ -136,6 +140,7 @@ export const contacts = pgTable("contacts", {
 
 export const leads = pgTable("leads", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: LEAD-000001
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   title: text("title"),
@@ -160,6 +165,7 @@ export const leads = pgTable("leads", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
+  orgIdIdx: index("leads_org_id_idx").on(table.organizationId),
   ownerIdIdx: index("leads_owner_id_idx").on(table.ownerId),
   statusIdx: index("leads_status_idx").on(table.status),
   emailIdx: index("leads_email_idx").on(table.email),
@@ -168,6 +174,7 @@ export const leads = pgTable("leads", {
 
 export const opportunities = pgTable("opportunities", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: OPP-2025-000001
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   accountId: varchar("account_id", { length: 100 }).notNull().references(() => accounts.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   stage: opportunityStageEnum("stage").notNull().default("prospecting"),
@@ -195,6 +202,7 @@ export const opportunities = pgTable("opportunities", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
+  orgIdIdx: index("opportunities_org_id_idx").on(table.organizationId),
   accountIdIdx: index("opportunities_account_id_idx").on(table.accountId),
   ownerIdIdx: index("opportunities_owner_id_idx").on(table.ownerId),
   stageIdx: index("opportunities_stage_idx").on(table.stage),
@@ -206,6 +214,7 @@ export const opportunities = pgTable("opportunities", {
 
 export const activities = pgTable("activities", {
   id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACV-2501-00001
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   type: activityTypeEnum("type").notNull(),
   subject: text("subject").notNull(),
   status: activityStatusEnum("status").notNull().default("pending"),
@@ -224,6 +233,7 @@ export const activities = pgTable("activities", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
+  orgIdIdx: index("activities_org_id_idx").on(table.organizationId),
   ownerIdIdx: index("activities_owner_id_idx").on(table.ownerId),
   relatedIdx: index("activities_related_idx").on(table.relatedType, table.relatedId),
   dueAtIdx: index("activities_due_at_idx").on(table.dueAt),
@@ -264,23 +274,31 @@ export const auditLogs = pgTable("audit_logs", {
 
 export const idPatterns = pgTable("id_patterns", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  entity: text("entity").notNull().unique(), // "Account", "Contact", "Lead", etc.
+  entity: text("entity").notNull(), // "Account", "Contact", "Lead", etc.
   pattern: text("pattern").notNull(), // e.g., "ACCT-{YYYY}-{SEQ:5}"
   counter: integer("counter").notNull().default(0),
   startValue: integer("start_value").default(1),
   lastIssued: text("last_issued"),
+  organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  entityOrgUnique: uniqueIndex("id_patterns_entity_org_idx").on(table.entity, table.organizationId),
+  orgIdx: index("id_patterns_org_idx").on(table.organizationId),
+}));
 
 export const accountCategories = pgTable("account_categories", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
+  name: text("name").notNull(),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
+  organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  nameOrgUnique: uniqueIndex("account_categories_name_org_idx").on(table.name, table.organizationId),
+  orgIdx: index("account_categories_org_idx").on(table.organizationId),
+}));
 
 export const backupJobs = pgTable("backup_jobs", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
@@ -364,6 +382,7 @@ export const apiKeys = pgTable("api_keys", {
   rateLimitPerMin: integer("rate_limit_per_min").default(100), // Requests per minute limit
   lastUsedAt: timestamp("last_used_at"),
   expiresAt: timestamp("expires_at"), // Optional expiration date
+  organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
   createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
   revokedBy: varchar("revoked_by", { length: 50 }).references(() => users.id),
   revokedAt: timestamp("revoked_at"),
@@ -371,6 +390,7 @@ export const apiKeys = pgTable("api_keys", {
 }, (table) => ({
   hashedKeyIdx: index("api_keys_hashed_key_idx").on(table.hashedKey),
   isActiveIdx: index("api_keys_is_active_idx").on(table.isActive),
+  orgIdx: index("api_keys_org_idx").on(table.organizationId),
 }));
 
 // ========== TAGS SYSTEM ==========
@@ -468,10 +488,13 @@ export const llmConfigurations = pgTable("llm_configurations", {
   requestTimeout: integer("request_timeout").notNull().default(60), // seconds
   enabledAgents: jsonb("enabled_agents").default(["market_research", "company_discovery", "lead_discovery", "strategy", "communication_drafting"]),
   agentModelOverrides: jsonb("agent_model_overrides").default({}), // { agentName: modelName }
+  organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
   updatedBy: varchar("updated_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  orgIdx: index("llm_configurations_org_idx").on(table.organizationId),
+}));
 
 export const insertLlmConfigurationSchema = createInsertSchema(llmConfigurations).omit({
   id: true,
@@ -488,11 +511,13 @@ export const icpProfiles = pgTable("icp_profiles", {
   name: text("name").notNull(),
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   nameIdx: index("icp_profiles_name_idx").on(table.name),
+  orgIdIdx: index("icp_profiles_org_id_idx").on(table.organizationId),
 }));
 
 export const icpProfileVersions = pgTable("icp_profile_versions", {
@@ -532,11 +557,13 @@ export const taskPlaybooks = pgTable("task_playbooks", {
   description: text("description"),
   icpProfileId: varchar("icp_profile_id", { length: 50 }).references(() => icpProfiles.id, { onDelete: "set null" }),
   isActive: boolean("is_active").notNull().default(true),
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   nameIdx: index("task_playbooks_name_idx").on(table.name),
+  orgIdIdx: index("task_playbooks_org_id_idx").on(table.organizationId),
 }));
 
 export const taskPlaybookSteps = pgTable("task_playbook_steps", {
@@ -557,6 +584,7 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   description: text("description"),
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   icpProfileId: varchar("icp_profile_id", { length: 50 }).references(() => icpProfiles.id),
   icpVersionId: varchar("icp_version_id", { length: 50 }).references(() => icpProfileVersions.id),
   playbookId: varchar("playbook_id", { length: 50 }).references(() => taskPlaybooks.id, { onDelete: "set null" }),
@@ -581,6 +609,7 @@ export const leadGenerationRuns = pgTable("lead_generation_runs", {
 }, (table) => ({
   statusIdx: index("lg_runs_status_idx").on(table.status),
   ownerIdIdx: index("lg_runs_owner_id_idx").on(table.ownerId),
+  orgIdIdx: index("lg_runs_org_id_idx").on(table.organizationId),
 }));
 
 export const agentStepLogs = pgTable("agent_step_logs", {
@@ -1169,6 +1198,42 @@ export type ResearchDocument = typeof researchDocuments.$inferSelect;
 export const insertAiConfigSchema = createInsertSchema(aiConfigs).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAiConfig = z.infer<typeof insertAiConfigSchema>;
 export type AiConfig = typeof aiConfigs.$inferSelect;
+
+// ========== ORGANIZATIONS (Multi-Tenant) ==========
+
+export const organizations = pgTable("organizations", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  logoUrl: text("logo_url"),
+  settings: jsonb("settings").notNull().default({}), // { annualSalesTargets: { "2025": 1000000 } }
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  slugIdx: index("organizations_slug_idx").on(table.slug),
+}));
+
+export const userOrganizations = pgTable("user_organizations", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  roleId: varchar("role_id", { length: 50 }).notNull().references(() => roles.id, { onDelete: "restrict" }),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("user_organizations_user_id_idx").on(table.userId),
+  orgIdIdx: index("user_organizations_org_id_idx").on(table.organizationId),
+  uniqueMembership: uniqueIndex("user_organizations_unique_idx").on(table.userId, table.organizationId),
+}));
+
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type Organization = typeof organizations.$inferSelect;
+
+export const insertUserOrganizationSchema = createInsertSchema(userOrganizations).omit({ id: true, createdAt: true });
+export type InsertUserOrganization = z.infer<typeof insertUserOrganizationSchema>;
+export type UserOrganization = typeof userOrganizations.$inferSelect;
 
 // ========== CRM DOCUMENT ATTACHMENTS ==========
 

@@ -12,6 +12,7 @@ const SALT_ROUNDS = 10;
 
 export interface AuthRequest extends Request {
   user?: User;
+  activeOrgId?: string;
 }
 
 // Hash password
@@ -47,6 +48,25 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
             if (user) {
               req.user = user;
               storage.updateApiKeyLastUsed(key.id).catch(() => {});
+
+              // Enforce API key org scope:
+              // If the key is org-scoped (key.organizationId is set), the request must
+              // target that exact org — cross-org access is rejected.
+              if (key.organizationId) {
+                if (req.activeOrgId && req.activeOrgId !== key.organizationId) {
+                  return res.status(403).json({ error: "API key does not belong to the specified organization" });
+                }
+                // Pin the request to the key's org (even if no X-Organization-Id header was sent)
+                req.activeOrgId = key.organizationId;
+              } else {
+                // System-level key (no org): fall back to request header or user's default org
+                if (!req.activeOrgId) {
+                  const userOrgs = await storage.getUserOrganizations(user.id);
+                  const defaultOrg = userOrgs.find(o => o.isDefault === true) || userOrgs[0];
+                  if (defaultOrg) req.activeOrgId = defaultOrg.organizationId;
+                }
+              }
+
               return next();
             }
           }
@@ -69,10 +89,42 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     }
     
     req.user = user;
+
+    // Resolve and validate active org
+    const userOrgs = await storage.getUserOrganizations(user.id);
+
+    if (req.activeOrgId) {
+      // An explicit org header was provided — verify the user is a member
+      const isMember = userOrgs.some(o => o.organizationId === req.activeOrgId);
+      if (!isMember) {
+        // Global admins may access any org without being a member
+        const globalRoles = await storage.getUserRoles(user.id);
+        const isGlobalAdmin = globalRoles.some(r => r.name === "Admin");
+        if (!isGlobalAdmin) {
+          return res.status(403).json({ error: "Access denied: not a member of the specified organization" });
+        }
+      }
+    } else {
+      // No org header — resolve the user's default org
+      const defaultOrg = userOrgs.find(o => o.isDefault === true) || userOrgs[0];
+      if (defaultOrg) {
+        req.activeOrgId = defaultOrg.organizationId;
+      }
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+}
+
+// Middleware to attach active org ID from request header
+export function attachActiveOrg(req: AuthRequest, res: Response, next: NextFunction) {
+  const orgId = req.headers["x-organization-id"] as string | undefined;
+  if (orgId) {
+    req.activeOrgId = orgId;
+  }
+  next();
 }
 
 // Optional authentication (doesn't fail if no token)

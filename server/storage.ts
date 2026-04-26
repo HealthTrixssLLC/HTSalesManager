@@ -19,6 +19,9 @@ import type {
   Tag, InsertTag,
   EntityTag,
   CrmDocument, InsertCrmDocument, CrmDocumentEntityType,
+  Organization, InsertOrganization,
+  UserOrganization, InsertUserOrganization,
+  ApiKey, InsertApiKey,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -40,35 +43,35 @@ export interface IStorage {
   assignPermissionToRole(roleId: string, permissionId: string): Promise<void>;
   
   // ========== ACCOUNTS ==========
-  getAllAccounts(): Promise<Account[]>;
+  getAllAccounts(orgId?: string): Promise<Account[]>;
   getAccountById(id: string): Promise<Account | undefined>;
   createAccount(account: InsertAccount): Promise<Account>;
   updateAccount(id: string, account: Partial<InsertAccount>): Promise<Account>;
   deleteAccount(id: string): Promise<void>;
   
   // ========== CONTACTS ==========
-  getAllContacts(): Promise<Contact[]>;
+  getAllContacts(orgId?: string): Promise<Contact[]>;
   getContactById(id: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
   
   // ========== LEADS ==========
-  getAllLeads(): Promise<Lead[]>;
+  getAllLeads(orgId?: string): Promise<Lead[]>;
   getLeadById(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead>;
   deleteLead(id: string): Promise<void>;
   
   // ========== OPPORTUNITIES ==========
-  getAllOpportunities(): Promise<Opportunity[]>;
+  getAllOpportunities(orgId?: string): Promise<Opportunity[]>;
   getOpportunityById(id: string): Promise<Opportunity | undefined>;
   createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity>;
   updateOpportunity(id: string, opportunity: Partial<InsertOpportunity>): Promise<Opportunity>;
   deleteOpportunity(id: string): Promise<void>;
   
   // ========== ACTIVITIES ==========
-  getAllActivities(): Promise<Activity[]>;
+  getAllActivities(orgId?: string): Promise<Activity[]>;
   getActivityById(id: string): Promise<Activity | undefined>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
@@ -79,13 +82,13 @@ export interface IStorage {
   createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
   
   // ========== ID PATTERNS ==========
-  getAllIdPatterns(): Promise<IdPattern[]>;
-  getIdPattern(entity: string): Promise<IdPattern | undefined>;
+  getAllIdPatterns(orgId?: string): Promise<IdPattern[]>;
+  getIdPattern(entity: string, orgId?: string): Promise<IdPattern | undefined>;
   updateIdPattern(id: string, pattern: Partial<IdPattern>): Promise<IdPattern>;
-  generateId(entity: string): Promise<string>;
+  generateId(entity: string, orgId?: string): Promise<string>;
   
   // ========== ACCOUNT CATEGORIES ==========
-  getAllAccountCategories(): Promise<AccountCategory[]>;
+  getAllAccountCategories(orgId?: string): Promise<AccountCategory[]>;
   getAccountCategory(id: string): Promise<AccountCategory | undefined>;
   createAccountCategory(category: InsertAccountCategory): Promise<AccountCategory>;
   updateAccountCategory(id: string, category: Partial<AccountCategory>): Promise<AccountCategory>;
@@ -97,7 +100,7 @@ export interface IStorage {
   updateBackupJob(id: string, job: Partial<BackupJob>): Promise<BackupJob>;
   
   // ========== API KEYS ==========
-  getAllApiKeys(): Promise<ApiKey[]>;
+  getAllApiKeys(orgId?: string): Promise<ApiKey[]>;
   getApiKeyById(id: string): Promise<ApiKey | undefined>;
   getApiKeyByHashedKey(hashedKey: string): Promise<ApiKey | undefined>;
   createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
@@ -123,8 +126,8 @@ export interface IStorage {
   getAllOpportunityResources(): Promise<OpportunityResource[]>;
   
   // ========== LLM CONFIGURATION ==========
-  getLlmConfiguration(): Promise<LlmConfiguration | undefined>;
-  upsertLlmConfiguration(config: Partial<InsertLlmConfiguration> & { updatedBy?: string }): Promise<LlmConfiguration>;
+  getLlmConfiguration(orgId?: string): Promise<LlmConfiguration | undefined>;
+  upsertLlmConfiguration(config: Partial<InsertLlmConfiguration> & { updatedBy?: string }, orgId?: string): Promise<LlmConfiguration>;
   
   // ========== CRM DOCUMENT ATTACHMENTS ==========
   getDocuments(entityType: CrmDocumentEntityType, entityId: string): Promise<CrmDocument[]>;
@@ -135,11 +138,26 @@ export interface IStorage {
   // ========== USER MERGE ==========
   mergeUsers(primaryId: string, secondaryIds: string[]): Promise<void>;
 
+  // ========== ORGANIZATIONS ==========
+  getAllOrganizations(): Promise<Organization[]>;
+  getOrganizationById(id: string): Promise<Organization | undefined>;
+  createOrganization(org: InsertOrganization): Promise<Organization>;
+  updateOrganization(id: string, org: Partial<InsertOrganization>): Promise<Organization>;
+  deleteOrganization(id: string): Promise<void>;
+  getOrganizationMembers(organizationId: string): Promise<(UserOrganization & { user: User; roleName: string })[]>;
+  getUserOrganizations(userId: string): Promise<(UserOrganization & { organization: Organization; roleName: string })[]>;
+  addOrganizationMember(entry: InsertUserOrganization): Promise<UserOrganization>;
+  updateOrganizationMember(userId: string, organizationId: string, roleId: string): Promise<UserOrganization>;
+  removeOrganizationMember(userId: string, organizationId: string): Promise<void>;
+  setDefaultOrganization(userId: string, organizationId: string): Promise<void>;
+  getDefaultOrganization(userId: string): Promise<Organization | undefined>;
+  getOrgMembership(userId: string, organizationId: string): Promise<(UserOrganization & { roleName: string }) | undefined>;
+
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;
   
   // ========== DASHBOARD & STATS ==========
-  getDashboardStats(year: number): Promise<{
+  getDashboardStats(year: number, orgId?: string): Promise<{
     totalAccounts: number;
     totalContacts: number;
     totalLeads: number;
@@ -150,4 +168,10 @@ export interface IStorage {
     totalClosedDeals: number;
     opportunitiesByCloseDate: { period: string; count: number; value: number; opportunities: { id: string; name: string; amount: number; closeDate: string | null }[] }[];
   }>;
+  getSalesWaterfallData(year: number, orgId?: string): Promise<{
+    name: string;
+    amount: number;
+    stage: string;
+    closeDate: string | null;
+  }[]>;
 }

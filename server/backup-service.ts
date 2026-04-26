@@ -39,6 +39,9 @@ export interface BackupData {
     commentReactions: any[];
     commentAttachments: any[];
     commentSubscriptions: any[];
+    // Multi-tenant organization tables (added in v2.1.0)
+    organizations?: any[];
+    userOrganizations?: any[];
     // Lead Generation Module tables (added in v2.0.0)
     icpProfiles?: any[];
     icpProfileVersions?: any[];
@@ -68,7 +71,7 @@ export interface BackupData {
 
 export class BackupService {
   private readonly ENCRYPTION_ALGORITHM = "aes-256-gcm";
-  private readonly BACKUP_VERSION = "2.0.0";
+  private readonly BACKUP_VERSION = "2.1.0";
   private readonly BATCH_SIZE = 50; // Insert records in batches to avoid PostgreSQL parameter limits
 
   /**
@@ -171,6 +174,12 @@ export class BackupService {
   }> {
     
     // Export all data from database in batches to avoid overwhelming Neon serverless
+    // Batch 0: Organization tables (must be first - referenced by all CRM entities)
+    const [organizations, userOrganizations] = await Promise.all([
+      db.select().from(schema.organizations),
+      db.select().from(schema.userOrganizations),
+    ]);
+
     // Batch 1: Auth & RBAC (smaller tables)
     const [users, roles, permissions, userRoles, rolePermissions, idPatterns, apiKeys, accountCategories] = await Promise.all([
       db.select().from(schema.users),
@@ -262,6 +271,9 @@ export class BackupService {
       version: this.BACKUP_VERSION,
       timestamp: new Date().toISOString(),
       data: {
+        // Multi-tenant organization tables (v2.1.0+)
+        organizations,
+        userOrganizations,
         users,
         roles,
         permissions,
@@ -476,8 +488,9 @@ export class BackupService {
       const jsonData = buffer.toString("utf-8");
       const backupData: BackupData = JSON.parse(jsonData);
 
-      // Validate version - only accept 1.x and 2.x backups; reject anything else
-      const backupMajor = parseInt((backupData.version || "1.0.0").split(".")[0], 10);
+      // Validate version - accept v1.x and v2.x (including v2.0.0 and v2.1.0)
+      const backupVersion = backupData.version || "1.0.0";
+      const backupMajor = parseInt(backupVersion.split(".")[0], 10);
       const currentMajor = parseInt(this.BACKUP_VERSION.split(".")[0], 10);
       const SUPPORTED_MAJORS = [1, 2];
       if (!SUPPORTED_MAJORS.includes(backupMajor)) {
@@ -490,7 +503,8 @@ export class BackupService {
         console.warn(`[Backup] WARNING: ${msg}`);
         errors.push(msg);
       } else if (backupData.version !== this.BACKUP_VERSION) {
-        console.log(`[Backup] Restoring from v${backupData.version} backup (current: v${this.BACKUP_VERSION})`);
+        // Minor/patch version mismatch within same major — backwards compatible
+        console.log(`[Backup] Restoring from v${backupData.version} backup (current: v${this.BACKUP_VERSION}). Any missing tables will be skipped.`);
       }
 
       // Use transaction for atomic restore
@@ -588,10 +602,14 @@ export class BackupService {
           await tx.delete(schema.permissions);
           // Roles are independent  
           await tx.delete(schema.roles);
-          // Users are independent (but must be deleted AFTER api_keys and tags)
+          // userOrganizations references both users and organizations — delete before both
+          await tx.delete(schema.userOrganizations);
+          // Users are independent (but must be deleted AFTER api_keys, tags, and userOrganizations)
           await tx.delete(schema.users);
-          // ID patterns are independent
+          // ID patterns reference organizations — must be deleted before organizations
           await tx.delete(schema.idPatterns);
+          // Organizations — deleted last, after all tables that reference it
+          await tx.delete(schema.organizations);
           console.log("[Backup] All existing data deleted successfully");
         } catch (deleteError) {
           console.error("[Backup] Error during deletion:", deleteError);
@@ -600,7 +618,21 @@ export class BackupService {
 
         // Restore data (in dependency order) using batched inserts
         console.log("[Backup] Starting data restoration...");
-        
+
+        // Detect whether this backup includes org data (v2.1.0+).
+        // Old backups (v1.x, v2.0.0) don't have organizations — for backwards compat
+        // we strip organizationId from CRM records so FK constraints don't fail.
+        // Server startup will re-create the default org and backfill all records.
+        const hasOrgData = (backupData.data.organizations || []).length > 0;
+        const stripOrgId = (records: any[]): any[] => {
+          if (hasOrgData) return records; // New backup — keep organizationId intact
+          return records.map((r: any) => {
+            const copy = { ...r };
+            delete copy.organizationId;
+            return copy;
+          });
+        };
+
         // Restore auth/RBAC tables
         try {
           await this.batchInsert(tx, schema.roles, backupData.data.roles, "roles");
@@ -645,9 +677,31 @@ export class BackupService {
           throw new Error(`Failed to restore role permissions: ${error instanceof Error ? error.message : String(error)}`);
         }
 
+        // Restore organizations (v2.1.0+) — must come before accounts/contacts/leads/etc.
+        // Old backups will have no org data here; server startup will re-create the default org.
+        try {
+          const orgs = backupData.data.organizations || [];
+          await this.batchInsert(tx, schema.organizations, orgs, "organizations");
+          recordsRestored += orgs.length;
+          if (!hasOrgData) {
+            console.log("[Backup] No org data in backup (pre-v2.1.0 format) — server startup will recreate default org");
+          }
+        } catch (error) {
+          throw new Error(`Failed to restore organizations: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Restore userOrganizations (v2.1.0+) — after users and organizations
+        try {
+          const userOrgs = backupData.data.userOrganizations || [];
+          await this.batchInsert(tx, schema.userOrganizations, userOrgs, "user-organization memberships");
+          recordsRestored += userOrgs.length;
+        } catch (error) {
+          throw new Error(`Failed to restore user-organization memberships: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
         // Restore account categories (before accounts that reference them)
         try {
-          await this.batchInsert(tx, schema.accountCategories, backupData.data.accountCategories || [], "account categories");
+          await this.batchInsert(tx, schema.accountCategories, stripOrgId(backupData.data.accountCategories || []), "account categories");
           recordsRestored += (backupData.data.accountCategories || []).length;
         } catch (error) {
           throw new Error(`Failed to restore account categories: ${error instanceof Error ? error.message : String(error)}`);
@@ -662,29 +716,31 @@ export class BackupService {
         }
 
         // Restore CRM entities using batched inserts
+        // stripOrgId() handles backwards compat: strips organizationId from old backups
+        // so FK constraints don't fail when no org data is present.
         try {
-          await this.batchInsert(tx, schema.accounts, backupData.data.accounts, "accounts");
+          await this.batchInsert(tx, schema.accounts, stripOrgId(backupData.data.accounts), "accounts");
           recordsRestored += backupData.data.accounts.length;
         } catch (error) {
           throw new Error(`Failed to restore accounts: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          await this.batchInsert(tx, schema.contacts, backupData.data.contacts, "contacts");
+          await this.batchInsert(tx, schema.contacts, stripOrgId(backupData.data.contacts), "contacts");
           recordsRestored += backupData.data.contacts.length;
         } catch (error) {
           throw new Error(`Failed to restore contacts: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          await this.batchInsert(tx, schema.leads, backupData.data.leads, "leads");
+          await this.batchInsert(tx, schema.leads, stripOrgId(backupData.data.leads), "leads");
           recordsRestored += backupData.data.leads.length;
         } catch (error) {
           throw new Error(`Failed to restore leads: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         try {
-          await this.batchInsert(tx, schema.opportunities, backupData.data.opportunities, "opportunities");
+          await this.batchInsert(tx, schema.opportunities, stripOrgId(backupData.data.opportunities), "opportunities");
           recordsRestored += backupData.data.opportunities.length;
         } catch (error) {
           throw new Error(`Failed to restore opportunities: ${error instanceof Error ? error.message : String(error)}`);
@@ -694,7 +750,7 @@ export class BackupService {
         try {
           if (backupData.data.activities.length > 0) {
             console.log(`[Backup] Restoring ${backupData.data.activities.length} activities...`);
-            const activitiesWithDefaults = backupData.data.activities.map((activity: any) => {
+            const activitiesWithDefaults = stripOrgId(backupData.data.activities).map((activity: any) => {
               const withDates = this.convertDates(activity);
               return {
                 ...withDates,
@@ -713,9 +769,9 @@ export class BackupService {
           throw new Error(`Failed to restore activities: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        // Restore ID patterns
+        // Restore ID patterns (stripOrgId for backwards compat — org FK on idPatterns)
         try {
-          await this.batchInsert(tx, schema.idPatterns, backupData.data.idPatterns, "ID patterns");
+          await this.batchInsert(tx, schema.idPatterns, stripOrgId(backupData.data.idPatterns), "ID patterns");
           recordsRestored += backupData.data.idPatterns.length;
         } catch (error) {
           throw new Error(`Failed to restore ID patterns: ${error instanceof Error ? error.message : String(error)}`);
@@ -855,9 +911,9 @@ export class BackupService {
           throw new Error(`Failed to restore task playbook steps: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        // Restore lead generation runs (depend on ICP profiles/versions and users)
+        // Restore lead generation runs (depend on ICP profiles/versions, users, and organizations)
         try {
-          await this.batchInsert(tx, schema.leadGenerationRuns, backupData.data.leadGenerationRuns || [], "lead generation runs");
+          await this.batchInsert(tx, schema.leadGenerationRuns, stripOrgId(backupData.data.leadGenerationRuns || []), "lead generation runs");
           recordsRestored += (backupData.data.leadGenerationRuns || []).length;
         } catch (error) {
           throw new Error(`Failed to restore lead generation runs: ${error instanceof Error ? error.message : String(error)}`);
