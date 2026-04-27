@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
 import { useToast } from "@/hooks/use-toast";
+import { useFinancialAccess } from "@/hooks/use-financial-access";
 import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,6 +33,7 @@ export default function LeadDetailPage() {
   const [, setLocation] = useLocation();
   const leadId = params?.id;
   const { toast } = useToast();
+  const canViewFinancials = useFinancialAccess();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isConversionOpen, setIsConversionOpen] = useState(false);
@@ -308,6 +310,13 @@ export default function LeadDetailPage() {
                       >
                         {relatedData.convertedOpportunity.name}
                       </Button>
+                      {canViewFinancials && relatedData.convertedOpportunity.amount != null && (
+                        <p className="text-xs text-muted-foreground mt-1" data-testid="text-converted-opportunity-amount">
+                          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+                            Number(relatedData.convertedOpportunity.amount)
+                          )}
+                        </p>
+                      )}
                     </div>
                   )}
                 </CardContent>
