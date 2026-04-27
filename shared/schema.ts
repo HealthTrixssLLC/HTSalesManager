@@ -905,6 +905,7 @@ export type Permission = typeof permissions.$inferSelect;
 
 // Accounts
 export const insertAccountSchema = createInsertSchema(accounts).omit({ createdAt: true, updatedAt: true }).extend({
+  name: z.string().min(1, "Account name is required"),
   accountNumber: z.string().optional(),
   category: z.string().optional(),
   organizationId: z.string().optional(),
@@ -914,6 +915,8 @@ export type Account = typeof accounts.$inferSelect;
 
 // Contacts
 export const insertContactSchema = createInsertSchema(contacts).omit({ createdAt: true, updatedAt: true }).extend({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   organizationId: z.string().optional(),
 });
 export type InsertContact = z.infer<typeof insertContactSchema>;
@@ -928,6 +931,8 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
   convertedOpportunityId: true,
   convertedAt: true,
 }).extend({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   organizationId: z.string().optional(),
 });
 export type InsertLead = z.infer<typeof insertLeadSchema>;
@@ -947,6 +952,8 @@ const datePreprocessor = (val: unknown) => {
 export const insertOpportunitySchema = createInsertSchema(opportunities)
   .omit({ createdAt: true, updatedAt: true })
   .extend({
+    name: z.string().min(1, "Opportunity name is required"),
+    accountId: z.string().min(1, "Account is required"),
     closeDate: z.preprocess(
       datePreprocessor,
       z.date({ required_error: "Close date is required" })
@@ -962,6 +969,7 @@ export type Opportunity = typeof opportunities.$inferSelect;
 
 // Activities
 export const insertActivitySchema = createInsertSchema(activities).omit({ id: true, createdAt: true, updatedAt: true }).extend({
+  subject: z.string().min(1, "Subject is required"),
   dueAt: z.string().nullish(),
   completedAt: z.string().nullish(),
   ownerId: z.string().nullish(),

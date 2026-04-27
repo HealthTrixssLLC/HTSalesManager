@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getErrorMessage } from "@/lib/queryClient";
 
 const entityTabs = [
   { value: "account", label: "Account", icon: Building2 },
@@ -132,7 +132,7 @@ function QuickAddAccount({ onSuccess, onCancel }: { onSuccess: (id: string) => v
       onSuccess(data.id);
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create account", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create account", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -207,7 +207,7 @@ function QuickAddContact({ onSuccess, onCancel, context }: { onSuccess: (id: str
       onSuccess(data.id);
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create contact", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create contact", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -282,7 +282,7 @@ function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string
       onSuccess(data.id);
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create lead", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create lead", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -365,7 +365,7 @@ function QuickAddOpportunity({ onSuccess, onCancel, context }: { onSuccess: (id:
       onSuccess(data.id);
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create opportunity", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create opportunity", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 
@@ -465,7 +465,7 @@ function QuickAddActivity({ onSuccess, onCancel, context }: { onSuccess: (id: st
       onSuccess(data.id);
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create activity", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create activity", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 

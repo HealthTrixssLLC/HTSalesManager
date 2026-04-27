@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders, getErrorMessage } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -174,7 +174,7 @@ export default function LeadsPage() {
       form.reset();
     },
     onError: (error: Error) => {
-      toast({ title: "Failed to create lead", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to create lead", description: getErrorMessage(error), variant: "destructive" });
     },
   });
 

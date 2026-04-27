@@ -161,6 +161,27 @@ export function clearOrgScopedQueries() {
   });
 }
 
+/**
+ * Extracts a human-readable error message from a mutation error.
+ * Handles raw server responses like "400: {"error":"some message"}" and
+ * plain network/string errors.
+ */
+export function getErrorMessage(error: Error): string {
+  const raw = error.message || "";
+  const colonIdx = raw.indexOf(": ");
+  if (colonIdx !== -1) {
+    const body = raw.slice(colonIdx + 2);
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed?.error && typeof parsed.error === "string") return parsed.error;
+      if (parsed?.message && typeof parsed.message === "string") return parsed.message;
+    } catch {
+      if (body) return body;
+    }
+  }
+  return raw || "An unexpected error occurred. Please try again.";
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
