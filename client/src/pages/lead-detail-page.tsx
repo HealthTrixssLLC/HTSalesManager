@@ -28,12 +28,41 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import type { Lead, Activity, Account, Contact, Opportunity, InsertLead } from "@shared/schema";
 import { insertLeadSchema } from "@shared/schema";
 
+interface ConvertedOpportunityAmountProps {
+  opportunity: Pick<Opportunity, "id" | "name" | "amount">;
+  onNavigate: (id: string) => void;
+}
+
+export function ConvertedOpportunityAmount({ opportunity, onNavigate }: ConvertedOpportunityAmountProps) {
+  const canViewFinancials = useFinancialAccess();
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-1">Opportunity Created</p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full justify-start"
+        onClick={() => onNavigate(opportunity.id)}
+        data-testid="link-converted-opportunity"
+      >
+        {opportunity.name}
+      </Button>
+      {canViewFinancials && opportunity.amount != null && (
+        <p className="text-xs text-muted-foreground mt-1" data-testid="text-converted-opportunity-amount">
+          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+            Number(opportunity.amount)
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function LeadDetailPage() {
   const [, params] = useRoute("/leads/:id");
   const [, setLocation] = useLocation();
   const leadId = params?.id;
   const { toast } = useToast();
-  const canViewFinancials = useFinancialAccess();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isConversionOpen, setIsConversionOpen] = useState(false);
@@ -299,25 +328,10 @@ export default function LeadDetailPage() {
                     </div>
                   )}
                   {relatedData?.convertedOpportunity && (
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Opportunity Created</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start"
-                        onClick={() => setLocation(`/opportunities/${relatedData.convertedOpportunity?.id}`)}
-                        data-testid="link-converted-opportunity"
-                      >
-                        {relatedData.convertedOpportunity.name}
-                      </Button>
-                      {canViewFinancials && relatedData.convertedOpportunity.amount != null && (
-                        <p className="text-xs text-muted-foreground mt-1" data-testid="text-converted-opportunity-amount">
-                          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-                            Number(relatedData.convertedOpportunity.amount)
-                          )}
-                        </p>
-                      )}
-                    </div>
+                    <ConvertedOpportunityAmount
+                      opportunity={relatedData.convertedOpportunity}
+                      onNavigate={(id) => setLocation(`/opportunities/${id}`)}
+                    />
                   )}
                 </CardContent>
               </Card>
