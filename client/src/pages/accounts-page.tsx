@@ -265,6 +265,7 @@ export default function AccountsPage() {
     try {
       const response = await fetch("/api/export/accounts", {
         credentials: "include",
+        headers: getOrgHeaders("/api/export/accounts"),
       });
       
       if (!response.ok) {

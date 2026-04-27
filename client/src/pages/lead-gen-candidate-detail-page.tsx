@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { TaskPlaybook } from "@shared/schema";
 
@@ -291,7 +291,8 @@ export default function LeadGenCandidateDetailPage() {
   const { data: candidate, isLoading } = useQuery<CandidateDetail>({
     queryKey: ["/api/lead-gen/candidates", id],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/candidates/${id}`, { credentials: "include" });
+      const candidateUrl = `/api/lead-gen/candidates/${id}`;
+      const res = await fetch(candidateUrl, { credentials: "include", headers: getOrgHeaders(candidateUrl) });
       if (!res.ok) throw new Error("Failed to load candidate");
       return res.json();
     },

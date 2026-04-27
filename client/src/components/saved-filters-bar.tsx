@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
+import { apiRequest, queryClient, fetchCsrfToken, getOrgHeaders } from "@/lib/queryClient";
 import type { SavedFilter } from "@shared/schema";
 
 interface SavedFiltersBarProps {
@@ -32,7 +32,8 @@ export function SavedFiltersBar({ pageName, currentFilters, onApply, hasActiveFi
   const { data: presets = [] } = useQuery<SavedFilter[]>({
     queryKey: ["/api/saved-filters", pageName],
     queryFn: async () => {
-      const res = await fetch(`/api/saved-filters?page=${pageName}`, { credentials: "include" });
+      const sfUrl = `/api/saved-filters?page=${pageName}`;
+      const res = await fetch(sfUrl, { credentials: "include", headers: getOrgHeaders(sfUrl) });
       if (!res.ok) return [];
       return res.json();
     },

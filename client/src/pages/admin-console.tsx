@@ -23,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient, fetchCsrfToken } from "@/lib/queryClient";
+import { apiRequest, queryClient, fetchCsrfToken, getOrgHeaders } from "@/lib/queryClient";
 
 type UserWithRoles = User & { roles: Role[] };
 
@@ -750,6 +750,7 @@ export default function AdminConsole() {
         credentials: "include",
         headers: {
           "X-CSRF-Token": csrfToken,
+          ...getOrgHeaders("/api/admin/backup"),
         },
       });
       
@@ -796,6 +797,7 @@ export default function AdminConsole() {
       const headers: Record<string, string> = {
         "Content-Type": "application/octet-stream",
         "X-CSRF-Token": csrfToken,
+        ...getOrgHeaders("/api/admin/restore"),
       };
       if (encryptionKey.trim()) {
         headers["X-Backup-Encryption-Key"] = encryptionKey.trim();

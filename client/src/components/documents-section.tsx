@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest, fetchCsrfToken } from "@/lib/queryClient";
+import { queryClient, apiRequest, fetchCsrfToken, getOrgHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,7 +111,8 @@ function DocumentViewerDialog({ state, onClose }: { state: ViewerState | null; o
 
     (async () => {
       try {
-        const res = await fetch(`/api/documents/${doc.id}/download`, { credentials: "include" });
+        const dlUrl = `/api/documents/${doc.id}/download`;
+        const res = await fetch(dlUrl, { credentials: "include", headers: getOrgHeaders(dlUrl) });
         if (!res.ok) throw new Error("Failed to fetch document");
 
         if (type === "pdf") {
@@ -236,7 +237,8 @@ export function DocumentsSection({ entityType, entityId, canEdit: canEditProp }:
   const { data: documents = [], isLoading } = useQuery<DocumentRecord[]>({
     queryKey,
     queryFn: async () => {
-      const res = await fetch(`/api/documents?entityType=${entityType}&entityId=${entityId}`, { credentials: "include" });
+      const docsUrl = `/api/documents?entityType=${entityType}&entityId=${entityId}`;
+      const res = await fetch(docsUrl, { credentials: "include", headers: getOrgHeaders(docsUrl) });
       if (!res.ok) throw new Error("Failed to fetch documents");
       return res.json();
     },
@@ -253,7 +255,7 @@ export function DocumentsSection({ entityType, entityId, canEdit: canEditProp }:
         method: "POST",
         body: formData,
         credentials: "include",
-        headers: { "X-CSRF-Token": csrfToken },
+        headers: { "X-CSRF-Token": csrfToken, ...getOrgHeaders("/api/documents/upload") },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Upload failed" }));

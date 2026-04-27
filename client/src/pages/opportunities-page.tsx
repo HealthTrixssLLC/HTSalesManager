@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -154,7 +154,7 @@ export default function OpportunitiesPage() {
     queryFn: async ({ queryKey }) => {
       const params = queryKey[1] as string;
       const url = params ? `/api/opportunities?${params}` : "/api/opportunities";
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch opportunities");
       return res.json();
     },
@@ -268,6 +268,7 @@ export default function OpportunitiesPage() {
     try {
       const response = await fetch("/api/export/opportunities", {
         credentials: "include",
+        headers: getOrgHeaders("/api/export/opportunities"),
       });
       
       if (!response.ok) {

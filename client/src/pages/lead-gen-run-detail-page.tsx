@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import type { LeadGenerationRun, CandidateLead, TaskPlaybook } from "@shared/schema";
 
 type PlaybookWithCount = TaskPlaybook & { stepCount: number };
@@ -226,7 +226,8 @@ export default function LeadGenRunDetailPage() {
   const { data: run, isLoading } = useQuery<RunDetail>({
     queryKey: ["/api/lead-gen/runs", id],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/runs/${id}`, { credentials: "include" });
+      const runUrl = `/api/lead-gen/runs/${id}`;
+      const res = await fetch(runUrl, { credentials: "include", headers: getOrgHeaders(runUrl) });
       if (!res.ok) throw new Error("Failed to load run");
       return res.json();
     },
@@ -248,7 +249,8 @@ export default function LeadGenRunDetailPage() {
   const { data: auditEvents = [], isLoading: auditLoading } = useQuery<AuditEvent[]>({
     queryKey: ["/api/lead-gen/runs", id, "audit-events"],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/runs/${id}/audit-events`, { credentials: "include" });
+      const auditUrl = `/api/lead-gen/runs/${id}/audit-events`;
+      const res = await fetch(auditUrl, { credentials: "include", headers: getOrgHeaders(auditUrl) });
       if (!res.ok) throw new Error("Failed to load audit events");
       return res.json();
     },
@@ -259,7 +261,8 @@ export default function LeadGenRunDetailPage() {
   const { data: stepLogs = [], isLoading: stepLogsLoading } = useQuery<AgentStepLog[]>({
     queryKey: ["/api/lead-gen/runs", id, "step-logs"],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/runs/${id}/step-logs`, { credentials: "include" });
+      const stepLogsUrl = `/api/lead-gen/runs/${id}/step-logs`;
+      const res = await fetch(stepLogsUrl, { credentials: "include", headers: getOrgHeaders(stepLogsUrl) });
       if (!res.ok) throw new Error("Failed to load step logs");
       return res.json();
     },

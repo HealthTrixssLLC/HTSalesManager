@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -141,7 +141,7 @@ export default function ActivitiesPage() {
     queryFn: async ({ queryKey }) => {
       const params = queryKey[1] as string;
       const url = params ? `/api/activities?${params}` : "/api/activities";
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch activities");
       return res.json();
     },
@@ -170,8 +170,10 @@ export default function ActivitiesPage() {
     queryFn: async () => {
       // Fetch tags for all activities
       const activityTagsPromises = (activities || []).map(async (activity) => {
-        const res = await fetch(`/api/activities/${activity.id}/tags`, {
+        const tagUrl = `/api/activities/${activity.id}/tags`;
+        const res = await fetch(tagUrl, {
           credentials: "include",
+          headers: getOrgHeaders(tagUrl),
         });
         if (!res.ok) return [];
         const tags = await res.json();
@@ -396,6 +398,7 @@ export default function ActivitiesPage() {
     try {
       const response = await fetch("/api/export/activities", {
         credentials: "include",
+        headers: getOrgHeaders("/api/export/activities"),
       });
       
       if (!response.ok) {

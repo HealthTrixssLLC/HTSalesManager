@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getOrgHeaders } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, AlertTriangle, Clock, Users, TrendingUp, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -127,7 +128,8 @@ export default function LeadGenReportsPage() {
   const { data: report, isLoading: reportLoading } = useQuery<ReportData>({
     queryKey: ["/api/lead-gen/reports", queryParams.toString()],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/reports?${queryParams.toString()}`, { credentials: "include" });
+      const reportsUrl = `/api/lead-gen/reports?${queryParams.toString()}`;
+      const res = await fetch(reportsUrl, { credentials: "include", headers: getOrgHeaders(reportsUrl) });
       if (!res.ok) throw new Error("Failed to load report");
       return res.json();
     },
@@ -136,7 +138,7 @@ export default function LeadGenReportsPage() {
   const { data: runCards = [], isLoading: runCardsLoading } = useQuery<RunCard[]>({
     queryKey: ["/api/lead-gen/reports/run-cards"],
     queryFn: async () => {
-      const res = await fetch("/api/lead-gen/reports/run-cards", { credentials: "include" });
+      const res = await fetch("/api/lead-gen/reports/run-cards", { credentials: "include", headers: getOrgHeaders("/api/lead-gen/reports/run-cards") });
       if (!res.ok) throw new Error("Failed to load run cards");
       return res.json();
     },

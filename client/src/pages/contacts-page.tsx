@@ -201,6 +201,7 @@ export default function ContactsPage() {
     try {
       const response = await fetch("/api/export/contacts", {
         credentials: "include",
+        headers: getOrgHeaders("/api/export/contacts"),
       });
       
       if (!response.ok) {

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import type { LeadGenerationRun, IcpProfile, User } from "@shared/schema";
 
@@ -92,7 +92,8 @@ function DuplicateWarningBadge({ duplicateClass, candidateId }: { duplicateClass
   const { data: dupCheck } = useQuery<{ matches: DuplicateMatch[] }>({
     queryKey: ["/api/lead-gen/candidates", candidateId, "duplicate-check"],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/candidates/${candidateId}/duplicate-check`, { credentials: "include" });
+      const dupUrl = `/api/lead-gen/candidates/${candidateId}/duplicate-check`;
+      const res = await fetch(dupUrl, { credentials: "include", headers: getOrgHeaders(dupUrl) });
       if (!res.ok) return { matches: [] };
       return res.json();
     },
@@ -130,10 +131,11 @@ function ResearchDocsSummary({ candidateAccountId, candidateContactId, candidate
     queryKey: ["/api/research-documents/bulk", candidateAccountId, candidateContactId, candidateLeadId],
     queryFn: async () => {
       const results = await Promise.all(
-        queries.map(q =>
-          fetch(`/api/research-documents?entityType=${q.entityType}&entityId=${q.entityId}`, { credentials: "include" })
-            .then(r => r.ok ? r.json() : [])
-        )
+        queries.map(q => {
+          const rdBulkUrl = `/api/research-documents?entityType=${q.entityType}&entityId=${q.entityId}`;
+          return fetch(rdBulkUrl, { credentials: "include", headers: getOrgHeaders(rdBulkUrl) })
+            .then(r => r.ok ? r.json() : []);
+        })
       );
       return (results as ResearchDocument[][]).flat();
     },
@@ -293,7 +295,8 @@ export default function LeadGenReviewPage() {
   const { data: pageData, isLoading } = useQuery<CandidatePageResponse>({
     queryKey: ["/api/lead-gen/candidates", queryParams.toString()],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/candidates?${queryParams.toString()}`, { credentials: "include" });
+      const candidatesUrl = `/api/lead-gen/candidates?${queryParams.toString()}`;
+      const res = await fetch(candidatesUrl, { credentials: "include", headers: getOrgHeaders(candidatesUrl) });
       if (!res.ok) throw new Error("Failed to load candidates");
       return res.json();
     },

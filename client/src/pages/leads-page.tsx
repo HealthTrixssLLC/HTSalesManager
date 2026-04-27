@@ -223,6 +223,7 @@ export default function LeadsPage() {
     try {
       const response = await fetch("/api/export/leads", {
         credentials: "include",
+        headers: getOrgHeaders("/api/export/leads"),
       });
       
       if (!response.ok) {

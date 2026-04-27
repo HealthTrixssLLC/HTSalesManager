@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import type { TaskPlaybook, TaskPlaybookStep } from "@shared/schema";
 
 interface PlaybookDetail extends TaskPlaybook {
@@ -35,7 +35,8 @@ export default function LeadGenPlaybookDetailPage() {
   const { data: playbook, isLoading } = useQuery<PlaybookDetail>({
     queryKey: ["/api/lead-gen/playbooks", id],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/playbooks/${id}`, { credentials: "include" });
+      const playbookUrl = `/api/lead-gen/playbooks/${id}`;
+      const res = await fetch(playbookUrl, { credentials: "include", headers: getOrgHeaders(playbookUrl) });
       if (!res.ok) throw new Error("Failed to load playbook");
       return res.json();
     },

@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import type { IcpProfile, IcpProfileVersion, Offer, TaskPlaybook } from "@shared/schema";
 
 interface ScoringRubric {
@@ -54,7 +54,8 @@ export default function LeadGenIcpDetailPage() {
   const { data: profile, isLoading } = useQuery<IcpProfileDetail>({
     queryKey: ["/api/lead-gen/icps", id],
     queryFn: async () => {
-      const res = await fetch(`/api/lead-gen/icps/${id}`, { credentials: "include" });
+      const icpUrl = `/api/lead-gen/icps/${id}`;
+      const res = await fetch(icpUrl, { credentials: "include", headers: getOrgHeaders(icpUrl) });
       if (!res.ok) throw new Error("Failed to load ICP");
       return res.json();
     },

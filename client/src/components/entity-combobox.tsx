@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { getOrgHeaders } from "@/lib/queryClient";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -63,8 +64,10 @@ export function EntityCombobox({
       if (entityType) {
         params.append("type", entityType);
       }
-      const res = await fetch(`/api/entities/search?${params.toString()}`, {
+      const searchUrl = `/api/entities/search?${params.toString()}`;
+      const res = await fetch(searchUrl, {
         credentials: "include",
+        headers: getOrgHeaders(searchUrl),
       });
       if (!res.ok) {
         throw new Error("Failed to search entities");

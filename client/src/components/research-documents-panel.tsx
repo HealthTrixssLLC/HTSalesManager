@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 
 export type DocumentEntityType =
   | "candidate_account"
@@ -81,7 +81,8 @@ export function ResearchDocumentsPanel({ entityType, entityId, canManage = true,
   const { data: documents = [], isLoading } = useQuery<ResearchDocument[]>({
     queryKey: ["/api/research-documents", entityType, entityId],
     queryFn: async () => {
-      const res = await fetch(`/api/research-documents?entityType=${entityType}&entityId=${entityId}`, { credentials: "include" });
+      const rdUrl = `/api/research-documents?entityType=${entityType}&entityId=${entityId}`;
+      const res = await fetch(rdUrl, { credentials: "include", headers: getOrgHeaders(rdUrl) });
       if (!res.ok) throw new Error("Failed to load documents");
       return res.json();
     },

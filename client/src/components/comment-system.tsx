@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,8 +59,10 @@ export function CommentSystem({ entity, entityId, entityName }: CommentSystemPro
   }>({
     queryKey: ["/api", entity, entityId, "comments"],
     queryFn: async () => {
-      const res = await fetch(`/api/${entity}/${entityId}/comments`, {
+      const commentsUrl = `/api/${entity}/${entityId}/comments`;
+      const res = await fetch(commentsUrl, {
         credentials: "include",
+        headers: getOrgHeaders(commentsUrl),
       });
       if (!res.ok) throw new Error("Failed to load comments");
       return res.json();

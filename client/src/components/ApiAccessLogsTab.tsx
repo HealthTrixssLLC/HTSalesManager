@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { getOrgHeaders } from "@/lib/queryClient";
 import { ApiKey } from "@shared/schema";
 
 interface ApiAccessLogsTabProps {
@@ -67,8 +68,10 @@ export function ApiAccessLogsTab({ apiKeys }: ApiAccessLogsTabProps) {
       if (filters.status) params.append("status", filters.status);
       if (filters.action) params.append("action", filters.action);
 
-      const res = await fetch(`/api/admin/api-access-logs/export?${params.toString()}`, {
+      const exportUrl = `/api/admin/api-access-logs/export?${params.toString()}`;
+      const res = await fetch(exportUrl, {
         credentials: "include",
+        headers: getOrgHeaders(exportUrl),
       });
 
       if (!res.ok) throw new Error("Export failed");

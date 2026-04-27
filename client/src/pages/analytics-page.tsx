@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, DollarSign, Target, Zap, Users, AlertTriangle, Filter, Lock } from "lucide-react";
 import { useFinancialAccess } from "@/hooks/use-financial-access";
+import { getOrgHeaders } from "@/lib/queryClient";
 import {
   AreaChart,
   Area,
@@ -46,7 +47,7 @@ export default function AnalyticsPage() {
   const { data: repPerformance, isLoading: repLoading } = useQuery<any>({
     queryKey: ["/api/analytics/rep-performance", rolesQueryParam],
     queryFn: async () => {
-      const res = await fetch(repPerformanceUrl, { credentials: "include" });
+      const res = await fetch(repPerformanceUrl, { credentials: "include", headers: getOrgHeaders(repPerformanceUrl) });
       if (!res.ok) {
         throw new Error(`${res.status}: ${await res.text() || res.statusText}`);
       }
