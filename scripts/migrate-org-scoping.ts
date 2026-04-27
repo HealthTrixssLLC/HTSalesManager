@@ -13,7 +13,6 @@
  * are affected; subsequent runs are no-ops).
  */
 
-import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { isNull, eq } from "drizzle-orm";
