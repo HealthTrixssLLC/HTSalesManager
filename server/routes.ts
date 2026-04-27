@@ -284,11 +284,21 @@ export async function registerRoutes(app: Express) {
   // Get all users (for dropdowns)
   app.get("/api/users", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      // Global admins always see all active users so they can assign users across orgs.
+      // Global admins with an active org context see only that org's members.
+      // Global admins without an active org context see all active users.
       // Org-scoped (non-admin) users see only members of their active org.
       const isGlobalAdmin = await hasAnyRole(req.user!.id, ["Admin"]);
       let query;
-      if (isGlobalAdmin) {
+      if (isGlobalAdmin && req.activeOrgId) {
+        query = db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .innerJoin(userOrganizations, and(
+            eq(userOrganizations.userId, users.id),
+            eq(userOrganizations.organizationId, req.activeOrgId),
+          ))
+          .where(eq(users.status, "active"));
+      } else if (isGlobalAdmin) {
         query = db
           .select({ id: users.id, name: users.name, email: users.email })
           .from(users)
