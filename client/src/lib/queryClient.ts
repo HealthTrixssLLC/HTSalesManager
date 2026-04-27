@@ -143,6 +143,24 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+/**
+ * Removes all cached data for org-scoped queries.
+ * Call this when switching orgs to prevent stale data from a previous org
+ * from flashing briefly before new data loads.
+ * Org-agnostic queries (user info, org list, etc.) are preserved.
+ */
+export function clearOrgScopedQueries() {
+  queryClient.removeQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0];
+      if (typeof key === "string") {
+        return !isOrgAgnosticPath(key);
+      }
+      return true;
+    },
+  });
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

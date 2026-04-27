@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest, clearOrgScopedQueries } from "@/lib/queryClient";
 
 export type OrgSettings = {
   annualSalesTargets?: Record<string, number>;
@@ -69,8 +69,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const switchOrg = useCallback((orgId: string) => {
     setActiveOrgId(orgId);
     localStorage.setItem(LOCAL_STORAGE_KEY, orgId);
-    // Invalidate all org-scoped query data
-    queryClient.invalidateQueries();
+    // Remove all org-scoped cached data so the UI shows a loading state
+    // instead of stale records from the previous org during transition.
+    clearOrgScopedQueries();
   }, []);
 
   const setDefaultOrgMutation = useMutation({
