@@ -3,7 +3,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
-import { initializeDefaultOrganization } from "./seed";
+import { initializeDefaultOrganization, runStartupColumnMigration } from "./seed";
 import { storage, fixEntityTagsEntityNames } from "./db";
 import { csrfProtection, generateCsrfToken } from "./csrf-protection";
 
@@ -75,6 +75,11 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Run schema column migration FIRST — adds any missing organization_id columns
+  // and creates organizations/user_organizations tables if absent in production.
+  // Uses ALTER TABLE ... ADD COLUMN IF NOT EXISTS so it is fully idempotent.
+  await runStartupColumnMigration();
+
   // Initialize default roles and permissions
   await initializeDefaultRolesAndPermissions();
   

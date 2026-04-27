@@ -3,8 +3,93 @@
 
 import { db } from "./db";
 import { roles, permissions, rolePermissions, users, userRoles, organizations, userOrganizations } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { hashPassword } from "./auth";
+
+/**
+ * Startup column migration — runs BEFORE any ORM queries.
+ *
+ * Production databases that were deployed before the multi-tenant schema was
+ * applied will be missing the `organization_id` column on many tables and
+ * the `organizations` / `user_organizations` tables entirely.
+ *
+ * All statements use IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so they are
+ * fully idempotent — safe to run on every server start with zero cost once
+ * the columns already exist.
+ */
+export async function runStartupColumnMigration(): Promise<void> {
+  try {
+    // 1. Create the organizations table if it doesn't exist yet
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS organizations (
+        id VARCHAR(50) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(100) NOT NULL,
+        description TEXT,
+        settings JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+
+    // Unique index on slug (separate from table creation for IF NOT EXISTS safety)
+    await db.execute(sql.raw(`
+      CREATE UNIQUE INDEX IF NOT EXISTS organizations_slug_idx ON organizations (slug)
+    `));
+
+    // 2. Create the user_organizations join table if it doesn't exist yet
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS user_organizations (
+        id VARCHAR(50) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+        user_id VARCHAR(50) NOT NULL,
+        organization_id VARCHAR(50) NOT NULL,
+        role_id VARCHAR(50) NOT NULL,
+        is_default BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+
+    await db.execute(sql.raw(`
+      CREATE UNIQUE INDEX IF NOT EXISTS user_organizations_unique_idx
+        ON user_organizations (user_id, organization_id)
+    `));
+
+    // 3. Add organization_id column (nullable VARCHAR) to every table that
+    //    references it in the Drizzle schema. No FK constraint here — that is
+    //    applied later by drizzle-kit push once data is backfilled.
+    const tables = [
+      'accounts',
+      'contacts',
+      'leads',
+      'opportunities',
+      'activities',
+      'icp_profiles',
+      'task_playbooks',
+      'lead_generation_runs',
+      'id_patterns',
+      'account_categories',
+      'api_keys',
+      'llm_configurations',
+    ];
+
+    for (const table of tables) {
+      await db.execute(sql.raw(
+        `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS organization_id VARCHAR(50)`
+      ));
+    }
+
+    // 4. Add any extra columns to the organizations table that may have been
+    //    added after the initial table creation
+    await db.execute(sql.raw(`
+      ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_url TEXT
+    `));
+
+    console.log('✓ Startup column migration completed');
+  } catch (error) {
+    console.error('Startup column migration error (non-fatal):', error);
+    // Non-fatal: allow startup to continue; subsequent errors will surface naturally
+  }
+}
 
 type RoleConfig = {
   name: string;
