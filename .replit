@@ -53,4 +53,4 @@ BACKUP_ENCRYPTION_KEY = "qgvZCSMiorcxfGYYFJGIkxSOQZdvpkrGhvwdFH1QIh94eZ5cVqmAJ12
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 180000
