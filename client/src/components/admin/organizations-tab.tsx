@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Users, ChevronDown, ChevronRight, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, ChevronDown, ChevronRight, Star, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,10 +72,19 @@ function OrgForm({
           ...(salesTarget ? { [CURRENT_YEAR.toString()]: Number(salesTarget) } : {}),
         },
       };
-      const body = { name, slug, description: description || null, logoUrl: logoUrl || null, settings };
       if (org) {
+        // PUT: send empty strings explicitly so clearing fields is persisted
+        const body = { name, slug, description: description || "", logoUrl: logoUrl || "", settings };
         await apiRequest("PUT", `/api/organizations/${org.id}`, body);
       } else {
+        // POST: omit blank optional fields; backend schema uses .optional() not .nullable()
+        const body = {
+          name,
+          slug,
+          ...(description ? { description } : {}),
+          ...(logoUrl ? { logoUrl } : {}),
+          settings,
+        };
         await apiRequest("POST", "/api/organizations", body);
       }
     },
@@ -323,11 +332,97 @@ function OrgMembers({ org, roles, users }: { org: Org; roles: Role[]; users: Use
   );
 }
 
+type BulkAssignResult = {
+  accounts: number;
+  contacts: number;
+  leads: number;
+  opportunities: number;
+  activities: number;
+  total: number;
+};
+
+function BulkAssignDialog({
+  targetOrg,
+  allOrgs,
+  onClose,
+}: {
+  targetOrg: Org;
+  allOrgs: Org[];
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [sourceOrgId, setSourceOrgId] = useState("");
+
+  const otherOrgs = allOrgs.filter((o) => o.id !== targetOrg.id);
+
+  const bulkMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/organizations/${targetOrg.id}/bulk-assign-data`, { sourceOrgId });
+      return res.json() as Promise<{ success: boolean; moved: BulkAssignResult }>;
+    },
+    onSuccess: (data) => {
+      const m = data.moved;
+      toast({
+        title: "Bulk assignment complete",
+        description: `Moved ${m.total} records: ${m.accounts} accounts, ${m.contacts} contacts, ${m.leads} leads, ${m.opportunities} opportunities, ${m.activities} activities.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations/all"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <DialogContent className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>Bulk Assign Data</DialogTitle>
+        <DialogDescription>
+          Move all CRM records (accounts, contacts, leads, opportunities, activities) from the selected source to <strong>{targetOrg.name}</strong>.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4 py-2">
+        <div className="space-y-1">
+          <Label>Source Organization</Label>
+          <Select value={sourceOrgId} onValueChange={setSourceOrgId}>
+            <SelectTrigger data-testid="select-bulk-assign-source">
+              <SelectValue placeholder="Select source..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All organizations (everything not in target)</SelectItem>
+              {otherOrgs.map((o) => (
+                <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {sourceOrgId && (
+          <p className="text-sm text-muted-foreground">
+            All matching records will be reassigned to <strong>{targetOrg.name}</strong>. This action cannot be undone.
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button
+          onClick={() => bulkMutation.mutate()}
+          disabled={!sourceOrgId || bulkMutation.isPending}
+          data-testid="button-confirm-bulk-assign"
+        >
+          {bulkMutation.isPending ? "Assigning..." : "Assign Data"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
+
 export function OrganizationsTab() {
   const { toast } = useToast();
   const [expandedOrgId, setExpandedOrgId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOrg, setEditOrg] = useState<Org | null>(null);
+  const [bulkAssignOrg, setBulkAssignOrg] = useState<Org | null>(null);
 
   const { data: orgs = [], isLoading } = useQuery<Org[]>({
     queryKey: ["/api/organizations/all"],
@@ -406,6 +501,15 @@ export function OrganizationsTab() {
                       <Button
                         size="icon"
                         variant="ghost"
+                        onClick={(e) => { e.stopPropagation(); setBulkAssignOrg(org); }}
+                        data-testid={`button-bulk-assign-org-${org.id}`}
+                        title="Bulk Assign Data"
+                      >
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         onClick={(e) => { e.stopPropagation(); setEditOrg(org); }}
                         data-testid={`button-edit-org-${org.id}`}
                       >
@@ -442,6 +546,17 @@ export function OrganizationsTab() {
       {/* Edit org dialog */}
       <Dialog open={!!editOrg} onOpenChange={(open) => { if (!open) setEditOrg(null); }}>
         {editOrg && <OrgForm org={editOrg} onClose={() => setEditOrg(null)} onSaved={() => {}} />}
+      </Dialog>
+
+      {/* Bulk assign dialog */}
+      <Dialog open={!!bulkAssignOrg} onOpenChange={(open) => { if (!open) setBulkAssignOrg(null); }}>
+        {bulkAssignOrg && (
+          <BulkAssignDialog
+            targetOrg={bulkAssignOrg}
+            allOrgs={orgs}
+            onClose={() => setBulkAssignOrg(null)}
+          />
+        )}
       </Dialog>
     </Card>
   );

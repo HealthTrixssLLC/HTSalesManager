@@ -183,6 +183,36 @@ export function registerOrgRoutes(app: Express) {
     }
   });
 
+  // POST /api/organizations/:id/bulk-assign-data — reassign all CRM entities to this org (admin only)
+  app.post("/api/organizations/:id/bulk-assign-data", authenticate, requireGlobalRole("Admin"), crudRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const schema_v = z.object({
+        sourceOrgId: z.string().min(1),
+      });
+      const { sourceOrgId } = schema_v.parse(req.body);
+      const targetOrgId = req.params.id;
+
+      if (sourceOrgId !== "all") {
+        const sourceOrg = await storage.getOrganizationById(sourceOrgId);
+        if (!sourceOrg) return res.status(404).json({ error: "Source organization not found" });
+      }
+      const targetOrg = await storage.getOrganizationById(targetOrgId);
+      if (!targetOrg) return res.status(404).json({ error: "Target organization not found" });
+      if (sourceOrgId !== "all" && sourceOrgId === targetOrgId) {
+        return res.status(400).json({ error: "Source and target organizations must be different" });
+      }
+
+      const result = await storage.bulkAssignData(targetOrgId, sourceOrgId);
+      return res.json({ success: true, moved: result });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation failed", details: error.errors });
+      }
+      console.error("Bulk assign error:", error);
+      return res.status(500).json({ error: "Failed to bulk assign data" });
+    }
+  });
+
   // GET /api/user/organizations — current user's organizations (alias)
   app.get("/api/user/organizations", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {

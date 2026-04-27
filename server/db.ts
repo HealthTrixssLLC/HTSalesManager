@@ -1416,6 +1416,57 @@ export class PostgresStorage implements IStorage {
     return { ...result[0].membership, roleName: result[0].roleName };
   }
 
+  async bulkAssignData(targetOrgId: string, sourceOrgId: string | "all"): Promise<{ accounts: number; contacts: number; leads: number; opportunities: number; activities: number; total: number }> {
+    let accountsUpdated = 0;
+    let contactsUpdated = 0;
+    let leadsUpdated = 0;
+    let opportunitiesUpdated = 0;
+    let activitiesUpdated = 0;
+
+    const isAll = sourceOrgId === "all";
+
+    await db.transaction(async (tx) => {
+      const aResult = await tx.update(schema.accounts)
+        .set({ organizationId: targetOrgId })
+        .where(isAll ? ne(schema.accounts.organizationId, targetOrgId) : eq(schema.accounts.organizationId, sourceOrgId))
+        .returning({ id: schema.accounts.id });
+      accountsUpdated = aResult.length;
+
+      const cResult = await tx.update(schema.contacts)
+        .set({ organizationId: targetOrgId })
+        .where(isAll ? ne(schema.contacts.organizationId, targetOrgId) : eq(schema.contacts.organizationId, sourceOrgId))
+        .returning({ id: schema.contacts.id });
+      contactsUpdated = cResult.length;
+
+      const lResult = await tx.update(schema.leads)
+        .set({ organizationId: targetOrgId })
+        .where(isAll ? ne(schema.leads.organizationId, targetOrgId) : eq(schema.leads.organizationId, sourceOrgId))
+        .returning({ id: schema.leads.id });
+      leadsUpdated = lResult.length;
+
+      const oResult = await tx.update(schema.opportunities)
+        .set({ organizationId: targetOrgId })
+        .where(isAll ? ne(schema.opportunities.organizationId, targetOrgId) : eq(schema.opportunities.organizationId, sourceOrgId))
+        .returning({ id: schema.opportunities.id });
+      opportunitiesUpdated = oResult.length;
+
+      const acResult = await tx.update(schema.activities)
+        .set({ organizationId: targetOrgId })
+        .where(isAll ? ne(schema.activities.organizationId, targetOrgId) : eq(schema.activities.organizationId, sourceOrgId))
+        .returning({ id: schema.activities.id });
+      activitiesUpdated = acResult.length;
+    });
+
+    return {
+      accounts: accountsUpdated,
+      contacts: contactsUpdated,
+      leads: leadsUpdated,
+      opportunities: opportunitiesUpdated,
+      activities: activitiesUpdated,
+      total: accountsUpdated + contactsUpdated + leadsUpdated + opportunitiesUpdated + activitiesUpdated,
+    };
+  }
+
   // ========== ADMIN OPERATIONS ==========
   
   async resetDatabase(): Promise<void> {

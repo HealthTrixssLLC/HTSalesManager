@@ -152,6 +152,7 @@ export interface IStorage {
   setDefaultOrganization(userId: string, organizationId: string): Promise<void>;
   getDefaultOrganization(userId: string): Promise<Organization | undefined>;
   getOrgMembership(userId: string, organizationId: string): Promise<(UserOrganization & { roleName: string }) | undefined>;
+  bulkAssignData(targetOrgId: string, sourceOrgId: string | "all"): Promise<{ accounts: number; contacts: number; leads: number; opportunities: number; activities: number; total: number }>;
 
   // ========== ADMIN OPERATIONS ==========
   resetDatabase(): Promise<void>;
