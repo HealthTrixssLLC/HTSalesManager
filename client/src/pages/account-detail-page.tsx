@@ -20,7 +20,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TagSelector } from "@/components/tag-selector";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import type { Tag } from "@/components/ui/tag-badge";
 import { Account, Contact, Opportunity, Activity, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 
@@ -44,7 +44,8 @@ export default function AccountDetailPage() {
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
     queryKey: ["/api/accounts", accountId, "tags"],
     queryFn: async () => {
-      const res = await fetch(`/api/accounts/${accountId}/tags`);
+      const url = `/api/accounts/${accountId}/tags`;
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch tags");
       return res.json();
     },

@@ -43,6 +43,19 @@ function getActiveOrgId(): string | null {
 }
 
 /**
+ * Returns the X-Organization-Id header object for the active org,
+ * or an empty object if no org is active or the path is org-agnostic.
+ * Use this in custom queryFn / fetch calls to ensure org isolation.
+ */
+export function getOrgHeaders(url: string): Record<string, string> {
+  const orgId = getActiveOrgId();
+  if (orgId && !isOrgAgnosticPath(url)) {
+    return { "X-Organization-Id": orgId };
+  }
+  return {};
+}
+
+/**
  * Paths that must NOT receive X-Organization-Id header.
  * These are bootstrap/global endpoints used to recover org context;
  * sending a stale org header to them would cause a 403 lockout.

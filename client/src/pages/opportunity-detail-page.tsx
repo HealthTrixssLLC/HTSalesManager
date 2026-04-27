@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import type { Opportunity, Account, Contact, Activity, InsertOpportunity, InsertActivity } from "@shared/schema";
 import { insertOpportunitySchema, insertActivitySchema } from "@shared/schema";
 import { z } from "zod";
@@ -81,7 +81,8 @@ export default function OpportunityDetailPage() {
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
     queryKey: ["/api/opportunities", opportunityId, "tags"],
     queryFn: async () => {
-      const res = await fetch(`/api/opportunities/${opportunityId}/tags`);
+      const url = `/api/opportunities/${opportunityId}/tags`;
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch tags");
       return res.json();
     },

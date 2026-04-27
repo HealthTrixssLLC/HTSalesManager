@@ -20,7 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { TagSelector } from "@/components/tag-selector";
 import type { Tag } from "@/components/ui/tag-badge";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -47,7 +47,8 @@ export default function LeadDetailPage() {
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
     queryKey: ["/api/leads", leadId, "tags"],
     queryFn: async () => {
-      const res = await fetch(`/api/leads/${leadId}/tags`);
+      const url = `/api/leads/${leadId}/tags`;
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch tags");
       return res.json();
     },

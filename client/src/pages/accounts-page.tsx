@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -117,8 +117,10 @@ export default function AccountsPage() {
     queryKey: ["/api/accounts", queryString],
     queryFn: async ({ queryKey }) => {
       const params = queryKey[1] as string;
-      const res = await fetch(`/api/accounts?${params}`, {
+      const url = `/api/accounts?${params}`;
+      const res = await fetch(url, {
         credentials: "include",
+        headers: getOrgHeaders(url),
       });
       if (!res.ok) throw new Error("Failed to fetch accounts");
       return res.json();

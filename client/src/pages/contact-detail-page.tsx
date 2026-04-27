@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 
 export default function ContactDetailPage() {
   const [, params] = useRoute("/contacts/:id");
@@ -44,7 +44,8 @@ export default function ContactDetailPage() {
   const { data: tags = [], isLoading: tagsLoading } = useQuery<Tag[]>({
     queryKey: ["/api/contacts", contactId, "tags"],
     queryFn: async () => {
-      const res = await fetch(`/api/contacts/${contactId}/tags`);
+      const url = `/api/contacts/${contactId}/tags`;
+      const res = await fetch(url, { credentials: "include", headers: getOrgHeaders(url) });
       if (!res.ok) throw new Error("Failed to fetch tags");
       return res.json();
     },

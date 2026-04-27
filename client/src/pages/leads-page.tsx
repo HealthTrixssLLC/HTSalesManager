@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, getOrgHeaders } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -135,8 +135,10 @@ export default function LeadsPage() {
     queryKey: ["/api/leads", queryString],
     queryFn: async ({ queryKey }) => {
       const params = queryKey[1] as string;
-      const res = await fetch(`/api/leads?${params}`, {
+      const url = `/api/leads?${params}`;
+      const res = await fetch(url, {
         credentials: "include",
+        headers: getOrgHeaders(url),
       });
       if (!res.ok) throw new Error("Failed to fetch leads");
       return res.json();
