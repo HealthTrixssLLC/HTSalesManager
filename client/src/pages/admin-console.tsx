@@ -9,6 +9,7 @@ import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey }
 import { Slider } from "@/components/ui/slider";
 import { ApiAccessLogsTab } from "@/components/ApiAccessLogsTab";
 import { OrganizationsTab } from "@/components/admin/organizations-tab";
+import { AuditLogsTab } from "@/components/admin/AuditLogsTab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1183,6 +1184,7 @@ export default function AdminConsole() {
           <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
           <TabsTrigger value="api-keys" data-testid="tab-api-keys">API Keys</TabsTrigger>
           <TabsTrigger value="api-logs" data-testid="tab-api-logs">API Access Logs</TabsTrigger>
+          <TabsTrigger value="audit-logs" data-testid="tab-audit-logs">Audit Logs</TabsTrigger>
           <TabsTrigger value="backup" data-testid="tab-backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="dynamics" data-testid="tab-dynamics">Dynamics Import</TabsTrigger>
           <TabsTrigger value="system" data-testid="tab-system">System</TabsTrigger>
@@ -1655,6 +1657,11 @@ export default function AdminConsole() {
         {/* API Access Logs Tab */}
         <TabsContent value="api-logs">
           <ApiAccessLogsTab apiKeys={apiKeys} />
+        </TabsContent>
+
+        {/* Audit Logs Tab */}
+        <TabsContent value="audit-logs">
+          <AuditLogsTab />
         </TabsContent>
 
         {/* Backup & Restore Tab */}

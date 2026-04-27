@@ -5242,6 +5242,68 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  // Get admin audit logs (admin only) - filterable by resource and action
+  app.get("/api/admin/audit-logs", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const { resource, action, actorId, limit = "50", offset = "0" } = req.query;
+
+      // Validate and clamp pagination params
+      const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 50, 1), 200);
+      const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
+      if (!Number.isFinite(parsedLimit) || !Number.isFinite(parsedOffset)) {
+        return res.status(400).json({ error: "Invalid pagination parameters" });
+      }
+
+      // Build typed where clause — and() accepts (SQL<unknown> | undefined)[] natively
+      const whereClause = and(
+        sql`${auditLogs.action} NOT LIKE 'external_api_%'`,
+        resource ? eq(auditLogs.resource, resource as string) : undefined,
+        action ? eq(auditLogs.action, action as string) : undefined,
+        actorId ? eq(auditLogs.actorId, actorId as string) : undefined,
+      );
+
+      const logs = await db
+        .select({
+          id: auditLogs.id,
+          actorId: auditLogs.actorId,
+          actorName: users.name,
+          actorEmail: users.email,
+          action: auditLogs.action,
+          resource: auditLogs.resource,
+          resourceId: auditLogs.resourceId,
+          before: auditLogs.before,
+          after: auditLogs.after,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.actorId, users.id))
+        .where(whereClause)
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(parsedLimit)
+        .offset(parsedOffset);
+
+      const countResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(auditLogs)
+        .where(whereClause);
+
+      const total = Number(countResult[0]?.count || 0);
+
+      return res.json({
+        logs,
+        pagination: {
+          total,
+          limit: parsedLimit,
+          offset: parsedOffset,
+          hasMore: parsedOffset + logs.length < total,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching admin audit logs:", error);
+      return res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
   // Export API access logs to CSV (admin only) - server-side processing for large datasets
   app.get("/api/admin/api-access-logs/export", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
