@@ -50,7 +50,7 @@ export function registerOrgRoutes(app: Express) {
         name: z.string().min(1),
         slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
         description: z.string().nullish().transform(val => val ?? undefined),
-        logoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional().transform(val => (val === null || val === "") ? undefined : val),
+        logoUrl: z.string().optional().nullable().transform(val => (val === null || val === "") ? undefined : val),
         settings: z.record(z.any()).optional().default({}),
       });
       const data = schema.parse(req.body);

@@ -58,6 +58,7 @@ function OrgForm({
   const [slug, setSlug] = useState(org?.slug || "");
   const [description, setDescription] = useState(org?.description || "");
   const [logoUrl, setLogoUrl] = useState(org?.logoUrl || "");
+  const [logoUrlError, setLogoUrlError] = useState("");
   const [salesTarget, setSalesTarget] = useState(
     org?.settings?.annualSalesTargets?.[CURRENT_YEAR.toString()]
       ? String(org.settings.annualSalesTargets[CURRENT_YEAR.toString()])
@@ -77,7 +78,7 @@ function OrgForm({
         const body = { name, slug, description: description || "", logoUrl: logoUrl || "", settings };
         await apiRequest("PUT", `/api/organizations/${org.id}`, body);
       } else {
-        // POST: omit blank optional fields; backend schema uses .optional() not .nullable()
+        // POST: omit blank optional fields; backend schema uses .optional().nullable()
         const body = {
           name,
           slug,
@@ -149,9 +150,20 @@ function OrgForm({
             id="org-logo"
             data-testid="input-org-logo"
             value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setLogoUrl(val);
+              if (val && !val.startsWith("http://") && !val.startsWith("https://")) {
+                setLogoUrlError("URL must start with http:// or https://");
+              } else {
+                setLogoUrlError("");
+              }
+            }}
             placeholder="https://..."
           />
+          {logoUrlError && (
+            <p className="text-sm text-destructive" data-testid="error-org-logo">{logoUrlError}</p>
+          )}
         </div>
         <div className="space-y-1">
           <Label htmlFor="org-target">Annual Sales Target ({CURRENT_YEAR})</Label>
@@ -169,7 +181,7 @@ function OrgForm({
         <Button variant="outline" onClick={onClose}>Cancel</Button>
         <Button
           onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending || !name || !slug}
+          disabled={saveMutation.isPending || !name || !slug || !!logoUrlError}
           data-testid="button-save-org"
         >
           {saveMutation.isPending ? "Saving..." : "Save"}
