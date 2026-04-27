@@ -67,6 +67,7 @@ export default function OpportunityDetailPage() {
   const [isCreateActivityDialogOpen, setIsCreateActivityDialogOpen] = useState(false);
   const [isLogActivityOpen, setIsLogActivityOpen] = useState(false);
   const [editRepSearchOpen, setEditRepSearchOpen] = useState(false);
+  const [editAccountSearchOpen, setEditAccountSearchOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"contact" | "activity">("activity");
   const [newResourceUserId, setNewResourceUserId] = useState("");
@@ -100,6 +101,10 @@ export default function OpportunityDetailPage() {
 
   const { data: users = [] } = useQuery<Array<{ id: string; name: string; email: string }>>({
     queryKey: ["/api/users"],
+  });
+
+  const { data: accounts = [] } = useQuery<Account[]>({
+    queryKey: ["/api/accounts"],
   });
 
   type OpportunityResourceWithUser = {
@@ -154,6 +159,7 @@ export default function OpportunityDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/opportunities", opportunityId, "related"] });
       queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] });
       toast({ title: "Opportunity updated successfully" });
       setIsEditDialogOpen(false);
@@ -690,11 +696,61 @@ export default function OpportunityDetailPage() {
                 control={form.control}
                 name="accountId"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Account ID *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="ACT-1002" {...field} data-testid="input-edit-opportunity-account" />
-                    </FormControl>
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Account *</FormLabel>
+                    <Popover open={editAccountSearchOpen} onOpenChange={setEditAccountSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={editAccountSearchOpen}
+                            className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                            data-testid="input-edit-opportunity-account"
+                          >
+                            {field.value
+                              ? accounts.find((a) => a.id === field.value)?.name || field.value
+                              : "Search for an account..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search by account name or ID..." />
+                          <CommandList>
+                            <CommandEmpty>No account found.</CommandEmpty>
+                            <CommandGroup>
+                              {accounts.map((a) => (
+                                <CommandItem
+                                  key={a.id}
+                                  value={`${a.name} ${a.id}`}
+                                  onSelect={() => {
+                                    form.setValue("accountId", a.id);
+                                    setEditAccountSearchOpen(false);
+                                  }}
+                                  data-testid={`edit-account-option-${a.id}`}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === a.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{a.name}</span>
+                                    <span className="text-sm text-muted-foreground">{a.id}</span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
