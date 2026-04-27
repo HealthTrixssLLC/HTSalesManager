@@ -49,8 +49,8 @@ export function registerOrgRoutes(app: Express) {
       const schema = z.object({
         name: z.string().min(1),
         slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
-        description: z.string().optional(),
-        logoUrl: z.string().url().optional().or(z.literal("")),
+        description: z.string().nullish().transform(val => val ?? undefined),
+        logoUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional().transform(val => (val === null || val === "") ? undefined : val),
         settings: z.record(z.any()).optional().default({}),
       });
       const data = schema.parse(req.body);
