@@ -907,12 +907,15 @@ export type Permission = typeof permissions.$inferSelect;
 export const insertAccountSchema = createInsertSchema(accounts).omit({ createdAt: true, updatedAt: true }).extend({
   accountNumber: z.string().optional(),
   category: z.string().optional(),
+  organizationId: z.string().optional(),
 });
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
 export type Account = typeof accounts.$inferSelect;
 
 // Contacts
-export const insertContactSchema = createInsertSchema(contacts).omit({ createdAt: true, updatedAt: true });
+export const insertContactSchema = createInsertSchema(contacts).omit({ createdAt: true, updatedAt: true }).extend({
+  organizationId: z.string().optional(),
+});
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
@@ -924,6 +927,8 @@ export const insertLeadSchema = createInsertSchema(leads).omit({
   convertedContactId: true,
   convertedOpportunityId: true,
   convertedAt: true,
+}).extend({
+  organizationId: z.string().optional(),
 });
 export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type Lead = typeof leads.$inferSelect;
@@ -950,6 +955,7 @@ export const insertOpportunitySchema = createInsertSchema(opportunities)
     estCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
     implementationStartDate: z.preprocess(datePreprocessor, z.date().nullable()),
     implementationEndDate: z.preprocess(datePreprocessor, z.date().nullable()),
+    organizationId: z.string().optional(),
   });
 export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
 export type Opportunity = typeof opportunities.$inferSelect;
@@ -960,6 +966,7 @@ export const insertActivitySchema = createInsertSchema(activities).omit({ id: tr
   completedAt: z.string().nullish(),
   ownerId: z.string().nullish(),
   notes: z.string().nullish(),
+  organizationId: z.string().optional(),
 });
 export type InsertActivity = z.infer<typeof insertActivitySchema>;
 export type Activity = typeof activities.$inferSelect;
