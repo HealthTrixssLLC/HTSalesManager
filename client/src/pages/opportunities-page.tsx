@@ -994,27 +994,29 @@ export default function OpportunitiesPage() {
                     </Button>
                   </div>
                 </div>
-                <FormField
-                  control={form.control}
-                  name="includeInForecast"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Include in Forecast</FormLabel>
-                        <div className="text-sm text-muted-foreground">
-                          When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+                {canViewFinancials && (
+                  <FormField
+                    control={form.control}
+                    name="includeInForecast"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Include in Forecast</FormLabel>
+                          <div className="text-sm text-muted-foreground">
+                            When disabled, this opportunity will be excluded from all sales metrics, dashboards, and forecast reports.
+                          </div>
                         </div>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="switch-include-in-forecast"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="switch-include-in-forecast"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
