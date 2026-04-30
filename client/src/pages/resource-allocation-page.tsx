@@ -145,8 +145,6 @@ export default function ResourceAllocationPage() {
     const [y, m, d] = dateRangeEnd.split("-").map(Number);
     return new Date(y, m - 1, d);
   }, [dateRangeEnd]);
-  const months = useMemo(() => getMonthsBetween(timelineStart, timelineEnd), [timelineStart, timelineEnd]);
-
   const filteredOpportunities = useMemo(() => {
     if (!data) return [];
     return data.opportunities.filter(opp => {
@@ -197,6 +195,23 @@ export default function ResourceAllocationPage() {
     return data.users.map(u => ({ id: u.id, name: u.name }));
   }, [data]);
 
+  const effectiveTimelineEnd = useMemo(() => {
+    let max = timelineEnd.getTime();
+    for (const opp of filteredOpportunities) {
+      const end = opp.effectiveEndDate || opp.implementationEndDate;
+      if (end) max = Math.max(max, new Date(end).getTime());
+    }
+    for (const u of filteredUsers) {
+      for (const a of u.assignments) {
+        const end = a.effectiveEndDate || a.implementationEndDate;
+        if (end) max = Math.max(max, new Date(end).getTime());
+      }
+    }
+    return new Date(max);
+  }, [timelineEnd, filteredOpportunities, filteredUsers]);
+
+  const months = useMemo(() => getMonthsBetween(timelineStart, effectiveTimelineEnd), [timelineStart, effectiveTimelineEnd]);
+
   const shiftTimeline = (direction: "prev" | "next") => {
     const shift = direction === "next" ? visibleMonths : -visibleMonths;
     const newStart = new Date(timelineStart);
@@ -216,12 +231,12 @@ export default function ResourceAllocationPage() {
   const todayOffset = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const totalMs = timelineEnd.getTime() - timelineStart.getTime();
+    const totalMs = effectiveTimelineEnd.getTime() - timelineStart.getTime();
     if (totalMs <= 0) return null;
     const offset = ((today.getTime() - timelineStart.getTime()) / totalMs) * TIMELINE_WIDTH;
     if (offset < 0 || offset > TIMELINE_WIDTH) return null;
     return offset;
-  }, [timelineStart, timelineEnd]);
+  }, [timelineStart, effectiveTimelineEnd]);
 
   if (isLoading) {
     return (
@@ -394,7 +409,7 @@ export default function ResourceAllocationPage() {
                   {filteredOpportunities.map(opp => {
                     const startDate = new Date((opp.effectiveStartDate || opp.implementationStartDate)!);
                     const endDate = new Date((opp.effectiveEndDate || opp.implementationEndDate)!);
-                    const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
+                    const bar = getBarPosition(startDate, endDate, timelineStart, effectiveTimelineEnd, TIMELINE_WIDTH);
                     const canNavigate = canNavigateToOpportunity(opp);
 
                     return (
@@ -515,7 +530,7 @@ export default function ResourceAllocationPage() {
                       {u.assignments.map(assignment => {
                         const startDate = new Date((assignment.effectiveStartDate || assignment.implementationStartDate)!);
                         const endDate = new Date((assignment.effectiveEndDate || assignment.implementationEndDate)!);
-                        const bar = getBarPosition(startDate, endDate, timelineStart, timelineEnd, TIMELINE_WIDTH);
+                        const bar = getBarPosition(startDate, endDate, timelineStart, effectiveTimelineEnd, TIMELINE_WIDTH);
 
                         return (
                           <div key={assignment.resourceId} className="flex items-center mb-0.5">
