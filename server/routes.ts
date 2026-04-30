@@ -286,10 +286,17 @@ export async function registerRoutes(app: Express) {
     try {
       // Global admins with an active org context see only that org's members.
       // Global admins without an active org context see all active users.
+      // Global admins passing ?all=true see all active users regardless of activeOrgId.
       // Org-scoped (non-admin) users see only members of their active org.
       const isGlobalAdmin = await hasAnyRole(req.user!.id, ["Admin"]);
+      const wantsAll = req.query.all === "true" && isGlobalAdmin;
       let query;
-      if (isGlobalAdmin && req.activeOrgId) {
+      if (wantsAll) {
+        query = db
+          .select({ id: users.id, name: users.name, email: users.email })
+          .from(users)
+          .where(eq(users.status, "active"));
+      } else if (isGlobalAdmin && req.activeOrgId) {
         query = db
           .select({ id: users.id, name: users.name, email: users.email })
           .from(users)

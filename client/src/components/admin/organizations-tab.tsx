@@ -446,7 +446,11 @@ export function OrganizationsTab() {
 
   const { data: roles = [] } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: users = [] } = useQuery<UserRow[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/users", "all"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/users?all=true");
+      return res.json();
+    },
   });
 
   const deleteOrg = useMutation({
