@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Filter, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,15 +93,18 @@ function getBarPosition(
   const totalMs = timelineEnd.getTime() - timelineStart.getTime();
   if (totalMs <= 0) return null;
 
-  const barStart = Math.max(startDate.getTime(), timelineStart.getTime());
-  const barEnd = Math.min(endDate.getTime(), timelineEnd.getTime());
+  // Clamp to visible window: bars starting before the window pin to left=0,
+  // bars ending after the window pin to right edge (totalWidth).
+  const clampedStart = Math.max(startDate.getTime(), timelineStart.getTime());
+  const clampedEnd = Math.min(endDate.getTime(), timelineEnd.getTime());
 
-  if (barStart >= barEnd) return null;
+  if (clampedStart >= clampedEnd) return null;
 
-  const left = ((barStart - timelineStart.getTime()) / totalMs) * totalWidth;
-  const width = ((barEnd - barStart) / totalMs) * totalWidth;
+  const left = Math.max(0, ((clampedStart - timelineStart.getTime()) / totalMs) * totalWidth);
+  const right = Math.min(totalWidth, ((clampedEnd - timelineStart.getTime()) / totalMs) * totalWidth);
+  const width = Math.max(8, right - left);
 
-  return { left: Math.max(0, left), width: Math.max(8, width) };
+  return { left, width: Math.min(width, totalWidth - left) };
 }
 
 export default function ResourceAllocationPage() {
@@ -113,12 +116,22 @@ export default function ResourceAllocationPage() {
 
   const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper" || r.name === "Resource") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
 
+  const [visibleMonths, setVisibleMonths] = useState<number>(3);
+
   const now = new Date();
   const defaultStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0);
+  const defaultEnd = new Date(now.getFullYear(), now.getMonth() - 1 + 3, 0);
 
   const [dateRangeStart, setDateRangeStart] = useState<string>(defaultStart.toISOString().split("T")[0]);
   const [dateRangeEnd, setDateRangeEnd] = useState<string>(defaultEnd.toISOString().split("T")[0]);
+
+  // Whenever visibleMonths changes, recompute dateRangeEnd from the current start
+  useEffect(() => {
+    const [y, m, d] = dateRangeStart.split("-").map(Number);
+    const start = new Date(y, m - 1, d);
+    const newEnd = new Date(start.getFullYear(), start.getMonth() + visibleMonths, 0);
+    setDateRangeEnd(newEnd.toISOString().split("T")[0]);
+  }, [visibleMonths]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data, isLoading } = useQuery<ResourceAllocationData>({
     queryKey: ["/api/resource-allocation"],
@@ -185,11 +198,10 @@ export default function ResourceAllocationPage() {
   }, [data]);
 
   const shiftTimeline = (direction: "prev" | "next") => {
-    const months = direction === "next" ? 3 : -3;
+    const shift = direction === "next" ? visibleMonths : -visibleMonths;
     const newStart = new Date(timelineStart);
-    const newEnd = new Date(timelineEnd);
-    newStart.setMonth(newStart.getMonth() + months);
-    newEnd.setMonth(newEnd.getMonth() + months);
+    newStart.setMonth(newStart.getMonth() + shift);
+    const newEnd = new Date(newStart.getFullYear(), newStart.getMonth() + visibleMonths, 0);
     setDateRangeStart(newStart.toISOString().split("T")[0]);
     setDateRangeEnd(newEnd.toISOString().split("T")[0]);
   };
@@ -226,7 +238,24 @@ export default function ResourceAllocationPage() {
           <h1 className="text-2xl font-semibold text-foreground">Resource Allocation</h1>
           <p className="text-muted-foreground">Pipeline and resource timelines for implementation planning</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Months shown:</span>
+            <Select
+              value={String(visibleMonths)}
+              onValueChange={v => setVisibleMonths(Number(v))}
+            >
+              <SelectTrigger className="w-20" data-testid="select-visible-months">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3">3</SelectItem>
+                <SelectItem value="6">6</SelectItem>
+                <SelectItem value="9">9</SelectItem>
+                <SelectItem value="12">12</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <Button variant="outline" onClick={() => shiftTimeline("prev")} data-testid="button-timeline-prev">
             <ChevronLeft className="h-4 w-4 mr-1" />
             Earlier
@@ -300,6 +329,7 @@ export default function ResourceAllocationPage() {
                 onClick={() => {
                   setFilterUser("all");
                   setFilterStage("all");
+                  setVisibleMonths(3);
                   setDateRangeStart(defaultStart.toISOString().split("T")[0]);
                   setDateRangeEnd(defaultEnd.toISOString().split("T")[0]);
                 }}
