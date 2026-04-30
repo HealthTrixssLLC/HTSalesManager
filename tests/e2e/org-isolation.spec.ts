@@ -10,7 +10,7 @@ import { test, expect, type Page } from "@playwright/test";
  * Prerequisites (set up in dev DB):
  *  - admin@test.com / admin123 belongs to BOTH:
  *    - "Primary Organization" (id: 3e369484-0c88-401d-86e3-9c3361ee465e) — default
- *    - "Lucentria Inc." (id: ef8f31ec-840b-4fc4-bcbe-7d604c3c5d43)
+ *    - "Lucentria Inc." (id: 2f5e350e-5cb9-45a8-aef7-8ca8194c5081)
  *  - Lucentria-only records (visible only when active org = Lucentria Inc.):
  *    - Opportunity: "LUCENTRIA-TEST-OPPORTUNITY-XZ99"
  *    - Activity:    "LUCENTRIA-TEST-ACTIVITY-XZ99"
@@ -20,7 +20,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 const PRIMARY_ORG_ID = "3e369484-0c88-401d-86e3-9c3361ee465e";
-const LUCENTRIA_ORG_ID = "ef8f31ec-840b-4fc4-bcbe-7d604c3c5d43";
+const LUCENTRIA_ORG_ID = "2f5e350e-5cb9-45a8-aef7-8ca8194c5081";
 
 const LUCENTRIA_OPPORTUNITY = "LUCENTRIA-TEST-OPPORTUNITY-XZ99";
 const LUCENTRIA_ACTIVITY = "LUCENTRIA-TEST-ACTIVITY-XZ99";
@@ -98,23 +98,16 @@ test.describe("Org switching data isolation", () => {
     await expect(page.locator(`text=${LUCENTRIA_OPPORTUNITY}`)).not.toBeVisible();
   });
 
-  // ─── ACTIVITIES ───────────────────────────────────────────────────────────────
-
-  test("Activities: Primary Org does not show Lucentria-only records", async ({ page }) => {
-    await page.goto("/activities");
-    await waitForPage(page);
-
-    const searchBox = page.getByTestId("input-search-activities");
-    await searchBox.fill("LUCENTRIA-TEST");
-    await page.waitForTimeout(800);
-
-    await expect(page.locator(`text=${LUCENTRIA_ACTIVITY}`)).not.toBeVisible();
-  });
+  // ─── ACTIVITIES (Lucentria — small dataset, safe before analytics) ───────────
 
   test("Activities: Lucentria Inc. shows its own records", async ({ page }) => {
     await setOrg(page, LUCENTRIA_ORG_ID);
     await page.goto("/activities");
     await waitForSmallDataPage(page);
+
+    const searchBox = page.getByTestId("input-search-activities");
+    await searchBox.fill("LUCENTRIA-TEST");
+    await page.waitForTimeout(800);
 
     await expect(page.locator(`text=${LUCENTRIA_ACTIVITY}`)).toBeVisible({ timeout: 15000 });
   });
@@ -136,6 +129,19 @@ test.describe("Org switching data isolation", () => {
     await expect(page.getByTestId("analytics-page")).toBeVisible({ timeout: 20000 });
     await expect(page.getByTestId("text-revenue")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("text-winrate")).toBeVisible({ timeout: 10000 });
+  });
+
+  // ─── ACTIVITIES (Primary — large dataset, placed after analytics to avoid rate-limit contamination) ──
+
+  test("Activities: Primary Org does not show Lucentria-only records", async ({ page }) => {
+    await page.goto("/activities");
+    await waitForPage(page);
+
+    const searchBox = page.getByTestId("input-search-activities");
+    await searchBox.fill("LUCENTRIA-TEST");
+    await page.waitForTimeout(800);
+
+    await expect(page.locator(`text=${LUCENTRIA_ACTIVITY}`)).not.toBeVisible();
   });
 
   // ─── API ISOLATION ───────────────────────────────────────────────────────────
