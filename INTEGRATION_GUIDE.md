@@ -9,13 +9,14 @@ Complete guide for integrating with the Health Trixss CRM External API for custo
 1. [Overview](#overview)
 2. [Getting Started](#getting-started)
 3. [Authentication](#authentication)
-4. [API Endpoints](#api-endpoints)
-5. [Debugging & Monitoring](#debugging--monitoring)
-6. [Error Handling](#error-handling)
-7. [Rate Limiting](#rate-limiting)
-8. [Best Practices](#best-practices)
-9. [Code Examples](#code-examples)
-10. [Troubleshooting](#troubleshooting)
+4. [Multi-Tenancy & Organization Scoping](#multi-tenancy--organization-scoping)
+5. [API Endpoints](#api-endpoints)
+6. [Debugging & Monitoring](#debugging--monitoring)
+7. [Error Handling](#error-handling)
+8. [Rate Limiting](#rate-limiting)
+9. [Best Practices](#best-practices)
+10. [Code Examples](#code-examples)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -31,6 +32,7 @@ The Health Trixss CRM External API provides secure, RESTful access to accounts, 
 - **Incremental Sync**: `updatedSince` parameter for efficient data synchronization
 - **Relationship Expansion**: Include related entities in responses
 - **Programmatic Debugging**: Access audit logs via API for automated monitoring
+- **Multi-Tenant Isolation**: API keys can be scoped to a specific organization
 
 ### Base URL
 
@@ -71,7 +73,7 @@ HEALTH_TRIXSS_API_KEY=your-api-key-here
 ### Step 3: Test Your Connection
 
 ```bash
-curl -H "X-API-Key: your-api-key-here" \
+curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
   https://your-domain.repl.co/api/v1/external/accounts?limit=1
 ```
 
@@ -99,6 +101,12 @@ Expected response:
 
 ## Authentication
 
+### API Key Format
+
+Generated keys follow the format `htcrm_<value>` where `<value>` is a URL-safe base64-encoded random 32-byte value. The total key length is approximately 49 characters.
+
+Example: `htcrm_kB4rN8mPqT2vW5nL0jYeF3cZ9sU1xH6dA7oVgMpRkB4`
+
 ### API Key Header
 
 All requests must include your API key in the `X-API-Key` header:
@@ -111,10 +119,29 @@ X-API-Key: your-api-key-here
 
 | Status | Error | Cause |
 |--------|-------|-------|
-| 401 | Missing API key | No `X-API-Key` header provided |
-| 401 | Invalid API key format | Key doesn't match expected format (64 bytes base64) |
-| 401 | Invalid or revoked API key | Key not found or has been revoked |
-| 401 | API key expired | Key has passed its expiration date |
+| 401 | `API key required` | No `X-API-Key` header provided |
+| 401 | `Invalid API key format` | Key doesn't start with `htcrm_` or contains invalid characters |
+| 401 | `Invalid API key` | Key not found in database or has been revoked |
+| 401 | `API key expired` | Key has passed its expiration date |
+
+**Error response shape** (all auth errors):
+```json
+{
+  "error": "API key required",
+  "message": "Please provide your API key in the x-api-key header"
+}
+```
+
+---
+
+## Multi-Tenancy & Organization Scoping
+
+Health Trixss CRM is a multi-tenant system. API keys may be scoped to a specific organization.
+
+- **Org-scoped key**: All endpoints automatically filter results to that organization's data only. Records belonging to other organizations are invisible to the key.
+- **System-level key** (no org assigned): Has access to data across all organizations. Use with care — suitable only for global administrative integrations.
+
+The active organization scope is determined by the API key itself; no additional headers are required. When you generate an API key as an Admin, the key inherits the organization context of the user who created it.
 
 ---
 
@@ -150,10 +177,8 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
       "accountNumber": "ACCT-2025-00001",
       "type": "Customer",
       "category": "Healthcare",
+      "ownerId": "user-uuid-here",
       "industry": "Medical Devices",
-      "website": "https://example.com",
-      "phone": "+1-555-0100",
-      "region": "North America",
       "externalId": "SF-12345",
       "createdAt": "2025-01-15T10:30:00Z",
       "updatedAt": "2025-01-20T14:22:00Z",
@@ -162,10 +187,9 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
           "id": "OPP-2025-00001",
           "name": "Q1 2025 Contract Renewal",
           "stage": "Proposal",
-          "probability": 75,
-          "estRevenue": 50000,
+          "amount": 50000,
           "closeDate": "2025-03-31",
-          "includeInForecast": true
+          "probability": 75
         }
       ]
     }
@@ -178,6 +202,10 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
   }
 }
 ```
+
+**Notes**:
+- The `expand=opportunities` option only includes opportunities where `includeInForecast` is `true`.
+- Fields `website`, `phone`, and `region` are not included in list responses. Use the single-account endpoint for full detail.
 
 ---
 
@@ -195,20 +223,65 @@ Retrieve detailed information about a specific account.
 **Query Parameters**:
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `expand` | string | Comma-separated list: `opportunities` |
+| `expand` | string | Comma-separated list: `opportunities`, `contacts` |
 
 **Example Request**:
 ```bash
 curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
-  "https://your-domain.repl.co/api/v1/external/accounts/ACCT-2025-00001?expand=opportunities"
+  "https://your-domain.repl.co/api/v1/external/accounts/ACCT-2025-00001?expand=opportunities,contacts"
 ```
+
+**Example Response**:
+```json
+{
+  "data": {
+    "id": "ACCT-2025-00001",
+    "name": "Example Corp",
+    "accountNumber": "ACCT-2025-00001",
+    "type": "Customer",
+    "category": "Healthcare",
+    "ownerId": "user-uuid-here",
+    "industry": "Medical Devices",
+    "website": "https://example.com",
+    "phone": "+1-555-0100",
+    "externalId": "SF-12345",
+    "createdAt": "2025-01-15T10:30:00Z",
+    "updatedAt": "2025-01-20T14:22:00Z",
+    "opportunities": [
+      {
+        "id": "OPP-2025-00001",
+        "name": "Q1 2025 Contract Renewal",
+        "stage": "Proposal",
+        "amount": 50000,
+        "closeDate": "2025-03-31",
+        "probability": 75,
+        "rating": "Hot"
+      }
+    ],
+    "contacts": [
+      {
+        "id": "CON-2025-00001",
+        "firstName": "Jane",
+        "lastName": "Smith",
+        "email": "jane.smith@example.com",
+        "phone": "+1-555-0101",
+        "mobile": "+1-555-0102",
+        "title": "VP of Operations"
+      }
+    ]
+  }
+}
+```
+
+**Notes**:
+- `expand=opportunities` only includes opportunities where `includeInForecast` is `true`.
+- `expand=contacts` returns all contacts linked to this account.
 
 **Error Response** (404):
 ```json
 {
   "error": "Account not found",
-  "code": "ACCOUNT_NOT_FOUND",
-  "accountId": "ACCT-2025-99999"
+  "message": "No account found with ID: ACCT-2025-99999"
 }
 ```
 
@@ -224,28 +297,53 @@ Retrieve all opportunities with optional filtering and pagination.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `updatedSince` | ISO 8601 | - | Only return opportunities updated after this timestamp |
-| `includeInForecast` | boolean | - | Filter by forecast inclusion (true/false) |
+| `includeInForecast` | string | `true` | Filter by forecast inclusion: `true`, `false`, or `all` |
 | `limit` | integer | 100 | Number of results (max: 1000) |
 | `offset` | integer | 0 | Number of results to skip |
 | `expand` | string | - | Comma-separated list: `account` |
 
-**Example Request** (Forecast-only):
+**`includeInForecast` values**:
+| Value | Behavior |
+|-------|----------|
+| `true` (default) | Only return opportunities flagged for forecasting |
+| `false` | Only return opportunities excluded from forecasting |
+| `all` | Return every opportunity regardless of forecast flag |
+
+**Example Request** (Forecast-only, default):
 ```bash
 curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
-  "https://your-domain.repl.co/api/v1/external/opportunities?includeInForecast=true&limit=100"
+  "https://your-domain.repl.co/api/v1/external/opportunities?limit=100"
 ```
 
-**Example Response**:
+**Example Request** (Forecast-only with related account, default):
+```bash
+curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
+  "https://your-domain.repl.co/api/v1/external/opportunities?expand=account&limit=100"
+```
+
+**Example Request** (All opportunities):
+```bash
+curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
+  "https://your-domain.repl.co/api/v1/external/opportunities?includeInForecast=all&limit=100"
+```
+
+**Example Response** (with `expand=account`):
 ```json
 {
   "data": [
     {
       "id": "OPP-2025-00001",
-      "name": "Q1 2025 Contract Renewal",
       "accountId": "ACCT-2025-00001",
+      "name": "Q1 2025 Contract Renewal",
       "stage": "Proposal",
-      "probability": 75,
+      "amount": 50000,
       "closeDate": "2025-03-31",
+      "ownerId": "user-uuid-here",
+      "probability": 75,
+      "status": "open",
+      "actualCloseDate": null,
+      "actualRevenue": null,
+      "estCloseDate": "2025-03-15",
       "estRevenue": 50000,
       "rating": "Hot",
       "includeInForecast": true,
@@ -257,8 +355,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
         "name": "Example Corp",
         "accountNumber": "ACCT-2025-00001",
         "type": "Customer",
-        "category": "Healthcare",
-        "industry": "Medical Devices"
+        "category": "Healthcare"
       }
     }
   ],
@@ -295,12 +392,45 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
   "https://your-domain.repl.co/api/v1/external/opportunities/OPP-2025-00001?expand=account"
 ```
 
+**Example Response**:
+```json
+{
+  "data": {
+    "id": "OPP-2025-00001",
+    "accountId": "ACCT-2025-00001",
+    "name": "Q1 2025 Contract Renewal",
+    "stage": "Proposal",
+    "amount": 50000,
+    "closeDate": "2025-03-31",
+    "ownerId": "user-uuid-here",
+    "probability": 75,
+    "status": "open",
+    "actualCloseDate": null,
+    "actualRevenue": null,
+    "estCloseDate": "2025-03-15",
+    "estRevenue": 50000,
+    "rating": "Hot",
+    "includeInForecast": true,
+    "externalId": "SF-OPP-54321",
+    "createdAt": "2025-01-10T09:00:00Z",
+    "updatedAt": "2025-01-18T16:45:00Z",
+    "account": {
+      "id": "ACCT-2025-00001",
+      "name": "Example Corp",
+      "accountNumber": "ACCT-2025-00001",
+      "type": "Customer",
+      "category": "Healthcare",
+      "industry": "Medical Devices"
+    }
+  }
+}
+```
+
 **Error Response** (404):
 ```json
 {
   "error": "Opportunity not found",
-  "code": "OPPORTUNITY_NOT_FOUND",
-  "opportunityId": "OPP-2025-99999"
+  "message": "No opportunity found with ID: OPP-2025-99999"
 }
 ```
 
@@ -344,7 +474,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
       "responseSizeBytes": 156,
       "aborted": false,
       "errorType": "client_error",
-      "errorCode": "ACCOUNT_NOT_FOUND",
+      "errorCode": null,
       "errorMessage": "Account not found",
       "resourceType": "account",
       "resourceId": "ACCT-2025-99999",
@@ -389,7 +519,7 @@ async function checkForErrors() {
   const { data, pagination } = await response.json();
   
   if (pagination.total > 0) {
-    console.error(`⚠️  Found ${pagination.total} API errors in last 5 minutes:`);
+    console.error(`Found ${pagination.total} API errors in last 5 minutes:`);
     
     data.forEach(log => {
       console.error(`  - ${log.statusCode} ${log.method} ${log.endpoint}`);
@@ -431,14 +561,16 @@ Admins can view and export logs via the Admin Console:
 
 ### Standard Error Response
 
+All errors return a JSON object with two fields:
+
 ```json
 {
   "error": "Brief error description",
-  "code": "ERROR_CODE",
-  "message": "Detailed error message",
-  "details": {}
+  "message": "Detailed error message"
 }
 ```
+
+There is no `code` field or resource-specific ID field in error responses.
 
 ### Common HTTP Status Codes
 
@@ -463,11 +595,12 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
       // Success
       if (response.ok) return response;
       
-      // Rate limited - wait and retry
+      // Rate limited - wait and retry using Retry-After header (seconds)
       if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After') || (2 ** i);
+        const retryAfter = parseInt(response.headers.get('Retry-After') || String(2 ** i));
+        const waitMs = retryAfter * 1000;
         console.log(`Rate limited. Retrying in ${retryAfter}s...`);
-        await sleep(retryAfter * 1000);
+        await sleep(waitMs);
         continue;
       }
       
@@ -510,27 +643,38 @@ function sleep(ms) {
 Response headers indicate current rate limit status:
 
 ```http
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1642598760
+RateLimit-Limit: 100
+RateLimit-Remaining: 95
+RateLimit-Reset: 45
 ```
+
+- `RateLimit-Limit` — maximum requests allowed in the current window
+- `RateLimit-Remaining` — requests remaining in the current window
+- `RateLimit-Reset` — **seconds until the rate limit window resets** (not a Unix timestamp)
 
 ### 429 Response
 
-When rate limited:
+When rate limited, the response includes both a `Retry-After` header (seconds to wait) and a JSON body:
+
+```http
+Retry-After: 45
+RateLimit-Limit: 100
+RateLimit-Remaining: 0
+RateLimit-Reset: 45
+```
 
 ```json
 {
   "error": "Too many requests",
-  "retryAfter": 45
+  "message": "You have exceeded the rate limit for this API key. Please try again later."
 }
 ```
 
-**Important**: Wait `retryAfter` seconds before retrying.
+**Important**: Use the `Retry-After` header (seconds to wait) or `RateLimit-Reset` (seconds until window resets) to determine when to retry. Both values are in seconds, not Unix timestamps.
 
 ### Best Practices
 
-1. **Respect Rate Limits**: Check `X-RateLimit-Remaining` header
+1. **Respect Rate Limits**: Check `RateLimit-Remaining` header before each request
 2. **Use Incremental Sync**: Use `updatedSince` instead of fetching all data
 3. **Batch Requests**: Increase `limit` parameter to reduce total requests
 4. **Cache Data**: Store frequently accessed data locally
@@ -590,12 +734,12 @@ async function fetchAllAccounts() {
 Use `expand` parameter to reduce API calls:
 
 ```javascript
-// ❌ BAD: Two API calls per opportunity
+// BAD: Two API calls per opportunity
 for (const opp of opportunities) {
   const account = await fetch(`${BASE_URL}/accounts/${opp.accountId}`);
 }
 
-// ✅ GOOD: One API call with expanded relationships
+// GOOD: One API call with expanded relationships
 const opportunities = await fetch(
   `${BASE_URL}/opportunities?expand=account`,
   { headers: { 'X-API-Key': API_KEY } }
@@ -653,15 +797,18 @@ interface Opportunity {
   name: string;
   accountId: string;
   stage: string;
+  amount: number | null;
   probability: number;
-  estRevenue: number;
+  status: string;
+  estRevenue: number | null;
+  actualRevenue: number | null;
   includeInForecast: boolean;
   // ... other fields
 }
 
 async function getForecastData(): Promise<Opportunity[]> {
   const response = await fetch(
-    `${BASE_URL}/opportunities?includeInForecast=true&expand=account&limit=1000`,
+    `${BASE_URL}/opportunities?expand=account&limit=1000`,
     {
       headers: {
         'X-API-Key': API_KEY
@@ -682,7 +829,7 @@ async function calculateWeightedPipeline(): Promise<number> {
   const opportunities = await getForecastData();
   
   return opportunities.reduce((total, opp) => {
-    return total + (opp.estRevenue * opp.probability / 100);
+    return total + ((opp.estRevenue ?? 0) * opp.probability / 100);
   }, 0);
 }
 
@@ -711,7 +858,6 @@ def get_forecast_opportunities() -> List[Dict]:
         f'{BASE_URL}/opportunities',
         headers=get_headers(),
         params={
-            'includeInForecast': 'true',
             'expand': 'account',
             'limit': 1000
         }
@@ -724,7 +870,7 @@ def calculate_weighted_pipeline() -> float:
     opportunities = get_forecast_opportunities()
     
     weighted_total = sum(
-        opp['estRevenue'] * opp['probability'] / 100
+        (opp.get('estRevenue') or 0) * opp['probability'] / 100
         for opp in opportunities
     )
     
@@ -754,7 +900,7 @@ if __name__ == '__main__':
     # Check for errors
     errors = get_recent_errors()
     if errors:
-        print(f'\n⚠️  Found {len(errors)} API errors in last hour')
+        print(f'\nFound {len(errors)} API errors in last hour')
         for error in errors[:5]:  # Show first 5
             print(f"  - {error['statusCode']} {error['method']} {error['endpoint']}")
 ```
@@ -768,12 +914,12 @@ if __name__ == '__main__':
 API_KEY="${HEALTH_TRIXSS_API_KEY}"
 BASE_URL="https://your-domain.repl.co/api/v1/external"
 
-# Fetch all forecast opportunities
+# Fetch all forecast opportunities (default: includeInForecast=true)
 curl -s -H "X-API-Key: $API_KEY" \
-  "${BASE_URL}/opportunities?includeInForecast=true&limit=1000" \
+  "${BASE_URL}/opportunities?limit=1000" \
   | jq '{
     total: .pagination.total,
-    weighted_pipeline: ([.data[] | .estRevenue * .probability / 100] | add)
+    weighted_pipeline: ([.data[] | (.estRevenue // 0) * .probability / 100] | add)
   }'
 
 # Check for recent errors
@@ -805,8 +951,8 @@ curl -s -H "X-API-Key: $API_KEY" \
 
 **Solution**:
 ```bash
-# Verify your API key format
-echo $HEALTH_TRIXSS_API_KEY | wc -c  # Should be ~88 characters
+# Verify your API key format (should start with htcrm_ and be ~49 chars)
+echo -n $HEALTH_TRIXSS_API_KEY | wc -c  # Should be ~49 characters
 
 # Test with verbose output
 curl -v -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
@@ -856,6 +1002,7 @@ await limiter.execute(() => fetch(url, options));
 1. Resource ID is correct (check for typos)
 2. Resource hasn't been deleted
 3. Using correct ID format (e.g., `ACCT-2025-00001` not just `00001`)
+4. If using an org-scoped API key, the resource must belong to that organization
 
 **Solution**:
 ```javascript
@@ -904,8 +1051,8 @@ if (duration > 1000) {
 // Always use ISO 8601 UTC timestamps
 const lastSync = new Date().toISOString(); // "2025-01-20T14:30:00.000Z"
 
-// NOT: new Date().toString() ❌
-// NOT: "2025-01-20 14:30:00" ❌
+// NOT: new Date().toString()
+// NOT: "2025-01-20 14:30:00"
 ```
 
 ---
@@ -948,6 +1095,6 @@ To request a higher rate limit:
 
 ---
 
-**Last Updated**: January 2025  
+**Last Updated**: May 2026  
 **API Version**: 1.0  
-**Document Version**: 1.0.0
+**Document Version**: 1.1
