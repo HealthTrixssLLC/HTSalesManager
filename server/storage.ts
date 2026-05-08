@@ -115,6 +115,8 @@ export interface IStorage {
   deleteTag(id: string): Promise<void>;
   
   // ========== ENTITY TAGS ==========
+  getEntityTagsBulk(entity: string, entityIds: string[]): Promise<Array<{ entityId: string; id: string; name: string; color: string }>>;
+  getActivityTagsBulk(activityIds: string[], orgId?: string): Promise<Array<{ entityId: string; id: string; name: string; color: string }>>;
   getEntityTags(entity: string, entityId: string): Promise<Tag[]>;
   addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void>;
   removeEntityTag(entity: string, entityId: string, tagId: string): Promise<void>;

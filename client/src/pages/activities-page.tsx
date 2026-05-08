@@ -164,23 +164,20 @@ export default function ActivitiesPage() {
     queryKey: ["/api/tags"],
   });
 
-  // Fetch all entity tags for client-side filtering
+  // Fetch all entity tags for client-side filtering — single bulk request instead of N individual ones
   const { data: allEntityTags } = useQuery<Array<{ entityId: string; tagId: string }>>({
     queryKey: ["/api/entity-tags-activities"],
     queryFn: async () => {
-      // Fetch tags for all activities
-      const activityTagsPromises = (activities || []).map(async (activity) => {
-        const tagUrl = `/api/activities/${activity.id}/tags`;
-        const res = await fetch(tagUrl, {
-          credentials: "include",
-          headers: getOrgHeaders(tagUrl),
-        });
-        if (!res.ok) return [];
-        const tags = await res.json();
-        return tags.map((tag: any) => ({ entityId: activity.id, tagId: tag.id }));
+      const ids = (activities || []).map((a) => a.id);
+      if (ids.length === 0) return [];
+      const url = `/api/activities/tags/bulk?ids=${ids.join(",")}`;
+      const res = await fetch(url, {
+        credentials: "include",
+        headers: getOrgHeaders(url),
       });
-      const results = await Promise.all(activityTagsPromises);
-      return results.flat();
+      if (!res.ok) return [];
+      const rows: Array<{ entityId: string; id: string }> = await res.json();
+      return rows.map((row) => ({ entityId: row.entityId, tagId: row.id }));
     },
     enabled: !!activities && activities.length > 0,
   });

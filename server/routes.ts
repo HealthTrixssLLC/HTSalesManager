@@ -1827,6 +1827,20 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  app.get("/api/activities/tags/bulk", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const idsParam = req.query.ids as string | undefined;
+      if (!idsParam) return res.json([]);
+      const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      if (ids.length === 0) return res.json([]);
+      const rows = await storage.getActivityTagsBulk(ids, req.activeOrgId || undefined);
+      return res.json(rows);
+    } catch (error) {
+      console.error("Failed to fetch bulk activity tags:", error);
+      return res.status(500).json({ error: "Failed to fetch bulk activity tags" });
+    }
+  });
+
   app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const activity = await storage.getActivityById(req.params.id);

@@ -1144,6 +1144,44 @@ export class PostgresStorage implements IStorage {
   
   // ========== ENTITY TAGS ==========
   
+  async getEntityTagsBulk(entity: string, entityIds: string[]): Promise<Array<{ entityId: string; id: string; name: string; color: string }>> {
+    if (entityIds.length === 0) return [];
+    const result = await db
+      .select({
+        entityId: schema.entityTags.entityId,
+        id: schema.tags.id,
+        name: schema.tags.name,
+        color: schema.tags.color,
+      })
+      .from(schema.entityTags)
+      .innerJoin(schema.tags, eq(schema.entityTags.tagId, schema.tags.id))
+      .where(and(
+        eq(schema.entityTags.entity, entity),
+        inArray(schema.entityTags.entityId, entityIds)
+      ));
+    return result;
+  }
+
+  async getActivityTagsBulk(activityIds: string[], orgId?: string): Promise<Array<{ entityId: string; id: string; name: string; color: string }>> {
+    if (activityIds.length === 0) return [];
+    const result = await db
+      .select({
+        entityId: schema.entityTags.entityId,
+        id: schema.tags.id,
+        name: schema.tags.name,
+        color: schema.tags.color,
+      })
+      .from(schema.entityTags)
+      .innerJoin(schema.tags, eq(schema.entityTags.tagId, schema.tags.id))
+      .innerJoin(schema.activities, eq(schema.activities.id, schema.entityTags.entityId))
+      .where(and(
+        eq(schema.entityTags.entity, "Activity"),
+        inArray(schema.entityTags.entityId, activityIds),
+        orgId ? eq(schema.activities.organizationId, orgId) : undefined
+      ));
+    return result;
+  }
+
   async getEntityTags(entity: string, entityId: string): Promise<schema.Tag[]> {
     const result = await db
       .select({
