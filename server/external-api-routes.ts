@@ -207,6 +207,8 @@ router.get("/accounts", async (req: ApiKeyRequest, res) => {
             amount: o.amount,
             closeDate: o.closeDate,
             probability: o.probability,
+            implementationStartDate: o.implementationStartDate,
+            implementationEndDate: o.implementationEndDate,
           }));
       }
       
@@ -282,6 +284,8 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
           closeDate: o.closeDate,
           probability: o.probability,
           rating: o.rating,
+          implementationStartDate: o.implementationStartDate,
+          implementationEndDate: o.implementationEndDate,
         }));
     }
     
@@ -321,7 +325,7 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
  * - includeInForecast: Filter by forecast inclusion (true/false/all, default: true)
  * - limit: Number of results (default: 100, max: 1000)
  * - offset: Number of results to skip (default: 0)
- * - expand: Comma-separated list of related entities (e.g., "account")
+ * - expand: Comma-separated list of related entities (e.g., "account,resources")
  */
 router.get("/opportunities", async (req: ApiKeyRequest, res) => {
   try {
@@ -380,6 +384,8 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
         estRevenue: opp.estRevenue,
         rating: opp.rating,
         includeInForecast: opp.includeInForecast,
+        implementationStartDate: opp.implementationStartDate,
+        implementationEndDate: opp.implementationEndDate,
         externalId: opp.externalId,
         createdAt: opp.createdAt,
         updatedAt: opp.updatedAt,
@@ -397,6 +403,18 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
             category: account.category,
           };
         }
+      }
+      
+      // Optionally include resource assignments (org-scoped via parent opportunity)
+      if (expandList.includes("resources")) {
+        const resources = await storage.getOpportunityResources(opp.id);
+        leanOpp.resources = resources.map(r => ({
+          userId: r.userId,
+          role: r.role,
+          allocationPercentage: r.allocation,
+          startDate: r.startDate,
+          endDate: r.endDate,
+        }));
       }
       
       return leanOpp;
@@ -425,7 +443,7 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
  * Get a specific opportunity by ID
  * 
  * Query Parameters:
- * - expand: Comma-separated list of related entities (e.g., "account")
+ * - expand: Comma-separated list of related entities (e.g., "account,resources")
  */
 router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
   try {
@@ -459,6 +477,8 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
       estRevenue: opp.estRevenue,
       rating: opp.rating,
       includeInForecast: opp.includeInForecast,
+      implementationStartDate: opp.implementationStartDate,
+      implementationEndDate: opp.implementationEndDate,
       externalId: opp.externalId,
       createdAt: opp.createdAt,
       updatedAt: opp.updatedAt,
@@ -477,6 +497,18 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
           industry: account.industry,
         };
       }
+    }
+    
+    // Optionally include resource assignments (org-scoped via parent opportunity)
+    if (expandList.includes("resources")) {
+      const resources = await storage.getOpportunityResources(opp.id);
+      response.resources = resources.map(r => ({
+        userId: r.userId,
+        role: r.role,
+        allocationPercentage: r.allocation,
+        startDate: r.startDate,
+        endDate: r.endDate,
+      }));
     }
     
     return res.json({ data: response });
