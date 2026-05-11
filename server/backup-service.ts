@@ -121,6 +121,7 @@ export class BackupService {
     const specificDateFields = [
       'closeDate', 'actualCloseDate', 'estCloseDate',
       'implementationStartDate', 'implementationEndDate',
+      'billingEndDate',
       'startDate', 'endDate',
     ];
     

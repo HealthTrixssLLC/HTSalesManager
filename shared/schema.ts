@@ -196,6 +196,7 @@ export const opportunities = pgTable("opportunities", {
   includeInForecast: boolean("include_in_forecast").notNull().default(true), // Exclude internal/test opportunities from sales metrics
   implementationStartDate: timestamp("implementation_start_date"),
   implementationEndDate: timestamp("implementation_end_date"),
+  billingEndDate: timestamp("billing_end_date"),
   categories: text("categories").array(),
   operationalAreas: text("operational_areas").array(),
   description: text("description"),
@@ -962,6 +963,7 @@ export const insertOpportunitySchema = createInsertSchema(opportunities)
     estCloseDate: z.preprocess(datePreprocessor, z.date().nullable()),
     implementationStartDate: z.preprocess(datePreprocessor, z.date().nullable()),
     implementationEndDate: z.preprocess(datePreprocessor, z.date().nullable()),
+    billingEndDate: z.preprocess(datePreprocessor, z.date().nullable()),
     organizationId: z.string().optional(),
   });
 export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;

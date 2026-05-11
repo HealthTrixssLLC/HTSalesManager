@@ -208,6 +208,7 @@ export default function OpportunityDetailPage() {
     estCloseDate: z.union([z.date(), z.string(), z.null()]).optional(),
     implementationStartDate: z.union([z.date(), z.string(), z.null()]).optional(),
     implementationEndDate: z.union([z.date(), z.string(), z.null()]).optional(),
+    billingEndDate: z.union([z.date(), z.string(), z.null()]).optional(),
   });
 
   const form = useForm<InsertOpportunity>({
@@ -230,6 +231,7 @@ export default function OpportunityDetailPage() {
       includeInForecast: true,
       implementationStartDate: null,
       implementationEndDate: null,
+      billingEndDate: null,
       categories: [],
       operationalAreas: [],
       description: null,
@@ -338,6 +340,14 @@ export default function OpportunityDetailPage() {
           submitData.implementationEndDate = null;
         }
       }
+
+      if (submitData.billingEndDate) {
+        if (typeof submitData.billingEndDate === 'string' && submitData.billingEndDate !== '') {
+          submitData.billingEndDate = new Date(submitData.billingEndDate);
+        } else if (submitData.billingEndDate === '') {
+          submitData.billingEndDate = null;
+        }
+      }
       
       updateMutation.mutate(submitData);
     }
@@ -373,6 +383,7 @@ export default function OpportunityDetailPage() {
         includeInForecast: opportunity.includeInForecast ?? true,
         implementationStartDate: toDateValue(opportunity.implementationStartDate),
         implementationEndDate: toDateValue(opportunity.implementationEndDate),
+        billingEndDate: toDateValue(opportunity.billingEndDate),
         categories: opportunity.categories || [],
         operationalAreas: opportunity.operationalAreas || [],
         description: opportunity.description || null,
@@ -432,7 +443,8 @@ export default function OpportunityDetailPage() {
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
             <DetailField label="Impl. Start Date" value={opportunity.implementationStartDate} type="date" />
-            <DetailField label="Impl. End Date" value={opportunity.implementationEndDate} type="date" />
+            <DetailField label="Impl. End Date (Billing Start)" value={opportunity.implementationEndDate} type="date" />
+            <DetailField label="Billing End Date" value={opportunity.billingEndDate} type="date" />
             <div className="col-span-1">
               <label className="text-sm font-medium text-muted-foreground">Assigned Rep</label>
               <div className="mt-1 flex items-center gap-2" data-testid="field-assigned-rep">
@@ -989,7 +1001,7 @@ export default function OpportunityDetailPage() {
                     }
                     return (
                       <FormItem>
-                        <FormLabel>Implementation End</FormLabel>
+                        <FormLabel>Implementation End (Billing Start)</FormLabel>
                         <FormControl>
                           <Input
                             type="date"
@@ -1004,6 +1016,35 @@ export default function OpportunityDetailPage() {
                   }}
                 />
               </div>
+              <FormField
+                control={form.control}
+                name="billingEndDate"
+                render={({ field }) => {
+                  let dateString = "";
+                  if (field.value) {
+                    try {
+                      const date = field.value instanceof Date ? field.value : new Date(field.value as string);
+                      if (!isNaN(date.getTime())) {
+                        dateString = date.toISOString().split('T')[0];
+                      }
+                    } catch (e) {}
+                  }
+                  return (
+                    <FormItem>
+                      <FormLabel>Billing End Date</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          value={dateString}
+                          onChange={e => field.onChange(e.target.value || null)}
+                          data-testid="input-edit-billing-end-date"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
               {canViewFinancials && (
                 <FormField
                   control={form.control}

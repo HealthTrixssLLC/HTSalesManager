@@ -1345,6 +1345,9 @@ export async function registerRoutes(app: Express) {
       if (data.implementationStartDate && data.implementationEndDate && new Date(data.implementationStartDate) > new Date(data.implementationEndDate)) {
         return res.status(400).json({ error: "Implementation start date must be before end date" });
       }
+      if (data.implementationEndDate && data.billingEndDate && new Date(data.billingEndDate) < new Date(data.implementationEndDate)) {
+        return res.status(400).json({ error: "Billing end date must not be before implementation end date (billing start)" });
+      }
       if (req.activeOrgId) data.organizationId = req.activeOrgId;
       
       // Validate referenced account belongs to the same org
@@ -1403,11 +1406,19 @@ export async function registerRoutes(app: Express) {
       if (updateData.implementationEndDate !== undefined) {
         updateData.implementationEndDate = parseDate(updateData.implementationEndDate);
       }
+      if (updateData.billingEndDate !== undefined) {
+        updateData.billingEndDate = parseDate(updateData.billingEndDate);
+      }
 
       const startDate = updateData.implementationStartDate ?? before.implementationStartDate;
       const endDate = updateData.implementationEndDate ?? before.implementationEndDate;
       if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
         return res.status(400).json({ error: "Implementation start date must be before end date" });
+      }
+
+      const billingEnd = updateData.billingEndDate ?? before.billingEndDate;
+      if (endDate && billingEnd && new Date(billingEnd) < new Date(endDate)) {
+        return res.status(400).json({ error: "Billing end date must not be before implementation end date (billing start)" });
       }
 
       const opportunity = await storage.updateOpportunity(req.params.id, updateData);

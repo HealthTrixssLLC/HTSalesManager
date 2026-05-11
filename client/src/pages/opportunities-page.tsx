@@ -254,6 +254,7 @@ export default function OpportunitiesPage() {
       includeInForecast: true,
       implementationStartDate: null,
       implementationEndDate: null,
+      billingEndDate: null,
       categories: [],
       operationalAreas: [],
       description: null,
@@ -824,13 +825,31 @@ export default function OpportunitiesPage() {
                     name="implementationEndDate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Implementation End</FormLabel>
+                        <FormLabel>Implementation End (Billing Start)</FormLabel>
                         <FormControl>
                           <Input
                             type="date"
                             value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
                             onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                             data-testid="input-opportunity-impl-end"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="billingEndDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Billing End Date</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            value={field.value ? new Date(field.value).toISOString().split('T')[0] : ""}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            data-testid="input-opportunity-billing-end"
                           />
                         </FormControl>
                         <FormMessage />

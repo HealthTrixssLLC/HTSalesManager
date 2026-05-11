@@ -209,6 +209,7 @@ router.get("/accounts", async (req: ApiKeyRequest, res) => {
             probability: o.probability,
             implementationStartDate: o.implementationStartDate,
             implementationEndDate: o.implementationEndDate,
+            billingEndDate: o.billingEndDate,
           }));
       }
       
@@ -286,6 +287,7 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
           rating: o.rating,
           implementationStartDate: o.implementationStartDate,
           implementationEndDate: o.implementationEndDate,
+          billingEndDate: o.billingEndDate,
         }));
     }
     
@@ -386,6 +388,7 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
         includeInForecast: opp.includeInForecast,
         implementationStartDate: opp.implementationStartDate,
         implementationEndDate: opp.implementationEndDate,
+        billingEndDate: opp.billingEndDate,
         externalId: opp.externalId,
         createdAt: opp.createdAt,
         updatedAt: opp.updatedAt,
@@ -479,6 +482,7 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
       includeInForecast: opp.includeInForecast,
       implementationStartDate: opp.implementationStartDate,
       implementationEndDate: opp.implementationEndDate,
+      billingEndDate: opp.billingEndDate,
       externalId: opp.externalId,
       createdAt: opp.createdAt,
       updatedAt: opp.updatedAt,
