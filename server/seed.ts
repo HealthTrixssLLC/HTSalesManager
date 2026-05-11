@@ -84,6 +84,11 @@ export async function runStartupColumnMigration(): Promise<void> {
       ALTER TABLE organizations ADD COLUMN IF NOT EXISTS logo_url TEXT
     `));
 
+    // 5. Add billing_end_date to opportunities (added in v2.1.1)
+    await db.execute(sql.raw(`
+      ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS billing_end_date TIMESTAMP
+    `));
+
     console.log('✓ Startup column migration completed');
   } catch (error) {
     console.error('Startup column migration error (non-fatal):', error);
