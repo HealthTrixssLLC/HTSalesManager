@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "QiuT02JxPSYlwJ3ojkACv"
+uri = "file://CHANGELOG-billing-end-date.md"
+type = "text"
+title = "Billing End Date — Downstream Integration Guide"
