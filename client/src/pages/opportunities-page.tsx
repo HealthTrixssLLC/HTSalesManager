@@ -1556,6 +1556,15 @@ export default function OpportunitiesPage() {
                         {sortKey === "closeDate" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
                       </div>
                     </TableHead>
+                    <TableHead className="whitespace-nowrap" data-testid="th-impl-start">
+                      Impl. Start
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap" data-testid="th-impl-end">
+                      Impl. End (Billing Start)
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap" data-testid="th-billing-end">
+                      Billing End
+                    </TableHead>
                     <TableHead
                       className="cursor-pointer select-none whitespace-nowrap"
                       onClick={() => handleSort("ownerName")}
@@ -1591,7 +1600,7 @@ export default function OpportunitiesPage() {
                 <TableBody>
                   {paginatedOpportunities.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={canViewFinancials ? 9 : 8} className="text-center py-10 text-muted-foreground" data-testid="table-empty-state">
+                      <TableCell colSpan={canViewFinancials ? 12 : 11} className="text-center py-10 text-muted-foreground" data-testid="table-empty-state">
                         No opportunities found matching the current filters.
                       </TableCell>
                     </TableRow>
@@ -1639,6 +1648,15 @@ export default function OpportunitiesPage() {
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap" data-testid={`cell-close-date-${opp.id}`}>
                             {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap" data-testid={`cell-impl-start-${opp.id}`}>
+                            {opp.implementationStartDate ? new Date(opp.implementationStartDate).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap" data-testid={`cell-impl-end-${opp.id}`}>
+                            {opp.implementationEndDate ? new Date(opp.implementationEndDate).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap" data-testid={`cell-billing-end-${opp.id}`}>
+                            {opp.billingEndDate ? new Date(opp.billingEndDate).toLocaleDateString() : "—"}
                           </TableCell>
                           <TableCell className="text-sm" data-testid={`cell-owner-${opp.id}`}>
                             {opp.ownerId ? (userNameMap.get(opp.ownerId) || opp.ownerId) : "—"}
