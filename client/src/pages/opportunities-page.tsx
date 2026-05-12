@@ -1,10 +1,10 @@
 // Opportunities Kanban board with drag-and-drop
 // Based on design_guidelines.md enterprise SaaS patterns
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, keepPreviousData } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target, Check, ChevronsUpDown, Search } from "lucide-react";
+import { Plus, Loader2, DollarSign, Calendar, Download, MessageSquare, Building2, Filter, X, Users, Tags, TrendingUp, Target, Check, ChevronsUpDown, Search, LayoutGrid, List, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Opportunity, InsertOpportunity, insertOpportunitySchema, Account } from "@shared/schema";
 
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type PendingResource = { userId: string; role: string; userName: string };
 
@@ -137,6 +138,34 @@ export default function OpportunitiesPage() {
     setFilterOperationalAreas(Array.isArray(saved.filterOperationalAreas) ? saved.filterOperationalAreas : []);
   };
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
+
+  // Table view state
+  const VIEW_MODE_KEY = "opportunities_view_mode";
+  const [viewMode, setViewMode] = useState<"kanban" | "table">(() => {
+    const stored = localStorage.getItem(VIEW_MODE_KEY);
+    return stored === "table" ? "table" : "kanban";
+  });
+  const handleSetViewMode = (mode: "kanban" | "table") => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+    setCurrentPage(1);
+  };
+
+  type SortKey = "name" | "accountName" | "stage" | "amount" | "probability" | "closeDate" | "ownerName" | "rating" | "includeInForecast";
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+    setCurrentPage(1);
+  };
 
   const opportunityQueryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -467,6 +496,83 @@ export default function OpportunitiesPage() {
     return acc;
   }, {} as Record<string, OpportunityWithAccount[]>);
 
+  // Build a name lookup for assigned reps
+  const userNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    users?.forEach(u => map.set(u.id, u.name));
+    return map;
+  }, [users]);
+
+  const ratingOrder: Record<string, number> = { hot: 0, warm: 1, cold: 2 };
+
+  const sortedOpportunities = useMemo(() => {
+    const list = [...filteredOpportunities];
+    list.sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+      switch (sortKey) {
+        case "name":
+          aVal = (a.name || "").toLowerCase();
+          bVal = (b.name || "").toLowerCase();
+          break;
+        case "accountName":
+          aVal = (a.accountName || "").toLowerCase();
+          bVal = (b.accountName || "").toLowerCase();
+          break;
+        case "stage":
+          aVal = a.stage || "";
+          bVal = b.stage || "";
+          break;
+        case "amount":
+          aVal = parseFloat(a.amount || "0");
+          bVal = parseFloat(b.amount || "0");
+          break;
+        case "probability":
+          aVal = a.probability ?? 0;
+          bVal = b.probability ?? 0;
+          break;
+        case "closeDate":
+          aVal = a.closeDate ? new Date(a.closeDate).getTime() : 0;
+          bVal = b.closeDate ? new Date(b.closeDate).getTime() : 0;
+          break;
+        case "ownerName":
+          aVal = (a.ownerId ? userNameMap.get(a.ownerId) || "" : "").toLowerCase();
+          bVal = (b.ownerId ? userNameMap.get(b.ownerId) || "" : "").toLowerCase();
+          break;
+        case "rating":
+          aVal = a.rating ? (ratingOrder[a.rating] ?? 99) : 99;
+          bVal = b.rating ? (ratingOrder[b.rating] ?? 99) : 99;
+          break;
+        case "includeInForecast":
+          aVal = a.includeInForecast ? 0 : 1;
+          bVal = b.includeInForecast ? 0 : 1;
+          break;
+        default:
+          aVal = "";
+          bVal = "";
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return list;
+  }, [filteredOpportunities, sortKey, sortDir, userNameMap]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedOpportunities.length / PAGE_SIZE));
+
+  // Reset to page 1 whenever the sorted/filtered dataset shrinks
+  useEffect(() => {
+    setCurrentPage(prev => {
+      const maxPage = Math.max(1, Math.ceil(sortedOpportunities.length / PAGE_SIZE));
+      return prev > maxPage ? 1 : prev;
+    });
+  }, [sortedOpportunities.length]);
+
+  const paginatedOpportunities = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return sortedOpportunities.slice(start, start + PAGE_SIZE);
+  }, [sortedOpportunities, currentPage]);
+
   // Determine card color based on selected attribute
   const getCardColor = (opp: OpportunityWithAccount): string => {
     if (colorCodeBy === "rating") {
@@ -518,17 +624,42 @@ export default function OpportunitiesPage() {
           <h1 className="text-2xl font-semibold text-foreground">Opportunities</h1>
           <p className="text-muted-foreground">Visual pipeline to track deals and close them faster</p>
         </div>
-        <div className="flex gap-2">
-          <Select value={colorCodeBy} onValueChange={(value: "rating" | "closeDate" | "probability") => setColorCodeBy(value)}>
-            <SelectTrigger className="w-[200px]" data-testid="select-color-code">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="rating">Color by Rating</SelectItem>
-              <SelectItem value="closeDate">Color by Close Date</SelectItem>
-              <SelectItem value="probability">Color by Probability</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex gap-2 flex-wrap">
+          {/* View mode toggle */}
+          <div className="flex border rounded-md overflow-hidden" data-testid="view-mode-toggle">
+            <Button
+              variant={viewMode === "kanban" ? "default" : "ghost"}
+              size="icon"
+              className="rounded-none"
+              onClick={() => handleSetViewMode("kanban")}
+              title="Kanban view"
+              data-testid="button-view-kanban"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="icon"
+              className="rounded-none"
+              onClick={() => handleSetViewMode("table")}
+              title="Table view"
+              data-testid="button-view-table"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+          {viewMode === "kanban" && (
+            <Select value={colorCodeBy} onValueChange={(value: "rating" | "closeDate" | "probability") => setColorCodeBy(value)}>
+              <SelectTrigger className="w-[200px]" data-testid="select-color-code">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rating">Color by Rating</SelectItem>
+                <SelectItem value="closeDate">Color by Close Date</SelectItem>
+                <SelectItem value="probability">Color by Probability</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <Button variant="outline" onClick={() => setShowFilters(!showFilters)} data-testid="button-toggle-filters">
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? "Hide Filters" : "Show Filters"}
@@ -1324,7 +1455,260 @@ export default function OpportunitiesPage() {
         </Card>
       )}
 
+      {/* Table View */}
+      {viewMode === "table" && (
+        <div className="space-y-3" data-testid="opportunities-table-view">
+          <Card>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("name")}
+                      data-testid="th-name"
+                    >
+                      <div className="flex items-center gap-1">
+                        Opportunity Name
+                        {sortKey === "name" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("accountName")}
+                      data-testid="th-account"
+                    >
+                      <div className="flex items-center gap-1">
+                        Account
+                        {sortKey === "accountName" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("stage")}
+                      data-testid="th-stage"
+                    >
+                      <div className="flex items-center gap-1">
+                        Stage
+                        {sortKey === "stage" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    {canViewFinancials && (
+                      <TableHead
+                        className="cursor-pointer select-none whitespace-nowrap"
+                        onClick={() => handleSort("amount")}
+                        data-testid="th-amount"
+                      >
+                        <div className="flex items-center gap-1">
+                          Amount
+                          {sortKey === "amount" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                        </div>
+                      </TableHead>
+                    )}
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("probability")}
+                      data-testid="th-probability"
+                    >
+                      <div className="flex items-center gap-1">
+                        Probability
+                        {sortKey === "probability" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("closeDate")}
+                      data-testid="th-close-date"
+                    >
+                      <div className="flex items-center gap-1">
+                        Close Date
+                        {sortKey === "closeDate" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("ownerName")}
+                      data-testid="th-owner"
+                    >
+                      <div className="flex items-center gap-1">
+                        Assigned Rep
+                        {sortKey === "ownerName" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("rating")}
+                      data-testid="th-rating"
+                    >
+                      <div className="flex items-center gap-1">
+                        Rating
+                        {sortKey === "rating" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap"
+                      onClick={() => handleSort("includeInForecast")}
+                      data-testid="th-forecast"
+                    >
+                      <div className="flex items-center gap-1">
+                        Forecast
+                        {sortKey === "includeInForecast" ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedOpportunities.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={canViewFinancials ? 9 : 8} className="text-center py-10 text-muted-foreground" data-testid="table-empty-state">
+                        No opportunities found matching the current filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedOpportunities.map((opp) => {
+                      const stageMeta = stages.find(s => s.id === opp.stage);
+                      return (
+                        <TableRow
+                          key={opp.id}
+                          className="cursor-pointer"
+                          onClick={() => setLocation(`/opportunities/${opp.id}`)}
+                          data-testid={`row-opportunity-${opp.id}`}
+                        >
+                          <TableCell className="font-medium max-w-[200px]">
+                            <a
+                              href={`/opportunities/${opp.id}`}
+                              className="truncate block hover:underline text-foreground"
+                              title={opp.name}
+                              data-testid={`cell-name-${opp.id}`}
+                              onClick={(e) => { e.preventDefault(); setLocation(`/opportunities/${opp.id}`); }}
+                            >
+                              {opp.name}
+                            </a>
+                            <div className="text-xs text-muted-foreground" data-testid={`cell-id-${opp.id}`}>{opp.id}</div>
+                          </TableCell>
+                          <TableCell className="max-w-[160px]">
+                            <div className="truncate text-sm" data-testid={`cell-account-${opp.id}`}>{opp.accountName || "—"}</div>
+                          </TableCell>
+                          <TableCell>
+                            {stageMeta ? (
+                              <Badge className={`${stageMeta.color} text-xs`} data-testid={`cell-stage-${opp.id}`}>
+                                {stageMeta.label}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          {canViewFinancials && (
+                            <TableCell className="text-sm" data-testid={`cell-amount-${opp.id}`}>
+                              <FinancialValue value={opp.amount} format="currency" />
+                            </TableCell>
+                          )}
+                          <TableCell className="text-sm" data-testid={`cell-probability-${opp.id}`}>
+                            {opp.probability != null ? `${opp.probability}%` : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap" data-testid={`cell-close-date-${opp.id}`}>
+                            {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-sm" data-testid={`cell-owner-${opp.id}`}>
+                            {opp.ownerId ? (userNameMap.get(opp.ownerId) || opp.ownerId) : "—"}
+                          </TableCell>
+                          <TableCell data-testid={`cell-rating-${opp.id}`}>
+                            {opp.rating ? (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs capitalize",
+                                  opp.rating === "hot" && "border-red-500 text-red-600",
+                                  opp.rating === "warm" && "border-orange-500 text-orange-600",
+                                  opp.rating === "cold" && "border-blue-500 text-blue-600",
+                                )}
+                              >
+                                {opp.rating}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell data-testid={`cell-forecast-${opp.id}`}>
+                            {opp.includeInForecast ? (
+                              <div className="flex items-center gap-1 text-primary text-sm">
+                                <TrendingUp className="h-3 w-3" />
+                                <span>Yes</span>
+                              </div>
+                            ) : (
+                              <Badge variant="secondary" className="text-xs">Excluded</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between" data-testid="table-pagination">
+              <p className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages} &middot; {sortedOpportunities.length} total
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let page: number;
+                  if (totalPages <= 7) {
+                    page = i + 1;
+                  } else if (currentPage <= 4) {
+                    page = i + 1;
+                  } else if (currentPage >= totalPages - 3) {
+                    page = totalPages - 6 + i;
+                  } else {
+                    page = currentPage - 3 + i;
+                  }
+                  return (
+                    <Button
+                      key={page}
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="icon"
+                      onClick={() => setCurrentPage(page)}
+                      data-testid={`button-page-${page}`}
+                    >
+                      {page}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  data-testid="button-next-page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          {totalPages <= 1 && sortedOpportunities.length > 0 && (
+            <p className="text-sm text-muted-foreground" data-testid="table-count">
+              Showing all {sortedOpportunities.length} {sortedOpportunities.length === 1 ? "opportunity" : "opportunities"}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Kanban Board */}
+      {viewMode === "kanban" && (
       <div className="flex gap-4 overflow-x-auto pb-4">
         {stages.map((stage) => (
           <div key={stage.id} className="flex-shrink-0 w-80">
@@ -1496,6 +1880,7 @@ export default function OpportunitiesPage() {
           </div>
         ))}
       </div>
+      )}
 
       <Dialog open={commentsOpportunityId !== null} onOpenChange={(open) => !open && setCommentsOpportunityId(null)}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
