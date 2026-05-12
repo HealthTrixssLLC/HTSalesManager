@@ -107,8 +107,9 @@ export default function OpportunitiesPage() {
   const [filterIncludeInForecast, setFilterIncludeInForecast] = useState<string>("all");
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [filterOperationalAreas, setFilterOperationalAreas] = useState<string[]>([]);
+  const [filterStages, setFilterStages] = useState<string[]>([]);
 
-  const hasActiveFilters = !!(searchText || filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all" || filterCategories.length > 0 || filterOperationalAreas.length > 0);
+  const hasActiveFilters = !!(searchText || filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterTagIds.length > 0 || filterIncludeInForecast !== "all" || filterCategories.length > 0 || filterOperationalAreas.length > 0 || filterStages.length > 0);
 
   const currentOpportunityFilters = {
     searchText,
@@ -122,6 +123,7 @@ export default function OpportunitiesPage() {
     filterIncludeInForecast,
     filterCategories,
     filterOperationalAreas,
+    filterStages,
   };
 
   const handleApplySavedFilter = (saved: Record<string, any>) => {
@@ -136,6 +138,7 @@ export default function OpportunitiesPage() {
     setFilterIncludeInForecast(saved.filterIncludeInForecast ?? "all");
     setFilterCategories(Array.isArray(saved.filterCategories) ? saved.filterCategories : []);
     setFilterOperationalAreas(Array.isArray(saved.filterOperationalAreas) ? saved.filterOperationalAreas : []);
+    setFilterStages(Array.isArray(saved.filterStages) ? saved.filterStages : []);
   };
   const [colorCodeBy, setColorCodeBy] = useState<"rating" | "closeDate" | "probability">("rating");
 
@@ -475,6 +478,11 @@ export default function OpportunitiesPage() {
         const oppAreas = opp.operationalAreas || [];
         if (!filterOperationalAreas.some(area => oppAreas.includes(area))) return false;
       }
+
+      // Stage filter - opp must match one of the selected stages
+      if (filterStages.length > 0) {
+        if (!filterStages.includes(opp.stage || "")) return false;
+      }
       
       return true;
     });
@@ -489,7 +497,7 @@ export default function OpportunitiesPage() {
     }
 
     return result;
-  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, filterIncludeInForecast, filterCategories, filterOperationalAreas]);
+  }, [opportunities, filterAccount, filterCloseDateFrom, filterCloseDateTo, filterProbabilityMin, filterProbabilityMax, filterRating, filterTagIds, filterIncludeInForecast, filterCategories, filterOperationalAreas, filterStages]);
 
   const groupedOpportunities = stages.reduce((acc, stage) => {
     acc[stage.id] = filteredOpportunities?.filter((opp) => opp.stage === stage.id) || [];
@@ -1317,6 +1325,28 @@ export default function OpportunitiesPage() {
               </div>
 
               <div className="space-y-2 md:col-span-3">
+                <label className="text-sm font-medium">Stage</label>
+                <div className="flex flex-wrap gap-2" data-testid="filter-stages">
+                  {stages.map((stage) => {
+                    const selected = filterStages.includes(stage.id);
+                    return (
+                      <Badge
+                        key={stage.id}
+                        variant={selected ? "default" : "outline"}
+                        className="cursor-pointer select-none"
+                        onClick={() => setFilterStages(prev =>
+                          prev.includes(stage.id) ? prev.filter(s => s !== stage.id) : [...prev, stage.id]
+                        )}
+                        data-testid={`filter-badge-stage-${stage.id}`}
+                      >
+                        {stage.label}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium">Category</label>
                 <div className="flex flex-wrap gap-2" data-testid="filter-categories">
                   {CATEGORY_OPTIONS.map((cat) => {
@@ -1361,7 +1391,7 @@ export default function OpportunitiesPage() {
               </div>
             </div>
             
-            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterIncludeInForecast !== "all" || filterTagIds.length > 0 || filterCategories.length > 0 || filterOperationalAreas.length > 0) && (
+            {(filterAccount || filterCloseDateFrom || filterCloseDateTo || filterProbabilityMin || filterProbabilityMax || filterRating || filterIncludeInForecast !== "all" || filterTagIds.length > 0 || filterCategories.length > 0 || filterOperationalAreas.length > 0 || filterStages.length > 0) && (
               <div className="flex gap-2 mt-4">
                 <Button 
                   variant="outline" 
@@ -1378,6 +1408,7 @@ export default function OpportunitiesPage() {
                     setFilterIncludeInForecast("all");
                     setFilterCategories([]);
                     setFilterOperationalAreas([]);
+                    setFilterStages([]);
                   }}
                   data-testid="button-clear-filters"
                 >
