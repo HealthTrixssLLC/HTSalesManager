@@ -440,8 +440,12 @@ export default function OpportunityDetailPage() {
             <DetailField label="Status" value={opportunity.status} />
             <DetailField label="Rating" value={opportunity.rating} />
             <DetailField label="Amount" value={opportunity.amount} type="currency" />
+            {canViewFinancials && <DetailField label="Est. Revenue" value={opportunity.estRevenue} type="currency" />}
+            {canViewFinancials && <DetailField label="Actual Revenue" value={opportunity.actualRevenue} type="currency" />}
             <DetailField label="Probability" value={opportunity.probability} type="percent" />
             <DetailField label="Close Date" value={opportunity.closeDate} type="date" />
+            <DetailField label="Est. Close Date" value={opportunity.estCloseDate} type="date" />
+            <DetailField label="Actual Close Date" value={opportunity.actualCloseDate} type="date" />
             <DetailField label="Impl. Start Date" value={opportunity.implementationStartDate} type="date" />
             <DetailField label="Impl. End Date (Billing Start)" value={opportunity.implementationEndDate} type="date" />
             <DetailField label="Billing End Date" value={opportunity.billingEndDate} type="date" />
@@ -518,6 +522,21 @@ export default function OpportunityDetailPage() {
               </div>
             )}
           </DetailSection>
+
+          {(opportunity.externalId || opportunity.sourceSystem || opportunity.sourceRecordId || opportunity.importStatus || opportunity.importNotes) && (
+            <DetailSection title="Source & Import">
+              <DetailField label="External ID" value={opportunity.externalId} />
+              <DetailField label="Source System" value={opportunity.sourceSystem} />
+              <DetailField label="Source Record ID" value={opportunity.sourceRecordId} />
+              <DetailField label="Import Status" value={opportunity.importStatus} />
+              {opportunity.importNotes && (
+                <div className="col-span-full">
+                  <label className="text-sm font-medium text-muted-foreground">Import Notes</label>
+                  <p className="mt-1 text-sm" data-testid="field-import-notes">{opportunity.importNotes}</p>
+                </div>
+              )}
+            </DetailSection>
+          )}
 
           <Card data-testid="section-tags">
             <CardHeader>
