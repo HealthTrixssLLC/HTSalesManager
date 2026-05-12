@@ -470,6 +470,7 @@ export class PostgresStorage implements IStorage {
           o.include_in_forecast as "includeInForecast",
           o.implementation_start_date as "implementationStartDate",
           o.implementation_end_date as "implementationEndDate",
+          o.billing_end_date as "billingEndDate",
           o.categories,
           o.operational_areas as "operationalAreas",
           o.description,
