@@ -36,6 +36,7 @@ type ResourceAllocationData = {
     assignments: Array<{
       resourceId: string;
       role: string;
+      allocation: number | null;
       opportunityId: string;
       opportunityName: string;
       stage: string;
@@ -81,6 +82,32 @@ function formatMonthLabel(date: Date): string {
 
 function getInitials(name: string): string {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+}
+
+type UtilizationBand = "empty" | "under" | "approaching" | "full" | "over" | "heavy";
+
+function getUtilizationBand(pct: number): UtilizationBand {
+  if (pct === 0) return "empty";
+  if (pct < 75) return "under";
+  if (pct < 100) return "approaching";
+  if (pct === 100) return "full";
+  if (pct < 150) return "over";
+  return "heavy";
+}
+
+const utilizationBandStyles: Record<UtilizationBand, { bg: string; text: string; label: string }> = {
+  empty:      { bg: "bg-muted",           text: "text-muted-foreground", label: "0%"      },
+  under:      { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-800 dark:text-emerald-200", label: "1–74%"   },
+  approaching:{ bg: "bg-amber-100 dark:bg-amber-900/40",    text: "text-amber-800 dark:text-amber-200",    label: "75–99%"  },
+  full:       { bg: "bg-orange-200 dark:bg-orange-800/50",  text: "text-orange-900 dark:text-orange-100",  label: "100%"    },
+  over:       { bg: "bg-orange-400 dark:bg-orange-600/70",  text: "text-white",                            label: "101–149%"},
+  heavy:      { bg: "bg-red-500 dark:bg-red-700",           text: "text-white",                            label: "150%+"   },
+};
+
+function monthOverlaps(assignmentStart: Date, assignmentEnd: Date, monthDate: Date): boolean {
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59, 999);
+  return assignmentStart <= monthEnd && assignmentEnd >= monthStart;
 }
 
 function getBarPosition(
@@ -190,6 +217,28 @@ export default function ResourceAllocationPage() {
   }, [data]);
 
   const months = useMemo(() => getMonthsBetween(timelineStart, timelineEnd), [timelineStart, timelineEnd]);
+
+  const heatmapData = useMemo(() => {
+    const rows = filteredUsers.map(u => ({
+      user: u,
+      monthData: months.map(monthDate => {
+        const contributions: { opportunityName: string; allocation: number }[] = [];
+        for (const a of u.assignments) {
+          const startStr = a.effectiveStartDate || a.implementationStartDate;
+          const endStr = a.effectiveEndDate || a.implementationEndDate;
+          if (!startStr || !endStr) continue;
+          const aStart = new Date(startStr);
+          const aEnd = new Date(endStr);
+          if (monthOverlaps(aStart, aEnd, monthDate)) {
+            contributions.push({ opportunityName: a.opportunityName, allocation: a.allocation ?? 100 });
+          }
+        }
+        const totalAllocation = contributions.reduce((sum, c) => sum + c.allocation, 0);
+        return { monthDate, totalAllocation, contributions };
+      }),
+    }));
+    return rows.filter(row => row.monthData.some(md => md.contributions.length > 0));
+  }, [filteredUsers, months]);
 
   const shiftTimeline = (direction: "prev" | "next") => {
     const shift = direction === "next" ? visibleMonths : -visibleMonths;
@@ -556,6 +605,102 @@ export default function ResourceAllocationPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="resource-utilization-heatmap">
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2 flex-wrap">
+          <CardTitle className="text-lg">Resource Utilization</CardTitle>
+          <div className="flex items-center gap-3 flex-wrap">
+            {(Object.keys(utilizationBandStyles) as UtilizationBand[]).map(band => (
+              <div key={band} className="flex items-center gap-1.5">
+                <div className={`h-3 w-5 rounded-sm ${utilizationBandStyles[band].bg} border border-border/30`} />
+                <span className="text-xs text-muted-foreground">{utilizationBandStyles[band].label}</span>
+              </div>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {heatmapData.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center" data-testid="text-no-heatmap-data">
+              No resource assignments found for the selected filters and time window.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: TIMELINE_WIDTH + 220 }}>
+                <div className="flex border-b pb-1 mb-2">
+                  <div className="w-[220px] shrink-0 text-xs font-medium text-muted-foreground pr-2">Resource</div>
+                  <div className="flex relative" style={{ width: TIMELINE_WIDTH }}>
+                    {months.map((m, i) => (
+                      <div
+                        key={i}
+                        className="text-xs text-muted-foreground text-center border-l border-border/40"
+                        style={{ width: `${100 / months.length}%` }}
+                      >
+                        {formatMonthLabel(m)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {heatmapData.map(({ user: u, monthData }) => (
+                  <div
+                    key={u.id}
+                    className="flex items-stretch mb-1"
+                    data-testid={`heatmap-row-${u.id}`}
+                  >
+                    <div className="w-[220px] shrink-0 sticky left-0 z-10 bg-card pr-2 flex items-center gap-2 py-1">
+                      <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarFallback className="text-[10px]">{getInitials(u.name)}</AvatarFallback>
+                      </Avatar>
+                      <p className="text-xs font-medium truncate">{u.name}</p>
+                    </div>
+                    <div className="flex" style={{ width: TIMELINE_WIDTH }}>
+                      {monthData.map(({ monthDate, totalAllocation, contributions }, i) => {
+                        const band = getUtilizationBand(totalAllocation);
+                        const styles = utilizationBandStyles[band];
+                        return (
+                          <div
+                            key={i}
+                            className="py-1 px-0.5 border-l border-border/20"
+                            style={{ width: `${100 / months.length}%` }}
+                            data-testid={`heatmap-cell-${u.id}-${monthDate.getFullYear()}-${monthDate.getMonth() + 1}`}
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className={`h-8 rounded-sm flex items-center justify-center text-[11px] font-medium cursor-default ${styles.bg} ${styles.text}`}
+                                >
+                                  {totalAllocation > 0 ? `${totalAllocation}%` : ""}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <div className="text-xs space-y-1 max-w-[220px]">
+                                  <p className="font-medium">{u.name} — {formatMonthLabel(monthDate)}</p>
+                                  {contributions.length === 0 ? (
+                                    <p className="text-muted-foreground">No assignments this month</p>
+                                  ) : (
+                                    <>
+                                      {contributions.map((c, ci) => (
+                                        <p key={ci}>{c.opportunityName}: {c.allocation}%</p>
+                                      ))}
+                                      <p className="font-semibold border-t border-border/40 pt-0.5 mt-0.5">
+                                        Total: {totalAllocation}%
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

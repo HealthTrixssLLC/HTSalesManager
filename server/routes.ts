@@ -1657,6 +1657,7 @@ export async function registerRoutes(app: Express) {
             return {
               resourceId: r.id,
               role: r.role,
+              allocation: r.allocation ?? 100,
               opportunityId: r.opportunityId,
               opportunityName: opp?.name || "Unknown",
               stage: opp?.stage || "unknown",
