@@ -37,14 +37,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 type PendingResource = { userId: string; role: string; userName: string };
 
-const CATEGORY_OPTIONS = [
-  "SW Development",
-  "SME Advisory",
-  "Discovery",
-  "Data Analytics and Reporting",
-  "Data Submission",
-  "Incubator Candidate",
-];
 
 const OPERATIONAL_AREA_OPTIONS = [
   "Enrollment",
@@ -202,6 +194,10 @@ export default function OpportunitiesPage() {
   // Fetch all accounts for autocomplete
   const { data: accounts } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
+  });
+
+  const { data: categoryOptions = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/categories"],
   });
 
   const createMutation = useMutation({
@@ -1003,7 +999,8 @@ export default function OpportunitiesPage() {
                     <FormItem>
                       <FormLabel>Category</FormLabel>
                       <div className="flex flex-wrap gap-2" data-testid="toggle-categories">
-                        {CATEGORY_OPTIONS.map((cat) => {
+                        {categoryOptions.map((catObj) => {
+                          const cat = catObj.name;
                           const selected = (field.value || []).includes(cat);
                           return (
                             <Badge
@@ -1349,7 +1346,8 @@ export default function OpportunitiesPage() {
               <div className="space-y-2 md:col-span-3">
                 <label className="text-sm font-medium">Category</label>
                 <div className="flex flex-wrap gap-2" data-testid="filter-categories">
-                  {CATEGORY_OPTIONS.map((cat) => {
+                  {categoryOptions.map((catObj) => {
+                    const cat = catObj.name;
                     const selected = filterCategories.includes(cat);
                     return (
                       <Badge

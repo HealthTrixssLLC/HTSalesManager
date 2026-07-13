@@ -3,14 +3,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { Loader2, Check, ChevronsUpDown, Plus, X, Users } from "lucide-react";
 
-const CATEGORY_OPTIONS = [
-  "SW Development",
-  "SME Advisory",
-  "Discovery",
-  "Data Analytics and Reporting",
-  "Data Submission",
-  "Incubator Candidate",
-];
 
 const OPERATIONAL_AREA_OPTIONS = [
   "Enrollment",
@@ -105,6 +97,10 @@ export default function OpportunityDetailPage() {
 
   const { data: accounts = [] } = useQuery<Account[]>({
     queryKey: ["/api/accounts"],
+  });
+
+  const { data: categoryOptions = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/categories"],
   });
 
   type OpportunityResourceWithUser = {
@@ -1094,7 +1090,8 @@ export default function OpportunityDetailPage() {
                   <FormItem>
                     <FormLabel>Category</FormLabel>
                     <div className="flex flex-wrap gap-2" data-testid="edit-toggle-categories">
-                      {CATEGORY_OPTIONS.map((cat) => {
+                      {categoryOptions.map((catObj) => {
+                        const cat = catObj.name;
                         const selected = (field.value || []).includes(cat);
                         return (
                           <Badge

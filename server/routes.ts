@@ -2812,6 +2812,16 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  // Public read endpoint — any authenticated user can fetch active categories for forms/filters
+  app.get("/api/categories", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const categories = await storage.getAllAccountCategories(req.activeOrgId || undefined);
+      return res.json(categories.filter((c: any) => c.isActive !== false));
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
   // Admin-only endpoint for category management
   app.get("/api/admin/categories", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
