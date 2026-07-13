@@ -3767,7 +3767,7 @@ export async function registerRoutes(app: Express) {
         accountName: opp.accountId ? accountMap.get(opp.accountId) : "",
       }));
       
-      const headers = ["id", "name", "accountId", "accountName", "amount", "stage", "probability", "closeDate", "ownerId", "createdAt"];
+      const headers = ["id", "name", "description", "accountId", "accountName", "amount", "stage", "probability", "closeDate", "ownerId", "createdAt"];
       const csv = arrayToCSV(enrichedOpportunities, headers);
       
       res.setHeader("Content-Type", "text/csv");
