@@ -756,7 +756,13 @@ export default function AdminConsole() {
       });
       
       if (!res.ok) {
-        throw new Error("Failed to create backup");
+        let detail = "Failed to create backup file";
+        try {
+          const body = await res.json();
+          if (body?.detail) detail = body.detail;
+          else if (body?.error) detail = body.error;
+        } catch {}
+        throw new Error(detail);
       }
       
       // Get the file data and checksum
@@ -778,10 +784,10 @@ export default function AdminConsole() {
     onSuccess: () => {
       toast({ title: "Backup downloaded successfully" });
     },
-    onError: () => {
+    onError: (error: Error) => {
       toast({ 
         title: "Backup failed", 
-        description: "Failed to create backup file",
+        description: error.message || "Failed to create backup file",
         variant: "destructive" 
       });
     },

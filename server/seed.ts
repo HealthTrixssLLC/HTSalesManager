@@ -89,6 +89,44 @@ export async function runStartupColumnMigration(): Promise<void> {
       ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS billing_end_date TIMESTAMP
     `));
 
+    // 6. Create ai_configs table if it doesn't exist yet (added in Lead Gen module)
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS ai_configs (
+        id VARCHAR(50) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        api_key_env_var TEXT,
+        base_url TEXT,
+        temperature DECIMAL(3,2) DEFAULT 0.7,
+        max_tokens INTEGER DEFAULT 4096,
+        agent_phase TEXT,
+        is_default BOOLEAN NOT NULL DEFAULT false,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        metadata JSONB DEFAULT '{}',
+        created_by VARCHAR(50),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+
+    // 7. Create crm_documents table if it doesn't exist yet (added in Research Docs module)
+    //    entity_type stored as TEXT here; drizzle-kit push will enforce the enum constraint.
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS crm_documents (
+        id VARCHAR(50) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+        entity_type TEXT NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        file_name TEXT NOT NULL,
+        file_path TEXT,
+        file_data TEXT,
+        content_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        uploaded_by VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+
     console.log('✓ Startup column migration completed');
   } catch (error) {
     console.error('Startup column migration error (non-fatal):', error);

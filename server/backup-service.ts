@@ -257,16 +257,27 @@ export class BackupService {
     ]);
 
     // Batch 10: Research documents and AI/LLM configuration
-    const [researchDocuments, llmConfigurations, aiConfigs] = await Promise.all([
+    // aiConfigs and crmDocuments are newer tables — guard against them not existing yet
+    // in production databases that haven't had drizzle-kit push run against them.
+    const [researchDocuments, llmConfigurations] = await Promise.all([
       db.select().from(schema.researchDocuments),
       db.select().from(schema.llmConfigurations),
-      db.select().from(schema.aiConfigs),
     ]);
 
+    let aiConfigs: any[] = [];
+    try {
+      aiConfigs = await db.select().from(schema.aiConfigs);
+    } catch (e) {
+      console.warn("[Backup] ai_configs table not found — skipping (will be empty in backup):", (e as Error).message);
+    }
+
     // Batch 11: CRM Document Attachment metadata
-    const [crmDocuments] = await Promise.all([
-      db.select().from(schema.crmDocuments),
-    ]);
+    let crmDocuments: any[] = [];
+    try {
+      crmDocuments = await db.select().from(schema.crmDocuments);
+    } catch (e) {
+      console.warn("[Backup] crm_documents table not found — skipping (will be empty in backup):", (e as Error).message);
+    }
 
     const backupData: BackupData = {
       version: this.BACKUP_VERSION,

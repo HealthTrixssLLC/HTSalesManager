@@ -2944,7 +2944,8 @@ export async function registerRoutes(app: Express) {
       }
     } catch (error) {
       console.error("Backup error:", error);
-      return res.status(500).json({ error: "Failed to create backup" });
+      const message = error instanceof Error ? error.message : "Unknown error";
+      return res.status(500).json({ error: "Failed to create backup", detail: message });
     }
   });
   
