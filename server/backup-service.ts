@@ -267,16 +267,27 @@ export class BackupService {
     let aiConfigs: any[] = [];
     try {
       aiConfigs = await db.select().from(schema.aiConfigs);
-    } catch (e) {
-      console.warn("[Backup] ai_configs table not found — skipping (will be empty in backup):", (e as Error).message);
+    } catch (e: any) {
+      // 42P01 = undefined_table — table hasn't been created in this DB yet; safe to skip.
+      // Any other error (permissions, syntax, connection) should propagate and fail the backup.
+      if (e?.code === "42P01") {
+        console.warn("[Backup] ai_configs table does not exist yet — skipping (will be empty in backup)");
+      } else {
+        throw e;
+      }
     }
 
     // Batch 11: CRM Document Attachment metadata
     let crmDocuments: any[] = [];
     try {
       crmDocuments = await db.select().from(schema.crmDocuments);
-    } catch (e) {
-      console.warn("[Backup] crm_documents table not found — skipping (will be empty in backup):", (e as Error).message);
+    } catch (e: any) {
+      // 42P01 = undefined_table — table hasn't been created in this DB yet; safe to skip.
+      if (e?.code === "42P01") {
+        console.warn("[Backup] crm_documents table does not exist yet — skipping (will be empty in backup)");
+      } else {
+        throw e;
+      }
     }
 
     const backupData: BackupData = {
