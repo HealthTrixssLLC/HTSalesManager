@@ -28,6 +28,7 @@ import { SortableTableHeader } from "@/components/sortable-table-header";
 import { ColumnVisibility, type Column } from "@/components/column-visibility";
 import { SavedFiltersBar } from "@/components/saved-filters-bar";
 import { EmptyState } from "@/components/empty-state";
+import { NewExternalLeadsBanner } from "@/components/new-external-leads-alert";
 
 const statusColors: Record<string, string> = {
   new:         "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
@@ -569,6 +570,8 @@ export default function LeadsPage() {
           </Dialog>
         </div>
       </div>
+
+      <NewExternalLeadsBanner />
 
       <LeadsSummaryCards onCardClick={handleSummaryCardClick} />
 

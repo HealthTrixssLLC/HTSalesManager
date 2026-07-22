@@ -949,6 +949,42 @@ export async function registerRoutes(app: Express) {
     }
   });
   
+  // Recent leads created via the external API (website form / email intake).
+  // Used by the frontend to notify the sales team of new inbound leads.
+  app.get("/api/leads/new-external", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+    try {
+      const allLeads = await storage.getAllLeads(req.activeOrgId || undefined);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+      // Handle both camelCase (Drizzle select) and snake_case (raw SQL) row shapes
+      const externalLeads = (allLeads as any[])
+        .map(l => ({
+          id: l.id,
+          firstName: l.firstName ?? l.first_name ?? null,
+          lastName: l.lastName ?? l.last_name ?? null,
+          company: l.company ?? null,
+          email: l.email ?? null,
+          source: l.source ?? null,
+          rating: l.rating ?? null,
+          status: l.status,
+          sourceSystem: l.sourceSystem ?? l.source_system ?? null,
+          createdAt: l.createdAt ?? l.created_at ?? null,
+        }))
+        .filter(l =>
+          typeof l.sourceSystem === "string" &&
+          l.sourceSystem.startsWith("External API") &&
+          l.createdAt && new Date(l.createdAt) >= sevenDaysAgo
+        )
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 50);
+
+      return res.json(externalLeads);
+    } catch (error) {
+      console.error("Error fetching new external leads:", error);
+      return res.status(500).json({ error: "Failed to fetch new external leads" });
+    }
+  });
+
   app.get("/api/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       let leads = await storage.getAllLeads(req.activeOrgId || undefined);

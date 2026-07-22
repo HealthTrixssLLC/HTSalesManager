@@ -13,6 +13,7 @@ import { Building2, Users, Target as TargetIcon, TrendingUp, Loader2, DollarSign
 import { useFinancialAccess } from "@/hooks/use-financial-access";
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from "recharts";
 import { UpcomingActivitiesCard } from "@/components/upcoming-activities-card";
+import { NewExternalLeadsCard } from "@/components/new-external-leads-alert";
 import { useToast } from "@/hooks/use-toast";
 import { useOrg, type OrgSettings } from "@/contexts/org-context";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -574,6 +575,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* New Inbound Leads from website/email */}
+      <NewExternalLeadsCard />
 
       {/* Upcoming Activities */}
       <UpcomingActivitiesCard />
