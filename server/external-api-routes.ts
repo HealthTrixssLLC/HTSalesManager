@@ -712,6 +712,7 @@ const externalLeadSchema = z.object({
   company: z.string().trim().max(300).optional(),
   title: z.string().trim().max(200).optional(),
   topic: z.string().trim().max(2000).optional(),
+  notes: z.string().trim().max(2000).optional(),
   source: z.enum(["website", "referral", "phone", "email", "event", "partner", "other"]).optional(),
   rating: z.enum(["hot", "warm", "cold"]).optional(),
 }).strict();
@@ -799,7 +800,7 @@ router.post("/leads", async (req: ApiKeyRequest, res) => {
       phone: data.phone ?? null,
       company: data.company ?? null,
       title: data.title ?? null,
-      topic: data.topic ?? null,
+      topic: data.topic ?? data.notes ?? null,
       source: data.source ?? null,
       rating: data.rating ?? null,
       status: "new",

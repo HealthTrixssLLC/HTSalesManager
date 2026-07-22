@@ -48,6 +48,7 @@ POST /api/v1/external/leads
 | `company` | string | — | Max 300 chars |
 | `title` | string | — | Job title, max 200 chars |
 | `topic` | string | — | Subject / message / notes, max 2000 chars |
+| `notes` | string | — | Alias for `topic` (used if `topic` is not provided), max 2000 chars |
 | `source` | string | — | One of: `website`, `referral`, `phone`, `email`, `event`, `partner`, `other` |
 | `rating` | string | — | One of: `hot`, `warm`, `cold` |
 
