@@ -5153,13 +5153,20 @@ export async function registerRoutes(app: Express) {
   // Get all API keys (admin only)
   app.get("/api/admin/api-keys", authenticate, requireGlobalRole("Admin"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const keys = await storage.getAllApiKeys(req.activeOrgId || undefined);
+      // Global admins manage all keys, so return every key with its org binding
+      const [keys, orgs] = await Promise.all([
+        storage.getAllApiKeys(),
+        storage.getAllOrganizations(),
+      ]);
+      const orgNameById = new Map(orgs.map(o => [o.id, o.name]));
       
       // Don't send hashed keys to client
       const sanitized = keys.map(k => ({
         id: k.id,
         name: k.name,
         description: k.description,
+        organizationId: k.organizationId,
+        organizationName: k.organizationId ? (orgNameById.get(k.organizationId) || "Unknown organization") : null,
         isActive: k.isActive,
         lastUsedAt: k.lastUsedAt,
         expiresAt: k.expiresAt,
@@ -5181,6 +5188,20 @@ export async function registerRoutes(app: Express) {
     try {
       const data = insertApiKeySchema.omit({ hashedKey: true, createdBy: true }).parse(req.body);
       
+      // Resolve org binding: an explicit organizationId in the body wins
+      // (null = system key for all orgs); otherwise fall back to the active org
+      const explicitOrgProvided = "organizationId" in req.body;
+      const organizationId = explicitOrgProvided
+        ? (data.organizationId || null)
+        : (req.activeOrgId || null);
+      
+      if (organizationId) {
+        const org = await storage.getOrganizationById(organizationId);
+        if (!org) {
+          return res.status(400).json({ error: "Organization not found" });
+        }
+      }
+      
       // Generate API key
       const { publicKey, hashedKey } = generateApiKey();
       
@@ -5189,7 +5210,7 @@ export async function registerRoutes(app: Express) {
         ...data,
         hashedKey,
         createdBy: req.user!.id,
-        organizationId: req.activeOrgId || undefined,
+        organizationId,
       });
       
       // Return public key (only shown once!) and key info
@@ -5198,6 +5219,7 @@ export async function registerRoutes(app: Express) {
         id: apiKey.id,
         name: apiKey.name,
         description: apiKey.description,
+        organizationId: apiKey.organizationId,
         expiresAt: apiKey.expiresAt,
         createdAt: apiKey.createdAt,
         warning: "This is the only time the API key will be shown. Please save it securely.",

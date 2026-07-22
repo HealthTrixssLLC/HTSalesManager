@@ -4,6 +4,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useOrg } from "@/contexts/org-context";
 import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff, Search, GitMerge } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
 import { Slider } from "@/components/ui/slider";
@@ -589,9 +590,14 @@ function AzureWebSearchConfigSection() {
   );
 }
 
+type ApiKeyRow = ApiKey & { organizationName: string | null };
+
+type OrgOption = { id: string; name: string };
+
 export default function AdminConsole() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { activeOrgId } = useOrg();
   const isAdmin = user?.roles?.some((r: Role) => r.name === "Admin") ?? false;
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmClearAccountsOpen, setConfirmClearAccountsOpen] = useState(false);
@@ -621,8 +627,8 @@ export default function AdminConsole() {
   });
   const [categoryToDelete, setCategoryToDelete] = useState<AccountCategory | null>(null);
   const [createApiKeyOpen, setCreateApiKeyOpen] = useState(false);
-  const [newApiKeyData, setNewApiKeyData] = useState<{name: string; description: string; expiresAt: string}>({
-    name: "", description: "", expiresAt: ""
+  const [newApiKeyData, setNewApiKeyData] = useState<{name: string; description: string; expiresAt: string; organizationId: string}>({
+    name: "", description: "", expiresAt: "", organizationId: ""
   });
   const [generatedApiKey, setGeneratedApiKey] = useState<{key: string; name: string} | null>(null);
   const [revokeApiKeyId, setRevokeApiKeyId] = useState<string | null>(null);
@@ -632,7 +638,8 @@ export default function AdminConsole() {
   const { data: roles } = useQuery<Role[]>({ queryKey: ["/api/admin/roles"] });
   const { data: idPatterns } = useQuery<IdPattern[]>({ queryKey: ["/api/admin/id-patterns"] });
   const { data: categories } = useQuery<AccountCategory[]>({ queryKey: ["/api/admin/categories"] });
-  const { data: apiKeys } = useQuery<ApiKey[]>({ queryKey: ["/api/admin/api-keys"] });
+  const { data: apiKeys } = useQuery<ApiKeyRow[]>({ queryKey: ["/api/admin/api-keys"] });
+  const { data: allOrgs } = useQuery<OrgOption[]>({ queryKey: ["/api/organizations/all"], enabled: isAdmin });
   
   // Fetch database diagnostics when activities entity type is selected
   type DbDiagnostics = {
@@ -971,13 +978,14 @@ export default function AdminConsole() {
   });
 
   const createApiKeyMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string; expiresAt?: string }) => {
+    mutationFn: async (data: { name: string; description?: string; expiresAt?: string; organizationId?: string }) => {
       const res = await apiRequest("POST", "/api/admin/api-keys", {
         name: data.name,
         description: data.description || null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         isActive: true,
         rateLimitPerMin: 100, // Default rate limit
+        organizationId: data.organizationId || null,
       });
       return await res.json();
     },
@@ -985,7 +993,7 @@ export default function AdminConsole() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/api-keys"] });
       setGeneratedApiKey({ key: data.apiKey, name: data.name });
       setCreateApiKeyOpen(false);
-      setNewApiKeyData({ name: "", description: "", expiresAt: "" });
+      setNewApiKeyData({ name: "", description: "", expiresAt: "", organizationId: "" });
     },
     onError: (error: Error) => {
       toast({ 
@@ -1595,7 +1603,13 @@ export default function AdminConsole() {
                   </CardTitle>
                   <CardDescription>Manage API keys for external integrations</CardDescription>
                 </div>
-                <Button onClick={() => setCreateApiKeyOpen(true)} data-testid="button-create-api-key">
+                <Button
+                  onClick={() => {
+                    setNewApiKeyData({ name: "", description: "", expiresAt: "", organizationId: activeOrgId || "" });
+                    setCreateApiKeyOpen(true);
+                  }}
+                  data-testid="button-create-api-key"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Generate API Key
                 </Button>
@@ -1607,6 +1621,7 @@ export default function AdminConsole() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Description</TableHead>
+                    <TableHead>Organization</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Last Used</TableHead>
                     <TableHead>Expires</TableHead>
@@ -1616,7 +1631,7 @@ export default function AdminConsole() {
                 <TableBody>
                   {!apiKeys?.length && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
                         No API keys yet. Generate one to get started.
                       </TableCell>
                     </TableRow>
@@ -1626,6 +1641,13 @@ export default function AdminConsole() {
                       <TableCell className="font-medium">{key.name}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {key.description || "—"}
+                      </TableCell>
+                      <TableCell data-testid={`text-key-org-${key.id}`}>
+                        {key.organizationName ? (
+                          <Badge variant="outline">{key.organizationName}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">System — all orgs</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {key.isActive && !key.revokedAt ? (
@@ -2389,6 +2411,28 @@ export default function AdminConsole() {
                 placeholder="Used by external forecasting application"
                 data-testid="input-api-key-description"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api-key-organization">Organization</Label>
+              <Select
+                value={newApiKeyData.organizationId || "system"}
+                onValueChange={(value) => setNewApiKeyData({...newApiKeyData, organizationId: value === "system" ? "" : value})}
+              >
+                <SelectTrigger id="api-key-organization" data-testid="select-api-key-organization">
+                  <SelectValue placeholder="Select an organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="system">System — all orgs (read-only endpoints)</SelectItem>
+                  {allOrgs?.map((org) => (
+                    <SelectItem key={org.id} value={org.id} data-testid={`option-api-key-org-${org.id}`}>
+                      {org.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Keys used to create leads via the external API <strong>must</strong> be bound to an organization — incoming leads are assigned to that organization. System keys (no organization) can only read data and will get a 403 error when creating leads.
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="api-key-expires">Expires At (optional)</Label>
