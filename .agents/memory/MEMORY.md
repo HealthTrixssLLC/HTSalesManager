@@ -1,0 +1,2 @@
+- [db:push interactive drift](db-push-drift.md) — `npm run db:push` blocks on an interactive prompt about a pre-existing organizations slug constraint; apply new indexes via SQL and keep schema.ts in sync.
+- [Server test config](db-push-drift.md) — server integration tests in `tests/` need `--config tests/vitest.server.config.ts`; root vitest config only covers client tests. Restart the dev server before running them (tsx doesn't hot-reload server code).

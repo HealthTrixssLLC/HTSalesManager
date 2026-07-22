@@ -793,20 +793,45 @@ router.post("/leads", async (req: ApiKeyRequest, res) => {
       }
     }
 
-    const lead = await storage.createLead({
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email ?? null,
-      phone: data.phone ?? null,
-      company: data.company ?? null,
-      title: data.title ?? null,
-      topic: data.topic ?? data.notes ?? null,
-      source: data.source ?? null,
-      rating: data.rating ?? null,
-      status: "new",
-      organizationId: orgId,
-      sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
-    } as any);
+    let lead;
+    try {
+      lead = await storage.createLead({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email ?? null,
+        phone: data.phone ?? null,
+        company: data.company ?? null,
+        title: data.title ?? null,
+        topic: data.topic ?? data.notes ?? null,
+        source: data.source ?? null,
+        rating: data.rating ?? null,
+        status: "new",
+        organizationId: orgId,
+        sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
+      } as any);
+    } catch (createError: any) {
+      // Unique index violation (leads_org_email_unique_idx): another request
+      // with the same email won the race. Return the existing lead instead of a 500.
+      const isUniqueViolation =
+        createError?.code === "23505" ||
+        createError?.cause?.code === "23505" ||
+        /duplicate key value/i.test(createError?.message || "");
+      if (isUniqueViolation && data.email) {
+        const existingLeads = await storage.getAllLeads(orgId);
+        const emailLower = data.email.toLowerCase();
+        const existing = existingLeads.find(
+          (l: any) => l.email && l.email.toLowerCase() === emailLower
+        );
+        if (existing) {
+          return res.status(200).json({
+            duplicate: true,
+            message: "A lead with this email already exists in the organization. No new lead was created.",
+            data: formatLeadResponse(existing, organization.name),
+          });
+        }
+      }
+      throw createError;
+    }
 
     return res.status(201).json({
       duplicate: false,

@@ -54,6 +54,8 @@ For deploying the multi-tenant schema to an **existing pre-multi-tenant database
 2. Run `npm run db:push` — applies the `NOT NULL` constraints on `organizationId` columns.
 3. Start the server normally — `initializeDefaultOrganization()` will handle any remaining setup.
 
+**Lead email uniqueness:** A partial unique index `leads_org_email_unique_idx` on `(organization_id, lower(email)) WHERE email IS NOT NULL` guarantees no two leads in an org share an email, even under concurrent submissions. To apply it to an existing database, run `npx tsx scripts/migrate-lead-email-unique.ts` — it first deduplicates existing lead emails (oldest lead keeps the email; newer duplicates have it cleared with the original preserved in `import_notes`), then creates the index. Idempotent and safe to re-run. The external lead API (`POST /api/v1/external/leads`) handles the resulting unique-constraint conflicts gracefully by returning `duplicate: true`.
+
 ## External Dependencies
 
 *   **Database**: PostgreSQL 16+

@@ -86,6 +86,31 @@ describe("External Lead API", () => {
     expect(body.data.id).toBe(createdLeadIds[0]);
   });
 
+  it("never creates two leads for concurrent identical submissions", async () => {
+    const raceEmail = `vitest-race-${Date.now()}@example.com`;
+    const payload = { firstName: "Race", lastName: "Condition", email: raceEmail };
+    const responses = await Promise.all([
+      post(payload, orgKey),
+      post(payload, orgKey),
+      post(payload, orgKey),
+    ]);
+    const bodies = await Promise.all(responses.map(r => r.json()));
+
+    // No request may fail with a 500
+    for (const r of responses) expect([200, 201]).toContain(r.status);
+
+    const created = bodies.filter(b => b.duplicate === false);
+    const duplicates = bodies.filter(b => b.duplicate === true);
+    expect(created.length).toBe(1);
+    expect(duplicates.length).toBe(2);
+    for (const d of duplicates) expect(d.data.id).toBe(created[0].data.id);
+
+    // Exactly one row in the database
+    const rows = await db.select().from(schema.leads).where(eq(schema.leads.email, raceEmail));
+    expect(rows.length).toBe(1);
+    createdLeadIds.push(created[0].data.id);
+  });
+
   it("rejects invalid payloads with field-level errors", async () => {
     const res = await post({ firstName: "", email: "not-an-email", source: "bogus" }, orgKey);
     expect(res.status).toBe(400);
