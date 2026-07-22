@@ -6,3 +6,9 @@ id = "QiuT02JxPSYlwJ3ojkACv"
 uri = "file://CHANGELOG-billing-end-date.md"
 type = "text"
 title = "Billing End Date — Downstream Integration Guide"
+
+[[outputs]]
+id = "ph9gLMcASQO_eL9zv7lK_"
+uri = "file://docs/EXTERNAL_LEAD_API_GUIDE.md"
+type = "text"
+title = "External Lead API Integration Guide"

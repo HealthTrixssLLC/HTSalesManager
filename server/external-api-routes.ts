@@ -2,6 +2,7 @@
 // Provides read-only access to accounts and opportunities data
 
 import { Router, Response, NextFunction } from "express";
+import { z } from "zod";
 import { storage } from "./db";
 import { authenticateApiKey, createApiKeyRateLimiter, ApiKeyRequest } from "./api-key-auth";
 
@@ -696,6 +697,215 @@ router.get("/logs", async (req: ApiKeyRequest, res) => {
     return res.status(500).json({
       error: "Failed to fetch logs",
       message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+// ========== LEAD CREATION ENDPOINTS ==========
+
+// Validation schema for external lead submissions
+const externalLeadSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required").max(200),
+  lastName: z.string().trim().min(1, "Last name is required").max(200),
+  email: z.string().trim().email("Invalid email address").max(320).optional(),
+  phone: z.string().trim().max(50).optional(),
+  company: z.string().trim().max(300).optional(),
+  title: z.string().trim().max(200).optional(),
+  topic: z.string().trim().max(2000).optional(),
+  source: z.enum(["website", "referral", "phone", "email", "event", "partner", "other"]).optional(),
+  rating: z.enum(["hot", "warm", "cold"]).optional(),
+}).strict();
+
+/** Format a lead for external API responses.
+ * Handles both camelCase (Drizzle select) and snake_case (raw SQL) row shapes. */
+function formatLeadResponse(lead: any, orgName: string | null) {
+  return {
+    id: lead.id,
+    firstName: lead.firstName ?? lead.first_name ?? null,
+    lastName: lead.lastName ?? lead.last_name ?? null,
+    email: lead.email,
+    phone: lead.phone,
+    company: lead.company,
+    title: lead.title,
+    topic: lead.topic,
+    status: lead.status,
+    source: lead.source,
+    rating: lead.rating,
+    organizationId: lead.organizationId ?? lead.organization_id ?? null,
+    organizationName: orgName,
+    createdAt: lead.createdAt ?? lead.created_at ?? null,
+    updatedAt: lead.updatedAt ?? lead.updated_at ?? null,
+  };
+}
+
+/**
+ * POST /api/v1/external/leads
+ * Create a new lead. Requires an organization-bound API key.
+ * The lead is always assigned to the API key's organization.
+ * If a lead with the same email already exists in the organization,
+ * no duplicate is created — the existing lead is returned with duplicate: true.
+ */
+router.post("/leads", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Lead creation requires an API key bound to an organization. Ask your CRM administrator to create an organization-scoped API key in the Admin Console.",
+      });
+    }
+
+    const parsed = externalLeadSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: "The lead payload is invalid",
+        details: parsed.error.errors.map(e => ({
+          field: e.path.join(".") || "(root)",
+          message: e.message,
+        })),
+      });
+    }
+    const data = parsed.data;
+
+    const organization = await storage.getOrganizationById(orgId);
+    if (!organization) {
+      return res.status(403).json({
+        error: "Invalid organization",
+        message: "The organization bound to this API key no longer exists",
+      });
+    }
+
+    // Duplicate detection: same email within the same organization
+    if (data.email) {
+      const existingLeads = await storage.getAllLeads(orgId);
+      const emailLower = data.email.toLowerCase();
+      const duplicate = existingLeads.find(
+        (l: any) => l.email && l.email.toLowerCase() === emailLower
+      );
+      if (duplicate) {
+        return res.status(200).json({
+          duplicate: true,
+          message: "A lead with this email already exists in the organization. No new lead was created.",
+          data: formatLeadResponse(duplicate, organization.name),
+        });
+      }
+    }
+
+    const lead = await storage.createLead({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      company: data.company ?? null,
+      title: data.title ?? null,
+      topic: data.topic ?? null,
+      source: data.source ?? null,
+      rating: data.rating ?? null,
+      status: "new",
+      organizationId: orgId,
+      sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
+    } as any);
+
+    return res.status(201).json({
+      duplicate: false,
+      data: formatLeadResponse(lead, organization.name),
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating lead:", error);
+    return res.status(500).json({
+      error: "Failed to create lead",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/leads
+ * List leads for the API key's organization (read-back/confirmation).
+ * Query params: updatedSince (ISO 8601), limit (default 100, max 1000), offset
+ */
+router.get("/leads", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Lead access requires an API key bound to an organization",
+      });
+    }
+
+    const { updatedSince, limit = "100", offset = "0" } = req.query;
+    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+
+    const organization = await storage.getOrganizationById(orgId);
+    let leads = await storage.getAllLeads(orgId);
+
+    if (updatedSince && typeof updatedSince === "string") {
+      const sinceDate = new Date(updatedSince);
+      if (isNaN(sinceDate.getTime())) {
+        return res.status(400).json({
+          error: "Invalid updatedSince",
+          message: "updatedSince must be a valid ISO 8601 timestamp",
+        });
+      }
+      leads = leads.filter((l: any) => {
+        const updated = l.updatedAt ?? l.updated_at;
+        return updated ? new Date(updated) > sinceDate : false;
+      });
+    }
+
+    const total = leads.length;
+    const page = leads.slice(offsetNum, offsetNum + limitNum);
+
+    return res.json({
+      data: page.map((l: any) => formatLeadResponse(l, organization?.name ?? null)),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + page.length < total,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching leads:", error);
+    return res.status(500).json({
+      error: "Failed to fetch leads",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/leads/:id
+ * Fetch a single lead by ID (org-scoped).
+ */
+router.get("/leads/:id", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Lead access requires an API key bound to an organization",
+      });
+    }
+
+    const lead = await storage.getLeadById(req.params.id);
+    if (!lead || !keyOrgOwns(lead, orgId)) {
+      return res.status(404).json({
+        error: "Lead not found",
+        message: `No lead found with ID: ${req.params.id}`,
+      });
+    }
+
+    const organization = await storage.getOrganizationById(orgId);
+    return res.json({ data: formatLeadResponse(lead, organization?.name ?? null) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching lead:", error);
+    return res.status(500).json({
+      error: "Failed to fetch lead",
+      message: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });
