@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import {
   Loader2, Plus, ArrowLeft, Play, ArrowRight, CheckCircle2,
   Download, ClipboardList, Users, Search, Lightbulb, MessageSquare, Building2,
-  RefreshCw, AlertCircle, CheckCircle, Square, ChevronDown, ChevronRight, Terminal
+  RefreshCw, AlertCircle, CheckCircle, Square, ChevronDown, ChevronRight, Terminal, XCircle
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -202,6 +204,15 @@ export default function LeadGenRunDetailPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isCandidateDialogOpen, setIsCandidateDialogOpen] = useState(false);
+  const { user } = useAuth();
+  const userRoles = (user?.roles ?? []).map((r: { name: string }) => r.name);
+  const canDecide = userRoles.some((r: string) => ["Admin", "SalesManager", "SalesOperator", "Reviewer"].includes(r));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | null>(null);
+  const [bulkNote, setBulkNote] = useState("");
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [id]);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
   const toggleStep = (id: string) => setExpandedSteps(prev => {
     const next = new Set(prev);
@@ -257,6 +268,15 @@ export default function LeadGenRunDetailPage() {
     enabled: !!id,
     refetchInterval: run?.status === "active" ? 10000 : false,
   });
+
+  useEffect(() => {
+    if (!run?.candidates) return;
+    setSelectedIds(prev => {
+      const pendingIds = new Set(run.candidates!.filter(c => c.status === "pending_review").map(c => c.id));
+      const next = new Set(Array.from(prev).filter(cid => pendingIds.has(cid)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [run?.candidates]);
 
   const { data: stepLogs = [], isLoading: stepLogsLoading } = useQuery<AgentStepLog[]>({
     queryKey: ["/api/lead-gen/runs", id, "step-logs"],
@@ -340,6 +360,63 @@ export default function LeadGenRunDetailPage() {
     const nextIdx = lastSuccessIdx + 1;
     return nextIdx < phaseOrder.length ? phaseOrder[nextIdx] : phaseOrder[0];
   }
+
+  const bulkMutation = useMutation({
+    mutationFn: async ({ action, candidateIds, note }: { action: "approve" | "reject"; candidateIds: string[]; note: string }) => {
+      const res = await apiRequest("POST", `/api/lead-gen/candidates/bulk-${action}`, { candidateIds, note: note || undefined });
+      return await res.json();
+    },
+    onSuccess: (data: unknown, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/runs", id, "audit-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/lead-gen/dashboard"] });
+      const total = vars.candidateIds.length;
+      let title = `Bulk ${vars.action} completed`;
+      let description: string;
+      let hadFailures = false;
+      if (vars.action === "approve") {
+        // bulk-approve returns { results: [{ id, success, ... }] }
+        const results = (data as { results?: { success?: boolean }[] } | null)?.results;
+        if (Array.isArray(results)) {
+          const succeeded = results.filter(r => r.success === true).length;
+          const failed = total - succeeded;
+          hadFailures = failed > 0;
+          description = failed > 0
+            ? `${succeeded} of ${total} candidate${total !== 1 ? "s" : ""} approved; ${failed} could not be processed.`
+            : `${succeeded} candidate${succeeded !== 1 ? "s" : ""} approved.`;
+        } else {
+          description = `Approval request for ${total} candidate${total !== 1 ? "s" : ""} completed.`;
+        }
+      } else {
+        // bulk-reject returns { success, count } (aggregate only; ineligible IDs are skipped)
+        const count = (data as { count?: number } | null)?.count;
+        if (typeof count === "number") {
+          hadFailures = count < total;
+          description = count < total
+            ? `Rejected ${count} of ${total} requested candidate${total !== 1 ? "s" : ""}; the rest were skipped (no longer pending review).`
+            : `${count} candidate${count !== 1 ? "s" : ""} rejected.`;
+        } else {
+          description = `Rejection request for ${total} candidate${total !== 1 ? "s" : ""} completed.`;
+        }
+      }
+      toast({ title, description, variant: hadFailures ? "destructive" : undefined });
+      setSelectedIds(new Set());
+      setBulkAction(null);
+      setBulkNote("");
+    },
+    onError: (err: Error) => toast({ title: "Bulk action failed", description: err.message, variant: "destructive" }),
+  });
+
+  const toggleSelection = (candidateId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(candidateId)) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
+  };
 
   const addCandidateMutation = useMutation({
     mutationFn: async (data: typeof candidateForm) => {
@@ -649,6 +726,21 @@ export default function LeadGenRunDetailPage() {
             </Button>
           </div>
 
+          {canDecide && selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 p-3 bg-muted rounded-md flex-wrap" data-testid="bulk-action-bar">
+              <span className="text-sm font-medium" data-testid="text-selected-count">{selectedIds.size} selected</span>
+              <Button size="sm" variant="outline" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">Clear</Button>
+              <Button size="sm" onClick={() => setBulkAction("approve")} data-testid="button-bulk-approve">
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Approve Selected
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setBulkAction("reject")} data-testid="button-bulk-reject">
+                <XCircle className="h-4 w-4 mr-1" />
+                Reject Selected
+              </Button>
+            </div>
+          )}
+
           {(!run.candidates || run.candidates.length === 0) ? (
             <Card>
               <CardContent className="py-8 text-center text-muted-foreground">
@@ -660,6 +752,26 @@ export default function LeadGenRunDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
+                    {canDecide && (
+                      <th className="py-3 px-4 w-10">
+                        {(() => {
+                          const selectable = (run.candidates ?? []).filter(c => c.status === "pending_review");
+                          const allSelected = selectable.length > 0 && selectable.every(c => selectedIds.has(c.id));
+                          return (
+                            <Checkbox
+                              checked={allSelected}
+                              disabled={selectable.length === 0}
+                              onCheckedChange={(checked) => {
+                                if (checked) setSelectedIds(new Set(selectable.map(c => c.id)));
+                                else setSelectedIds(new Set());
+                              }}
+                              aria-label="Select all pending candidates"
+                              data-testid="checkbox-select-all"
+                            />
+                          );
+                        })()}
+                      </th>
+                    )}
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Company</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Contact</th>
                     <th className="text-left py-3 px-4 font-medium text-muted-foreground">Title</th>
@@ -677,6 +789,18 @@ export default function LeadGenRunDetailPage() {
                       onClick={() => setLocation(`/lead-gen/candidates/${c.id}`)}
                       data-testid={`row-candidate-${c.id}`}
                     >
+                      {canDecide && (
+                        <td className="py-3 px-4 w-10" onClick={e => e.stopPropagation()}>
+                          {c.status === "pending_review" && (
+                            <Checkbox
+                              checked={selectedIds.has(c.id)}
+                              onCheckedChange={() => toggleSelection(c.id)}
+                              aria-label={`Select ${c.accountName || c.id}`}
+                              data-testid={`checkbox-candidate-${c.id}`}
+                            />
+                          )}
+                        </td>
+                      )}
                       <td className="py-3 px-4 font-medium">{c.accountName || c.id.slice(0, 8)}</td>
                       <td className="py-3 px-4">
                         {c.contactName
@@ -884,6 +1008,34 @@ export default function LeadGenRunDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Bulk action confirmation dialog */}
+      <Dialog open={!!bulkAction} onOpenChange={(open) => { if (!open) { setBulkAction(null); setBulkNote(""); } }}>
+        <DialogContent data-testid="dialog-bulk-action">
+          <DialogHeader>
+            <DialogTitle>Confirm Bulk {bulkAction === "approve" ? "Approve" : "Reject"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will {bulkAction} {selectedIds.size} candidate{selectedIds.size !== 1 ? "s" : ""}.
+            {bulkAction === "approve" && " Approved candidates are converted into CRM leads."}
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="bulk-note">Note (optional)</Label>
+            <Textarea id="bulk-note" value={bulkNote} onChange={e => setBulkNote(e.target.value)} placeholder="Add a note..." data-testid="input-bulk-note" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkAction(null); setBulkNote(""); }} disabled={bulkMutation.isPending} data-testid="button-cancel-bulk-action">Cancel</Button>
+            <Button
+              onClick={() => bulkMutation.mutate({ action: bulkAction!, candidateIds: Array.from(selectedIds), note: bulkNote })}
+              disabled={bulkMutation.isPending || selectedIds.size === 0}
+              data-testid="button-confirm-bulk-action"
+            >
+              {bulkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Stage Candidate Dialog */}
       <Dialog open={isCandidateDialogOpen} onOpenChange={setIsCandidateDialogOpen}>
