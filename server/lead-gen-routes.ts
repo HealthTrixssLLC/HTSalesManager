@@ -927,6 +927,14 @@ export function registerLeadGenRoutes(app: Express) {
     if (!candidate[0]) throw new Error("Candidate not found");
     if (candidate[0].status !== "pending_review") throw new Error(`Cannot approve: candidate is already '${candidate[0].status}'. Only pending_review candidates can be actioned.`);
 
+    // Resolve the organization from the run that produced this candidate —
+    // the created CRM lead and activities must belong to that org.
+    const runRows = await db.select().from(schema.leadGenerationRuns)
+      .where(eq(schema.leadGenerationRuns.id, candidate[0].runId)).limit(1);
+    if (!runRows[0]) throw new Error("Cannot approve: parent lead generation run not found");
+    const runOrganizationId = runRows[0].organizationId;
+    if (!runOrganizationId) throw new Error("Cannot approve: lead generation run has no organization assigned");
+
     const [accountRows, contactRows, playbookSteps] = await Promise.all([
       candidate[0].candidateAccountId
         ? db.select().from(schema.candidateAccounts).where(eq(schema.candidateAccounts.id, candidate[0].candidateAccountId!)).limit(1)
@@ -958,17 +966,23 @@ export function registerLeadGenRoutes(app: Express) {
     // Duplicate check
     let duplicateClass: "unique" | "possible_duplicate" | "confirmed_duplicate" = "unique";
     if (contactData?.email) {
-      const existingByEmail = await db.select().from(schema.leads).where(eq(schema.leads.email, contactData.email)).limit(1);
+      const existingByEmail = await db.select().from(schema.leads)
+        .where(and(
+          eq(schema.leads.organizationId, runOrganizationId),
+          sql`lower(${schema.leads.email}) = lower(${contactData.email})`,
+        )).limit(1);
       if (existingByEmail.length > 0) duplicateClass = "confirmed_duplicate";
     }
     if (duplicateClass === "unique" && contactData?.firstName && contactData?.lastName && accountData?.name) {
       const fullName = `${contactData.firstName} ${contactData.lastName}`.toLowerCase();
-      const existingByName = await db.select().from(schema.leads).where(eq(schema.leads.company, accountData.name)).limit(5);
+      const existingByName = await db.select().from(schema.leads)
+        .where(and(eq(schema.leads.organizationId, runOrganizationId), eq(schema.leads.company, accountData.name))).limit(5);
       const nameMatch = (existingByName as schema.Lead[]).some(l => `${l.firstName} ${l.lastName}`.toLowerCase() === fullName);
       if (nameMatch) duplicateClass = "confirmed_duplicate";
       else if (existingByName.length > 0) duplicateClass = "possible_duplicate";
     } else if (duplicateClass === "unique" && accountData?.name) {
-      const existing = await db.select().from(schema.leads).where(eq(schema.leads.company, accountData.name)).limit(1);
+      const existing = await db.select().from(schema.leads)
+        .where(and(eq(schema.leads.organizationId, runOrganizationId), eq(schema.leads.company, accountData.name))).limit(1);
       if (existing.length > 0) duplicateClass = "possible_duplicate";
     }
 
@@ -981,10 +995,12 @@ export function registerLeadGenRoutes(app: Express) {
 
     // All DB writes in a single atomic transaction
     let crmLead: schema.Lead;
+    try {
     await (db as TypedPgDb).transaction(async (tx) => {
       // Insert CRM lead
       const leadRows = await tx.insert(schema.leads).values({
         id: crmLeadId,
+        organizationId: runOrganizationId,
         firstName: contactData?.firstName || accountData?.name || "Unknown",
         lastName: contactData?.lastName || "",
         title: contactData?.title || null,
@@ -1011,6 +1027,7 @@ export function registerLeadGenRoutes(app: Express) {
         const activityId = activityIds[i];
         await tx.insert(schema.activities).values({
           id: activityId,
+          organizationId: runOrganizationId,
           type: step.activityType as "call" | "email" | "meeting" | "task" | "note",
           subject: step.name,
           status: "pending",
@@ -1067,6 +1084,15 @@ export function registerLeadGenRoutes(app: Express) {
         await tx.insert(researchDocuments).values(docsToInsert);
       }
     });
+    } catch (err) {
+      // Map unique-index collisions (e.g. leads_org_email_unique_idx on a
+      // concurrent approval with the same email) to a deterministic 409.
+      const pgErr = err as { code?: string; cause?: { code?: string } };
+      if (pgErr?.code === "23505" || pgErr?.cause?.code === "23505") {
+        throw new Error("Cannot approve: a lead with this email already exists in the organization");
+      }
+      throw err;
+    }
 
     // Post-transaction audit logs (best-effort)
     await createLgAudit(actorId, "candidate_approved", "CandidateLead", candidateId, candidate[0].runId, { crmLeadId, duplicateClass });
