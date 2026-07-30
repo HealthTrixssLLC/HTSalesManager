@@ -305,13 +305,16 @@ export class PostgresStorage implements IStorage {
       const result: any = await db.execute(sql`
         SELECT 
           c.id,
+          c.organization_id as "organizationId",
           c.account_id as "accountId",
           c.first_name as "firstName",
           c.last_name as "lastName",
           c.email,
           c.phone,
+          c.mobile,
           c.title,
           c.owner_id as "ownerId",
+          c.external_id as "externalId",
           c.created_at as "createdAt",
           c.updated_at as "updatedAt",
           COALESCE(
@@ -331,7 +334,7 @@ export class PostgresStorage implements IStorage {
         LEFT JOIN entity_tags et ON et.entity_id = c.id AND et.entity = 'Contact'
         LEFT JOIN tags t ON t.id = et.tag_id
         ${orgFilter}
-        GROUP BY c.id, c.account_id, c.first_name, c.last_name, c.email, c.phone, c.title, c.owner_id, c.created_at, c.updated_at
+        GROUP BY c.id, c.organization_id, c.account_id, c.first_name, c.last_name, c.email, c.phone, c.mobile, c.title, c.owner_id, c.external_id, c.created_at, c.updated_at
         ORDER BY c.created_at DESC
       `);
       

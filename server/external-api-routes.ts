@@ -526,6 +526,172 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
   }
 });
 
+// ========== CONTACTS ENDPOINTS ==========
+
+/**
+ * Format a contact record for external API responses.
+ * Always includes all guaranteed fields (null when not set).
+ */
+function formatContactResponse(contact: any, account?: { id: string; name: string } | null) {
+  const response: any = {
+    id: contact.id,
+    firstName: contact.firstName ?? contact.first_name ?? null,
+    lastName: contact.lastName ?? contact.last_name ?? null,
+    title: contact.title ?? null,
+    email: contact.email ?? null,
+    phone: contact.phone ?? null,
+    mobile: contact.mobile ?? null,
+    accountId: contact.accountId ?? contact.account_id ?? null,
+    ownerId: contact.ownerId ?? contact.owner_id ?? null,
+    externalId: contact.externalId ?? contact.external_id ?? null,
+    createdAt: contact.createdAt ?? contact.created_at ?? null,
+    updatedAt: contact.updatedAt ?? contact.updated_at ?? null,
+  };
+  if (account !== undefined) {
+    response.account = account ? { id: account.id, name: account.name } : null;
+  }
+  return response;
+}
+
+/**
+ * GET /api/v1/external/contacts
+ * List all contacts for the API key's organization with optional filtering and pagination.
+ *
+ * Query Parameters:
+ * - updatedSince: ISO 8601 timestamp
+ * - limit: Number of results (default: 100, max: 1000)
+ * - offset: Number of results to skip (default: 0)
+ * - expand: "account" — includes { id, name } on each contact
+ */
+router.get("/contacts", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Contact access requires an API key bound to an organization",
+      });
+    }
+
+    const { updatedSince, limit = "100", offset = "0", expand = "" } = req.query;
+    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+    const expandList = (expand as string).split(",").filter(Boolean);
+
+    if (updatedSince && typeof updatedSince === "string") {
+      const parsed = new Date(updatedSince);
+      if (isNaN(parsed.getTime())) {
+        return res.status(400).json({
+          error: "Invalid updatedSince",
+          message: "updatedSince must be a valid ISO 8601 timestamp",
+        });
+      }
+    }
+
+    let contacts = await storage.getAllContacts(orgId);
+
+    // Filter by updatedSince if provided
+    if (updatedSince && typeof updatedSince === "string") {
+      const sinceDate = new Date(updatedSince);
+      contacts = contacts.filter((c: any) => {
+        const updated = c.updatedAt ?? c.updated_at;
+        return updated ? new Date(updated) > sinceDate : false;
+      });
+    }
+
+    const total = contacts.length;
+    const page = contacts.slice(offsetNum, offsetNum + limitNum);
+
+    // Optionally expand account (lean { id, name } per contact)
+    let accountCache: Map<string, { id: string; name: string } | null> | null = null;
+    if (expandList.includes("account")) {
+      accountCache = new Map();
+    }
+
+    const data = await Promise.all(page.map(async (contact: any) => {
+      let account: { id: string; name: string } | null | undefined = undefined;
+      if (accountCache !== null) {
+        const acctId = contact.accountId ?? contact.account_id;
+        if (acctId) {
+          if (!accountCache.has(acctId)) {
+            const acct = await storage.getAccountById(acctId);
+            accountCache.set(acctId, acct && keyOrgOwns(acct, orgId) ? { id: acct.id, name: acct.name } : null);
+          }
+          account = accountCache.get(acctId) ?? null;
+        } else {
+          account = null;
+        }
+      }
+      return formatContactResponse(contact, account);
+    }));
+
+    return res.json({
+      data,
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + page.length < total,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching contacts:", error);
+    return res.status(500).json({
+      error: "Failed to fetch contacts",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/contacts/:id
+ * Fetch a single contact by ID (org-scoped).
+ *
+ * Query Parameters:
+ * - expand: "account" — includes { id, name } on the contact
+ */
+router.get("/contacts/:id", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Contact access requires an API key bound to an organization",
+      });
+    }
+
+    const { expand = "" } = req.query;
+    const expandList = (expand as string).split(",").filter(Boolean);
+
+    const contact = await storage.getContactById(req.params.id);
+    if (!contact || !keyOrgOwns(contact, orgId)) {
+      return res.status(404).json({
+        error: "Contact not found",
+        message: `No contact found with ID: ${req.params.id}`,
+      });
+    }
+
+    let account: { id: string; name: string } | null | undefined = undefined;
+    if (expandList.includes("account")) {
+      const acctId = contact.accountId;
+      if (acctId) {
+        const acct = await storage.getAccountById(acctId);
+        account = acct && keyOrgOwns(acct, orgId) ? { id: acct.id, name: acct.name } : null;
+      } else {
+        account = null;
+      }
+    }
+
+    return res.json({ data: formatContactResponse(contact, account) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching contact:", error);
+    return res.status(500).json({
+      error: "Failed to fetch contact",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 // ========== AUDIT LOGS ENDPOINT ==========
 
 /**
