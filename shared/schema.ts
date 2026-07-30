@@ -22,7 +22,7 @@ export const researchDocumentEntityTypeEnum = pgEnum("research_document_entity_t
 
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended"]);
 export const leadStatusEnum = pgEnum("lead_status", ["new", "contacted", "qualified", "unqualified", "converted"]);
-export const leadSourceEnum = pgEnum("lead_source", ["website", "referral", "phone", "email", "event", "partner", "other"]);
+export const leadSourceEnum = pgEnum("lead_source", ["website", "referral", "phone", "email", "event", "partner", "lead_generation", "other"]);
 export const opportunityStageEnum = pgEnum("opportunity_stage", ["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
 export const activityTypeEnum = pgEnum("activity_type", ["call", "email", "meeting", "task", "note"]);
 export const activityStatusEnum = pgEnum("activity_status", ["pending", "completed", "cancelled"]);

@@ -986,6 +986,28 @@ export function registerLeadGenRoutes(app: Express) {
       if (existing.length > 0) duplicateClass = "possible_duplicate";
     }
 
+    // Build a research summary from the best available doc (used for lead topic)
+    const SUMMARY_MAX = 500;
+    const summaryDocPriority = ["company_overview", "strategic_approach", "contact_brief"] as const;
+    let researchSummary: string | null = null;
+    for (const docType of summaryDocPriority) {
+      const doc = candidateDocs.find((d: ResearchDocument) => d.documentType === docType);
+      if (doc?.content) {
+        let text = doc.content.trim();
+        if (text.length > SUMMARY_MAX) {
+          // Trim at last sentence boundary within the limit
+          const truncated = text.slice(0, SUMMARY_MAX);
+          const lastPeriod = Math.max(truncated.lastIndexOf(". "), truncated.lastIndexOf(".\n"));
+          text = lastPeriod > SUMMARY_MAX / 2 ? truncated.slice(0, lastPeriod + 1) : truncated + "…";
+        }
+        researchSummary = text;
+        break;
+      }
+    }
+    if (!researchSummary) {
+      researchSummary = "Approved from lead generation run.";
+    }
+
     // Pre-generate IDs (outside transaction, no side effects)
     const crmLeadId = await storage.generateId("Lead");
     const activityIds: string[] = [];
@@ -1008,7 +1030,8 @@ export function registerLeadGenRoutes(app: Express) {
         email: contactData?.email || null,
         phone: contactData?.phone || null,
         status: "new",
-        source: "other",
+        source: "lead_generation",
+        topic: researchSummary,
       }).returning();
       crmLead = leadRows[0];
 

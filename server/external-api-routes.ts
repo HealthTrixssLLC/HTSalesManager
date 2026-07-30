@@ -713,7 +713,7 @@ const externalLeadSchema = z.object({
   title: z.string().trim().max(200).optional(),
   topic: z.string().trim().max(2000).optional(),
   notes: z.string().trim().max(2000).optional(),
-  source: z.enum(["website", "referral", "phone", "email", "event", "partner", "other"]).optional(),
+  source: z.enum(["website", "referral", "phone", "email", "event", "partner", "lead_generation", "other"]).optional(),
   rating: z.enum(["hot", "warm", "cold"]).optional(),
 }).strict();
 

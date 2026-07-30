@@ -4071,7 +4071,7 @@ export async function registerRoutes(app: Express) {
           
           // Validate enum values before parsing
           const validStatuses = ["new", "contacted", "qualified", "unqualified", "converted"];
-          const validSources = ["website", "referral", "phone", "email", "event", "partner", "other"];
+          const validSources = ["website", "referral", "phone", "email", "event", "partner", "lead_generation", "other"];
           
           if (row.status && !validStatuses.includes(row.status.toLowerCase())) {
             throw new Error(`Invalid status: "${row.status}". Expected one of: ${validStatuses.join(", ")}. Note: values must be lowercase.`);
