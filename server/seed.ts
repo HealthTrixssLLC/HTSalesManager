@@ -89,6 +89,36 @@ export async function runStartupColumnMigration(): Promise<void> {
       ALTER TABLE opportunities ADD COLUMN IF NOT EXISTS billing_end_date TIMESTAMP
     `));
 
+    // 5b. Ensure lead_generation_runs.organization_id has its FK constraint.
+    //     ADD COLUMN IF NOT EXISTS won't add the FK if the column already exists,
+    //     so we add the constraint separately using a DO block (idempotent).
+    await db.execute(sql.raw(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE constraint_schema = 'public'
+            AND table_name        = 'lead_generation_runs'
+            AND constraint_name   = 'lead_generation_runs_organization_id_fk'
+            AND constraint_type   = 'FOREIGN KEY'
+        ) THEN
+          -- Only add if the column actually exists (it may have been added above)
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name   = 'lead_generation_runs'
+              AND column_name  = 'organization_id'
+          ) THEN
+            ALTER TABLE lead_generation_runs
+              ADD CONSTRAINT lead_generation_runs_organization_id_fk
+              FOREIGN KEY (organization_id)
+              REFERENCES organizations(id)
+              ON DELETE CASCADE;
+          END IF;
+        END IF;
+      END $$;
+    `));
+
     // 6. Create ai_configs table if it doesn't exist yet (added in Lead Gen module)
     await db.execute(sql.raw(`
       CREATE TABLE IF NOT EXISTS ai_configs (
@@ -581,6 +611,19 @@ export async function initializeDefaultOrganization(): Promise<void> {
           }
         }
       }
+      // Raw-SQL backfill for lead_generation_runs.organization_id (avoids Drizzle
+      // column-presence check on the nullable column that may not exist yet).
+      const runBackfillResult = await db.execute(
+        sql`UPDATE lead_generation_runs SET organization_id = ${firstOrg.id} WHERE organization_id IS NULL`
+      );
+      const runBackfillCount = (runBackfillResult as unknown as { rowCount?: number }).rowCount ?? 0;
+      if (runBackfillCount > 0) {
+        console.log(`  ✓ Backfilled ${runBackfillCount} lead_generation_runs rows with org ${firstOrg.id}`);
+      }
+
+      // Re-home any leads/activities that were approved before org stamping was fixed
+      await repairLeadGenApprovals();
+
       // Backfill any CRM records that have no org assigned
       await backfillEntityOrganizations(firstOrg.id);
       return;
@@ -625,6 +668,18 @@ export async function initializeDefaultOrganization(): Promise<void> {
       }
     }
 
+    // Raw-SQL backfill for lead_generation_runs.organization_id
+    const runBackfillResult2 = await db.execute(
+      sql`UPDATE lead_generation_runs SET organization_id = ${primaryOrg.id} WHERE organization_id IS NULL`
+    );
+    const runBackfillCount2 = (runBackfillResult2 as unknown as { rowCount?: number }).rowCount ?? 0;
+    if (runBackfillCount2 > 0) {
+      console.log(`  ✓ Backfilled ${runBackfillCount2} lead_generation_runs rows with org ${primaryOrg.id}`);
+    }
+
+    // Re-home any leads/activities that were approved before org stamping was fixed
+    await repairLeadGenApprovals();
+
     // Backfill existing CRM entity records with the primary org ID
     await backfillEntityOrganizations(primaryOrg.id);
 
@@ -635,28 +690,76 @@ export async function initializeDefaultOrganization(): Promise<void> {
   }
 }
 
+/**
+ * Re-home CRM leads and activities that were created by the candidate approval
+ * flow before org stamping was in place.  Idempotent — subsequent runs are no-ops.
+ */
+async function repairLeadGenApprovals(): Promise<void> {
+  try {
+    // Re-home CRM leads created from candidate approvals
+    const leadResult = await db.execute(sql.raw(`
+      UPDATE leads l
+      SET organization_id = r.organization_id,
+          updated_at = NOW()
+      FROM lg_crm_leads lcl
+      JOIN candidate_leads cl ON cl.id = lcl.candidate_lead_id
+      JOIN lead_generation_runs r ON r.id = COALESCE(lcl.run_id, cl.run_id)
+      WHERE l.id = lcl.crm_lead_id
+        AND r.organization_id IS NOT NULL
+        AND (l.organization_id IS DISTINCT FROM r.organization_id)
+    `));
+    const leadsReHomed = (leadResult as unknown as { rowCount?: number }).rowCount ?? 0;
+
+    // Re-home activities created from playbook steps during approval
+    const activityResult = await db.execute(sql.raw(`
+      UPDATE activities a
+      SET organization_id = r.organization_id,
+          updated_at = NOW()
+      FROM lg_crm_tasks lct
+      JOIN candidate_leads cl ON cl.id = lct.candidate_lead_id
+      JOIN lead_generation_runs r ON r.id = COALESCE(lct.run_id, cl.run_id)
+      WHERE a.id = lct.activity_id
+        AND r.organization_id IS NOT NULL
+        AND (a.organization_id IS DISTINCT FROM r.organization_id)
+    `));
+    const activitiesReHomed = (activityResult as unknown as { rowCount?: number }).rowCount ?? 0;
+
+    if (leadsReHomed > 0 || activitiesReHomed > 0) {
+      console.log(`  ✓ repairLeadGenApprovals: re-homed ${leadsReHomed} leads, ${activitiesReHomed} activities`);
+    }
+  } catch (err) {
+    // Tables may not exist in all environments (e.g. lg_crm_leads not yet created)
+    console.warn("repairLeadGenApprovals skipped (tables may not exist yet):", (err as Error).message);
+  }
+}
+
 async function backfillEntityOrganizations(orgId: string): Promise<void> {
   const { accounts, contacts, leads, opportunities, activities, icpProfiles, taskPlaybooks, leadGenerationRuns, llmConfigurations, apiKeys } = await import("@shared/schema");
   const { isNull } = await import("drizzle-orm");
-  await db.update(accounts).set({ organizationId: orgId }).where(isNull(accounts.organizationId));
-  await db.update(contacts).set({ organizationId: orgId }).where(isNull(contacts.organizationId));
-  await db.update(leads).set({ organizationId: orgId }).where(isNull(leads.organizationId));
-  await db.update(opportunities).set({ organizationId: orgId }).where(isNull(opportunities.organizationId));
-  await db.update(activities).set({ organizationId: orgId }).where(isNull(activities.organizationId));
-  await db.update(icpProfiles).set({ organizationId: orgId }).where(isNull(icpProfiles.organizationId));
-  await db.update(taskPlaybooks).set({ organizationId: orgId }).where(isNull(taskPlaybooks.organizationId));
-  await db.update(leadGenerationRuns).set({ organizationId: orgId }).where(isNull(leadGenerationRuns.organizationId));
-  // llmConfigurations and apiKeys are org-scoped; backfill only if not already stamped.
-  try {
-    await db.update(llmConfigurations).set({ organizationId: orgId }).where(isNull(llmConfigurations.organizationId));
-  } catch (_e) {
-    // Ignore conflicts - already backfilled
+
+  // Wrap each table individually so a missing column on one table does not
+  // abort the entire backfill — log the specific failure for diagnostics.
+  const coreTables: Array<{ name: string; fn: () => Promise<unknown> }> = [
+    { name: "accounts",            fn: () => db.update(accounts).set({ organizationId: orgId }).where(isNull(accounts.organizationId)) },
+    { name: "contacts",            fn: () => db.update(contacts).set({ organizationId: orgId }).where(isNull(contacts.organizationId)) },
+    { name: "leads",               fn: () => db.update(leads).set({ organizationId: orgId }).where(isNull(leads.organizationId)) },
+    { name: "opportunities",       fn: () => db.update(opportunities).set({ organizationId: orgId }).where(isNull(opportunities.organizationId)) },
+    { name: "activities",          fn: () => db.update(activities).set({ organizationId: orgId }).where(isNull(activities.organizationId)) },
+    { name: "icpProfiles",         fn: () => db.update(icpProfiles).set({ organizationId: orgId }).where(isNull(icpProfiles.organizationId)) },
+    { name: "taskPlaybooks",       fn: () => db.update(taskPlaybooks).set({ organizationId: orgId }).where(isNull(taskPlaybooks.organizationId)) },
+    { name: "leadGenerationRuns",  fn: () => db.update(leadGenerationRuns).set({ organizationId: orgId }).where(isNull(leadGenerationRuns.organizationId)) },
+    { name: "llmConfigurations",   fn: () => db.update(llmConfigurations).set({ organizationId: orgId }).where(isNull(llmConfigurations.organizationId)) },
+    { name: "apiKeys",             fn: () => db.update(apiKeys).set({ organizationId: orgId }).where(isNull(apiKeys.organizationId)) },
+  ];
+
+  for (const { name, fn } of coreTables) {
+    try {
+      await fn();
+    } catch (err) {
+      console.warn(`  backfillEntityOrganizations: skipped ${name} — ${(err as Error).message}`);
+    }
   }
-  try {
-    await db.update(apiKeys).set({ organizationId: orgId }).where(isNull(apiKeys.organizationId));
-  } catch (_e) {
-    // Ignore conflicts - already backfilled
-  }
+
   // Initialize org-specific ID patterns and account categories
   await initializeOrgSettings(orgId);
   console.log("✓ Backfilled existing CRM, lead-gen, and admin records with primary org ID");

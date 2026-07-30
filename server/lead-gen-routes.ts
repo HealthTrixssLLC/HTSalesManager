@@ -933,7 +933,7 @@ export function registerLeadGenRoutes(app: Express) {
       .where(eq(schema.leadGenerationRuns.id, candidate[0].runId)).limit(1);
     if (!runRows[0]) throw new Error("Cannot approve: parent lead generation run not found");
     const runOrganizationId = runRows[0].organizationId;
-    if (!runOrganizationId) throw new Error("Cannot approve: lead generation run has no organization assigned");
+    if (!runOrganizationId) throw new Error("Cannot approve: the parent run has no organization — an admin must run the repair script");
 
     const [accountRows, contactRows, playbookSteps] = await Promise.all([
       candidate[0].candidateAccountId
