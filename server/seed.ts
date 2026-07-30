@@ -157,6 +157,21 @@ export async function runStartupColumnMigration(): Promise<void> {
       )
     `));
 
+    // 8. Add 'lead_generation' to the lead_source enum if not already present.
+    //    ALTER TYPE ... ADD VALUE IF NOT EXISTS is idempotent and safe on existing DBs.
+    await db.execute(sql.raw(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_enum e
+          JOIN pg_type t ON t.oid = e.enumtypid
+          WHERE t.typname = 'lead_source' AND e.enumlabel = 'lead_generation'
+        ) THEN
+          ALTER TYPE lead_source ADD VALUE 'lead_generation';
+        END IF;
+      END $$;
+    `));
+
     console.log('✓ Startup column migration completed');
   } catch (error) {
     console.error('Startup column migration error (non-fatal):', error);

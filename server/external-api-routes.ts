@@ -1102,4 +1102,129 @@ router.get("/leads/:id", async (req: ApiKeyRequest, res) => {
   }
 });
 
+// ========== ACTIVITIES ENDPOINT ==========
+
+// Validation schema for external activity creation
+const externalActivitySchema = z.object({
+  type: z.enum(["call", "email", "meeting", "task", "note"]),
+  subject: z.string().trim().min(1, "Subject is required").max(500),
+  status: z.enum(["pending", "completed", "cancelled"]).optional().default("completed"),
+  notes: z.string().trim().max(10000).optional(),
+  dueAt: z.string().datetime({ offset: true }).optional(),
+  completedAt: z.string().datetime({ offset: true }).optional(),
+  priority: z.enum(["low", "medium", "high"]).optional(),
+  relatedType: z.enum(["Contact", "Lead", "Account", "Opportunity"]).optional(),
+  relatedId: z.string().trim().min(1).max(100).optional(),
+}).strict().refine(
+  (data) => {
+    // relatedType and relatedId must both be present or both absent
+    const hasType = !!data.relatedType;
+    const hasId = !!data.relatedId;
+    return hasType === hasId;
+  },
+  { message: "relatedType and relatedId must both be provided together" }
+);
+
+/**
+ * POST /api/v1/external/activities
+ * Create a new activity and optionally link it to a CRM record.
+ *
+ * Required fields: type, subject
+ * Optional fields: status, notes, dueAt, completedAt, priority, relatedType, relatedId
+ *
+ * When relatedType + relatedId are provided, the referenced record must belong
+ * to the same org as the API key; returns 404 if not found or wrong org.
+ */
+router.post("/activities", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Activity creation requires an API key bound to an organization. Ask your CRM administrator to create an organization-scoped API key in the Admin Console.",
+      });
+    }
+
+    const parsed = externalActivitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: "The activity payload is invalid",
+        details: parsed.error.errors.map(e => ({
+          field: e.path.join(".") || "(root)",
+          message: e.message,
+        })),
+      });
+    }
+    const data = parsed.data;
+
+    // Related-entity authorization check — verify the record belongs to this org
+    if (data.relatedType && data.relatedId) {
+      let relatedRecord: { organizationId?: string | null } | undefined | null;
+      switch (data.relatedType) {
+        case "Contact":     relatedRecord = await storage.getContactById(data.relatedId); break;
+        case "Lead":        relatedRecord = await storage.getLeadById(data.relatedId); break;
+        case "Account":     relatedRecord = await storage.getAccountById(data.relatedId); break;
+        case "Opportunity": relatedRecord = await storage.getOpportunityById(data.relatedId); break;
+      }
+      if (!relatedRecord || !keyOrgOwns(relatedRecord, orgId)) {
+        return res.status(404).json({
+          error: "Related record not found",
+          message: `No ${data.relatedType} found with ID: ${data.relatedId}`,
+        });
+      }
+    }
+
+    // Create the activity record
+    const activity = await storage.createActivity({
+      organizationId: orgId,
+      type: data.type,
+      subject: data.subject,
+      status: data.status,
+      notes: data.notes ?? null,
+      dueAt: data.dueAt ? new Date(data.dueAt) : null,
+      completedAt: data.completedAt ? new Date(data.completedAt) : null,
+      priority: data.priority ?? "medium",
+      relatedType: data.relatedType ?? null,
+      relatedId: data.relatedId ?? null,
+      ownerId: null,
+    } as any);
+
+    // Create activity_associations row so the activity appears on the related entity's timeline
+    if (data.relatedType && data.relatedId) {
+      const { db } = await import("./db");
+      const { activityAssociations } = await import("@shared/schema");
+      await db.insert(activityAssociations).values({
+        activityId: activity.id,
+        entityType: data.relatedType,
+        entityId: data.relatedId,
+      });
+    }
+
+    return res.status(201).json({
+      data: {
+        id: activity.id,
+        type: activity.type,
+        subject: activity.subject,
+        status: activity.status,
+        priority: activity.priority,
+        notes: activity.notes,
+        dueAt: activity.dueAt,
+        completedAt: activity.completedAt,
+        relatedType: activity.relatedType,
+        relatedId: activity.relatedId,
+        organizationId: activity.organizationId,
+        createdAt: activity.createdAt,
+        updatedAt: activity.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating activity:", error);
+    return res.status(500).json({
+      error: "Failed to create activity",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 export default router;
