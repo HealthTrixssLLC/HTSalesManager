@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Health Trixss CRM External API provides secure, read-only access to your CRM data, enabling custom forecasting applications, business intelligence tools, and third-party integrations to access account and opportunity information.
+The Health Trixss CRM External API provides secure access to your CRM data, enabling custom forecasting applications, business intelligence tools, and third-party integrations to read and write CRM records.
 
-**Base URL:** `https://your-crm-domain.com/api/v1/external`
+**Base URL:** `https://htsalesmanager.healthtrixss.com/api/v1/external`
 
 **API Version:** 1.0
 
@@ -18,14 +18,15 @@ The Health Trixss CRM External API provides secure, read-only access to your CRM
 
 1. [Getting Started](#getting-started)
 2. [Authentication](#authentication)
-3. [Available Endpoints](#available-endpoints)
-4. [Query Parameters](#query-parameters)
-5. [Request Examples](#request-examples)
-6. [Response Formats](#response-formats)
-7. [Error Handling](#error-handling)
-8. [Rate Limiting](#rate-limiting)
-9. [Best Practices](#best-practices)
-10. [Integration Patterns](#integration-patterns)
+3. [API Key Scoping](#api-key-scoping)
+4. [Available Endpoints](#available-endpoints)
+5. [Query Parameters](#query-parameters)
+6. [Response Format](#response-format)
+7. [Request Examples](#request-examples)
+8. [Error Handling](#error-handling)
+9. [Rate Limiting](#rate-limiting)
+10. [Best Practices](#best-practices)
+11. [Integration Patterns](#integration-patterns)
 
 ---
 
@@ -44,18 +45,18 @@ The Health Trixss CRM External API provides secure, read-only access to your CRM
    - Navigate to Admin Console → API Keys tab
    - Click "Generate New API Key"
    - Provide a name and optional description
-   - Copy the generated key immediately (it's shown only once)
+   - Optionally bind the key to a specific organization (required for leads, contacts, and activities)
+   - Copy the generated key immediately (shown only once)
 
 2. **Test Your Connection:**
    ```bash
    curl -H "x-api-key: YOUR_API_KEY" \
-        https://your-crm-domain.com/api/v1/external/accounts
+        https://htsalesmanager.healthtrixss.com/api/v1/external/accounts
    ```
 
 3. **Start Building:**
-   - Use the API key in all requests via the `x-api-key` header
-   - Begin fetching accounts and opportunities
-   - Implement error handling and rate limiting
+   - All responses are wrapped in a `data` field (single records) or `data` array + `pagination` object (lists)
+   - Use `limit` / `offset` for pagination and `updatedSince` for incremental syncs
 
 ---
 
@@ -83,181 +84,543 @@ x-api-key: your-api-key-here
 | Status Code | Error | Description |
 |-------------|-------|-------------|
 | `401` | API key required | No x-api-key header provided |
-| `401` | Invalid API key format | The provided API key format is invalid |
-| `401` | Invalid API key | API key is invalid or has been revoked |
-| `401` | API key expired | The provided API key has expired |
+| `401` | Invalid API key format | Key format is invalid |
+| `401` | Invalid API key | Key is invalid or revoked |
+| `401` | API key expired | Key has passed its expiration date |
 
-**Example Error Response:**
-```json
-{
-  "error": "Invalid API key",
-  "message": "The provided API key is invalid or has been revoked"
-}
-```
+---
+
+## API Key Scoping
+
+API keys are either **system-level** or **organization-scoped**.
+
+| Key Type | Accounts | Opportunities | Contacts | Leads | Activities | Logs |
+|----------|----------|---------------|----------|-------|------------|------|
+| System key | ✅ All orgs | ✅ All orgs | ❌ 403 | ❌ 403 | ❌ 403 | ✅ Own key |
+| Org-scoped key | ✅ Own org | ✅ Own org | ✅ Own org | ✅ Own org | ✅ Own org | ✅ Own key |
+
+Contacts, leads, and activities **require an organization-scoped key**. Requesting them with a system key returns `403 Organization-bound API key required`.
 
 ---
 
 ## Available Endpoints
 
-### 1. List Accounts
+### Endpoint Summary
 
-Retrieve a paginated list of all accounts in your CRM.
+```
+GET  /api/v1/external/accounts              # List accounts
+GET  /api/v1/external/accounts/:id          # Get account details
+GET  /api/v1/external/opportunities         # List opportunities
+GET  /api/v1/external/opportunities/:id     # Get opportunity details
+GET  /api/v1/external/contacts              # List contacts (org-scoped key required)
+GET  /api/v1/external/contacts/:id          # Get contact details (org-scoped key required)
+POST /api/v1/external/leads                 # Create a lead (org-scoped key required)
+GET  /api/v1/external/leads                 # List leads (org-scoped key required)
+GET  /api/v1/external/leads/:id             # Get lead details (org-scoped key required)
+POST /api/v1/external/activities            # Create an activity (org-scoped key required)
+GET  /api/v1/external/logs                  # List API access logs for this key
+```
+
+---
+
+### 1. List Accounts
 
 **Endpoint:** `GET /api/v1/external/accounts`
 
 **Query Parameters:**
-- `limit` (number, optional): Number of records to return (default: 50, max: 100)
-- `offset` (number, optional): Number of records to skip for pagination (default: 0)
-- `updatedSince` (ISO 8601 string, optional): Only return accounts modified after this timestamp
-- `expand` (string, optional): Include related data. Value: `opportunities`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 100 | Records per page (max 1000) |
+| `offset` | number | 0 | Records to skip |
+| `updatedSince` | ISO 8601 | — | Only accounts updated after this timestamp |
+| `expand` | string | — | `opportunities` — adds forecast-flagged opportunities to each account |
 
 **Response:**
 ```json
 {
-  "accounts": [
+  "data": [
     {
       "id": "ACT-00001",
       "name": "Acme Healthcare",
+      "accountNumber": "AN-00001",
+      "type": "Customer",
       "category": "Hospital",
-      "website": "https://acmehealthcare.com",
-      "phone": "+1-555-0100",
-      "email": "info@acmehealthcare.com",
-      "address": "123 Main St",
-      "city": "Boston",
-      "state": "MA",
-      "zipCode": "02101",
-      "country": "USA",
-      "industry": "Healthcare",
-      "employees": 500,
-      "annualRevenue": 50000000,
-      "description": "Leading healthcare provider",
       "ownerId": 1,
+      "industry": "Healthcare",
+      "externalId": null,
       "createdAt": "2025-01-15T10:00:00.000Z",
       "updatedAt": "2025-02-01T14:30:00.000Z"
     }
   ],
   "pagination": {
     "total": 150,
-    "limit": 50,
+    "limit": 100,
     "offset": 0,
     "hasMore": true
   }
 }
 ```
 
-### 2. Get Account Details
+When `expand=opportunities` is included, each account gains an `opportunities` array containing only forecast-flagged opportunities:
+```json
+"opportunities": [
+  {
+    "id": "OPP-00001",
+    "name": "Enterprise License",
+    "stage": "Proposal Sent",
+    "amount": 15000000,
+    "closeDate": "2025-03-15",
+    "probability": 75,
+    "implementationStartDate": "2025-04-01",
+    "implementationEndDate": "2025-06-30",
+    "billingEndDate": "2026-06-30"
+  }
+]
+```
 
-Retrieve detailed information about a specific account.
+---
+
+### 2. Get Account Details
 
 **Endpoint:** `GET /api/v1/external/accounts/:id`
 
-**Path Parameters:**
-- `id` (string, required): Account ID (e.g., ACT-00001)
-
 **Query Parameters:**
-- `expand` (string, optional): Include related data. Values: `opportunities`, `contacts`, `leads`, `activities` (comma-separated)
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `expand` | string | Comma-separated: `opportunities`, `contacts` |
 
 **Response:**
 ```json
 {
-  "id": "ACT-00001",
-  "name": "Acme Healthcare",
-  "category": "Hospital",
-  "website": "https://acmehealthcare.com",
-  "phone": "+1-555-0100",
-  "email": "info@acmehealthcare.com",
-  "address": "123 Main St",
-  "city": "Boston",
-  "state": "MA",
-  "zipCode": "02101",
-  "country": "USA",
-  "industry": "Healthcare",
-  "employees": 500,
-  "annualRevenue": 50000000,
-  "description": "Leading healthcare provider",
-  "ownerId": 1,
-  "createdAt": "2025-01-15T10:00:00.000Z",
-  "updatedAt": "2025-02-01T14:30:00.000Z"
+  "data": {
+    "id": "ACT-00001",
+    "name": "Acme Healthcare",
+    "accountNumber": "AN-00001",
+    "type": "Customer",
+    "category": "Hospital",
+    "ownerId": 1,
+    "industry": "Healthcare",
+    "website": "https://acmehealthcare.com",
+    "phone": "+1-555-0100",
+    "externalId": null,
+    "createdAt": "2025-01-15T10:00:00.000Z",
+    "updatedAt": "2025-02-01T14:30:00.000Z"
+  }
 }
 ```
 
-### 3. List Opportunities
+When `expand=opportunities,contacts`:
+- `opportunities` array: same shape as above, includes `rating` field additionally
+- `contacts` array:
+```json
+"contacts": [
+  {
+    "id": "CON-00001",
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "email": "jane@acme.com",
+    "phone": "+1-555-0101",
+    "mobile": null,
+    "title": "VP of Operations"
+  }
+]
+```
 
-Retrieve a paginated list of opportunities, with optional filtering by forecast inclusion.
+---
+
+### 3. List Opportunities
 
 **Endpoint:** `GET /api/v1/external/opportunities`
 
 **Query Parameters:**
-- `limit` (number, optional): Number of records to return (default: 50, max: 100)
-- `offset` (number, optional): Number of records to skip for pagination (default: 0)
-- `includeInForecast` (string, optional): Filter opportunities by forecast inclusion
-  - `true` (default): Only opportunities marked for forecast inclusion
-  - `false`: Only opportunities excluded from forecast
-  - `all`: All opportunities regardless of forecast flag
-- `updatedSince` (ISO 8601 string, optional): Only return opportunities modified after this timestamp
-- `expand` (string, optional): Include related data. Value: `account`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 100 | Records per page (max 1000) |
+| `offset` | number | 0 | Records to skip |
+| `updatedSince` | ISO 8601 | — | Only opportunities updated after this timestamp |
+| `includeInForecast` | string | `true` | `true` · `false` · `all` |
+| `expand` | string | — | Comma-separated: `account`, `resources` |
 
 **Response:**
 ```json
 {
-  "opportunities": [
+  "data": [
     {
       "id": "OPP-00001",
-      "name": "Enterprise Software License",
       "accountId": "ACT-00001",
+      "name": "Enterprise Software License",
       "stage": "Proposal Sent",
-      "amount": 150000,
-      "probability": 75,
-      "expectedCloseDate": "2025-03-15",
-      "description": "Annual enterprise license renewal",
-      "leadSource": "Referral",
-      "nextStep": "Schedule final review meeting",
-      "includeInForecast": true,
+      "amount": 15000000,
+      "closeDate": "2025-03-15",
       "ownerId": 1,
+      "probability": 75,
+      "status": "open",
+      "actualCloseDate": null,
+      "actualRevenue": null,
+      "estCloseDate": "2025-03-15",
+      "estRevenue": 15000000,
+      "rating": "warm",
+      "includeInForecast": true,
+      "implementationStartDate": "2025-04-01",
+      "implementationEndDate": "2025-06-30",
+      "billingEndDate": "2026-06-30",
+      "externalId": null,
       "createdAt": "2025-01-10T09:00:00.000Z",
       "updatedAt": "2025-02-05T11:20:00.000Z"
     }
   ],
   "pagination": {
     "total": 85,
-    "limit": 50,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}
+```
+
+> **Note on monetary values:** `amount`, `actualRevenue`, and `estRevenue` are stored in cents. Divide by 100 for dollar values.
+
+When `expand=account`:
+```json
+"account": {
+  "id": "ACT-00001",
+  "name": "Acme Healthcare",
+  "accountNumber": "AN-00001",
+  "type": "Customer",
+  "category": "Hospital"
+}
+```
+
+When `expand=resources`:
+```json
+"resources": [
+  {
+    "userId": 3,
+    "role": "Implementation Lead",
+    "allocationPercentage": 80,
+    "startDate": "2025-04-01",
+    "endDate": "2025-06-30"
+  }
+]
+```
+
+---
+
+### 4. Get Opportunity Details
+
+**Endpoint:** `GET /api/v1/external/opportunities/:id`
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `expand` | string | Comma-separated: `account`, `resources` |
+
+**Response:** Same shape as a single item in the list response, wrapped in `{ "data": { ... } }`.
+
+When `expand=account`, the embedded account additionally includes `industry`:
+```json
+"account": {
+  "id": "ACT-00001",
+  "name": "Acme Healthcare",
+  "accountNumber": "AN-00001",
+  "type": "Customer",
+  "category": "Hospital",
+  "industry": "Healthcare"
+}
+```
+
+---
+
+### 5. List Contacts
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `GET /api/v1/external/contacts`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 100 | Records per page (max 1000) |
+| `offset` | number | 0 | Records to skip |
+| `updatedSince` | ISO 8601 | — | Only contacts updated after this timestamp |
+| `expand` | string | — | `account` — adds `{ id, name }` to each contact |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "CON-00001",
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "title": "VP of Operations",
+      "email": "jane@acme.com",
+      "phone": "+1-555-0101",
+      "mobile": null,
+      "accountId": "ACT-00001",
+      "ownerId": 1,
+      "externalId": null,
+      "createdAt": "2025-01-20T08:00:00.000Z",
+      "updatedAt": "2025-02-10T09:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 42,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}
+```
+
+---
+
+### 6. Get Contact Details
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `GET /api/v1/external/contacts/:id`
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `expand` | string | `account` — adds `{ id, name }` |
+
+**Response:** Single contact wrapped in `{ "data": { ... } }`.
+
+---
+
+### 7. Create Lead
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `POST /api/v1/external/leads`
+
+**Content-Type:** `application/json`
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `firstName` | string | ✅ | Max 200 characters |
+| `lastName` | string | ✅ | Max 200 characters |
+| `email` | string (email) | — | Max 320 characters; used for duplicate detection |
+| `phone` | string | — | Max 50 characters |
+| `company` | string | — | Max 300 characters |
+| `title` | string | — | Max 200 characters |
+| `topic` | string | — | Max 2000 characters |
+| `notes` | string | — | Max 2000 characters; merged with `topic` if `topic` is omitted |
+| `source` | enum | — | `website` · `referral` · `phone` · `email` · `event` · `partner` · `lead_generation` · `other` |
+| `rating` | enum | — | `hot` · `warm` · `cold` |
+
+**Duplicate Handling:** If a lead with the same email already exists in the organization, no new record is created. The existing lead is returned with `"duplicate": true`.
+
+**Success Response (201 Created):**
+```json
+{
+  "duplicate": false,
+  "data": {
+    "id": "LED-00042",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john.doe@example.com",
+    "phone": "+1-555-0199",
+    "company": "Acme Corp",
+    "title": "Director",
+    "topic": "Interested in product demo",
+    "status": "new",
+    "source": "website",
+    "rating": "warm",
+    "organizationId": "ORG-00001",
+    "organizationName": "Health Trixss",
+    "createdAt": "2025-08-12T10:00:00.000Z",
+    "updatedAt": "2025-08-12T10:00:00.000Z"
+  }
+}
+```
+
+**Duplicate Response (200 OK):**
+```json
+{
+  "duplicate": true,
+  "message": "A lead with this email already exists in the organization. No new lead was created.",
+  "data": { ... }
+}
+```
+
+**Validation Error (400):**
+```json
+{
+  "error": "Validation failed",
+  "message": "The lead payload is invalid",
+  "details": [
+    { "field": "email", "message": "Invalid email address" }
+  ]
+}
+```
+
+---
+
+### 8. List Leads
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `GET /api/v1/external/leads`
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | number | 100 | Records per page (max 1000) |
+| `offset` | number | 0 | Records to skip |
+| `updatedSince` | ISO 8601 | — | Only leads updated after this timestamp |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "LED-00042",
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "john.doe@example.com",
+      "phone": "+1-555-0199",
+      "company": "Acme Corp",
+      "title": "Director",
+      "topic": "Interested in product demo",
+      "status": "new",
+      "source": "website",
+      "rating": "warm",
+      "organizationId": "ORG-00001",
+      "organizationName": "Health Trixss",
+      "createdAt": "2025-08-12T10:00:00.000Z",
+      "updatedAt": "2025-08-12T10:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 17,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}
+```
+
+---
+
+### 9. Get Lead Details
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `GET /api/v1/external/leads/:id`
+
+**Response:** Single lead wrapped in `{ "data": { ... } }`.
+
+---
+
+### 10. Create Activity
+
+> **Requires an organization-scoped API key.** System keys receive `403`.
+
+**Endpoint:** `POST /api/v1/external/activities`
+
+**Content-Type:** `application/json`
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | enum | ✅ | `call` · `email` · `meeting` · `task` · `note` |
+| `subject` | string | ✅ | Max 500 characters |
+| `status` | enum | — | `pending` · `completed` · `cancelled` (default: `completed`) |
+| `notes` | string | — | Max 10000 characters |
+| `dueAt` | ISO 8601 datetime | — | Due date/time |
+| `completedAt` | ISO 8601 datetime | — | Completion date/time |
+| `priority` | enum | — | `low` · `medium` · `high` (default: `medium`) |
+| `relatedType` | enum | — | `Contact` · `Lead` · `Account` · `Opportunity` |
+| `relatedId` | string | — | ID of the related record |
+
+> `relatedType` and `relatedId` must **both** be provided together or both omitted. The referenced record must belong to the same organization as the API key.
+
+**Success Response (201 Created):**
+```json
+{
+  "data": {
+    "id": "ACT-00099",
+    "type": "call",
+    "subject": "Discovery call",
+    "status": "completed",
+    "priority": "medium",
+    "notes": "Discussed product fit",
+    "dueAt": null,
+    "completedAt": "2025-08-12T14:00:00.000Z",
+    "relatedType": "Lead",
+    "relatedId": "LED-00042",
+    "organizationId": "ORG-00001",
+    "createdAt": "2025-08-12T14:05:00.000Z",
+    "updatedAt": "2025-08-12T14:05:00.000Z"
+  }
+}
+```
+
+---
+
+### 11. List API Access Logs
+
+Retrieve your own API access log history for monitoring and debugging.
+
+**Endpoint:** `GET /api/v1/external/logs`
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `startDate` | ISO 8601 | Only logs after this timestamp |
+| `endDate` | ISO 8601 | Only logs before this timestamp |
+| `status` | number | Filter by HTTP status code (e.g., `200`, `401`, `429`) |
+| `action` | enum | `auth_success` · `auth_failure` · `request_success` · `request_failure` |
+| `limit` | number | Records per page (default 100, max 1000) |
+| `offset` | number | Records to skip (default 0) |
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "timestamp": "2025-08-12T10:05:00.000Z",
+      "action": "external_api_request_success",
+      "endpoint": "/accounts",
+      "method": "GET",
+      "statusCode": 200,
+      "latencyMs": 42,
+      "responseSizeBytes": 1840,
+      "aborted": false,
+      "errorType": null,
+      "errorCode": null,
+      "errorMessage": null,
+      "resourceType": null,
+      "resourceId": null,
+      "queryParams": { "limit": "50", "offset": "0" },
+      "ipAddress": "203.0.113.5",
+      "userAgent": "MyApp/1.0"
+    }
+  ],
+  "pagination": {
+    "total": 512,
+    "limit": 100,
     "offset": 0,
     "hasMore": true
   }
 }
 ```
 
-### 4. Get Opportunity Details
-
-Retrieve detailed information about a specific opportunity.
-
-**Endpoint:** `GET /api/v1/external/opportunities/:id`
-
-**Path Parameters:**
-- `id` (string, required): Opportunity ID (e.g., OPP-00001)
-
-**Query Parameters:**
-- `expand` (string, optional): Include related data. Value: `account`
-
-**Response:**
-```json
-{
-  "id": "OPP-00001",
-  "name": "Enterprise Software License",
-  "accountId": "ACT-00001",
-  "stage": "Proposal Sent",
-  "amount": 150000,
-  "probability": 75,
-  "expectedCloseDate": "2025-03-15",
-  "description": "Annual enterprise license renewal",
-  "leadSource": "Referral",
-  "nextStep": "Schedule final review meeting",
-  "includeInForecast": true,
-  "ownerId": 1,
-  "createdAt": "2025-01-10T09:00:00.000Z",
-  "updatedAt": "2025-02-05T11:20:00.000Z"
-}
-```
+> Logs are scoped to the calling API key. You will only see logs generated by your own key.
 
 ---
 
@@ -265,242 +628,96 @@ Retrieve detailed information about a specific opportunity.
 
 ### Pagination
 
-Use `limit` and `offset` parameters to paginate through large datasets:
+| Parameter | Default | Max | Description |
+|-----------|---------|-----|-------------|
+| `limit` | 100 | 1000 | Records per page |
+| `offset` | 0 | — | Starting position (0-based) |
 
-- **limit**: Number of records per page (max: 100)
-- **offset**: Starting position (0-based)
-
-**Example:**
 ```
 GET /api/v1/external/accounts?limit=25&offset=50
 ```
-This retrieves records 51-75.
 
 ### Incremental Sync
 
-Use `updatedSince` to fetch only records modified after a specific timestamp:
+Use `updatedSince` to fetch only records modified after a given timestamp.
 
-**Format:** ISO 8601 timestamp (e.g., `2025-02-01T00:00:00.000Z`)
+**Format:** ISO 8601 (`2025-08-01T00:00:00.000Z`)
 
-**Example:**
 ```
-GET /api/v1/external/opportunities?updatedSince=2025-02-01T00:00:00.000Z
+GET /api/v1/external/opportunities?updatedSince=2025-08-01T00:00:00.000Z
 ```
 
-### Expanding Related Data
+### Expand
 
-Use `expand` to include related entities in the response:
+Use `expand` to include related entities in the response. Pass multiple values as a comma-separated string.
 
-**For Accounts:**
-- `opportunities`: Include all opportunities for the account
-- `contacts`: Include all contacts
-- `leads`: Include all leads
-- `activities`: Include all activities
-
-**For Opportunities:**
-- `account`: Include the parent account details
-
-**Example:**
 ```
+GET /api/v1/external/opportunities?expand=account,resources
 GET /api/v1/external/accounts/ACT-00001?expand=opportunities,contacts
 ```
 
-### Filtering
-
-**Opportunities Only:**
-- `includeInForecast`: Filter by forecast inclusion flag
-  - `true`: Only forecasted opportunities
-  - `false`: Only non-forecasted opportunities
-  - `all`: All opportunities
-
 ---
 
-## Request Examples
+## Response Format
 
-### Example 1: Basic Account List
+### List Endpoints
 
-```javascript
-const axios = require('axios');
-
-const config = {
-  headers: {
-    'x-api-key': 'your-api-key-here'
-  }
-};
-
-axios.get('https://your-crm.com/api/v1/external/accounts', config)
-  .then(response => {
-    console.log(`Found ${response.data.pagination.total} accounts`);
-    response.data.accounts.forEach(account => {
-      console.log(`${account.id}: ${account.name}`);
-    });
-  })
-  .catch(error => {
-    console.error('Error:', error.response.data);
-  });
-```
-
-### Example 2: Paginated Opportunities
-
-```javascript
-async function getAllOpportunities() {
-  const apiKey = 'your-api-key-here';
-  const baseUrl = 'https://your-crm.com/api/v1/external';
-  let allOpportunities = [];
-  let offset = 0;
-  const limit = 100;
-
-  while (true) {
-    const response = await fetch(
-      `${baseUrl}/opportunities?limit=${limit}&offset=${offset}`,
-      {
-        headers: { 'x-api-key': apiKey }
-      }
-    );
-
-    const data = await response.json();
-    allOpportunities = allOpportunities.concat(data.opportunities);
-
-    if (!data.pagination.hasMore) break;
-    offset += limit;
-  }
-
-  return allOpportunities;
-}
-```
-
-### Example 3: Incremental Sync
-
-```javascript
-const lastSyncTime = '2025-02-01T00:00:00.000Z';
-
-fetch(`https://your-crm.com/api/v1/external/opportunities?updatedSince=${lastSyncTime}`, {
-  headers: {
-    'x-api-key': 'your-api-key-here'
-  }
-})
-.then(res => res.json())
-.then(data => {
-  console.log(`${data.opportunities.length} opportunities updated since last sync`);
-  // Update your local database with changed records
-});
-```
-
-### Example 4: Account with Expanded Opportunities
-
-```javascript
-fetch('https://your-crm.com/api/v1/external/accounts/ACT-00001?expand=opportunities', {
-  headers: {
-    'x-api-key': 'your-api-key-here'
-  }
-})
-.then(res => res.json())
-.then(account => {
-  console.log(`Account: ${account.name}`);
-  console.log(`Opportunities: ${account.opportunities.length}`);
-  
-  account.opportunities.forEach(opp => {
-    console.log(`  - ${opp.name}: $${opp.amount}`);
-  });
-});
-```
-
-### Example 5: Error Handling
-
-```javascript
-async function fetchWithRetry(url, options, maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, options);
-      
-      if (response.status === 429) {
-        // Rate limited - wait and retry
-        const retryAfter = response.headers.get('Retry-After') || 60;
-        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-        continue;
-      }
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`${error.error}: ${error.message}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      if (i === maxRetries - 1) throw error;
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-    }
-  }
-}
-
-// Usage
-const options = {
-  headers: { 'x-api-key': 'your-api-key-here' }
-};
-
-try {
-  const data = await fetchWithRetry(
-    'https://your-crm.com/api/v1/external/accounts',
-    options
-  );
-  console.log('Success:', data);
-} catch (error) {
-  console.error('Failed after retries:', error.message);
-}
-```
-
----
-
-## Response Formats
-
-### Success Response Structure
-
-All successful responses follow this structure:
-
-**List Endpoints:**
 ```json
 {
-  "accounts": [...],  // or "opportunities"
+  "data": [ ... ],
   "pagination": {
     "total": 150,
-    "limit": 50,
+    "limit": 100,
     "offset": 0,
     "hasMore": true
   }
 }
 ```
 
-**Detail Endpoints:**
+### Detail Endpoints
+
 ```json
 {
-  "id": "ACT-00001",
-  "name": "...",
-  // ... other fields
+  "data": { ... }
 }
 ```
 
-### Account Object
+### Lead Creation (unique shape)
+
+```json
+{
+  "duplicate": false,
+  "data": { ... }
+}
+```
+
+---
+
+## Object Reference
+
+### Account Object (list)
 
 ```typescript
 {
-  id: string;                    // Format: ACT-XXXXX
+  id: string;              // "ACT-XXXXX"
   name: string;
-  category: string;              // e.g., "Hospital", "Clinic"
+  accountNumber: string | null;
+  type: string | null;     // e.g., "Customer", "Prospect"
+  category: string | null; // e.g., "Hospital", "Clinic"
+  ownerId: number | null;
+  industry: string | null;
+  externalId: string | null;
+  createdAt: string;       // ISO 8601
+  updatedAt: string;       // ISO 8601
+}
+```
+
+### Account Object (detail, adds)
+
+```typescript
+{
   website: string | null;
   phone: string | null;
-  email: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  country: string | null;
-  industry: string | null;
-  employees: number | null;
-  annualRevenue: number | null;  // In cents
-  description: string | null;
-  ownerId: number;               // User ID of account owner
-  createdAt: string;             // ISO 8601 timestamp
-  updatedAt: string;             // ISO 8601 timestamp
 }
 ```
 
@@ -508,20 +725,88 @@ All successful responses follow this structure:
 
 ```typescript
 {
-  id: string;                    // Format: OPP-XXXXX
+  id: string;                         // "OPP-XXXXX"
+  accountId: string;
   name: string;
-  accountId: string;             // Foreign key to Account
-  stage: string;                 // e.g., "Prospecting", "Closed Won"
-  amount: number;                // In cents
-  probability: number;           // 0-100
-  expectedCloseDate: string;     // YYYY-MM-DD format
-  description: string | null;
-  leadSource: string | null;
-  nextStep: string | null;
-  includeInForecast: boolean;    // Forecast inclusion flag
-  ownerId: number;               // User ID of opportunity owner
-  createdAt: string;             // ISO 8601 timestamp
-  updatedAt: string;             // ISO 8601 timestamp
+  stage: string;                      // e.g., "Prospecting", "Closed Won"
+  amount: number | null;              // In cents
+  closeDate: string | null;           // "YYYY-MM-DD"
+  ownerId: number | null;
+  probability: number | null;         // 0–100
+  status: string | null;              // e.g., "open", "closed_won", "closed_lost"
+  actualCloseDate: string | null;     // "YYYY-MM-DD"
+  actualRevenue: number | null;       // In cents
+  estCloseDate: string | null;        // "YYYY-MM-DD"
+  estRevenue: number | null;          // In cents
+  rating: string | null;              // "hot" | "warm" | "cold"
+  includeInForecast: boolean;
+  implementationStartDate: string | null;  // "YYYY-MM-DD"
+  implementationEndDate: string | null;    // "YYYY-MM-DD"
+  billingEndDate: string | null;           // "YYYY-MM-DD"
+  externalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Contact Object
+
+```typescript
+{
+  id: string;              // "CON-XXXXX"
+  firstName: string | null;
+  lastName: string | null;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  mobile: string | null;
+  accountId: string | null;
+  ownerId: number | null;
+  externalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Lead Object
+
+```typescript
+{
+  id: string;              // "LED-XXXXX"
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  title: string | null;
+  topic: string | null;
+  status: string;          // "new" | "contacted" | "qualified" | "converted" | "lost"
+  source: string | null;
+  rating: string | null;   // "hot" | "warm" | "cold"
+  organizationId: string | null;
+  organizationName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Activity Object
+
+```typescript
+{
+  id: string;              // "ACT-XXXXX"
+  type: string;            // "call" | "email" | "meeting" | "task" | "note"
+  subject: string;
+  status: string;          // "pending" | "completed" | "cancelled"
+  priority: string;        // "low" | "medium" | "high"
+  notes: string | null;
+  dueAt: string | null;    // ISO 8601
+  completedAt: string | null;  // ISO 8601
+  relatedType: string | null;
+  relatedId: string | null;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
@@ -531,8 +816,6 @@ All successful responses follow this structure:
 
 ### Error Response Format
 
-All errors return a consistent JSON structure:
-
 ```json
 {
   "error": "Error code/name",
@@ -540,36 +823,30 @@ All errors return a consistent JSON structure:
 }
 ```
 
+Validation errors additionally include a `details` array:
+
+```json
+{
+  "error": "Validation failed",
+  "message": "The lead payload is invalid",
+  "details": [
+    { "field": "email", "message": "Invalid email address" }
+  ]
+}
+```
+
 ### HTTP Status Codes
 
-| Status Code | Error Type | Description |
-|-------------|------------|-------------|
-| `200` | Success | Request completed successfully |
-| `401` | Unauthorized | Authentication failed or missing |
-| `404` | Not Found | Resource does not exist |
-| `429` | Too Many Requests | Rate limit exceeded |
-| `500` | Server Error | Internal server error occurred |
-
-### Specific Error Messages
-
-**Authentication Errors (401):**
-- `API key required`
-- `Invalid API key format`
-- `Invalid API key`
-- `API key expired`
-
-**Resource Not Found (404):**
-- `Account not found` - No account found with ID: ACT-XXXXX
-- `Opportunity not found` - No opportunity found with ID: OPP-XXXXX
-
-**Rate Limiting (429):**
-- `Too many requests` - Rate limit exceeded
-
-**Server Errors (500):**
-- `Failed to fetch accounts` - Error listing accounts
-- `Failed to fetch account` - Error fetching account details
-- `Failed to fetch opportunities` - Error listing opportunities
-- `Failed to fetch opportunity` - Error fetching opportunity details
+| Status Code | Description |
+|-------------|-------------|
+| `200` | Success |
+| `201` | Created |
+| `400` | Bad request (invalid parameters or payload) |
+| `401` | Authentication failed or missing |
+| `403` | Forbidden (system key used where org-scoped key is required) |
+| `404` | Resource not found or not accessible by this key |
+| `429` | Rate limit exceeded |
+| `500` | Internal server error |
 
 ---
 
@@ -578,11 +855,11 @@ All errors return a consistent JSON structure:
 ### Default Limits
 
 - **Default:** 100 requests per minute per API key
-- **Configurable:** Admins can set custom limits per API key
+- **Configurable:** Admins can set custom limits per API key in the Admin Console
 
 ### Rate Limit Headers
 
-Every response includes rate limit information:
+Every response includes:
 
 ```
 X-RateLimit-Limit: 100
@@ -590,77 +867,168 @@ X-RateLimit-Remaining: 95
 X-RateLimit-Reset: 1707123600
 ```
 
-- `X-RateLimit-Limit`: Maximum requests allowed per minute
-- `X-RateLimit-Remaining`: Remaining requests in current window
-- `X-RateLimit-Reset`: Unix timestamp when the limit resets
-
-### Handling Rate Limits
-
-When rate limited (HTTP 429), the response includes a `Retry-After` header:
+When rate-limited (HTTP 429), a `Retry-After` header is included:
 
 ```
 Retry-After: 60
-```
-
-**Best Practice:**
-```javascript
-if (response.status === 429) {
-  const retryAfter = response.headers.get('Retry-After');
-  await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-  // Retry the request
-}
 ```
 
 ---
 
 ## Best Practices
 
-### 1. Security
+### Security
 
-- **Protect Your API Key:** Never commit API keys to version control
-- **Use Environment Variables:** Store keys in `.env` files or secure key vaults
-- **Rotate Keys Regularly:** Generate new keys periodically
-- **Use HTTPS:** Always use encrypted connections
-- **Monitor Usage:** Review API key activity regularly in Admin Console
+- Never commit API keys to version control
+- Store keys in environment variables or a secrets manager
+- Use organization-scoped keys for tenant-isolated access
+- Rotate keys periodically; revoke compromised keys immediately via Admin Console
 
-### 2. Performance
+### Performance
 
-- **Batch Requests:** Use pagination to fetch data in manageable chunks
-- **Cache Responses:** Cache data locally to reduce API calls
-- **Use Incremental Sync:** Leverage `updatedSince` for efficient updates
-- **Expand Wisely:** Only expand related data when needed
-- **Respect Rate Limits:** Implement exponential backoff
+- Use `updatedSince` for incremental syncs instead of full refreshes
+- Use `expand` only when you need the related data
+- Implement exponential backoff for 429 responses
+- Page through results with `limit` / `offset` rather than fetching everything at once
 
-### 3. Data Synchronization
+### Monetary Values
 
-- **Store Last Sync Time:** Track the last successful sync timestamp
-- **Handle Deletes:** The API doesn't expose deleted records; implement soft delete logic
-- **Validate Data:** Always validate API responses before using data
-- **Error Recovery:** Implement retry logic for transient failures
-
-### 4. Error Handling
+All monetary fields (`amount`, `actualRevenue`, `estRevenue`) are stored and returned in **cents**. Divide by 100 to get dollar values:
 
 ```javascript
-function handleApiError(error) {
-  if (error.response) {
-    switch (error.response.status) {
-      case 401:
-        // Invalid API key - check credentials
-        console.error('Authentication failed');
-        break;
-      case 404:
-        // Resource not found - may have been deleted
-        console.warn('Resource not found');
-        break;
-      case 429:
-        // Rate limited - implement backoff
-        console.warn('Rate limit exceeded');
-        break;
-      case 500:
-        // Server error - retry with exponential backoff
-        console.error('Server error');
-        break;
+const dollarsAmount = opportunity.amount / 100;
+```
+
+### Duplicate-Safe Lead Ingestion
+
+The `POST /leads` endpoint is idempotent on `email` within an org — submitting the same email twice returns the existing lead with `"duplicate": true` instead of creating a duplicate. Always check this flag before assuming a new record was created.
+
+---
+
+## Request Examples
+
+### Example 1: Fetch All Forecast Opportunities
+
+```javascript
+const baseUrl = 'https://htsalesmanager.healthtrixss.com/api/v1/external';
+const headers = { 'x-api-key': process.env.CRM_API_KEY };
+
+async function getAllForecastOpportunities() {
+  let all = [];
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const res = await fetch(
+      `${baseUrl}/opportunities?limit=${limit}&offset=${offset}&includeInForecast=true`,
+      { headers }
+    );
+    const { data, pagination } = await res.json();
+    all = all.concat(data);
+    if (!pagination.hasMore) break;
+    offset += limit;
+  }
+
+  return all;
+}
+```
+
+### Example 2: Incremental Sync
+
+```javascript
+const lastSync = localStorage.getItem('lastSyncTime') || '2020-01-01T00:00:00.000Z';
+
+const res = await fetch(
+  `${baseUrl}/opportunities?updatedSince=${encodeURIComponent(lastSync)}`,
+  { headers }
+);
+const { data } = await res.json();
+
+// Update local store with changed records
+data.forEach(opp => updateLocalRecord(opp));
+localStorage.setItem('lastSyncTime', new Date().toISOString());
+```
+
+### Example 3: Account with Opportunities and Contacts
+
+```javascript
+const res = await fetch(
+  `${baseUrl}/accounts/ACT-00001?expand=opportunities,contacts`,
+  { headers }
+);
+const { data: account } = await res.json();
+
+console.log(`${account.name} has ${account.opportunities.length} open opportunities`);
+account.contacts.forEach(c => console.log(`  Contact: ${c.firstName} ${c.lastName}`));
+```
+
+### Example 4: Submit a Lead from a Web Form
+
+```javascript
+const res = await fetch(`${baseUrl}/leads`, {
+  method: 'POST',
+  headers: { ...headers, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john.doe@example.com',
+    company: 'Acme Corp',
+    source: 'website',
+    topic: 'Interested in product demo',
+  }),
+});
+
+const result = await res.json();
+if (result.duplicate) {
+  console.log('Lead already exists:', result.data.id);
+} else {
+  console.log('New lead created:', result.data.id);
+}
+```
+
+### Example 5: Log an Activity Against a Lead
+
+```javascript
+const res = await fetch(`${baseUrl}/activities`, {
+  method: 'POST',
+  headers: { ...headers, 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    type: 'call',
+    subject: 'Initial discovery call',
+    status: 'completed',
+    completedAt: new Date().toISOString(),
+    notes: 'Discussed product fit and pricing',
+    relatedType: 'Lead',
+    relatedId: 'LED-00042',
+  }),
+});
+
+const { data: activity } = await res.json();
+console.log('Activity logged:', activity.id);
+```
+
+### Example 6: Error Handling with Retry
+
+```javascript
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, options);
+
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      continue;
     }
+
+    if (!res.ok) {
+      const err = await res.json();
+      if (res.status >= 400 && res.status < 500) throw new Error(err.message); // Don't retry client errors
+      if (attempt === maxRetries - 1) throw new Error(err.message);
+      await new Promise(r => setTimeout(r, 1000 * 2 ** attempt)); // Exponential backoff
+      continue;
+    }
+
+    return res.json();
   }
 }
 ```
@@ -671,123 +1039,97 @@ function handleApiError(error) {
 
 ### Pattern 1: Full Initial Sync + Incremental Updates
 
-**Use Case:** Custom forecasting dashboard
+**Use case:** Custom forecasting dashboard
 
 ```javascript
 class CRMSync {
-  constructor(apiKey, baseUrl) {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
-    this.lastSyncTime = null;
+  constructor(apiKey) {
+    this.baseUrl = 'https://htsalesmanager.healthtrixss.com/api/v1/external';
+    this.headers = { 'x-api-key': apiKey };
   }
 
   async initialSync() {
-    // Fetch all opportunities on first run
-    const opportunities = await this.fetchAllOpportunities();
-    await this.saveToDatabase(opportunities);
-    this.lastSyncTime = new Date().toISOString();
+    const opps = await this.fetchAll('/opportunities?includeInForecast=true');
+    await db.opportunities.bulkUpsert(opps);
+    await db.meta.set('lastSyncTime', new Date().toISOString());
   }
 
   async incrementalSync() {
-    // Fetch only changed opportunities
-    const url = `${this.baseUrl}/opportunities?updatedSince=${this.lastSyncTime}`;
-    const response = await fetch(url, {
-      headers: { 'x-api-key': this.apiKey }
-    });
-    const data = await response.json();
-    
-    await this.updateDatabase(data.opportunities);
-    this.lastSyncTime = new Date().toISOString();
+    const since = await db.meta.get('lastSyncTime');
+    const { data } = await fetch(
+      `${this.baseUrl}/opportunities?updatedSince=${since}`,
+      { headers: this.headers }
+    ).then(r => r.json());
+
+    await db.opportunities.bulkUpsert(data);
+    await db.meta.set('lastSyncTime', new Date().toISOString());
   }
 
-  async fetchAllOpportunities() {
-    let allOpps = [];
-    let offset = 0;
-    
+  async fetchAll(path) {
+    let all = [], offset = 0;
     while (true) {
-      const response = await fetch(
-        `${this.baseUrl}/opportunities?limit=100&offset=${offset}`,
-        { headers: { 'x-api-key': this.apiKey } }
-      );
-      const data = await response.json();
-      allOpps = allOpps.concat(data.opportunities);
-      
-      if (!data.pagination.hasMore) break;
+      const { data, pagination } = await fetch(
+        `${this.baseUrl}${path}&limit=100&offset=${offset}`,
+        { headers: this.headers }
+      ).then(r => r.json());
+      all = all.concat(data);
+      if (!pagination.hasMore) break;
       offset += 100;
     }
-    
-    return allOpps;
+    return all;
   }
 }
 ```
 
-### Pattern 2: Real-time Forecast Calculations
-
-**Use Case:** Sales pipeline analytics
+### Pattern 2: Weighted Forecast by Stage
 
 ```javascript
 async function calculateForecast() {
-  const response = await fetch(
-    'https://your-crm.com/api/v1/external/opportunities?includeInForecast=true',
-    {
-      headers: { 'x-api-key': process.env.CRM_API_KEY }
-    }
-  );
-  
-  const data = await response.json();
-  
-  const forecast = data.opportunities.reduce((acc, opp) => {
-    const weightedValue = (opp.amount / 100) * (opp.probability / 100);
-    
-    if (!acc[opp.stage]) {
-      acc[opp.stage] = { count: 0, total: 0, weighted: 0 };
-    }
-    
+  const { data } = await fetch(
+    `${baseUrl}/opportunities?includeInForecast=true&expand=account`,
+    { headers }
+  ).then(r => r.json());
+
+  return data.reduce((acc, opp) => {
+    const dollarAmount = (opp.amount ?? 0) / 100;
+    const weighted = dollarAmount * (opp.probability ?? 0) / 100;
+
+    acc[opp.stage] = acc[opp.stage] || { count: 0, total: 0, weighted: 0 };
     acc[opp.stage].count++;
-    acc[opp.stage].total += opp.amount / 100;
-    acc[opp.stage].weighted += weightedValue;
-    
+    acc[opp.stage].total += dollarAmount;
+    acc[opp.stage].weighted += weighted;
     return acc;
   }, {});
-  
-  return forecast;
 }
 ```
 
-### Pattern 3: Account-Centric Analysis
+### Pattern 3: Lead Capture Integration
 
-**Use Case:** Customer health scoring
+**Use case:** Website form → CRM lead
 
 ```javascript
-async function analyzeAccountHealth(accountId) {
-  const response = await fetch(
-    `https://your-crm.com/api/v1/external/accounts/${accountId}?expand=opportunities`,
-    {
-      headers: { 'x-api-key': process.env.CRM_API_KEY }
-    }
-  );
-  
-  const account = await response.json();
-  
-  const metrics = {
-    totalOpportunities: account.opportunities.length,
-    totalValue: account.opportunities.reduce((sum, opp) => sum + opp.amount, 0) / 100,
-    avgDealSize: 0,
-    winRate: 0,
-    openOpportunities: account.opportunities.filter(o => 
-      !['Closed Won', 'Closed Lost'].includes(o.stage)
-    ).length
-  };
-  
-  metrics.avgDealSize = metrics.totalValue / metrics.totalOpportunities;
-  
-  const closedWon = account.opportunities.filter(o => o.stage === 'Closed Won').length;
-  const closedTotal = account.opportunities.filter(o => 
-    ['Closed Won', 'Closed Lost'].includes(o.stage)
-  ).length;
-  metrics.winRate = closedTotal > 0 ? (closedWon / closedTotal) * 100 : 0;
-  
-  return metrics;
+// On form submit
+async function submitLead(formData) {
+  const res = await fetch(`${baseUrl}/leads`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      firstName: formData.get('firstName'),
+      lastName: formData.get('lastName'),
+      email: formData.get('email'),
+      company: formData.get('company'),
+      source: 'website',
+      topic: formData.get('message'),
+    }),
+  });
+
+  if (!res.ok) {
+    const { message } = await res.json();
+    throw new Error(message);
+  }
+
+  const result = await res.json();
+  return result; // Check result.duplicate to know if it was a new lead
 }
 ```
 
@@ -797,74 +1139,41 @@ async function analyzeAccountHealth(accountId) {
 
 ### Audit Logging
 
-All external API requests are automatically logged in the CRM's audit system with:
-- Endpoint accessed
-- HTTP method
-- Response status code
-- Request latency
-- API key metadata
+All external API requests are automatically logged. Access your key's logs programmatically via `GET /api/v1/external/logs` or view them in Admin Console → API Access Logs.
+
+Each log entry records: endpoint, method, HTTP status, latency, response size, query parameters, IP address, and user agent.
 
 ### Admin Console Features
 
-- **Generate API Keys:** Create new keys with custom names and descriptions
-- **View Activity:** Check last used timestamp for each key
-- **Revoke Access:** Instantly disable keys
-- **Set Expiration:** Configure automatic key expiration
-- **Configure Rate Limits:** Adjust request limits per key
-
-### Getting Help
-
-For additional support:
-- Review the in-app Help → API Documentation tab
-- Contact your CRM administrator
-- Check audit logs for debugging failed requests
+- **Generate API Keys:** Create new keys, optionally scoped to an organization
+- **View Activity:** Last used timestamp per key
+- **Revoke Access:** Instantly disable any key
+- **Set Expiration:** Automatic key expiration
+- **Configure Rate Limits:** Per-key rate limit overrides
+- **View Access Logs:** Searchable log of all API requests
 
 ---
 
 ## Changelog
 
-### Version 1.0 (Current)
-- Initial release
-- Four core endpoints (accounts list/detail, opportunities list/detail)
+### Version 1.1 (August 2026)
+- **New endpoints:** Contacts list/detail, Leads create/list/detail, Activities create, API access logs
+- **Response envelope:** All list and detail responses are now wrapped in `{ "data": ... }` (was `{ "accounts": ... }` / `{ "opportunities": ... }`)
+- **Pagination defaults updated:** Default limit raised to 100 (was 50), max raised to 1000 (was 100)
+- **Opportunity fields added:** `implementationStartDate`, `implementationEndDate`, `billingEndDate`, `status`, `actualCloseDate`, `actualRevenue`, `estCloseDate`, `estRevenue`, `rating`, `externalId`
+- **Opportunity fields renamed:** `expectedCloseDate` → `closeDate`
+- **Opportunity expand:** Added `resources` expand option
+- **Account fields added:** `accountNumber`, `type`, `externalId`
+- **Organization-scoped API keys:** System vs. org-scoped key distinction documented
+- **Base URL updated:** `https://htsalesmanager.healthtrixss.com`
+
+### Version 1.0 (November 2025)
+- Initial release: accounts and opportunities list/detail endpoints
 - API key authentication with bcrypt hashing
-- Rate limiting (100 req/min default)
-- Pagination support (max 100 per page)
-- Incremental sync via `updatedSince` parameter
-- Related data expansion via `expand` parameter
-- Forecast filtering for opportunities
-- Comprehensive audit logging
+- Rate limiting, pagination, incremental sync, expand
 
 ---
 
-## Quick Reference
-
-### Endpoints Summary
-
-```
-GET /api/v1/external/accounts              # List all accounts
-GET /api/v1/external/accounts/:id          # Get account details
-GET /api/v1/external/opportunities         # List opportunities
-GET /api/v1/external/opportunities/:id     # Get opportunity details
-```
-
-### Common Parameters
-
-```
-?limit=50                                   # Pagination limit
-?offset=0                                   # Pagination offset
-?updatedSince=2025-02-01T00:00:00.000Z     # Incremental sync
-?expand=opportunities                       # Include related data
-?includeInForecast=true                    # Filter by forecast flag
-```
-
-### Authentication Header
-
-```
-x-api-key: your-api-key-here
-```
-
----
-
-**Document Version:** 1.0  
-**Last Updated:** November 13, 2025  
-**API Version:** 1.0
+**Document Version:** 1.1  
+**Last Updated:** August 12, 2026  
+**API Version:** 1.1
