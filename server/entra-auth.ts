@@ -28,21 +28,19 @@ const GRAPH_ME_URL = "https://graph.microsoft.com/v1.0/me";
 const SCOPES = "openid profile email User.Read";
 
 function buildRedirectUri(req: Request): string {
-  // Use the explicitly-configured APP_BASE_URL first (production/custom domain),
-  // then fall back to the Replit-provided REPLIT_DEV_DOMAIN (injected by the platform,
-  // not by callers — safe to trust).  This prevents the redirect_uri from resolving to
-  // an internal proxy address (e.g. localhost:5000) inside Replit's environment, which
-  // would cause AADSTS500113 ("No reply address is registered for the application").
-  const baseUrl =
-    (process.env.APP_BASE_URL ?? "").replace(/\/$/, "") ||
-    (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
-
-  if (baseUrl) {
-    return `${baseUrl}/api/auth/entra/callback`;
+  // Priority 1: APP_BASE_URL — explicit, stable override for any domain.
+  // Set this to your production URL (e.g. https://htsalesmanager.healthtrixss.com)
+  // in the production deployment environment.
+  const appBaseUrl = (process.env.APP_BASE_URL ?? "").replace(/\/$/, "");
+  if (appBaseUrl) {
+    return `${appBaseUrl}/api/auth/entra/callback`;
   }
 
-  // Last-resort fallback: derive from request headers (original behaviour).
-  // Only reached if neither APP_BASE_URL nor REPLIT_DEV_DOMAIN is configured.
+  // Priority 2: Request headers — x-forwarded-host is set correctly by the reverse
+  // proxy in both the Replit dev environment and production custom-domain deployments.
+  // NOTE: REPLIT_DEV_DOMAIN is intentionally NOT used here — it is injected into all
+  // Replit environments including production, so using it would cause production to send
+  // the dev .replit.dev domain to Azure, breaking SSO (AADSTS500113).
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/api/auth/entra/callback`;
