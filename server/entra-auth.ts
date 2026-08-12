@@ -28,6 +28,21 @@ const GRAPH_ME_URL = "https://graph.microsoft.com/v1.0/me";
 const SCOPES = "openid profile email User.Read";
 
 function buildRedirectUri(req: Request): string {
+  // Use the explicitly-configured APP_BASE_URL first (production/custom domain),
+  // then fall back to the Replit-provided REPLIT_DEV_DOMAIN (injected by the platform,
+  // not by callers — safe to trust).  This prevents the redirect_uri from resolving to
+  // an internal proxy address (e.g. localhost:5000) inside Replit's environment, which
+  // would cause AADSTS500113 ("No reply address is registered for the application").
+  const baseUrl =
+    (process.env.APP_BASE_URL ?? "").replace(/\/$/, "") ||
+    (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+
+  if (baseUrl) {
+    return `${baseUrl}/api/auth/entra/callback`;
+  }
+
+  // Last-resort fallback: derive from request headers (original behaviour).
+  // Only reached if neither APP_BASE_URL nor REPLIT_DEV_DOMAIN is configured.
   const proto = req.headers["x-forwarded-proto"] ?? req.protocol;
   const host = req.headers["x-forwarded-host"] ?? req.headers.host;
   return `${proto}://${host}/api/auth/entra/callback`;
