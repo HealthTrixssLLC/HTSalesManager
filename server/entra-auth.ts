@@ -12,7 +12,8 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { storage } from "./db";
+import { storage, db, eq } from "./db";
+import * as schema from "@shared/schema";
 import { authenticate, type AuthRequest } from "./auth";
 import type { Express } from "express";
 
@@ -199,6 +200,13 @@ export function registerEntraRoutes(app: Express): void {
               "Your account has no permissions assigned. Contact your administrator."
             )
         );
+      }
+
+      // ── Stamp authProvider = 'entra_sso' on first SSO login (durable marker) ─
+      if ((userWithPassword as any).authProvider !== "entra_sso") {
+        await db.update(schema.users)
+          .set({ authProvider: "entra_sso", updatedAt: new Date() })
+          .where(eq(schema.users.id, user.id));
       }
 
       // ── All checks passed — issue JWT ───────────────────────────────────────

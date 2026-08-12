@@ -605,13 +605,13 @@ export default function AdminConsole() {
   const [selectedPattern, setSelectedPattern] = useState<IdPattern | null>(null);
   const [patternPreview, setPatternPreview] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [editUserData, setEditUserData] = useState<{name: string; email: string; roleId: string}>({name: "", email: "", roleId: ""});
+  const [editUserData, setEditUserData] = useState<{name: string; email: string; roleId: string; authProvider: "password" | "entra_sso"}>({name: "", email: "", roleId: "", authProvider: "password"});
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [mergePrimaryUserId, setMergePrimaryUserId] = useState<string>("");
-  const [newUserData, setNewUserData] = useState<{name: string; email: string; password: string; roleId: string}>({
-    name: "", email: "", password: "", roleId: ""
+  const [newUserData, setNewUserData] = useState<{name: string; email: string; password: string; roleId: string; authProvider: "password" | "entra_sso"}>({
+    name: "", email: "", password: "", roleId: "", authProvider: "password"
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dynamicsEntityType, setDynamicsEntityType] = useState<"accounts" | "contacts" | "leads" | "opportunities" | "activities">("accounts");
@@ -666,12 +666,13 @@ export default function AdminConsole() {
   });
 
   const createUserMutation = useMutation({
-    mutationFn: async (data: { name: string; email: string; password: string; roleId: string }) => {
+    mutationFn: async (data: { name: string; email: string; password: string; roleId: string; authProvider: "password" | "entra_sso" }) => {
       const res = await apiRequest("POST", "/api/admin/users", {
         name: data.name,
         email: data.email,
         password: data.password,
-        roleId: data.roleId
+        roleId: data.roleId,
+        authProvider: data.authProvider,
       });
       return await res.json();
     },
@@ -679,7 +680,7 @@ export default function AdminConsole() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "User created successfully" });
       setCreateUserOpen(false);
-      setNewUserData({ name: "", email: "", password: "", roleId: "" });
+      setNewUserData({ name: "", email: "", password: "", roleId: "", authProvider: "password" });
     },
     onError: (error: Error) => {
       toast({ 
@@ -691,11 +692,12 @@ export default function AdminConsole() {
   });
   
   const updateUserMutation = useMutation({
-    mutationFn: async (data: { id: string; name: string; email: string; roleId: string }) => {
+    mutationFn: async (data: { id: string; name: string; email: string; roleId: string; authProvider: "password" | "entra_sso" }) => {
       const res = await apiRequest("PATCH", `/api/admin/users/${data.id}`, {
         name: data.name,
         email: data.email,
-        roleId: data.roleId
+        roleId: data.roleId,
+        authProvider: data.authProvider,
       });
       return await res.json();
     },
@@ -1051,13 +1053,14 @@ export default function AdminConsole() {
     setEditUserData({
       name: user.name,
       email: user.email,
-      roleId: user.roles[0]?.id || ""
+      roleId: user.roles[0]?.id || "",
+      authProvider: (user as any).authProvider === "entra_sso" ? "entra_sso" : "password",
     });
   };
   
   const cancelEditingUser = () => {
     setEditingUserId(null);
-    setEditUserData({name: "", email: "", roleId: ""});
+    setEditUserData({name: "", email: "", roleId: "", authProvider: "password"});
   };
   
   const saveUserChanges = () => {
@@ -1257,6 +1260,7 @@ export default function AdminConsole() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Auth</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
@@ -1327,6 +1331,26 @@ export default function AdminConsole() {
                           ) : (
                             <Badge variant="secondary" className={getRoleBadgeClass(user.roles[0]?.name)}>
                               {user.roles[0]?.name || "No role"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isEditing ? (
+                            <Select
+                              value={editUserData.authProvider}
+                              onValueChange={(value) => setEditUserData({...editUserData, authProvider: value as "password" | "entra_sso"})}
+                            >
+                              <SelectTrigger data-testid={`select-edit-auth-${user.id}`} className="w-32">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="password">Password</SelectItem>
+                                <SelectItem value="entra_sso">SSO (Entra)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="outline" className={(user as any).authProvider === "entra_sso" ? "border-blue-400 text-blue-700" : "border-gray-300 text-gray-600"}>
+                              {(user as any).authProvider === "entra_sso" ? "SSO" : "Password"}
                             </Badge>
                           )}
                         </TableCell>
@@ -2277,6 +2301,26 @@ export default function AdminConsole() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-user-auth">Authentication Method</Label>
+              <Select
+                value={newUserData.authProvider}
+                onValueChange={(value) => setNewUserData({...newUserData, authProvider: value as "password" | "entra_sso"})}
+              >
+                <SelectTrigger id="new-user-auth" data-testid="select-new-user-auth">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="password">Password (local login)</SelectItem>
+                  <SelectItem value="entra_sso">Microsoft SSO (Entra ID)</SelectItem>
+                </SelectContent>
+              </Select>
+              {newUserData.authProvider === "entra_sso" && (
+                <p className="text-xs text-muted-foreground">
+                  SSO users sign in via Microsoft and are excluded from password reset emails.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>

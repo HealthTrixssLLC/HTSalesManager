@@ -13,7 +13,9 @@
 
 import type { Express } from "express";
 import { z } from "zod";
+import crypto from "crypto";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
+import { sendPasswordResetEmail } from "./email-service";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, attachActiveOrg, type AuthRequest } from "./auth";
 import { requirePermission, requireRole, requireGlobalRole, DEFAULT_ROLE, hasPermission, hasAnyRole } from "./rbac";
 import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter, readRateLimiter } from "./rate-limiters";
@@ -49,6 +51,7 @@ import {
   activityAssociations,
   auditLogs,
   llmConfigurations,
+  passwordResetTokens,
   type CrmDocumentEntityType,
 } from "@shared/schema";
 import { backupService } from "./backup-service";
@@ -271,6 +274,136 @@ export async function registerRoutes(app: Express) {
   app.post("/api/logout", authRateLimiter, (req, res) => {
     res.clearCookie("token");
     return res.json({ success: true });
+  });
+
+  // ── Forgot password — sends a reset link via Azure Graph email ─────────────
+  // CSRF-exempt (see csrf-protection.ts). Always returns 200 to prevent enumeration.
+  //
+  // Origin safety: we NEVER build the reset URL from X-Forwarded-Host or Host
+  // headers — those can be forged by an unauthenticated attacker, allowing them
+  // to redirect the reset link to their own server and steal the raw token.
+  // Instead we use the explicitly-configured APP_BASE_URL, falling back to the
+  // Replit-provided REPLIT_DEV_DOMAIN (set by the platform, not by callers).
+  // If neither is available the email is silently skipped (fail-closed).
+  //
+  // SSO classification: users default to authProvider='password'. Entra SSO users
+  // are stamped 'entra_sso' on their first successful SSO login (server/entra-auth.ts).
+  // Until that first login, an SSO-managed user would technically be eligible for
+  // password reset. Admins can mitigate this by ensuring SSO users complete their
+  // first login before this feature is relied upon, or by using the admin console
+  // to set authProvider='entra_sso' via the PATCH /api/admin/users/:id route once
+  // that field is surfaced there. See Task #159 for the planned follow-up.
+  app.post("/api/auth/forgot-password", sensitiveRateLimiter, async (req, res) => {
+    const { email } = req.body ?? {};
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({ error: "Email is required." });
+    }
+
+    try {
+      const user = await storage.getUserByEmail(email.trim().toLowerCase());
+
+      // Generic success — never reveal whether the address exists or is SSO-managed
+      if (!user || (user as any).authProvider === "entra_sso") {
+        return res.json({ success: true });
+      }
+
+      // Determine a safe, attacker-proof base URL
+      const baseUrl =
+        (process.env.APP_BASE_URL ?? "").replace(/\/$/, "") ||
+        (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : "");
+
+      if (!baseUrl) {
+        console.error(
+          "[forgot-password] APP_BASE_URL / REPLIT_DEV_DOMAIN not set — reset email not sent. " +
+          "Set APP_BASE_URL to your public CRM URL to enable password reset emails."
+        );
+        // Return success to preserve enumeration-safety; email is silently skipped
+        return res.json({ success: true });
+      }
+
+      // Delete any existing unused tokens for this user (one active token at a time)
+      await db.delete(passwordResetTokens)
+        .where(and(
+          eq(passwordResetTokens.userId, user.id),
+          sql`${passwordResetTokens.usedAt} IS NULL`,
+        ));
+
+      // Generate a cryptographically random token; persist only its SHA-256 hash
+      const rawToken  = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await db.insert(passwordResetTokens).values({
+        userId:    user.id,
+        tokenHash,
+        expiresAt,
+      });
+
+      const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
+
+      // Fire-and-forget — errors are logged inside sendPasswordResetEmail
+      sendPasswordResetEmail(user.email, resetUrl);
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("[forgot-password] Error:", err);
+      return res.status(500).json({ error: "An error occurred. Please try again." });
+    }
+  });
+
+  // ── Reset password — validates token and sets new password ─────────────────
+  // CSRF-exempt (see csrf-protection.ts).
+  // Token claim is atomic: the UPDATE with `used_at IS NULL AND expires_at > now()`
+  // inside the transaction is the authoritative validity check. Only the one
+  // concurrent request that gets a returned row can proceed; all others receive
+  // a 400, eliminating the TOCTOU race between read and write.
+  app.post("/api/auth/reset-password", sensitiveRateLimiter, async (req, res) => {
+    const { token, newPassword } = req.body ?? {};
+
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ error: "Reset token is required." });
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+
+    try {
+      const tokenHash      = crypto.createHash("sha256").update(token).digest("hex");
+      const hashedPassword = await hashPassword(newPassword);
+
+      // Everything inside one transaction: claim token + update password atomically.
+      // The conditional UPDATE is the single authoritative validity + uniqueness gate.
+      let tokenInvalid = false;
+      await (db as any).transaction(async (tx: typeof db) => {
+        // Atomically mark the token used — only succeeds when unused AND not expired
+        const claimed = await tx.update(passwordResetTokens)
+          .set({ usedAt: new Date() })
+          .where(and(
+            eq(passwordResetTokens.tokenHash, tokenHash),
+            sql`${passwordResetTokens.usedAt} IS NULL`,
+            sql`${passwordResetTokens.expiresAt} > now()`,
+          ))
+          .returning({ userId: passwordResetTokens.userId });
+
+        if (!claimed.length) {
+          tokenInvalid = true;
+          return; // Abort without rolling back (no writes occurred yet)
+        }
+
+        await tx.update(users)
+          .set({ password: hashedPassword, updatedAt: new Date() })
+          .where(eq(users.id, claimed[0].userId));
+      });
+
+      if (tokenInvalid) {
+        return res.status(400).json({ error: "Invalid or expired reset link. Please request a new one." });
+      }
+
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("[reset-password] Error:", err);
+      return res.status(500).json({ error: "An error occurred. Please try again." });
+    }
   });
   
   app.get("/api/user", optionalAuthenticate, readRateLimiter, async (req: AuthRequest, res) => {
@@ -2659,12 +2792,17 @@ export async function registerRoutes(app: Express) {
   
   app.post("/api/admin/users", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const { name, email, password, roleId } = req.body;
+      const { name, email, password, roleId, authProvider } = req.body;
       
       // Validate required fields
       if (!name || !email || !password || !roleId) {
         return res.status(400).json({ error: "Name, email, password, and role are required" });
       }
+
+      // Validate authProvider — only recognised values accepted; defaults to 'password'
+      const allowedProviders = ["password", "entra_sso"] as const;
+      const provider: "password" | "entra_sso" =
+        allowedProviders.includes(authProvider) ? authProvider : "password";
       
       // Check if user already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -2675,12 +2813,13 @@ export async function registerRoutes(app: Express) {
       // Hash password using the auth helper
       const hashedPassword = await hashPassword(password);
       
-      // Create user
+      // Create user with explicit authProvider so admins can pre-classify SSO accounts
       const newUser = await storage.createUser({
         name,
         email,
         password: hashedPassword,
-        status: "active"
+        status: "active",
+        authProvider: provider,
       });
       
       // Assign role
@@ -2713,7 +2852,7 @@ export async function registerRoutes(app: Express) {
   app.patch("/api/admin/users/:id", authenticate, requireGlobalRole("Admin"), sensitiveRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { id } = req.params;
-      const { name, email, status, roleId } = req.body;
+      const { name, email, status, roleId, authProvider } = req.body;
       
       // Get the before state
       const before = await storage.getUserById(id);
@@ -2726,6 +2865,14 @@ export async function registerRoutes(app: Express) {
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
       if (status !== undefined) updateData.status = status;
+      // Allow admins to explicitly classify a user's auth provider
+      if (authProvider !== undefined) {
+        const allowedProviders = ["password", "entra_sso"];
+        if (!allowedProviders.includes(authProvider)) {
+          return res.status(400).json({ error: "Invalid authProvider. Must be 'password' or 'entra_sso'." });
+        }
+        updateData.authProvider = authProvider;
+      }
       
       const updatedUser = await storage.updateUser(id, updateData);
       

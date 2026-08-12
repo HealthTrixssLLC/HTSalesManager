@@ -53,7 +53,12 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
-  if (req.path === "/api/login" || req.path === "/api/register") {
+  if (
+    req.path === "/api/login" ||
+    req.path === "/api/register" ||
+    req.path === "/api/auth/forgot-password" ||
+    req.path === "/api/auth/reset-password"
+  ) {
     return next();
   }
 

@@ -228,6 +228,11 @@ export default function AuthPage() {
                     Invalid email or password
                   </p>
                 )}
+                <p className="text-center text-sm text-muted-foreground pt-1">
+                  <a href="/forgot-password" className="underline underline-offset-4 hover:text-foreground">
+                    Forgot password?
+                  </a>
+                </p>
               </form>
             </TabsContent>
 

@@ -38,9 +38,23 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   password: text("password").notNull(),
   status: userStatusEnum("status").notNull().default("active"),
+  authProvider: text("auth_provider").notNull().default("password"), // "password" | "entra_sso"
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// Single-use, time-limited tokens for password reset
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id", { length: 50 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx:  index("prt_user_id_idx").on(table.userId),
+  expiresIdx: index("prt_expires_idx").on(table.expiresAt),
+}));
 
 export const roles = pgTable("roles", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
