@@ -96,6 +96,9 @@ integrations = ["javascript_auth_all_persistance:1.0.0", "javascript_database:1.
 [userenv.shared]
 BACKUP_ENCRYPTION_KEY = "qgvZCSMiorcxfGYYFJGIkxSOQZdvpkrGhvwdFH1QIh94eZ5cVqmAJ12lcwTKpo+u"
 
+[userenv.production]
+APP_BASE_URL = "https://htsalesmanager.healthtrixss.com"
+
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
