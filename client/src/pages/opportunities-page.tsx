@@ -10,6 +10,7 @@ import { Opportunity, InsertOpportunity, insertOpportunitySchema, Account } from
 type OpportunityWithAccount = Opportunity & { accountName: string | null };
 import { useAuth } from "@/hooks/use-auth";
 import { useFinancialAccess } from "@/hooks/use-financial-access";
+import { usePermissions } from "@/hooks/use-permissions";
 import { FinancialValue } from "@/components/financial-value";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +63,7 @@ const stages = [
 export default function OpportunitiesPage() {
   const { user } = useAuth();
   const canViewFinancials = useFinancialAccess();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -668,19 +670,21 @@ export default function OpportunitiesPage() {
             <Filter className="h-4 w-4 mr-2" />
             {showFilters ? "Hide Filters" : "Show Filters"}
           </Button>
-          {canViewFinancials && (
+          {canViewFinancials && can("Opportunity", "read") && (
             <Button variant="outline" onClick={handleExport} data-testid="button-export-opportunities">
               <Download className="h-4 w-4 mr-2" />
               Export to CSV
             </Button>
           )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            {can("Opportunity", "create") && (
             <DialogTrigger asChild>
               <Button data-testid="button-create-opportunity">
                 <Plus className="h-4 w-4 mr-2" />
                 New Opportunity
               </Button>
             </DialogTrigger>
+            )}
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Opportunity</DialogTitle>
@@ -1422,7 +1426,7 @@ export default function OpportunitiesPage() {
       )}
 
       {/* Bulk Actions Toolbar */}
-      {selectedOpportunityIds.size > 0 && (
+      {selectedOpportunityIds.size > 0 && can("Opportunity", "update") && (
         <Card data-testid="toolbar-bulk-actions">
           <CardContent className="py-3">
             <div className="flex items-center justify-between flex-wrap gap-2">

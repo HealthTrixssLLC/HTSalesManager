@@ -4,6 +4,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useOrg } from "@/contexts/org-context";
 import { Plus, Trash2, Save, Database, Download, Upload, AlertTriangle, Edit2, X, Check, Key, Copy, Calendar, Bot, Zap, Eye, EyeOff, Search, GitMerge } from "lucide-react";
 import { User, Role, IdPattern, AccountCategory, InsertAccountCategory, ApiKey } from "@shared/schema";
@@ -598,7 +599,8 @@ export default function AdminConsole() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { activeOrgId } = useOrg();
-  const isAdmin = user?.roles?.some((r: Role) => r.name === "Admin") ?? false;
+  const { can } = usePermissions();
+  const isAdmin = can("*", "*");
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [confirmClearAccountsOpen, setConfirmClearAccountsOpen] = useState(false);
   const [confirmSystemResetOpen, setConfirmSystemResetOpen] = useState(false);

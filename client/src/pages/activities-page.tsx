@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { Plus, Loader2, Calendar, Phone, Mail, MessageSquare, CheckSquare, FileText, Download, Filter, SortAsc, Eye, X, Search } from "lucide-react";
 import { Activity, InsertActivity, insertActivitySchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,7 @@ function toLocalDateTimeString(date: Date): string {
 
 export default function ActivitiesPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -434,17 +436,21 @@ export default function ActivitiesPage() {
           <p className="text-muted-foreground">Track calls, meetings, tasks, and notes</p>
         </div>
         <div className="flex gap-2">
+          {can("Activity", "read") && (
           <Button variant="outline" onClick={handleExport} data-testid="button-export-activities">
             <Download className="h-4 w-4 mr-2" />
             Export to CSV
           </Button>
+          )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            {can("Activity", "create") && (
             <DialogTrigger asChild>
               <Button data-testid="button-create-activity">
                 <Plus className="h-4 w-4 mr-2" />
                 New Activity
               </Button>
             </DialogTrigger>
+            )}
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Activity</DialogTitle>
@@ -625,7 +631,7 @@ export default function ActivitiesPage() {
       </div>
 
       {/* Bulk Actions Toolbar */}
-      {selectedActivityIds.size > 0 && (
+      {selectedActivityIds.size > 0 && can("Activity", "update") && (
         <Card className="bg-primary/5 border-primary/20">
           <CardContent className="flex items-center justify-between p-4">
             <div className="flex items-center gap-4">

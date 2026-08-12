@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { Plus, Loader2, Users, Mail, Phone, Download, MessageSquare, X, Building2, Tags } from "lucide-react";
 import { Contact, InsertContact, insertContactSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -45,6 +46,7 @@ const AVAILABLE_COLUMNS: Column[] = [
 
 export default function ContactsPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -336,17 +338,21 @@ export default function ContactsPage() {
             storageKey="contacts-visible-columns"
             onVisibilityChange={handleColumnVisibilityChange}
           />
+          {can("Contact", "read") && (
           <Button variant="outline" onClick={handleExport} data-testid="button-export-contacts">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
+          )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            {can("Contact", "create") && (
             <DialogTrigger asChild>
               <Button data-testid="button-create-contact">
                 <Plus className="h-4 w-4 mr-2" />
                 New Contact
               </Button>
             </DialogTrigger>
+            )}
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Contact</DialogTitle>
@@ -494,7 +500,7 @@ export default function ContactsPage() {
         initialFilters={savedFilterInitial}
       />
 
-      {selectedContactIds.size > 0 && (
+      {selectedContactIds.size > 0 && can("Contact", "update") && (
         <Card className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">

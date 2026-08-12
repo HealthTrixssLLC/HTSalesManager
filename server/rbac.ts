@@ -60,6 +60,12 @@ async function getUserPermissions(userId: string, orgId?: string): Promise<Set<s
   return permissions;
 }
 
+// Expose resolved permissions as a plain array for API responses (e.g. GET /api/user)
+export async function getResolvedPermissions(userId: string, orgId?: string): Promise<string[]> {
+  const permissions = await getUserPermissions(userId, orgId);
+  return Array.from(permissions);
+}
+
 // Clear permission cache for a user (evicts all org-scoped entries too)
 export function clearPermissionCache(userId: string) {
   Array.from(permissionCache.keys()).forEach(key => {

@@ -17,7 +17,7 @@ import crypto from "crypto";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
 import { sendPasswordResetEmail } from "./email-service";
 import { hashPassword, verifyPassword, generateToken, authenticate, optionalAuthenticate, attachActiveOrg, type AuthRequest } from "./auth";
-import { requirePermission, requireRole, requireGlobalRole, DEFAULT_ROLE, hasPermission, hasAnyRole } from "./rbac";
+import { requirePermission, requireRole, requireGlobalRole, DEFAULT_ROLE, hasPermission, hasAnyRole, getResolvedPermissions } from "./rbac";
 import { authRateLimiter, sensitiveRateLimiter, crudRateLimiter, readRateLimiter } from "./rate-limiters";
 import {
   insertUserSchema,
@@ -412,6 +412,20 @@ export async function registerRoutes(app: Express) {
     }
     const userRolesData = await storage.getUserRoles(req.user.id);
     return res.json({ ...req.user, roles: userRolesData });
+  });
+
+  /**
+   * GET /api/permissions?orgId=<id>
+   *
+   * Returns the caller's effective permissions resolved against the given org.
+   * Without orgId, resolves against global roles (useful for admin-only paths).
+   * This is the canonical source for client-side UI gating — always call with
+   * the active org so the permissions match what the server will enforce.
+   */
+  app.get("/api/permissions", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
+    const orgId = typeof req.query.orgId === "string" ? req.query.orgId : undefined;
+    const permissions = await getResolvedPermissions(req.user!.id, orgId);
+    return res.json({ permissions });
   });
   
   // Get all users (for dropdowns)

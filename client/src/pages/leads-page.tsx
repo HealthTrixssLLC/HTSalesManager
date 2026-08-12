@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { Plus, Loader2, ArrowRightCircle, Download, MessageSquare, Mail, Phone, X, Users, Building2, Star, UserPlus } from "lucide-react";
 import { Lead, InsertLead, insertLeadSchema } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -63,6 +64,7 @@ const AVAILABLE_COLUMNS: Column[] = [
 
 export default function LeadsPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -355,17 +357,21 @@ export default function LeadsPage() {
             storageKey="leads-visible-columns"
             onVisibilityChange={handleColumnVisibilityChange}
           />
+          {can("Lead", "read") && (
           <Button variant="outline" onClick={handleExport} data-testid="button-export-leads">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
+          )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            {can("Lead", "create") && (
             <DialogTrigger asChild>
               <Button data-testid="button-create-lead">
                 <Plus className="h-4 w-4 mr-2" />
                 New Lead
               </Button>
             </DialogTrigger>
+            )}
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Lead</DialogTitle>
@@ -590,7 +596,7 @@ export default function LeadsPage() {
         initialFilters={savedFilterInitial}
       />
 
-      {selectedLeadIds.size > 0 && (
+      {selectedLeadIds.size > 0 && can("Lead", "update") && (
         <Card className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">
@@ -997,7 +1003,7 @@ export default function LeadsPage() {
                           >
                             <MessageSquare className="h-4 w-4" />
                           </Button>
-                          {lead.status !== "converted" && (
+                          {lead.status !== "converted" && can("Lead", "convert") && (
                             <Button
                               size="sm"
                               variant="outline"

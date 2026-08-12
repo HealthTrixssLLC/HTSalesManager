@@ -7,6 +7,7 @@ import { useLocation } from "wouter";
 import { Plus, Pencil, Trash2, Loader2, Download, MessageSquare, X, Users, Tags, FolderTree, Building2 } from "lucide-react";
 import { Account, InsertAccount, insertAccountSchema, AccountCategory } from "@shared/schema";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -46,6 +47,7 @@ const AVAILABLE_COLUMNS: Column[] = [
 
 export default function AccountsPage() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -392,17 +394,21 @@ export default function AccountsPage() {
             storageKey="accounts-visible-columns"
             onVisibilityChange={handleColumnVisibilityChange}
           />
+          {can("Account", "read") && (
           <Button variant="outline" onClick={handleExport} data-testid="button-export-accounts">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
+          )}
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            {can("Account", "create") && (
             <DialogTrigger asChild>
               <Button onClick={handleCreateNew} data-testid="button-create-account">
                 <Plus className="h-4 w-4 mr-2" />
                 New Account
               </Button>
             </DialogTrigger>
+            )}
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingAccount ? "Edit Account" : "Create New Account"}</DialogTitle>
@@ -578,7 +584,7 @@ export default function AccountsPage() {
         initialFilters={savedFilterInitial}
       />
 
-      {selectedAccountIds.size > 0 && (
+      {selectedAccountIds.size > 0 && can("Account", "update") && (
         <Card className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-2">
@@ -811,7 +817,7 @@ export default function AccountsPage() {
                       icon={Building2}
                       title="No accounts found"
                       description={hasActiveFilters ? "Try adjusting your filters to see more results." : "Create your first account to get started."}
-                      action={!hasActiveFilters ? { label: "New Account", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-account" } : undefined}
+                      action={!hasActiveFilters && can("Account", "create") ? { label: "New Account", onClick: () => setIsCreateDialogOpen(true), testId: "button-empty-create-account" } : undefined}
                     />
                   </TableCell>
                 </TableRow>
@@ -928,6 +934,7 @@ export default function AccountsPage() {
                           >
                             <MessageSquare className="h-4 w-4" />
                           </Button>
+                          {can("Account", "update") && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -939,6 +946,7 @@ export default function AccountsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}

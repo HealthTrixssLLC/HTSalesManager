@@ -3,6 +3,7 @@ import { Home, Building2, Users, UserPlus, Target, Calendar, History, Settings, 
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/hooks/use-permissions";
 import { OrgSwitcher } from "@/components/org-switcher";
 import {
   Sidebar,
@@ -48,20 +49,37 @@ const leadGenItems = [
   { title: "Reports",        url: "/lead-gen/reports",   icon: BarChart2 },
 ];
 
-const productDeveloperMenuItems = [
-  { title: "Resource Allocation", url: "/resource-allocation", icon: GanttChart },
-];
-
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logoutMutation } = useAuth();
+  const { can } = usePermissions();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
-  const isProductDeveloper = user?.roles?.some(r => r.name === "ProductDeveloper") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly"].includes(r.name));
-  const isResourceOnly = user?.roles?.some(r => r.name === "Resource") && !user?.roles?.some(r => ["Admin", "SalesManager", "SalesRep", "ReadOnly", "ProductDeveloper"].includes(r.name));
-  const isLimitedRole = isProductDeveloper || isResourceOnly;
-  const visibleMenuItems = isLimitedRole ? productDeveloperMenuItems : menuItems;
-  const visibleAdminItems = isLimitedRole ? [] : adminItems;
+  // A user has "core CRM" access if they can read any of the main CRM entities
+  const hasCrmRead = can("Account", "read") || can("Lead", "read") || can("Opportunity", "read") || can("Contact", "read") || can("Activity", "read");
+
+  // Build visible menu items based on per-resource read permissions
+  const visibleMenuItems = [
+    { title: "Dashboard",            url: "/",                   icon: Home,      show: hasCrmRead },
+    { title: "Analytics",            url: "/analytics",           icon: BarChart3, show: hasCrmRead },
+    { title: "Accounts",             url: "/accounts",            icon: Building2, show: can("Account", "read") },
+    { title: "Contacts",             url: "/contacts",            icon: Users,     show: can("Contact", "read") },
+    { title: "Leads",                url: "/leads",               icon: UserPlus,  show: can("Lead", "read") },
+    { title: "Opportunities",        url: "/opportunities",       icon: Target,    show: can("Opportunity", "read") },
+    { title: "Activities",           url: "/activities",          icon: Calendar,  show: can("Activity", "read") },
+    { title: "Resource Allocation",  url: "/resource-allocation", icon: GanttChart,show: can("ResourceAllocation", "read") },
+  ].filter(item => item.show);
+
+  // Build visible admin items based on per-item permissions
+  const visibleAdminItems = [
+    { title: "CSV Import",       url: "/import",    icon: Upload,      show: can("*", "*") },
+    { title: "Admin Console",    url: "/admin",     icon: Settings,    show: can("*", "*") },
+    { title: "Audit Log",        url: "/audit-log", icon: History,     show: can("AuditLog", "read") },
+    { title: "Help & Migration", url: "/help",      icon: HelpCircle,  show: can("*", "*") },
+  ].filter(item => item.show);
+
+  // Quick Add is only useful if the user can create at least one entity
+  const canQuickAdd = can("Account", "create") || can("Contact", "create") || can("Lead", "create") || can("Opportunity", "create") || can("Activity", "create");
 
   const routeMatch = useMemo(() => {
     const patterns = [
@@ -168,7 +186,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {!isLimitedRole && (
+          {can("LeadGen", "read") && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-white/40 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
               Lead Generation
@@ -238,7 +256,7 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter className="px-4 py-4 border-t border-white/10">
-          {!isLimitedRole && (
+          {canQuickAdd && (
           <Button
             variant="ghost"
             className="w-full justify-start text-white/70 hover:text-white hover:bg-white/10 gap-2 mb-3"
