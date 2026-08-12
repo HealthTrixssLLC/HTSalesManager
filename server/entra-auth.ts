@@ -21,9 +21,9 @@ const JWT_SECRET = process.env.SESSION_SECRET || "health-trixss-crm-secret-key";
 // SSO uses its own dedicated app registration (healthtrixss_sso) — separate from
 // the AZURE_* secrets used by server/email-service.ts (Healthtrixss System Email App).
 // The email app has no OAuth redirect URIs, so sharing credentials breaks SSO (AADSTS500113).
-const TENANT_ID = process.env.ENTRA_SSO_TENANT_ID!;
-const CLIENT_ID = process.env.ENTRA_SSO_CLIENT_ID!;
-const CLIENT_SECRET = process.env.ENTRA_SSO_CLIENT_SECRET!;
+const TENANT_ID = process.env.ENTRA_SSO_TENANT_ID || process.env.ENTRA_TENANT_ID!;
+const CLIENT_ID = process.env.ENTRA_SSO_CLIENT_ID || process.env.ENTRA_CLIENT_ID!;
+const CLIENT_SECRET = process.env.ENTRA_SSO_CLIENT_SECRET || process.env.ENTRA_CLIENT_SECRET!;
 
 const MICROSOFT_AUTHORIZE_URL = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/authorize`;
 const MICROSOFT_TOKEN_URL = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
