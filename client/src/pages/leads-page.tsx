@@ -925,7 +925,7 @@ export default function LeadsPage() {
                     )}
                     {isColumnVisible("name") && (
                       <TableCell className="font-medium" data-testid={`cell-name-${lead.id}`}>
-                        {lead.firstName} {lead.lastName}
+                        {(lead.firstName ?? (lead as any).first_name) || ""} {(lead.lastName ?? (lead as any).last_name) || ""}
                       </TableCell>
                     )}
                     {isColumnVisible("title") && (
@@ -1024,7 +1024,7 @@ export default function LeadsPage() {
                             variant="ghost" 
                             onClick={() => {
                               setCommentsLeadId(lead.id);
-                              setCommentsLeadName(`${lead.firstName} ${lead.lastName}`);
+                              setCommentsLeadName(`${lead.firstName ?? (lead as any).first_name ?? ""} ${lead.lastName ?? (lead as any).last_name ?? ""}`.trim());
                             }}
                             data-testid={`button-comments-${lead.id}`}
                           >
