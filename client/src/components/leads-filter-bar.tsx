@@ -218,10 +218,10 @@ export function LeadsFilterBar({ onFilterChange, totalCount, filteredCount, init
 
         <Select value={ownerId || undefined} onValueChange={handleOwnerChange}>
           <SelectTrigger className="w-[160px]" data-testid="select-filter-owner">
-            <SelectValue placeholder="All Owners" />
+            <SelectValue placeholder="All Sales Reps" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Owners</SelectItem>
+            <SelectItem value="all">All Sales Reps</SelectItem>
             {users?.map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.name}

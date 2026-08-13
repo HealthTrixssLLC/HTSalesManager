@@ -261,7 +261,9 @@ function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [rating, setRating] = useState<string>("");
+  const [ownerId, setOwnerId] = useState<string>("");
   const { toast } = useToast();
+  const { data: users } = useQuery<any[]>({ queryKey: ["/api/users"] });
 
   useEffect(() => {
     if (context?.accountName && !company) setCompany(context.accountName);
@@ -274,6 +276,7 @@ function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string
         firstName, lastName, company: company || null, email: email || null,
         phone: phone || null,
         status: "new", rating: rating || null,
+        ownerId: ownerId && ownerId !== "unassigned" ? ownerId : null,
       });
       return await res.json();
     },
@@ -320,6 +323,20 @@ function QuickAddLead({ onSuccess, onCancel, context }: { onSuccess: (id: string
             <SelectItem value="hot">Hot</SelectItem>
             <SelectItem value="warm">Warm</SelectItem>
             <SelectItem value="cold">Cold</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Sales Rep</Label>
+        <Select value={ownerId} onValueChange={setOwnerId}>
+          <SelectTrigger className="mt-1.5" data-testid="select-quick-lead-owner">
+            <SelectValue placeholder="Unassigned" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            {users?.map((u) => (
+              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

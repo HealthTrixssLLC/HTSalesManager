@@ -56,7 +56,7 @@ const AVAILABLE_COLUMNS: Column[] = [
   { id: "status", label: "Status" },
   { id: "source", label: "Source" },
   { id: "rating", label: "Rating" },
-  { id: "ownerId", label: "Owner" },
+  { id: "ownerId", label: "Sales Rep" },
   { id: "topic", label: "Topic" },
   { id: "tags", label: "Tags" },
   { id: "actions", label: "Actions" },
@@ -867,7 +867,7 @@ export default function LeadsPage() {
                 )}
                 {isColumnVisible("ownerId") && (
                   <SortableTableHeader
-                    label="Owner"
+                    label="Sales Rep"
                     field="ownerId"
                     currentSortBy={sortBy}
                     currentSortOrder={sortOrder}
