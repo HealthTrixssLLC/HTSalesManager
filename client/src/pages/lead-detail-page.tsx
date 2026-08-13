@@ -70,6 +70,10 @@ export default function LeadDetailPage() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
 
+  const { data: users } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/users"],
+  });
+
   const { data: lead, isLoading: leadLoading } = useQuery<Lead>({
     queryKey: ["/api/leads", leadId],
     enabled: !!leadId,
@@ -165,7 +169,11 @@ export default function LeadDetailPage() {
   }, [lead, isEditDialogOpen, form]);
 
   const onSubmitEdit = (data: InsertLead) => {
-    editMutation.mutate(data);
+    const payload = {
+      ...data,
+      ownerId: data.ownerId === "unassigned" ? null : data.ownerId,
+    };
+    editMutation.mutate(payload as InsertLead);
   };
 
   const handleDelete = () => {
@@ -225,6 +233,10 @@ export default function LeadDetailPage() {
               <DetailField label="Phone" value={lead.phone} type="phone" />
               <DetailField label="Topic" value={lead.topic} />
               <DetailField label="Source" value={lead.source} />
+              <DetailField
+                label="Assigned Sales Rep"
+                value={lead.ownerId ? (users?.find(u => u.id === lead.ownerId)?.name ?? "Unknown") : "Unassigned"}
+              />
               <div className="col-span-full flex justify-end pt-2">
                 <ContactResearchButton
                   entityType="lead"
@@ -545,6 +557,29 @@ export default function LeadDetailPage() {
                       <SelectItem value="hot">Hot</SelectItem>
                       <SelectItem value="warm">Warm</SelectItem>
                       <SelectItem value="cold">Cold</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="ownerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sales Rep</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || undefined}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-edit-owner">
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {users?.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />

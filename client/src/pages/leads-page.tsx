@@ -219,7 +219,11 @@ export default function LeadsPage() {
   });
 
   const onSubmit = (data: InsertLead) => {
-    createMutation.mutate(data);
+    const payload = {
+      ...data,
+      ownerId: data.ownerId === "unassigned" ? null : data.ownerId,
+    };
+    createMutation.mutate(payload as InsertLead);
   };
 
   const handleExport = async () => {
@@ -556,6 +560,29 @@ export default function LeadsPage() {
                           <SelectItem value="hot">Hot</SelectItem>
                           <SelectItem value="warm">Warm</SelectItem>
                           <SelectItem value="cold">Cold</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="ownerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Sales Rep</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-lead-owner">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="unassigned">Unassigned</SelectItem>
+                          {users?.map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
