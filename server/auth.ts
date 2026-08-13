@@ -13,6 +13,10 @@ const SALT_ROUNDS = 10;
 export interface AuthRequest extends Request {
   user?: User;
   activeOrgId?: string;
+  /** True when the request authenticated via an org-scoped API key.
+   *  Lead routes use this to stay pinned to activeOrgId rather than
+   *  expanding access to all of the user's org memberships. */
+  isApiKeyAuth?: boolean;
 }
 
 // Hash password
@@ -47,6 +51,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
             const user = await storage.getUserById(key.createdBy);
             if (user) {
               req.user = user;
+              req.isApiKeyAuth = true;
               storage.updateApiKeyLastUsed(key.id).catch(() => {});
 
               // Enforce API key org scope:

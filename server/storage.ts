@@ -57,7 +57,7 @@ export interface IStorage {
   deleteContact(id: string): Promise<void>;
   
   // ========== LEADS ==========
-  getAllLeads(orgId?: string): Promise<Lead[]>;
+  getAllLeads(orgId?: string | string[]): Promise<Lead[]>;
   getLeadById(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead>;

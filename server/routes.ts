@@ -107,6 +107,54 @@ function assertOrgOwnership(record: { organizationId?: string | null } | null | 
   return record.organizationId === orgId;
 }
 
+// Lead-specific permission middleware.
+// For session callers: when the user has the required Lead permission in their
+// default/primary org AND that org differs from the currently active org, this
+// middleware pins req.activeOrgId to the default org BEFORE checking permission.
+// This ensures all teammates share the same lead pool regardless of which org
+// the browser currently has active, while keeping permissions always consistent
+// with the org being accessed.
+// API key callers remain pinned to their key's org (req.activeOrgId is unchanged).
+function requireLeadPermission(action: string) {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    // Session callers: redirect to default org when permitted there
+    if (!req.isApiKeyAuth) {
+      const defaultOrg = await storage.getDefaultOrganization(req.user.id);
+      const defaultOrgId = defaultOrg?.id;
+      if (defaultOrgId && defaultOrgId !== req.activeOrgId) {
+        const allowedInDefault = await hasPermission(req.user.id, "Lead", action, defaultOrgId);
+        if (allowedInDefault) {
+          req.activeOrgId = defaultOrgId;
+        }
+      }
+    }
+
+    // Enforce org context and membership (mirrors requirePermission behaviour)
+    if (!req.activeOrgId) {
+      return res.status(400).json({ error: "Active organization context required. Set X-Organization-Id header." });
+    }
+    const isGlobalAdmin = await hasAnyRole(req.user.id, ["Admin"]);
+    if (!isGlobalAdmin) {
+      const membership = await storage.getOrgMembership(req.user.id, req.activeOrgId);
+      if (!membership) {
+        return res.status(403).json({ error: "You are not a member of this organization" });
+      }
+    }
+
+    // Check Lead permission against the effective org
+    const allowed = await hasPermission(req.user.id, "Lead", action, req.activeOrgId);
+    if (!allowed) {
+      return res.status(403).json({ error: "Forbidden", message: `You do not have permission to ${action} Lead` });
+    }
+
+    next();
+  };
+}
+
 // Resolve a CRM entity by type+id and verify it belongs to the active org.
 // Returns false if entity is not found or belongs to a different org.
 async function assertEntityOrgOwnership(entity: string, entityId: string, orgId: string | undefined): Promise<boolean> {
@@ -1035,7 +1083,7 @@ export async function registerRoutes(app: Express) {
   // ========== LEADS ROUTES ==========
   
   // Get leads summary statistics
-  app.get("/api/leads/summary", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/leads/summary", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allLeads = await storage.getAllLeads(req.activeOrgId || undefined);
       
@@ -1098,7 +1146,7 @@ export async function registerRoutes(app: Express) {
   
   // Recent leads created via the external API (website form / email intake).
   // Used by the frontend to notify the sales team of new inbound leads.
-  app.get("/api/leads/new-external", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/leads/new-external", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const allLeads = await storage.getAllLeads(req.activeOrgId || undefined);
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -1132,7 +1180,7 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  app.get("/api/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/leads", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       let leads = await storage.getAllLeads(req.activeOrgId || undefined);
       
@@ -1206,7 +1254,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/leads/:id", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/leads/:id", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const lead = await storage.getLeadById(req.params.id);
       if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
@@ -1218,9 +1266,11 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/leads", authenticate, requirePermission("Lead", "create"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/leads", authenticate, requireLeadPermission("create"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const data = insertLeadSchema.parse(req.body);
+      // req.activeOrgId has already been resolved to the effective lead org
+      // by requireLeadPermission — use it directly.
       if (req.activeOrgId) data.organizationId = req.activeOrgId;
       const lead = await storage.createLead(data);
       
@@ -1236,7 +1286,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Get related data for a lead (activities, conversion info)
-  app.get("/api/leads/:id/related", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/leads/:id/related", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       
@@ -1245,8 +1295,9 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ error: "Lead not found" });
       }
       
+      const leadOrgId = lead.organizationId || req.activeOrgId;
       const [allActivities, activityAssocs] = await Promise.all([
-        storage.getAllActivities(req.activeOrgId || undefined),
+        storage.getAllActivities(leadOrgId || undefined),
         // Fetch activity associations for this lead
         db.select().from(activityAssociations).where(
           and(
@@ -1291,7 +1342,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Lead Conversion
-  app.post("/api/leads/:id/convert", authenticate, requirePermission("Lead", "convert"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/leads/:id/convert", authenticate, requireLeadPermission("convert"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const { 
@@ -1319,6 +1370,15 @@ export async function registerRoutes(app: Express) {
       let opportunityId = null;
       
       const conversionOrgId = (lead.organizationId || req.activeOrgId) as string;
+
+      // Validate that a pre-existing account belongs to the lead's org to prevent
+      // cross-org relationships (e.g. contact in org B linked to account in org A).
+      if (existingAccountId) {
+        const existingAccount = await storage.getAccountById(existingAccountId);
+        if (!existingAccount || existingAccount.organizationId !== conversionOrgId) {
+          return res.status(400).json({ error: "The specified account does not belong to this lead's organization" });
+        }
+      }
 
       // Create Account if requested (backwards compatible with old wizard)
       if (createAccount || (!accountId && accountData)) {
@@ -1398,11 +1458,10 @@ export async function registerRoutes(app: Express) {
   });
 
   // Update lead
-  app.patch("/api/leads/:id", authenticate, requirePermission("Lead", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.patch("/api/leads/:id", authenticate, requireLeadPermission("update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
-      
       if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -1418,11 +1477,10 @@ export async function registerRoutes(app: Express) {
   });
 
   // Delete lead
-  app.delete("/api/leads/:id", authenticate, requirePermission("Lead", "delete"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.delete("/api/leads/:id", authenticate, requireLeadPermission("delete"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leadId = req.params.id;
       const lead = await storage.getLeadById(leadId);
-      
       if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
@@ -1438,7 +1496,7 @@ export async function registerRoutes(app: Express) {
   });
   
   // Bulk update leads
-  app.post("/api/leads/bulk-update", authenticate, requirePermission("Lead", "update"), crudRateLimiter, async (req: AuthRequest, res) => {
+  app.post("/api/leads/bulk-update", authenticate, requireLeadPermission("update"), crudRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { leadIds, updates } = req.body;
       
@@ -3945,7 +4003,7 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.get("/api/export/leads", authenticate, requirePermission("Lead", "read"), readRateLimiter, async (req: AuthRequest, res) => {
+  app.get("/api/export/leads", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const leads = await storage.getAllLeads(req.activeOrgId || undefined);
       
@@ -4203,12 +4261,15 @@ export async function registerRoutes(app: Express) {
     }
   });
   
-  app.post("/api/import/leads", authenticate, requirePermission("Lead", "create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
+  app.post("/api/import/leads", authenticate, requireLeadPermission("create"), crudRateLimiter, upload.single("file"), async (req: AuthRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
       
+      // req.activeOrgId is already resolved to the effective lead org by requireLeadPermission.
+      const importOrgId = req.activeOrgId;
+
       const csvContent = req.file.buffer.toString("utf-8");
       const records = parse(csvContent, {
         columns: true,
@@ -4242,7 +4303,7 @@ export async function registerRoutes(app: Express) {
             throw new Error(`Invalid source: "${row.source}". Expected one of: ${validSources.join(", ")}. Note: values must be lowercase.`);
           }
           
-          const generatedId = (!row.id || row.id.trim() === "") ? await storage.generateId("Lead", req.activeOrgId || undefined) : row.id;
+          const generatedId = (!row.id || row.id.trim() === "") ? await storage.generateId("Lead", importOrgId || undefined) : row.id;
           
           const leadData: any = {
             id: generatedId,
@@ -4260,14 +4321,14 @@ export async function registerRoutes(app: Express) {
             sourceRecordId: row.sourceRecordId,
             importStatus: row.importStatus,
             importNotes: row.importNotes,
-            organizationId: req.activeOrgId || undefined,
+            organizationId: importOrgId || undefined,
           };
           
           // Check for duplicate by externalId (scoped to org)
           if (leadData.externalId) {
             const [existingByExternalId] = await db.select()
               .from(leads)
-              .where(and(eq(leads.externalId, leadData.externalId), req.activeOrgId ? eq(leads.organizationId, req.activeOrgId) : undefined))
+              .where(and(eq(leads.externalId, leadData.externalId), importOrgId ? eq(leads.organizationId, importOrgId) : undefined))
               .limit(1);
             
             if (existingByExternalId) {

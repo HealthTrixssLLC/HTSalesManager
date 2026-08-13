@@ -377,10 +377,15 @@ export class PostgresStorage implements IStorage {
   
   // ========== LEADS ==========
   
-  async getAllLeads(orgId?: string): Promise<Lead[]> {
+  async getAllLeads(orgId?: string | string[]): Promise<Lead[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
-      const orgFilter = orgId ? sql`WHERE l.organization_id = ${orgId}` : sql``;
+      const orgIds = orgId ? (Array.isArray(orgId) ? orgId : [orgId]) : null;
+      // An empty array means "no orgs" — return nothing (deny-safe).
+      if (orgIds !== null && orgIds.length === 0) return [];
+      const orgFilter = orgIds && orgIds.length > 0
+        ? sql`WHERE l.organization_id IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`
+        : sql``;
       const result: any = await db.execute(sql`
         SELECT 
           l.*,
