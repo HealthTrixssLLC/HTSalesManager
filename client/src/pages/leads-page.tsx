@@ -981,7 +981,7 @@ export default function LeadsPage() {
                     )}
                     {isColumnVisible("ownerId") && (
                       <TableCell data-testid={`cell-owner-${lead.id}`}>
-                        {getOwnerName(lead.ownerId)}
+                        {getOwnerName(lead.ownerId ?? (lead as any).owner_id)}
                       </TableCell>
                     )}
                     {isColumnVisible("topic") && (
