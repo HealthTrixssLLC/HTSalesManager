@@ -1,0 +1,241 @@
+The diagnosis is approved.
+
+We will NOT delete LEAD-000152 as part of this deployment remediation.
+
+The root cause is the representation of "no email," not duplicate people.
+
+Our authoritative business rule is:
+
+A meaningful email address must be unique within an organization.
+
+A missing, empty, or whitespace-only email address means "no email" and
+must NOT participate in email uniqueness.
+
+Proceed with a root-cause remediation.
+
+==================================================
+1. VERIFY BEFORE WRITING
+==================================================
+
+Before making changes, inspect the actual production data for:
+
+email IS NULL
+
+email = ''
+
+and whitespace-only email values such as:
+
+' '
+'   '
+
+Report their counts.
+
+Also check whether any existing meaningful email addresses conflict after:
+
+lower(BTRIM(email))
+
+Use the equivalent of:
+
+SELECT
+    organization_id,
+    lower(BTRIM(email)) AS normalized_email,
+    COUNT(*)
+FROM leads
+WHERE NULLIF(BTRIM(email), '') IS NOT NULL
+GROUP BY organization_id, lower(BTRIM(email))
+HAVING COUNT(*) > 1;
+
+If ANY meaningful-email duplicate groups exist, STOP.
+
+Do not proceed automatically.
+
+==================================================
+2. NORMALIZE EXISTING BLANK EMAILS
+==================================================
+
+If there are no meaningful-email duplicate conflicts:
+
+Normalize existing blank/whitespace-only Lead emails to NULL.
+
+Equivalent:
+
+UPDATE leads
+SET email = NULL
+WHERE email IS NOT NULL
+  AND BTRIM(email) = '';
+
+Do this transactionally.
+
+Do NOT modify meaningful email addresses.
+
+Do NOT delete any Lead records.
+
+LEAD-000093 and LEAD-000152 must both remain.
+
+Verify their email fields become NULL.
+
+==================================================
+3. FIX APPLICATION INPUT NORMALIZATION
+==================================================
+
+Update the application so Lead email values are normalized consistently
+before persistence.
+
+For Lead CREATE and PATCH/UPDATE:
+
+- trim surrounding whitespace
+- if the resulting value is empty, persist NULL
+- otherwise preserve the meaningful email value using the application's
+  existing email-validation rules
+
+Do not silently change meaningful email addresses beyond the normalization
+already required for uniqueness.
+
+Inspect all Lead write paths, not only the External API.
+
+Apply this normalization at the safest shared validation/business layer so
+internal UI writes and External API writes behave consistently.
+
+Do not duplicate normalization logic unnecessarily.
+
+==================================================
+4. FIX EMAIL UNIQUENESS
+==================================================
+
+Update the migration/index definition so uniqueness applies only to
+meaningful email addresses.
+
+Preferred PostgreSQL semantics:
+
+CREATE UNIQUE INDEX leads_org_email_unique_idx
+ON leads (
+    organization_id,
+    lower(BTRIM(email))
+)
+WHERE NULLIF(BTRIM(email), '') IS NOT NULL;
+
+Before implementing this exact SQL, verify that it is compatible with the
+application's existing Lead email lookup/deduplication logic.
+
+The application and database MUST use equivalent normalization semantics.
+
+If application lookup currently uses only lower(email), update it safely so
+lookup, deduplication, and database uniqueness agree.
+
+We want:
+
+jay@example.com
+
+JAY@example.com
+
+" jay@example.com "
+
+to resolve to the same normalized email identity within the same
+organization.
+
+==================================================
+5. MIGRATION SAFETY
+==================================================
+
+Update the existing pending production migration if it has NOT yet been
+deployed anywhere that must preserve migration immutability.
+
+If that migration has already been deployed to another persistent/shared
+environment where migration files must remain immutable, create a new
+corrective migration instead.
+
+Do not rewrite migration history blindly.
+
+Explain which approach you selected and why.
+
+==================================================
+6. TESTS
+==================================================
+
+Add/update tests covering:
+
+Lead with email = NULL
+Lead with email = ''
+Lead with email = '   '
+Lead email with surrounding whitespace
+case-insensitive duplicate email
+case + whitespace duplicate email
+same meaningful email in same organization → rejected
+same meaningful email in different organizations → allowed
+multiple leads with no email in same organization → allowed
+External API Lead create normalization
+External API Lead PATCH normalization if email is mutable there
+internal Lead creation/update normalization
+
+Verify existing Lead deduplication behavior remains correct.
+
+==================================================
+7. PRODUCTION VALIDATION
+==================================================
+
+After remediation, verify:
+
+A. LEAD-000093 still exists
+B. LEAD-000152 still exists
+C. both now have email = NULL
+D. zero meaningful normalized duplicate-email groups exist
+E. leads_org_email_unique_idx exists
+F. multiple NULL-email Leads are permitted
+G. duplicate normalized real email within an organization is rejected
+H. same normalized email across different organizations is permitted
+
+==================================================
+8. FULL REGRESSION
+==================================================
+
+Run:
+
+npm run typecheck
+complete automated tests
+External API tests
+tenant-isolation tests
+OpenAPI validation
+
+Expected:
+
+TypeScript = 0 errors
+all tests passing
+
+Do not weaken tests or TypeScript configuration.
+
+==================================================
+9. DOCUMENTATION
+==================================================
+
+Update the API documentation/OpenAPI where appropriate to explicitly state:
+
+Lead email normalization:
+- surrounding whitespace is trimmed
+- blank/whitespace-only email is treated as no email
+- meaningful email uniqueness is case-insensitive within an organization
+
+Do not expose implementation-specific database details unnecessarily in
+consumer documentation.
+
+==================================================
+10. STOP BEFORE DEPLOYMENT
+==================================================
+
+Complete the code/migration/data remediation and validation.
+
+DO NOT initiate another production deployment automatically.
+
+At completion report:
+
+PRODUCTION DATA BEFORE
+PRODUCTION DATA AFTER
+INDEX DEFINITION
+APPLICATION NORMALIZATION
+MIGRATION STRATEGY
+FILES CHANGED
+TEST RESULTS
+TYPECHECK RESULT
+OPENAPI RESULT
+REMAINING PRODUCTION MIGRATIONS
+DEPLOYMENT INSTRUCTIONS
+READY TO RETRY REPLIT DEPLOYMENT: YES/NO

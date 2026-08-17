@@ -4,6 +4,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { db, storage, eq, and, sql, desc, inArray } from "./db";
+import { normalizeEmail } from "./lib/normalize-email";
 import { lt, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -963,13 +964,14 @@ export function registerLeadGenRoutes(app: Express) {
     const accountData = accountRows[0];
     const contactData = contactRows[0];
 
-    // Duplicate check
+    // Duplicate check — use the same normalization as the DB index (BTRIM + lower)
     let duplicateClass: "unique" | "possible_duplicate" | "confirmed_duplicate" = "unique";
-    if (contactData?.email) {
+    const normalizedCandidateEmail = normalizeEmail(contactData?.email);
+    if (normalizedCandidateEmail) {
       const existingByEmail = await db.select().from(schema.leads)
         .where(and(
           eq(schema.leads.organizationId, runOrganizationId),
-          sql`lower(${schema.leads.email}) = lower(${contactData.email})`,
+          sql`lower(BTRIM(${schema.leads.email})) = ${normalizedCandidateEmail.toLowerCase()}`,
         )).limit(1);
       if (existingByEmail.length > 0) duplicateClass = "confirmed_duplicate";
     }
@@ -1027,7 +1029,7 @@ export function registerLeadGenRoutes(app: Express) {
         lastName: contactData?.lastName || "",
         title: contactData?.title || null,
         company: accountData?.name || "",
-        email: contactData?.email || null,
+        email: normalizeEmail(contactData?.email),
         phone: contactData?.phone || null,
         status: "new",
         source: "lead_generation",

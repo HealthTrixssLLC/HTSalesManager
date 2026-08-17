@@ -9,6 +9,7 @@ import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import { eq, sql, and, gte, gt, lt, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
+import { normalizeEmail } from "./lib/normalize-email";
 import type {
   IStorage,
   AccountListFilters,
@@ -492,12 +493,18 @@ export class PostgresStorage implements IStorage {
     if (!lead.id || lead.id === "") {
       lead.id = await this.generateId("Lead", lead.organizationId || undefined);
     }
-    const result = await db.insert(schema.leads).values({ ...lead, id: lead.id!, organizationId: lead.organizationId! }).returning();
+    // Normalize email: blank/whitespace-only → NULL; trim meaningful emails.
+    const normalized = { ...lead, id: lead.id!, organizationId: lead.organizationId!, email: normalizeEmail(lead.email) };
+    const result = await db.insert(schema.leads).values(normalized).returning();
     return result[0];
   }
   
   async updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead> {
     const { organizationId: _orgId, ...safeUpdates } = lead;
+    // Normalize email only when the caller explicitly included it in the update.
+    if ("email" in safeUpdates) {
+      safeUpdates.email = normalizeEmail(safeUpdates.email);
+    }
     const result = await db.update(schema.leads)
       .set({ ...safeUpdates, updatedAt: new Date() })
       .where(eq(schema.leads.id, id))
@@ -785,8 +792,14 @@ export class PostgresStorage implements IStorage {
     const where = orgId
       ? and(eq(schema.leads.id, id), eq(schema.leads.organizationId, orgId))
       : eq(schema.leads.id, id);
+    const stripped = this.stripImmutable(fields);
+    // Normalize email when included in PATCH body (defense-in-depth; Zod already
+    // validates format for external PATCH, but internal paths do not).
+    if ("email" in stripped) {
+      stripped.email = normalizeEmail(stripped.email);
+    }
     const result = await db.update(schema.leads)
-      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .set({ ...stripped, updatedAt: new Date() })
       .where(where)
       .returning();
     return result[0];

@@ -285,9 +285,16 @@ Unknown fields return 400 with `rejectedFields` and `allowedFields`.
   `relatedId` must be provided together; the referenced record must belong to
   the key's organization. Creation also writes an activity-association row so
   the activity shows on the record's timeline.
-- **Lead dedup**: `POST /leads` with an email matching an existing lead
-  (case-insensitive, same org) creates nothing and returns HTTP 200 with
-  `duplicate: true` and the existing record.
+- **Lead email normalization**: Surrounding whitespace is trimmed from every
+  email value before storage. A blank or whitespace-only email is treated as
+  "no email" and stored as `NULL`; such leads do not participate in uniqueness
+  — multiple leads without a meaningful email are permitted in the same
+  organization. This normalization applies to all write paths (create, update,
+  PATCH, import, lead-gen approval).
+- **Lead dedup**: `POST /leads` with a meaningful email that matches an existing
+  lead (case-insensitive and whitespace-trimmed, same org) creates nothing and
+  returns HTTP 200 with `duplicate: true` and the existing record. Empty or
+  whitespace-only emails do not trigger deduplication.
 - **Document ↔ entity links**: a document can link to any number of
   `account|opportunity|contact|lead` records in its own organization; the
   (document, entityType, entityId) pair is unique — repeat links are

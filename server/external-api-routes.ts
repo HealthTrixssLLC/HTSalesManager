@@ -4,6 +4,7 @@
 import { Router, Response, NextFunction } from "express";
 import { z } from "zod";
 import { storage } from "./db";
+import { normalizeEmail } from "./lib/normalize-email";
 import { authenticateApiKey, createApiKeyRateLimiter, requirePermission, ApiKeyRequest } from "./api-key-auth";
 
 /** Extract org ID from API key (null = system key, no org restriction) */
@@ -1127,12 +1128,14 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
       });
     }
 
-    // Duplicate detection: same email within the same organization
-    if (data.email) {
+    // Duplicate detection: same normalized email within the same organization.
+    // normalizeEmail trims whitespace; the DB index uses lower(BTRIM(email)).
+    const normalizedEmail = normalizeEmail(data.email);
+    if (normalizedEmail) {
       const existingLeads = await storage.getAllLeads(orgId);
-      const emailLower = data.email.toLowerCase();
+      const emailKey = normalizedEmail.toLowerCase();
       const duplicate = existingLeads.find(
-        (l: any) => l.email && l.email.toLowerCase() === emailLower
+        (l: any) => normalizeEmail(l.email)?.toLowerCase() === emailKey
       );
       if (duplicate) {
         return res.status(200).json({
@@ -1148,7 +1151,7 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
       lead = await storage.createLead({
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email ?? null,
+        email: normalizedEmail,
         phone: data.phone ?? null,
         company: data.company ?? null,
         title: data.title ?? null,
@@ -1166,11 +1169,11 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
         createError?.code === "23505" ||
         createError?.cause?.code === "23505" ||
         /duplicate key value/i.test(createError?.message || "");
-      if (isUniqueViolation && data.email) {
+      if (isUniqueViolation && normalizedEmail) {
         const existingLeads = await storage.getAllLeads(orgId);
-        const emailLower = data.email.toLowerCase();
+        const emailKey = normalizedEmail.toLowerCase();
         const existing = existingLeads.find(
-          (l: any) => l.email && l.email.toLowerCase() === emailLower
+          (l: any) => normalizeEmail(l.email)?.toLowerCase() === emailKey
         );
         if (existing) {
           return res.status(200).json({
