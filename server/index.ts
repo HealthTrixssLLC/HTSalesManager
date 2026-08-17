@@ -80,24 +80,40 @@ app.use((req, res, next) => {
   const httpServer = http.createServer(app);
 
   // Lightweight liveness probe — no DB access, no auth required.
-  // Must be registered before serveStatic's SPA catch-all to remain reachable.
-  // In production this is the primary target for Replit's autoscale health check.
+  // Registered first so it is never intercepted by the startup gate or
+  // any SPA catch-all registered later.
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
   if (app.get("env") !== "development") {
-    // Production: bind the port immediately — before the init chain — so the
-    // Replit autoscale health check can succeed within ~100 ms of process start.
+    // Production startup gate — active only while init is running.
     //
-    // During the init window (~5-6 s) /health returns 200 immediately.
-    // API routes are unavailable until registerRoutes() completes; unauthenticated
-    // API requests receive 404. The static frontend is served after serveStatic()
-    // is registered at the bottom of this function (after registerRoutes).
-    // This is safe: clients cannot authenticate until auth routes are registered.
+    // Once startupReady flips to true (set after serveStatic() below) this
+    // middleware calls next() immediately and is permanently transparent.
+    //
+    // During the init window:
+    //   GET /        → 200 {"status":"starting"}  (Replit health probe target)
+    //   all others   → 503 {"status":"starting"}  (honest, not a misleading 404)
+    let startupReady = false;
+
+    app.use((req, res, next) => {
+      if (startupReady) return next();
+      if (req.method === "GET" && req.path === "/") {
+        return res.status(200).json({ status: "starting" });
+      }
+      return res.status(503).json({ status: "starting" });
+    });
+
+    // Bind the port immediately so the probe above can respond within ~100 ms.
     httpServer.listen(port, "0.0.0.0", () => {
       log(`Health Trixss CRM serving on http://0.0.0.0:${port}`);
     });
+
+    // Keep a reference so we can set it after full init completes.
+    // Stored on the httpServer object to stay accessible in the production
+    // branch at the bottom of this function without widening scope.
+    (httpServer as any)._setStartupReady = () => { startupReady = true; };
   }
 
   // ── Init chain ────────────────────────────────────────────────────────────
@@ -156,5 +172,12 @@ app.use((req, res, next) => {
     // Production: static serving registered after API routes (correct order).
     // The server is already listening (bound above before the init chain).
     serveStatic(app);
+    // Full init complete — release the startup gate so all requests pass through.
+    (httpServer as any)._setStartupReady();
   }
-})();
+})().catch((err: Error) => {
+  // Ensure a failed init exits nonzero rather than leaving a permanently
+  // false-healthy (listening but broken) instance.
+  console.error("Fatal startup error:", err);
+  process.exit(1);
+});
