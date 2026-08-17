@@ -8,3 +8,4 @@ description: NEON_DATABASE_URL (production) schema and id_patterns diverge sharp
 
 **Why:** Task-204 audit assumptions (ACT/ACCT collision, existence of ACT-2103) proved false against actual prod data; checking the live pattern rows first avoids wasted analysis.
 **How to apply:** before any ID/schema work touching production, SELECT `id_patterns` and information_schema from NEON_DATABASE_URL first.
+- Some polymorphic entity-type columns are Postgres enums: compare with `col::text IN (...)` or non-enum variants raise "invalid input value for enum".
