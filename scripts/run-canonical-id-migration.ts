@@ -28,6 +28,14 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { verifyDryRunReport, computeReportMac, DbIdentity } from "./canonical-id-migration-gate";
+import {
+  computeFinalCounter,
+  computeAllocationBase,
+  isCompatiblePattern,
+  combineChecksumParts,
+  idPatternRowRepr,
+  HighWaterRow,
+} from "./canonical-id-migration-hwm";
 
 const DRYRUN_REPORT_PATH = path.resolve(process.cwd(), "scripts/canonical-id-migration-dryrun-report.json");
 
@@ -266,13 +274,58 @@ async function getDbIdentity(): Promise<DbIdentity> {
   return { systemIdentifier, database: base.rows[0].database, host: base.rows[0].host };
 }
 
-async function computeInputChecksum(): Promise<string> {
+// Dynamic FK discovery (shared by step (b) and the input checksum): every FK
+// column in public schema referencing the four renamed entity tables.
+interface FkRow {
+  constraint_name: string;
+  src_table: string;
+  src_column: string;
+  ref_table: string;
+  ref_column: string;
+  condeferrable: boolean;
+}
+async function discoverFkRows(q: Queryable): Promise<FkRow[]> {
+  const r = await q.query(
+    `SELECT con.conname AS constraint_name,
+            src.relname  AS src_table,
+            srcatt.attname AS src_column,
+            tgt.relname  AS ref_table,
+            tgtatt.attname AS ref_column,
+            con.condeferrable
+     FROM pg_constraint con
+     JOIN pg_class src ON src.oid = con.conrelid
+     JOIN pg_class tgt ON tgt.oid = con.confrelid
+     JOIN pg_namespace ns ON ns.oid = src.relnamespace AND ns.nspname = 'public'
+     JOIN LATERAL unnest(con.conkey)  WITH ORDINALITY k(attnum, ord) ON true
+     JOIN LATERAL unnest(con.confkey) WITH ORDINALITY fk(attnum, ord) ON fk.ord = k.ord
+     JOIN pg_attribute srcatt ON srcatt.attrelid = con.conrelid  AND srcatt.attnum = k.attnum
+     JOIN pg_attribute tgtatt ON tgtatt.attrelid = con.confrelid AND tgtatt.attnum = fk.attnum
+     WHERE con.contype = 'f'
+       AND tgt.relname IN ('accounts','contacts','opportunities','activities')
+     ORDER BY src.relname, con.conname`
+  );
+  return r.rows as FkRow[];
+}
+
+const TABLE_TO_ENTITY: Record<string, string> = {
+  accounts: "Account",
+  contacts: "Contact",
+  opportunities: "Opportunity",
+  activities: "Activity",
+};
+const ENTITY_BY_NAME: Record<string, EntityDef> = Object.fromEntries(ENTITIES.map((e) => [e.entity, e]));
+
+async function computeInputChecksum(): Promise<{ checksum: string; describedInputs: string[] }> {
   // sha256 over ALL mapping determinants: for non-canonical rows, (id, created_at)
   // in the deterministic mapping order — created_at drives both the canonical date
   // segment and the (created_at, id) ordering; for canonical rows, the full sorted
-  // ID list plus the max sequence (the counter input). Any change to any of these
-  // between dry-run and live invalidates the evidence.
+  // ID list plus the max sequence (the counter input). Additionally (Task 220):
+  // the full id_patterns generator state, the legacy values held by every
+  // dynamically discovered FK column into the four entity tables, and the legacy
+  // values held by every declared soft-reference column. Any change to any of
+  // these between dry-run and live invalidates the evidence.
   const parts: string[] = [];
+  const describedInputs: string[] = [];
   for (const e of ENTITIES) {
     const ids = await pool.query(
       `SELECT COALESCE(encode(sha256(convert_to(string_agg(id || '@' || created_at::text, ',' ORDER BY created_at, id), 'UTF8')), 'hex'), 'empty') AS h,
@@ -306,7 +359,76 @@ async function computeInputChecksum(): Promise<string> {
   } else {
     parts.push(`Document:absent`);
   }
-  return crypto.createHash("sha256").update(parts.join("|")).digest("hex");
+  describedInputs.push("per-entity non-canonical (id, created_at) sets and canonical ID sets + max sequences (Account, Contact, Opportunity, Activity, Lead, Document)");
+
+  // --- (a) id_patterns generator state (Task 220 Gap 2) ---
+  // Every row's entity, pattern, counter, start_value, last_issued and
+  // organization_id, deterministically ordered. A counter bump (e.g. an app
+  // write between dry-run and live) or a pattern edit changes the checksum.
+  const pat = await pool.query(
+    `SELECT entity, pattern, counter, start_value, last_issued::text AS last_issued, organization_id
+     FROM id_patterns
+     ORDER BY organization_id NULLS FIRST, entity`
+  );
+  const patRepr = pat.rows.map((r: any) => idPatternRowRepr(r)).join(";");
+  parts.push(`id_patterns:${crypto.createHash("sha256").update(patRepr).digest("hex")}:${pat.rows.length}`);
+  describedInputs.push(`id_patterns state: ${pat.rows.length} row(s) — entity, pattern, counter, start_value, last_issued, organization_id (ordered organization_id NULLS FIRST, entity)`);
+
+  // --- (b) Dynamically discovered FK reference values (Task 220 Gap 2) ---
+  // For every FK column referencing accounts/contacts/opportunities/activities
+  // .id, the distinct referencing values that are legacy (non-canonical) — i.e.
+  // the values this migration will rewrite. A changed FK relationship between
+  // dry-run and live changes the checksum.
+  const fkCols = (await discoverFkRows(pool)).filter((fk) => fk.ref_column === "id");
+  for (const fk of fkCols) {
+    const e = ENTITY_BY_NAME[TABLE_TO_ENTITY[fk.ref_table]];
+    const r = await pool.query(
+      `SELECT COALESCE(encode(sha256(convert_to(string_agg(DISTINCT ${fk.src_column}, ',' ORDER BY ${fk.src_column}), 'UTF8')), 'hex'), 'empty') AS h,
+              COUNT(DISTINCT ${fk.src_column})::int AS n
+       FROM ${fk.src_table}
+       WHERE ${fk.src_column} IS NOT NULL AND ${fk.src_column} !~ '${e.canonicalRegex}'`
+    );
+    parts.push(`fk:${fk.src_table}.${fk.src_column}:${r.rows[0].h}:${r.rows[0].n}`);
+  }
+  describedInputs.push(`FK reference values: ${fkCols.length} discovered FK column(s) into the four entity tables — distinct non-canonical (to-be-renamed) values hashed per column`);
+
+  // --- (c) Declared soft-reference values (Task 220 Gap 2) ---
+  // For every declared soft-ref column, the distinct values that currently
+  // resolve to a legacy_id_map candidate (a non-canonical ID in the matching
+  // entity table — exactly the values the migration will rewrite).
+  let softCols = 0;
+  for (const ref of SOFT_REFS) {
+    if (!(await tableExists(pool, ref.table)) || !(await columnExists(pool, ref.table, ref.column))) {
+      parts.push(`soft:${ref.table}.${ref.column}:absent`);
+      continue;
+    }
+    softCols++;
+    if (ref.typeColumn) {
+      for (const e of ENTITIES) {
+        const variants = TYPE_VARIANTS[e.entity].map((v) => `'${v}'`).join(",");
+        const r = await pool.query(
+          `SELECT COALESCE(encode(sha256(convert_to(string_agg(DISTINCT t.${ref.column}, ',' ORDER BY t.${ref.column}), 'UTF8')), 'hex'), 'empty') AS h,
+                  COUNT(DISTINCT t.${ref.column})::int AS n
+           FROM ${ref.table} t
+           WHERE t.${ref.typeColumn}::text IN (${variants})
+             AND t.${ref.column} IN (SELECT id FROM ${e.table} WHERE id !~ '${e.canonicalRegex}')`
+        );
+        parts.push(`soft:${ref.table}.${ref.column}[${e.entity}]:${r.rows[0].h}:${r.rows[0].n}`);
+      }
+    } else {
+      const e = ENTITY_BY_NAME[ref.entity!];
+      const r = await pool.query(
+        `SELECT COALESCE(encode(sha256(convert_to(string_agg(DISTINCT t.${ref.column}, ',' ORDER BY t.${ref.column}), 'UTF8')), 'hex'), 'empty') AS h,
+                COUNT(DISTINCT t.${ref.column})::int AS n
+         FROM ${ref.table} t
+         WHERE t.${ref.column} IN (SELECT id FROM ${e.table} WHERE id !~ '${e.canonicalRegex}')`
+      );
+      parts.push(`soft:${ref.table}.${ref.column}:${r.rows[0].h}:${r.rows[0].n}`);
+    }
+  }
+  describedInputs.push(`soft-reference values: ${softCols} present declared column(s) — distinct values resolving to legacy_id_map candidates hashed per column/entity`);
+
+  return { checksum: combineChecksumParts(parts), describedInputs };
 }
 
 class ValidationError extends Error {}
@@ -328,12 +450,14 @@ async function expectZeroRows(client: PoolClient, label: string, sql: string) {
   log("V", `${label} PASS (0 rows)`);
 }
 
-async function tableExists(client: PoolClient, table: string): Promise<boolean> {
+type Queryable = Pool | PoolClient;
+
+async function tableExists(client: Queryable, table: string): Promise<boolean> {
   const r = await client.query(`SELECT to_regclass($1) IS NOT NULL AS ok`, [`public.${table}`]);
   return !!r.rows[0]?.ok;
 }
 
-async function columnExists(client: PoolClient, table: string, column: string): Promise<boolean> {
+async function columnExists(client: Queryable, table: string, column: string): Promise<boolean> {
   const r = await client.query(
     `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 AND column_name=$2`,
     [table, column]
@@ -358,7 +482,7 @@ async function columnExists(client: PoolClient, table: string, column: string): 
 
   // ---------- Target identity + input checksum (outside transaction; SELECT-only) ----------
   const dbIdentity = await getDbIdentity();
-  const inputChecksum = await computeInputChecksum();
+  const { checksum: inputChecksum, describedInputs: checksumInputs } = await computeInputChecksum();
   log("GATE", `target identity: system=${dbIdentity.systemIdentifier} db=${dbIdentity.database} host=${dbIdentity.host}`);
   log("GATE", `migration-input checksum: ${inputChecksum}`);
 
@@ -402,34 +526,7 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     log("a", `pre-migration row counts: ${JSON.stringify(preCounts)}`);
 
     // ---------- (b) Dynamic FK discovery (Correction 6) + make deferrable ----------
-    const fkRows = (
-      await client.query(
-        `SELECT con.conname AS constraint_name,
-                src.relname  AS src_table,
-                srcatt.attname AS src_column,
-                tgt.relname  AS ref_table,
-                tgtatt.attname AS ref_column,
-                con.condeferrable
-         FROM pg_constraint con
-         JOIN pg_class src ON src.oid = con.conrelid
-         JOIN pg_class tgt ON tgt.oid = con.confrelid
-         JOIN pg_namespace ns ON ns.oid = src.relnamespace AND ns.nspname = 'public'
-         JOIN LATERAL unnest(con.conkey)  WITH ORDINALITY k(attnum, ord) ON true
-         JOIN LATERAL unnest(con.confkey) WITH ORDINALITY fk(attnum, ord) ON fk.ord = k.ord
-         JOIN pg_attribute srcatt ON srcatt.attrelid = con.conrelid  AND srcatt.attnum = k.attnum
-         JOIN pg_attribute tgtatt ON tgtatt.attrelid = con.confrelid AND tgtatt.attnum = fk.attnum
-         WHERE con.contype = 'f'
-           AND tgt.relname IN ('accounts','contacts','opportunities','activities')
-         ORDER BY src.relname, con.conname`
-      )
-    ).rows as Array<{
-      constraint_name: string;
-      src_table: string;
-      src_column: string;
-      ref_table: string;
-      ref_column: string;
-      condeferrable: boolean;
-    }>;
+    const fkRows = await discoverFkRows(client);
     log("b", `discovered ${fkRows.length} FK reference(s) into the four entity tables:`);
     for (const fk of fkRows) {
       log("b", `  ${fk.src_table}.${fk.src_column} -> ${fk.ref_table}.${fk.ref_column} (${fk.constraint_name})`);
@@ -457,6 +554,60 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     await client.query(`SET CONSTRAINTS ALL DEFERRED`);
     log("b", "SET CONSTRAINTS ALL DEFERRED");
 
+    // Target generator patterns (also needed by the high-water helpers below).
+    const PATTERNS: Record<string, string> = {
+      Account: "ACCT-{YYYY}-{SEQ:5}",
+      Contact: "CONT-{YY}{MM}-{SEQ:5}",
+      Opportunity: "OPP-{YYYY}-{SEQ:6}",
+      Activity: "ACT-{YY}{MM}-{SEQ:5}",
+    };
+
+    // ---------- High-water helpers (Task 220) — used by steps (c) and (g) ----------
+    const auditLogsUsable =
+      (await tableExists(client, "audit_logs")) &&
+      (await columnExists(client, "audit_logs", "resource")) &&
+      (await columnExists(client, "audit_logs", "resource_id"));
+    if (!auditLogsUsable) {
+      log("WARN", "audit_logs table/columns not present — HISTORICAL_CANONICAL_MAX falls back to 0");
+    }
+    // Historical max: only audit rows whose entity (resource) field matches the
+    // entity type are counted — no spurious cross-entity JSON/text matches.
+    const AUDIT_VARIANTS: Record<string, string[]> = {
+      ...TYPE_VARIANTS,
+      Lead: ["Lead", "lead", "leads"],
+      Document: ["Document", "document", "documents"],
+    };
+    async function historicalCanonicalMax(entity: string, regex: string, seqPart: number): Promise<number> {
+      if (!auditLogsUsable) return 0;
+      const variants = AUDIT_VARIANTS[entity].map((v) => `'${v}'`).join(",");
+      const r = await client.query(
+        `SELECT COALESCE(MAX(CAST(split_part(resource_id,'-',${seqPart}) AS int)), 0) AS mx
+         FROM audit_logs
+         WHERE resource::text IN (${variants}) AND resource_id ~ '${regex}'`
+      );
+      return Number(r.rows[0].mx);
+    }
+    async function existingGeneratorHighWater(entity: string, targetPattern: string): Promise<number> {
+      // Current global generator row, read BEFORE step (g) updates it. Its
+      // counter only counts when its pattern is compatible with the target
+      // canonical pattern (same prefix/format family); otherwise 0.
+      const r = await client.query(
+        `SELECT pattern, counter FROM id_patterns WHERE entity=$1 AND organization_id IS NULL`,
+        [entity]
+      );
+      if (r.rows.length === 0) return 0;
+      return isCompatiblePattern(r.rows[0].pattern, targetPattern) ? Number(r.rows[0].counter ?? 0) : 0;
+    }
+    // Generator high-water per entity is captured ONCE, up front, before any
+    // id_patterns mutation — used for allocation in (c), the counter in (g),
+    // and the V7c assertion.
+    const generatorHighWater: Record<string, number> = {};
+    const historicalMax: Record<string, number> = {};
+    for (const e of ENTITIES) {
+      generatorHighWater[e.entity] = await existingGeneratorHighWater(e.entity, PATTERNS[e.entity]);
+      historicalMax[e.entity] = await historicalCanonicalMax(e.entity, e.canonicalRegex, 3);
+    }
+
     // ---------- (c) Build legacy_id_map (Corrections 2–5, 7) ----------
     await client.query(`
       CREATE TABLE IF NOT EXISTS legacy_id_map (
@@ -470,15 +621,27 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     log("c", "legacy_id_map table ready");
 
     const mapCounts: Record<string, number> = {};
+    const allocationBases: Record<string, { liveMax: number; base: number }> = {};
     for (const e of ENTITIES) {
-      // Base = highest sequence already in use by canonical-format rows in this
-      // table; new sequence numbers start above it, so a newly generated
-      // canonical ID can never collide with a live canonical PK.
+      // Allocation base (Task 220): new sequences must start above EVERY
+      // sequence ever issued — not just the live canonical MAX. A canonical ID
+      // issued to a since-deleted record (generator counter) or recorded in
+      // audit history must never be reassigned to a migrated row.
       const baseR = await client.query(
         `SELECT COALESCE(MAX(CAST(split_part(id,'-',3) AS int)), 0) AS mx
          FROM ${e.table} WHERE id ~ '${e.canonicalRegex}'`
       );
-      const base = Number(baseR.rows[0].mx);
+      const liveMax = Number(baseR.rows[0].mx);
+      const base = computeAllocationBase({
+        liveMax,
+        existingGeneratorHighWater: generatorHighWater[e.entity],
+        historicalCanonicalMax: historicalMax[e.entity],
+      });
+      allocationBases[e.entity] = { liveMax, base };
+      log(
+        "c",
+        `${e.entity} allocation base: LIVE_MAX=${liveMax} EXISTING_GENERATOR_HIGH_WATER=${generatorHighWater[e.entity]} HISTORICAL_CANONICAL_MAX=${historicalMax[e.entity]} → base=${base} (first new SEQ ${base + 1})`
+      );
       // Deterministic global ordering by (created_at, id) — Correction 7.
       const r = await client.query(
         `INSERT INTO legacy_id_map (entity, legacy_id, canonical_id)
@@ -594,12 +757,6 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     }
 
     // ---------- (e) FK reference columns — driven by the discovered catalog list ----------
-    const TABLE_TO_ENTITY: Record<string, string> = {
-      accounts: "Account",
-      contacts: "Contact",
-      opportunities: "Opportunity",
-      activities: "Activity",
-    };
     const refCounts: Record<string, number> = {};
     const handledCols = new Set<string>();
     for (const fk of fkRows) {
@@ -651,27 +808,39 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     }
 
     // ---------- (g) id_patterns target state — counters computed dynamically (Correction 8) ----------
-    const PATTERNS: Record<string, string> = {
-      Account: "ACCT-{YYYY}-{SEQ:5}",
-      Contact: "CONT-{YY}{MM}-{SEQ:5}",
-      Opportunity: "OPP-{YYYY}-{SEQ:6}",
-      Activity: "ACT-{YY}{MM}-{SEQ:5}",
-    };
     const counters: Record<string, number> = {};
+    // Task 220 Gap 1: the counter is the MAX of FOUR sources, not just the live
+    // table MAX — a canonical ID ever issued to a since-deleted record, or an
+    // already-advanced generator counter, must never be reissued. The generator
+    // and historical components were captured up front (before step (c)), and
+    // already floor the allocation base, so migrated IDs start above them too.
+    const hwTable: Record<string, HighWaterRow & { NEXT_ID?: string }> = {};
     for (const e of ENTITIES) {
-      // After the PK updates every row in the table is canonical; the required
-      // counter is the highest sequence in live IDs (next ID = start_value + counter,
-      // start_value = 1, so next SEQ = max + 1 — provably collision-free, see V7).
-      const r = await client.query(
+      const liveR = await client.query(
         `SELECT COALESCE(MAX(CAST(split_part(id,'-',3) AS int)), 0) AS mx FROM ${e.table} WHERE id ~ '${e.canonicalRegex}'`
       );
-      counters[e.entity] = Number(r.rows[0].mx);
+      const liveMax = Number(liveR.rows[0].mx);
+      const migR = await client.query(
+        `SELECT COALESCE(MAX(CAST(split_part(canonical_id,'-',3) AS int)), 0) AS mx
+         FROM legacy_id_map WHERE entity = $1`,
+        [e.entity]
+      );
+      const migrationMax = Number(migR.rows[0].mx);
+      const egh = generatorHighWater[e.entity];
+      const histMax = historicalMax[e.entity];
+      const inputs = { liveMax, migrationMax, existingGeneratorHighWater: egh, historicalCanonicalMax: histMax };
+      const finalCounter = computeFinalCounter(inputs);
+      hwTable[e.entity] = { ...inputs, finalCounter };
+      counters[e.entity] = finalCounter;
       const u = await client.query(
         `UPDATE id_patterns SET pattern=$1, counter=$2, start_value=1, last_issued=NULL, updated_at=now()
          WHERE entity=$3 AND organization_id IS NULL`,
-        [PATTERNS[e.entity], counters[e.entity], e.entity]
+        [PATTERNS[e.entity], finalCounter, e.entity]
       );
-      log("g", `id_patterns ${e.entity}: pattern=${PATTERNS[e.entity]} counter=${counters[e.entity]} (computed via MAX) start_value=1 (${u.rowCount} row)`);
+      log(
+        "g",
+        `id_patterns ${e.entity}: LIVE_MAX=${liveMax} MIGRATION_MAX=${migrationMax} EXISTING_GENERATOR_HIGH_WATER=${egh} HISTORICAL_CANONICAL_MAX=${histMax} → FINAL_COUNTER=${finalCounter}; pattern=${PATTERNS[e.entity]} start_value=1 (${u.rowCount} row)`
+      );
     }
     // Lead and Document counters are computed the same way (Correction 8 covers
     // every final pattern, not just the four renamed entities). Their IDs carry
@@ -693,13 +862,26 @@ async function columnExists(client: PoolClient, table: string, column: string): 
       const r = await client.query(
         `SELECT COALESCE(MAX(CAST(split_part(id,'-',2) AS int)), 0) AS mx FROM ${s.table} WHERE id ~ '${s.regex}'`
       );
-      counters[s.entity] = Number(r.rows[0].mx);
+      // Task 220: Lead/Document patterns are unchanged, but the same high-water
+      // logic applies — the existing generator counter wins if higher than
+      // LIVE_MAX (their pattern is compatible by construction, still verified).
+      const liveMax = Number(r.rows[0].mx);
+      const migrationMax = 0; // never renamed by this migration
+      const egh = await existingGeneratorHighWater(s.entity, s.pattern);
+      const histMax = await historicalCanonicalMax(s.entity, s.regex, 2);
+      const inputs = { liveMax, migrationMax, existingGeneratorHighWater: egh, historicalCanonicalMax: histMax };
+      const finalCounter = computeFinalCounter(inputs);
+      hwTable[s.entity] = { ...inputs, finalCounter };
+      counters[s.entity] = finalCounter;
       const u = await client.query(
         `UPDATE id_patterns SET pattern=$1, counter=$2, start_value=1, last_issued=NULL, updated_at=now()
          WHERE entity=$3 AND organization_id IS NULL`,
-        [s.pattern, counters[s.entity], s.entity]
+        [s.pattern, finalCounter, s.entity]
       );
-      log("g", `id_patterns ${s.entity}: pattern=${s.pattern} counter=${counters[s.entity]} (computed via MAX) start_value=1 (${u.rowCount} row)`);
+      log(
+        "g",
+        `id_patterns ${s.entity}: LIVE_MAX=${liveMax} MIGRATION_MAX=${migrationMax} EXISTING_GENERATOR_HIGH_WATER=${egh} HISTORICAL_CANONICAL_MAX=${histMax} → FINAL_COUNTER=${finalCounter}; pattern=${s.pattern} start_value=1 (${u.rowCount} row)`
+      );
     }
     // Per-organisation id_patterns overrides: generateId() always uses the GLOBAL
     // counter but prefers an org-specific row's FORMAT string. A per-org row with a
@@ -881,6 +1063,31 @@ async function columnExists(client: PoolClient, table: string, column: string): 
                (SELECT counter FROM id_patterns WHERE entity='Document' AND organization_id IS NULL)`
       );
     }
+    // V7c (Task 220): the STORED counter must be >= every high-water source —
+    // LIVE_MAX, MIGRATION_MAX, EXISTING_GENERATOR_HIGH_WATER, and
+    // HISTORICAL_CANONICAL_MAX — for every entity that was reconciled.
+    for (const [entity, hw] of Object.entries(hwTable)) {
+      const r = await client.query(
+        `SELECT counter FROM id_patterns WHERE entity=$1 AND organization_id IS NULL`,
+        [entity]
+      );
+      if (r.rows.length !== 1) {
+        throw new ValidationError(`V7c FAILED ${entity}: expected 1 global id_patterns row, got ${r.rows.length}`);
+      }
+      const stored = Number(r.rows[0].counter);
+      const checks: Array<[string, number]> = [
+        ["LIVE_MAX", hw.liveMax],
+        ["MIGRATION_MAX", hw.migrationMax],
+        ["EXISTING_GENERATOR_HIGH_WATER", hw.existingGeneratorHighWater],
+        ["HISTORICAL_CANONICAL_MAX", hw.historicalCanonicalMax],
+      ];
+      for (const [label, v] of checks) {
+        if (stored < v) {
+          throw new ValidationError(`V7c FAILED ${entity}: stored counter ${stored} < ${label} ${v}`);
+        }
+      }
+      log("V", `V7c ${entity} PASS — stored counter ${stored} >= all high-water sources`);
+    }
 
     // V8: row counts unchanged (rename-only invariant) — compared to pre-transaction snapshot.
     for (const e of ENTITIES) {
@@ -923,6 +1130,9 @@ async function columnExists(client: PoolClient, table: string, column: string): 
                WHEN 'Document'    THEN 'DOC-' || LPAD((start_value+counter)::text,6,'0')
              END AS next_id
       FROM id_patterns WHERE organization_id IS NULL ORDER BY entity`);
+    for (const r of nextIds.rows) {
+      if (hwTable[r.entity]) hwTable[r.entity].NEXT_ID = r.next_id;
+    }
 
     // ---------- COMMIT (live) or ROLLBACK (dry-run) ----------
     if (live) {
@@ -962,12 +1172,22 @@ async function columnExists(client: PoolClient, table: string, column: string): 
     for (const [label, n] of Object.entries(refCounts)) {
       if (n > 0) summary.push(`  ${label.padEnd(45)} ${n}`);
     }
-    summary.push("Computed id_patterns counters (MAX of live canonical sequences):");
-    for (const [entity, n] of Object.entries(counters)) summary.push(`  ${entity.padEnd(12)} ${n}`);
+    summary.push("FINAL HIGH-WATER TABLE (counter = MAX of all four sources):");
+    summary.push(
+      `  ${"entity".padEnd(12)} ${"LIVE_MAX".padStart(9)} ${"MIGRATION_MAX".padStart(14)} ${"EXISTING_GEN_HW".padStart(16)} ${"HISTORICAL_MAX".padStart(15)} ${"FINAL_COUNTER".padStart(14)}`
+    );
+    for (const [entity, hw] of Object.entries(hwTable)) {
+      summary.push(
+        `  ${entity.padEnd(12)} ${String(hw.liveMax).padStart(9)} ${String(hw.migrationMax).padStart(14)} ${String(hw.existingGeneratorHighWater).padStart(16)} ${String(hw.historicalCanonicalMax).padStart(15)} ${String(hw.finalCounter).padStart(14)}`
+      );
+    }
     summary.push("legacy_id_map row counts per entity:");
     for (const [entity, n] of Object.entries(mapCounts)) summary.push(`  ${entity.padEnd(12)} ${n}`);
-    summary.push("First post-migration ID per entity (SEQ = start_value + counter):");
+    summary.push("FINAL EXPECTED NEXT ID PER ENTITY (SEQ = start_value + counter):");
     for (const r of nextIds.rows) summary.push(`  ${String(r.entity).padEnd(12)} ${r.next_id}`);
+    summary.push("UPDATED CHECKSUM INPUTS (all hashed into the migration-input checksum):");
+    for (const d of checksumInputs) summary.push(`  - ${d}`);
+    summary.push(`  checksum: ${inputChecksum}`);
     summary.push(`Total transaction wall-clock time: ${(elapsedMs / 1000).toFixed(2)}s`);
     summary.push("=".repeat(78));
     console.log(summary.join("\n"));
@@ -991,6 +1211,20 @@ async function columnExists(client: PoolClient, table: string, column: string): 
         counters,
         preCounts,
         nextIds: nextIds.rows,
+        highWaterTable: Object.fromEntries(
+          Object.entries(hwTable).map(([entity, hw]) => [
+            entity,
+            {
+              LIVE_MAX: hw.liveMax,
+              MIGRATION_MAX: hw.migrationMax,
+              EXISTING_GENERATOR_HIGH_WATER: hw.existingGeneratorHighWater,
+              HISTORICAL_CANONICAL_MAX: hw.historicalCanonicalMax,
+              FINAL_COUNTER: hw.finalCounter,
+              NEXT_ID: hw.NEXT_ID ?? null,
+            },
+          ])
+        ),
+        updatedChecksumInputs: checksumInputs,
         elapsedMs,
       };
       if (process.env.SESSION_SECRET) {
