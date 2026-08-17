@@ -1,0 +1,131 @@
+The implementation report is approved except for one remaining
+blocking roadmap item:
+
+PHASE A — ACTIVITY READ API
+
+This must be completed before the External API enhancement roadmap
+is considered finished.
+
+Implement:
+
+GET /api/v1/external/activities
+GET /api/v1/external/activities/:id
+
+Use the existing Activity model and existing External API conventions.
+
+GET /activities must support server-side filters for all fields that
+actually exist and can be safely filtered:
+
+relatedType
+relatedId
+type
+status
+priority
+dueBefore
+dueAfter
+updatedSince
+limit
+offset
+
+Do not invent fields.
+
+Requirements:
+
+1. Organization/tenant isolation must be enforced.
+
+2. System-level versus organization-scoped API-key behavior must follow
+the existing security architecture.
+
+3. Require the appropriate read permission. Use activities.read if that
+is consistent with the permission architecture already implemented.
+
+4. GET /activities/:id must never leak existence of another
+organization's Activity.
+
+5. Preserve the standard detail response:
+
+{
+  "data": {}
+}
+
+6. Preserve the standard paginated list response:
+
+{
+  "data": [],
+  "pagination": {
+    "total": 0,
+    "limit": 100,
+    "offset": 0,
+    "hasMore": false
+  }
+}
+
+7. Implement strict ISO 8601 validation for date filters consistent
+with the filtering framework already added in Phase B.
+
+8. Validate enums using the same mechanisms used elsewhere in the
+External API.
+
+9. Add comprehensive automated tests covering:
+
+- list activities
+- get activity by ID
+- relatedType filter
+- relatedId filter
+- combined relatedType + relatedId
+- type filter
+- status filter
+- priority filter
+- dueBefore
+- dueAfter
+- updatedSince
+- pagination
+- invalid date parameters
+- invalid enum parameters
+- cross-tenant isolation
+- read-only key access
+- key lacking activities.read receives 403
+- nonexistent Activity returns appropriate 404
+- another organization's Activity does not leak existence
+
+10. Update:
+
+docs/openapi.yaml
+docs/API_IMPLEMENTATION_GUIDE.md
+API_DOCUMENTATION.md
+
+Remove any statement saying Activity reads are unavailable.
+
+11. Confirm all External API routes have appropriate permission guards.
+
+12. Run the complete existing test suite plus the new Activity tests.
+
+13. Validate OpenAPI.
+
+14. Do not change canonical Activity IDs.
+
+Activity remains:
+
+ACT-*
+
+Account remains:
+
+ACCT-*
+
+15. Update docs/IMPLEMENTATION_REPORT.md so Phase A is marked implemented
+only after the routes, authorization, tests, and documentation are
+actually complete.
+
+At completion provide:
+
+IMPLEMENTED
+FILES CHANGED
+API ENDPOINTS
+PERMISSION MODEL
+TENANT ISOLATION TESTS
+TEST RESULTS
+OPENAPI VALIDATION
+DOCUMENTATION CHANGES
+NOT IMPLEMENTED
+
+Do not modify or build the MCP project.
