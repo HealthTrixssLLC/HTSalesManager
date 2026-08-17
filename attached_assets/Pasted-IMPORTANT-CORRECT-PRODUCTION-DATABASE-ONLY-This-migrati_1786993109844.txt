@@ -1,0 +1,91 @@
+IMPORTANT — CORRECT PRODUCTION DATABASE ONLY
+
+This migration plan must be designed against the ACTUAL production PostgreSQL database
+used by the deployed CRM application:
+
+https://htsalesmanager.healthtrixss.com
+
+The production application uses the Replit-managed PostgreSQL database bound through
+the deployment's DATABASE_URL.
+
+DO NOT USE:
+
+NEON_DATABASE_URL
+
+The Neon database is a stale copy and is NOT production.
+
+DO NOT USE the workspace/development DATABASE_URL either.
+
+The workspace DATABASE_URL points to the Replit development database and is NOT production.
+
+The authoritative production database is:
+
+DATABASE TYPE:
+PostgreSQL
+
+HOSTING:
+Replit-managed production PostgreSQL
+
+CONNECTION SOURCE:
+The DATABASE_URL bound inside the production deployment for
+https://htsalesmanager.healthtrixss.com
+
+PRODUCTION ORGANIZATION USED FOR LIVE MCP PARITY TESTING:
+
+Health Trixss / Primary Organization
+
+Organization ID:
+3e369484-0c88-401d-86e3-9c3361ee465e
+
+The production database has already been positively fingerprinted by these known records:
+
+ACT-2103 = Cavulus
+ACT-2102 = Integrated Psychiatric Consultants, P.A (IPC)
+ACT-2100 = Providence
+ACT-2099 = Humanizing Technologies
+ACT-2098 = Care Oregon
+ACT-2091 = Care Compass
+
+The Health Trixss organization has:
+
+56 Accounts
+
+and the live External API and direct production PostgreSQL query were confirmed to match:
+
+LIVE API HT ACCOUNT COUNT: 56
+PRODUCTION POSTGRES HT ACCOUNT COUNT: 56
+API/POSTGRES PARITY: PASS
+
+Before ANY migration planning or execution, the target database MUST pass this fingerprint.
+
+If the connected database does not contain ACT-2103 = Cavulus and ACT-2098 = Care Oregon,
+or does not return 56 Accounts for organization:
+
+3e369484-0c88-401d-86e3-9c3361ee465e
+
+STOP IMMEDIATELY.
+
+Do not run migration SQL.
+
+Do not update id_patterns.
+
+Do not rename IDs.
+
+Do not infer that a database is production based on an environment-variable name.
+
+The migration must only execute from a process/environment that has access to the
+production deployment's DATABASE_URL.
+
+The existing production audit script:
+
+scripts/canonical-id-audit-prod.ts
+
+must be run first and must PASS its production fingerprint gate before any migration begins.
+
+If that audit gate fails:
+
+ABORT THE MIGRATION.
+
+Explicitly report:
+
+WRONG DATABASE / PRODUCTION FINGERPRINT FAILED
