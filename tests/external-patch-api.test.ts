@@ -53,14 +53,14 @@ beforeAll(async () => {
     .returning();
   otherOrgId = tempOrg.id;
 
-  // API keys: org-bound and read-only (Phase F stub marker)
+  // API keys: org-bound full access and read-only (Phase F permission scopes)
   const k1 = generateApiKey();
   const k2 = generateApiKey();
   orgKey = k1.publicKey;
   readOnlyKey = k2.publicKey;
   const inserted = await db.insert(schema.apiKeys).values([
     { hashedKey: k1.hashedKey, name: "vitest-patch-key", isActive: true, organizationId: orgId, createdBy: userId },
-    { hashedKey: k2.hashedKey, name: "vitest-patch-key [read-only]", isActive: true, organizationId: orgId, createdBy: userId },
+    { hashedKey: k2.hashedKey, name: "vitest-patch-key-readonly", isActive: true, organizationId: orgId, createdBy: userId, permissions: ["crm.read", "activities.read", "documents.read"] },
   ]).returning({ id: schema.apiKeys.id });
   keyIds = inserted.map(r => r.id);
 
@@ -294,11 +294,12 @@ describe("External PATCH API — access control", () => {
     expect(body.data.ownerId).toBe(inOrgUserId);
   });
 
-  it("returns 403 for read-only keys (Phase F stub)", async () => {
+  it("returns 403 for read-only keys (Phase F permission scopes)", async () => {
     const res = await patch(`/accounts/${ids.account}`, { name: "Blocked" }, readOnlyKey);
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body.error).toBe("Read-only API key");
+    expect(body.error).toBe("Insufficient permissions");
+    expect(body.requiredPermission).toBe("crm.write");
   });
 
   it("returns 401 for an invalid API key", async () => {

@@ -389,8 +389,14 @@ export const commentSubscriptions = pgTable("comment_subscriptions", {
   uniqueSubscription: index("comment_subscriptions_unique_idx").on(table.commentId, table.userId),
 }));
 
-// ========== API KEYS FOR EXTERNAL INTEGRATIONS ==========
-
+export const API_KEY_PERMISSIONS = [
+  "crm.read",
+  "crm.write",
+  "activities.read",
+  "activities.write",
+  "documents.read",
+  "documents.write",
+] as const;
 export const apiKeys = pgTable("api_keys", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
   hashedKey: text("hashed_key").notNull().unique(), // Bcrypt hash of the API key
@@ -398,6 +404,8 @@ export const apiKeys = pgTable("api_keys", {
   description: text("description"), // Purpose/usage description
   isActive: boolean("is_active").notNull().default(true),
   rateLimitPerMin: integer("rate_limit_per_min").default(100), // Requests per minute limit
+  // Permission scopes. NULL (legacy keys) or the default = all permissions (backward compatible)
+  permissions: text("permissions").array().default(sql`ARRAY['crm.read','crm.write','activities.read','activities.write','documents.read','documents.write']::text[]`),
   lastUsedAt: timestamp("last_used_at"),
   expiresAt: timestamp("expires_at"), // Optional expiration date
   organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
@@ -1067,6 +1075,9 @@ export const insertApiKeySchema = createInsertSchema(apiKeys)
       },
       z.date().nullable().optional()
     ).optional(),
+    // At least one permission is required when the field is provided;
+    // omit or pass null only for legacy full-access behavior
+    permissions: z.array(z.enum(API_KEY_PERMISSIONS)).min(1, "At least one permission is required").nullable().optional(),
   });
 export type InsertApiKey = z.infer<typeof insertApiKeySchema>;
 export type ApiKey = typeof apiKeys.$inferSelect;
@@ -1333,3 +1344,5 @@ export const insertCrmDocumentSchema = createInsertSchema(crmDocuments).omit({ i
 export type InsertCrmDocument = z.infer<typeof insertCrmDocumentSchema>;
 export type CrmDocument = typeof crmDocuments.$inferSelect;
 export type CrmDocumentEntityType = "lead" | "account" | "contact" | "opportunity";
+
+export type ApiKeyPermission = (typeof API_KEY_PERMISSIONS)[number];

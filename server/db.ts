@@ -47,7 +47,7 @@ if (isNeonDatabase) {
   neonConfig.webSocketConstructor = ws;
   
   // Configure connection pooling for better reliability
-  const pool = new PgPool({ 
+  const pool = new NeonPool({ 
     connectionString: process.env.DATABASE_URL,
     max: 20,                    // Maximum 20 connections in pool
     idleTimeoutMillis: 30000,   // Close idle connections after 30s

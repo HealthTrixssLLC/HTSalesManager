@@ -629,7 +629,7 @@ export default function AdminConsole() {
   });
   const [categoryToDelete, setCategoryToDelete] = useState<AccountCategory | null>(null);
   const [createApiKeyOpen, setCreateApiKeyOpen] = useState(false);
-  const [newApiKeyData, setNewApiKeyData] = useState<{name: string; description: string; expiresAt: string; organizationId: string}>({
+  const [newApiKeyData, setNewApiKeyData] = useState<{name: string; description: string; expiresAt: string; organizationId: string; readOnly?: boolean}>({
     name: "", description: "", expiresAt: "", organizationId: ""
   });
   const [generatedApiKey, setGeneratedApiKey] = useState<{key: string; name: string} | null>(null);
@@ -982,7 +982,7 @@ export default function AdminConsole() {
   });
 
   const createApiKeyMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string; expiresAt?: string; organizationId?: string }) => {
+    mutationFn: async (data: { name: string; description?: string; expiresAt?: string; organizationId?: string; readOnly?: boolean }) => {
       const res = await apiRequest("POST", "/api/admin/api-keys", {
         name: data.name,
         description: data.description || null,
@@ -990,6 +990,9 @@ export default function AdminConsole() {
         isActive: true,
         rateLimitPerMin: 100, // Default rate limit
         organizationId: data.organizationId || null,
+        permissions: data.readOnly
+          ? ["crm.read", "activities.read", "documents.read"]
+          : ["crm.read", "crm.write", "activities.read", "activities.write", "documents.read", "documents.write"],
       });
       return await res.json();
     },
@@ -1648,6 +1651,7 @@ export default function AdminConsole() {
                     <TableHead>Name</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Organization</TableHead>
+                    <TableHead>Permissions</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Last Used</TableHead>
                     <TableHead>Expires</TableHead>
@@ -1657,7 +1661,7 @@ export default function AdminConsole() {
                 <TableBody>
                   {!apiKeys?.length && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center text-muted-foreground">
                         No API keys yet. Generate one to get started.
                       </TableCell>
                     </TableRow>
@@ -1673,6 +1677,13 @@ export default function AdminConsole() {
                           <Badge variant="outline">{key.organizationName}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">System — all orgs</span>
+                        )}
+                      </TableCell>
+                      <TableCell data-testid={`text-key-permissions-${key.id}`}>
+                        {!key.permissions || key.permissions.some(p => p.endsWith(".write")) ? (
+                          <Badge variant="outline">Full access</Badge>
+                        ) : (
+                          <Badge variant="secondary">Read-only</Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -2479,6 +2490,20 @@ export default function AdminConsole() {
               <p className="text-xs text-muted-foreground">
                 Keys used to create leads via the external API <strong>must</strong> be bound to an organization — incoming leads are assigned to that organization. System keys (no organization) can only read data and will get a 403 error when creating leads.
               </p>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label htmlFor="api-key-read-only">Read-only key</Label>
+                <p className="text-xs text-muted-foreground">
+                  Read-only keys can fetch data but receive 403 on any create, update, or delete operation.
+                </p>
+              </div>
+              <Switch
+                id="api-key-read-only"
+                checked={!!newApiKeyData.readOnly}
+                onCheckedChange={(checked) => setNewApiKeyData({...newApiKeyData, readOnly: checked})}
+                data-testid="switch-api-key-read-only"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="api-key-expires">Expires At (optional)</Label>

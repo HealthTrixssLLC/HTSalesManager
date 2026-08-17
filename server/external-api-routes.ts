@@ -4,7 +4,7 @@
 import { Router, Response, NextFunction } from "express";
 import { z } from "zod";
 import { storage } from "./db";
-import { authenticateApiKey, createApiKeyRateLimiter, ApiKeyRequest } from "./api-key-auth";
+import { authenticateApiKey, createApiKeyRateLimiter, requirePermission, ApiKeyRequest } from "./api-key-auth";
 
 /** Extract org ID from API key (null = system key, no org restriction) */
 function getKeyOrgId(req: ApiKeyRequest): string | undefined {
@@ -149,7 +149,7 @@ router.use(createApiKeyRateLimiter());
  * - offset: Number of results to skip (default: 0)
  * - expand: Comma-separated list of related entities to include (e.g., "opportunities")
  */
-router.get("/accounts", async (req: ApiKeyRequest, res) => {
+router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const {
       updatedSince,
@@ -242,7 +242,7 @@ router.get("/accounts", async (req: ApiKeyRequest, res) => {
  * Query Parameters:
  * - expand: Comma-separated list of related entities (e.g., "opportunities,contacts")
  */
-router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
+router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const { expand = "" } = req.query;
     const expandList = (expand as string).split(",").filter(Boolean);
@@ -330,7 +330,7 @@ router.get("/accounts/:id", async (req: ApiKeyRequest, res) => {
  * - offset: Number of results to skip (default: 0)
  * - expand: Comma-separated list of related entities (e.g., "account,resources")
  */
-router.get("/opportunities", async (req: ApiKeyRequest, res) => {
+router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const {
       updatedSince,
@@ -449,7 +449,7 @@ router.get("/opportunities", async (req: ApiKeyRequest, res) => {
  * Query Parameters:
  * - expand: Comma-separated list of related entities (e.g., "account,resources")
  */
-router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
+router.get("/opportunities/:id", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const { expand = "" } = req.query;
     const expandList = (expand as string).split(",").filter(Boolean);
@@ -558,7 +558,7 @@ const linkContactSchema = z.object({
  * POST /api/v1/external/opportunities/:id/contacts
  * Link a contact to an opportunity with a role (optional isPrimary flag).
  */
-router.post("/opportunities/:id/contacts", async (req: ApiKeyRequest, res) => {
+router.post("/opportunities/:id/contacts", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     
@@ -624,7 +624,7 @@ router.post("/opportunities/:id/contacts", async (req: ApiKeyRequest, res) => {
  * DELETE /api/v1/external/opportunities/:id/contacts/:contactId
  * Remove the opportunity-contact relationship (does not delete the contact).
  */
-router.delete("/opportunities/:id/contacts/:contactId", async (req: ApiKeyRequest, res) => {
+router.delete("/opportunities/:id/contacts/:contactId", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     
@@ -691,7 +691,7 @@ function formatContactResponse(contact: any, account?: { id: string; name: strin
  * - offset: Number of results to skip (default: 0)
  * - expand: "account" — includes { id, name } on each contact
  */
-router.get("/contacts", async (req: ApiKeyRequest, res) => {
+router.get("/contacts", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -778,7 +778,7 @@ router.get("/contacts", async (req: ApiKeyRequest, res) => {
  * Query Parameters:
  * - expand: "account" — includes { id, name } on the contact
  */
-router.get("/contacts/:id", async (req: ApiKeyRequest, res) => {
+router.get("/contacts/:id", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -834,7 +834,7 @@ router.get("/contacts/:id", async (req: ApiKeyRequest, res) => {
  * - limit: Number of results (default: 100, max: 1000)
  * - offset: Number of results to skip (default: 0)
  */
-router.get("/logs", async (req: ApiKeyRequest, res) => {
+router.get("/logs", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const {
       startDate,
@@ -1040,7 +1040,7 @@ function formatLeadResponse(lead: any, orgName: string | null) {
  * If a lead with the same email already exists in the organization,
  * no duplicate is created — the existing lead is returned with duplicate: true.
  */
-router.post("/leads", async (req: ApiKeyRequest, res) => {
+router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -1145,7 +1145,7 @@ router.post("/leads", async (req: ApiKeyRequest, res) => {
  * List leads for the API key's organization (read-back/confirmation).
  * Query params: updatedSince (ISO 8601), limit (default 100, max 1000), offset
  */
-router.get("/leads", async (req: ApiKeyRequest, res) => {
+router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -1201,7 +1201,7 @@ router.get("/leads", async (req: ApiKeyRequest, res) => {
  * GET /api/v1/external/leads/:id
  * Fetch a single lead by ID (org-scoped).
  */
-router.get("/leads/:id", async (req: ApiKeyRequest, res) => {
+router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -1263,7 +1263,7 @@ const externalActivitySchema = z.object({
  * When relatedType + relatedId are provided, the referenced record must belong
  * to the same org as the API key; returns 404 if not found or wrong org.
  */
-router.post("/activities", async (req: ApiKeyRequest, res) => {
+router.post("/activities", requirePermission("activities.write"), async (req: ApiKeyRequest, res) => {
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
@@ -1361,20 +1361,6 @@ router.post("/activities", async (req: ApiKeyRequest, res) => {
 
 import { MUTABLE_FIELDS, IMMUTABLE_FIELDS, PATCH_SCHEMAS, classifyPatchFields } from "./external-patch-config";
 
-/**
- * Phase F stub: key-level write permissions arrive in Phase F.
- * Until then, a key is treated as read-only when its name or description
- * contains the marker "[read-only]". TODO(Phase F): replace with a real
- * permissions column on api_keys.
- */
-function keyIsReadOnly(req: ApiKeyRequest): boolean {
-  const marker = "[read-only]";
-  return !!(
-    req.apiKey?.name?.toLowerCase().includes(marker) ||
-    req.apiKey?.description?.toLowerCase().includes(marker)
-  );
-}
-
 type PatchEntity = "account" | "contact" | "lead" | "opportunity" | "activity";
 
 interface PatchEntityConfig {
@@ -1395,14 +1381,6 @@ const PATCH_ENTITIES: Record<string, PatchEntityConfig> = {
 function makePatchHandler(cfg: PatchEntityConfig) {
   return async (req: ApiKeyRequest, res: Response) => {
     try {
-      // Write-permission check (Phase F stub)
-      if (keyIsReadOnly(req)) {
-        return res.status(403).json({
-          error: "Read-only API key",
-          message: "This API key does not have write permissions",
-        });
-      }
-
       const orgId = getKeyOrgId(req);
       const body = req.body;
 
@@ -1564,7 +1542,10 @@ function makePatchHandler(cfg: PatchEntityConfig) {
  * return 400 listing the rejected keys. Org scoping enforced (404 cross-org).
  */
 for (const [path, cfg] of Object.entries(PATCH_ENTITIES)) {
-  router.patch(`/${path}/:id`, makePatchHandler(cfg));
+  // Key-level permission scopes (Phase F): activities require activities.write,
+  // all CRM entities require crm.write
+  const writePermission = cfg.entity === "activity" ? "activities.write" : "crm.write";
+  router.patch(`/${path}/:id`, requirePermission(writePermission), makePatchHandler(cfg));
 }
 
 export default router;

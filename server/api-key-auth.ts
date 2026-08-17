@@ -5,6 +5,10 @@ import { Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
 import { storage } from "./db";
 import { verifyApiKey, validateApiKeyFormat } from "./api-key-utils";
+import { API_KEY_PERMISSIONS, type ApiKeyPermission } from "@shared/schema";
+
+// All capability tokens — granted to legacy keys without an explicit permissions field
+export const ALL_API_KEY_PERMISSIONS: ApiKeyPermission[] = [...API_KEY_PERMISSIONS];
 
 export interface ApiKeyRequest extends Request {
   apiKey?: {
@@ -13,6 +17,7 @@ export interface ApiKeyRequest extends Request {
     description: string | null;
     rateLimitPerMin: number | null;
     organizationId: string | null;
+    permissions: string[];
   };
 }
 
@@ -161,6 +166,10 @@ export async function authenticateApiKey(
       description: matchedKey.description,
       rateLimitPerMin: matchedKey.rateLimitPerMin,
       organizationId: matchedKey.organizationId ?? null,
+      // Backward compatibility: legacy keys without a permissions field (NULL)
+      // are treated as having all permissions. An explicit empty array means
+      // zero granted scopes — it is NOT promoted to full access.
+      permissions: matchedKey.permissions ?? ALL_API_KEY_PERMISSIONS,
     };
     
     next();
@@ -180,6 +189,46 @@ export async function authenticateApiKey(
       message: "An error occurred during authentication"
     });
   }
+}
+
+/**
+ * Middleware factory that enforces a permission scope on a route.
+ * Returns 403 with a clear message identifying the missing permission.
+ * Must run after authenticateApiKey.
+ */
+export function requirePermission(permission: ApiKeyPermission) {
+  return (req: ApiKeyRequest, res: Response, next: NextFunction) => {
+    const granted = req.apiKey?.permissions ?? [];
+    if (!granted.includes(permission)) {
+      // Audit the denied attempt (fire-and-forget)
+      storage.createAuditLog({
+        actorId: null,
+        action: "external_api_permission_denied",
+        resource: "api_key",
+        resourceId: req.apiKey?.id ?? null,
+        before: null,
+        after: {
+          endpoint: req.path,
+          method: req.method,
+          requiredPermission: permission,
+          grantedPermissions: granted,
+          apiKeyName: req.apiKey?.name,
+          timestamp: new Date().toISOString(),
+        },
+        ipAddress: req.ip || req.connection.remoteAddress || null,
+        userAgent: req.headers["user-agent"] || null,
+      }).catch(err => {
+        console.error("[API-AUTH] Failed to log permission denial:", err);
+      });
+
+      return res.status(403).json({
+        error: "Insufficient permissions",
+        message: `This API key does not have the '${permission}' permission required for this operation`,
+        requiredPermission: permission,
+      });
+    }
+    next();
+  };
 }
 
 /**
