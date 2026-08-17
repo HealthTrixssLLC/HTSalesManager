@@ -1,0 +1,60 @@
+STOP — actual Publishing preview still proposes destructive production DDL.
+
+I opened the real Replit Publishing workflow after completing Tasks #222 and #223.
+
+The actual production migration preview STILL says:
+
+DROP TABLE "legacy_id_map" CASCADE;
+
+and:
+
+You're about to delete legacy_id_map table with 766 items
+
+Therefore the previous statement that Publishing would produce no change for legacy_id_map was incorrect.
+
+Do not publish. Do not modify production.
+
+Diagnose why Replit Publishing's actual schema-diff engine still considers legacy_id_map removable even though:
+
+legacyIdMap was reportedly added to shared/schema.ts;
+migrations/0016_add_legacy_id_map.sql was reportedly added;
+_journal.json was reportedly updated;
+production already contains the table with 766 records.
+
+Focus specifically on how this project exposes its Drizzle schema to Replit Publishing. Inspect:
+
+drizzle.config.ts;
+the schema path(s) actually configured there;
+shared/schema.ts;
+whether legacyIdMap is exported in the manner required by Drizzle/Replit introspection;
+migration metadata/snapshots;
+whether Replit Publishing uses the migration journal, Drizzle schema export, generated snapshot, or another schema source for its production diff;
+whether the current Publishing attempt is based on an older deployed/workspace revision;
+whether another schema file or schema barrel/export is authoritative.
+
+Do not guess that adding another migration will solve this. We already added migration 0016 and the actual Publishing preview still wants to drop the table.
+
+Determine the exact reason the real Publishing preview produces:
+
+DROP TABLE "legacy_id_map" CASCADE;
+
+Then make only the minimum source/metadata correction required for Publishing to recognize the existing production table as intentional.
+
+Hard constraints
+Do NOT drop legacy_id_map.
+Do NOT truncate it.
+Do NOT recreate it.
+Do NOT modify its 766 production rows.
+Do NOT run DDL against production.
+Do NOT change canonical IDs.
+Do NOT change id_patterns.
+Do NOT modify Tasks #222 or #223.
+Do NOT publish.
+
+After the correction, tell me exactly what was wrong and exactly what files were changed.
+
+Then STOP.
+
+I will manually reopen Replit Publishing and use the actual production migration preview as the acceptance test.
+
+Acceptance criterion: the actual Replit Publishing screen must no longer propose DROP TABLE "legacy_id_map" CASCADE.
