@@ -9,6 +9,8 @@ import {
   isCompatiblePattern,
   combineChecksumParts,
   idPatternRowRepr,
+  assertExactlyOneGlobalRow,
+  assertGlobalUpdateRowCount,
 } from "../scripts/canonical-id-migration-hwm";
 import { verifyDryRunReport, computeReportMac } from "../scripts/canonical-id-migration-gate";
 import * as crypto from "crypto";
@@ -91,11 +93,23 @@ describe("computeAllocationBase (step (c) legacy_id_map numbering base)", () => 
 });
 
 describe("isCompatiblePattern (generator counter eligibility)", () => {
-  it("accepts same prefix/format family", () => {
+  it("accepts exact canonical-pattern equality for all six entity patterns", () => {
     expect(isCompatiblePattern("ACCT-{YYYY}-{SEQ:5}", "ACCT-{YYYY}-{SEQ:5}")).toBe(true);
-    expect(isCompatiblePattern("ACCT-{YY}-{SEQ:4}", "ACCT-{YYYY}-{SEQ:5}")).toBe(true); // same ACCT family
+    expect(isCompatiblePattern("CONT-{YY}{MM}-{SEQ:5}", "CONT-{YY}{MM}-{SEQ:5}")).toBe(true);
+    expect(isCompatiblePattern("OPP-{YYYY}-{SEQ:6}", "OPP-{YYYY}-{SEQ:6}")).toBe(true);
+    expect(isCompatiblePattern("ACT-{YY}{MM}-{SEQ:5}", "ACT-{YY}{MM}-{SEQ:5}")).toBe(true);
     expect(isCompatiblePattern("LEAD-{SEQ:6}", "LEAD-{SEQ:6}")).toBe(true);
     expect(isCompatiblePattern("DOC-{SEQ:6}", "DOC-{SEQ:6}")).toBe(true);
+  });
+
+  it("rejects a same-prefix but different-format variant — NOT a proven compatible sequence namespace", () => {
+    // ACCT-{YY}-{SEQ:4} uses a different date granularity and sequence width
+    // from ACCT-{YYYY}-{SEQ:5}. Prefix match alone does not prove same namespace.
+    expect(isCompatiblePattern("ACCT-{YY}-{SEQ:4}", "ACCT-{YYYY}-{SEQ:5}")).toBe(false);
+    expect(isCompatiblePattern("CONT-{YY}-{SEQ:4}", "CONT-{YY}{MM}-{SEQ:5}")).toBe(false);
+    expect(isCompatiblePattern("OPP-{YYYY}-{SEQ:4}", "OPP-{YYYY}-{SEQ:6}")).toBe(false);
+    expect(isCompatiblePattern("ACT-{YYYY}-{SEQ:5}", "ACT-{YY}{MM}-{SEQ:5}")).toBe(false);
+    expect(isCompatiblePattern("LEAD-{SEQ:5}", "LEAD-{SEQ:6}")).toBe(false);
   });
 
   it("rejects a different prefix family (legacy pattern counters must not carry over)", () => {
@@ -108,6 +122,57 @@ describe("isCompatiblePattern (generator counter eligibility)", () => {
     expect(isCompatiblePattern(null, "ACCT-{YYYY}-{SEQ:5}")).toBe(false);
     expect(isCompatiblePattern(undefined, "ACCT-{YYYY}-{SEQ:5}")).toBe(false);
     expect(isCompatiblePattern("", "ACCT-{YYYY}-{SEQ:5}")).toBe(false);
+  });
+});
+
+describe("assertExactlyOneGlobalRow (pre-migration id_patterns invariant)", () => {
+  it("count === 1 — PASS (invariant satisfied)", () => {
+    expect(() => assertExactlyOneGlobalRow("Account", 1)).not.toThrow();
+    expect(() => assertExactlyOneGlobalRow("Lead", 1)).not.toThrow();
+  });
+
+  it("count === 0 (missing global row) — FAIL", () => {
+    expect(() => assertExactlyOneGlobalRow("Account", 0)).toThrow(/0 global row/);
+    expect(() => assertExactlyOneGlobalRow("Contact", 0)).toThrow(/Contact/);
+  });
+
+  it("count === 2 (duplicate global rows) — FAIL", () => {
+    expect(() => assertExactlyOneGlobalRow("Opportunity", 2)).toThrow(/2 global row/);
+    expect(() => assertExactlyOneGlobalRow("Activity", 3)).toThrow(/Activity/);
+  });
+
+  it("error message names the entity and the offending count", () => {
+    const err = (() => {
+      try { assertExactlyOneGlobalRow("Lead", 0); }
+      catch (e: any) { return e.message; }
+    })();
+    expect(err).toMatch(/Lead/);
+    expect(err).toMatch(/0/);
+  });
+});
+
+describe("assertGlobalUpdateRowCount (per-UPDATE id_patterns invariant)", () => {
+  it("rowCount === 1 — PASS", () => {
+    expect(() => assertGlobalUpdateRowCount("Account", 1)).not.toThrow();
+    expect(() => assertGlobalUpdateRowCount("Document", 1)).not.toThrow();
+  });
+
+  it("rowCount === 0 (missing row, UPDATE hit nothing) — FAIL", () => {
+    expect(() => assertGlobalUpdateRowCount("Account", 0)).toThrow(/0/);
+    expect(() => assertGlobalUpdateRowCount("Lead", 0)).toThrow(/Lead/);
+  });
+
+  it("rowCount === 2 (duplicate rows updated simultaneously) — FAIL", () => {
+    expect(() => assertGlobalUpdateRowCount("Opportunity", 2)).toThrow(/2/);
+  });
+
+  it("error message names the entity and the actual rowCount", () => {
+    const err = (() => {
+      try { assertGlobalUpdateRowCount("Activity", 0); }
+      catch (e: any) { return e.message; }
+    })();
+    expect(err).toMatch(/Activity/);
+    expect(err).toMatch(/0/);
   });
 });
 

@@ -1,0 +1,230 @@
+FINAL CANONICAL ID MIGRATION HARDENING — PRODUCTION READINESS
+
+This is the FINAL implementation pass.
+
+NO SCOPE CREEP.
+NO redesign.
+NO additional features.
+NO speculative hardening.
+NO unrelated refactoring.
+NO new migration requirements.
+
+The migration architecture and Task 220 high-water/checksum work are accepted.
+
+Make ONLY the two changes below, run verification, report the results, and STOP.
+
+======================================================================
+1. GENERATOR PATTERN COMPATIBILITY — MAKE EXPLICIT
+======================================================================
+
+The current isCompatiblePattern() logic determines compatibility primarily
+from the ID prefix.
+
+Replace prefix-based inference with explicit generator-pattern compatibility.
+
+Canonical target patterns are:
+
+Account      ACCT-{YYYY}-{SEQ:5}
+Contact      CONT-{YY}{MM}-{SEQ:5}
+Opportunity  OPP-{YYYY}-{SEQ:6}
+Activity     ACT-{YY}{MM}-{SEQ:5}
+Lead         LEAD-{SEQ:6}
+Document     DOC-{SEQ:6}
+
+RULE:
+
+A generator counter may contribute to EXISTING_GENERATOR_HIGH_WATER only
+when the existing pattern is explicitly known to use the same sequence
+namespace as the canonical target pattern.
+
+Exact target-pattern equality MUST be compatible.
+
+Do NOT assume compatibility merely because prefixes match.
+
+For example:
+
+ACCT-{YY}-{SEQ:4}
+
+must NOT automatically be considered compatible with:
+
+ACCT-{YYYY}-{SEQ:5}
+
+If the existing production code/data contains a historical generator pattern
+that is demonstrably part of the same monotonically increasing sequence
+namespace, it may be explicitly whitelisted.
+
+Do not guess.
+
+If no such historical pattern is proven, use exact canonical-pattern
+compatibility only.
+
+Update the existing unit tests to reflect this rule.
+
+======================================================================
+2. GLOBAL id_patterns INVARIANT — EXACTLY ONE ROW REQUIRED
+======================================================================
+
+The migration depends on one global generator row for each final entity:
+
+Account
+Contact
+Opportunity
+Activity
+Lead
+Document
+
+For each entity require EXACTLY ONE:
+
+id_patterns
+WHERE entity = <entity>
+AND organization_id IS NULL
+
+Add a pre-migration validation that proves this invariant.
+
+If count != 1:
+
+HARD FAIL.
+
+This applies to BOTH:
+
+--dry-run
+--live
+
+The migration must not attempt to manufacture a missing generator row and
+must not choose between duplicate rows.
+
+Additionally, every UPDATE of a global id_patterns row during the migration
+must assert:
+
+rowCount === 1
+
+If rowCount is anything other than 1:
+
+throw ValidationError
+ROLLBACK
+
+Do not allow a log such as "(0 row)" to be treated as success.
+
+Where practical, add/adjust tests covering:
+
+- exactly one global row -> PASS
+- missing global row -> FAIL
+- duplicate global rows -> FAIL
+- UPDATE affecting exactly one row -> PASS
+- UPDATE affecting anything other than one row -> FAIL
+
+======================================================================
+PRESERVE EVERYTHING ELSE
+======================================================================
+
+Do NOT alter the accepted migration behavior, including:
+
+- canonical ID formats
+- global/all-organization migration scope
+- deterministic mapping order
+- legacy_id_map behavior
+- dynamic FK discovery
+- FK rewriting
+- soft-reference rewriting
+- constraint handling
+- audit behavior
+- transaction boundaries
+- explicit rollback behavior
+- production fingerprint gate
+- dry-run/live separation
+- maintenance-window requirements
+- CI protection
+- dry-run report
+- report HMAC verification
+- database identity binding
+- migration input checksum
+- checksum coverage of id_patterns
+- checksum coverage of FK/soft-reference inputs
+- historical canonical ID detection
+- generator high-water preservation
+- allocation-base calculation
+- FINAL_COUNTER calculation
+- Lead/Document reconciliation
+- organization-specific canonical format normalization
+- V1-V9 validations
+- V7 next-ID collision protection
+- production summary/high-water table
+
+The accepted high-water rule remains:
+
+FINAL_COUNTER =
+MAX(
+  LIVE_MAX,
+  MIGRATION_MAX,
+  EXISTING_GENERATOR_HIGH_WATER,
+  HISTORICAL_CANONICAL_MAX
+)
+
+Migrated ID allocation must continue to start above the applicable
+pre-migration high-water mark so previously issued canonical IDs are
+never reused.
+
+======================================================================
+FINAL VERIFICATION
+======================================================================
+
+After implementing ONLY the two changes above:
+
+1. Run TypeScript/type checking.
+2. Run the complete relevant test suite.
+3. Confirm the migration script compiles.
+4. Confirm no unrelated files/behavior were changed.
+5. Review the resulting diff for accidental scope expansion.
+
+If a test fails because of one of these two changes, fix that failure.
+
+If you discover an unrelated issue:
+
+DO NOT FIX IT.
+
+Report it separately as an observation.
+
+Do not expand the scope.
+
+======================================================================
+RETURN ONLY
+======================================================================
+
+Return a concise final production-readiness report containing:
+
+1. Files changed
+2. Exact generator compatibility rule implemented
+3. Global id_patterns invariant implemented
+4. Tests added/changed
+5. Typecheck result
+6. Test-suite result
+7. Any unrelated issue discovered but NOT changed
+8. Exact command for the production --dry-run
+9. Git diff/stat summary
+
+End with exactly one of:
+
+READY FOR PRODUCTION DRY-RUN
+
+or
+
+NOT READY FOR PRODUCTION DRY-RUN — <specific blocking reason>
+
+======================================================================
+STOP CONDITION
+======================================================================
+
+DO NOT execute the production dry-run.
+
+DO NOT execute --live.
+
+DO NOT make another hardening pass.
+
+DO NOT propose additional improvements.
+
+DO NOT broaden the task.
+
+Once the implementation and verification above are complete, STOP.
+
+The next step after a READY result is review of the actual production
+dry-run output — not another code-hardening cycle.

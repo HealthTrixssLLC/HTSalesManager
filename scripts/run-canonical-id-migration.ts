@@ -34,6 +34,8 @@ import {
   isCompatiblePattern,
   combineChecksumParts,
   idPatternRowRepr,
+  assertExactlyOneGlobalRow,
+  assertGlobalUpdateRowCount,
   HighWaterRow,
 } from "./canonical-id-migration-hwm";
 
@@ -518,6 +520,19 @@ async function columnExists(client: Queryable, table: string, column: string): P
     log("a", "BEGIN; locking id_patterns rows FOR UPDATE (freezes generateId)");
     await client.query(`SELECT id FROM id_patterns WHERE organization_id IS NULL FOR UPDATE`);
 
+    // Pre-migration invariant: exactly one global id_patterns row per entity.
+    // Hard-fail on 0 (missing) or >1 (duplicates) — applies to both --dry-run
+    // and --live.  The migration must not manufacture a missing row or choose
+    // between duplicates.
+    for (const entity of ["Account", "Contact", "Opportunity", "Activity", "Lead", "Document"]) {
+      const cr = await client.query(
+        `SELECT COUNT(*)::int AS n FROM id_patterns WHERE entity = $1 AND organization_id IS NULL`,
+        [entity]
+      );
+      assertExactlyOneGlobalRow(entity, Number(cr.rows[0].n));
+    }
+    log("a", "global id_patterns invariant PASS — exactly one global row per entity");
+
     const preCounts: Record<string, number> = {};
     for (const e of ENTITIES) {
       const r = await client.query(`SELECT COUNT(*)::int AS n FROM ${e.table}`);
@@ -837,6 +852,7 @@ async function columnExists(client: Queryable, table: string, column: string): P
          WHERE entity=$3 AND organization_id IS NULL`,
         [PATTERNS[e.entity], finalCounter, e.entity]
       );
+      assertGlobalUpdateRowCount(e.entity, u.rowCount ?? 0);
       log(
         "g",
         `id_patterns ${e.entity}: LIVE_MAX=${liveMax} MIGRATION_MAX=${migrationMax} EXISTING_GENERATOR_HIGH_WATER=${egh} HISTORICAL_CANONICAL_MAX=${histMax} → FINAL_COUNTER=${finalCounter}; pattern=${PATTERNS[e.entity]} start_value=1 (${u.rowCount} row)`
@@ -878,6 +894,7 @@ async function columnExists(client: Queryable, table: string, column: string): P
          WHERE entity=$3 AND organization_id IS NULL`,
         [s.pattern, finalCounter, s.entity]
       );
+      assertGlobalUpdateRowCount(s.entity, u.rowCount ?? 0);
       log(
         "g",
         `id_patterns ${s.entity}: LIVE_MAX=${liveMax} MIGRATION_MAX=${migrationMax} EXISTING_GENERATOR_HIGH_WATER=${egh} HISTORICAL_CANONICAL_MAX=${histMax} → FINAL_COUNTER=${finalCounter}; pattern=${s.pattern} start_value=1 (${u.rowCount} row)`

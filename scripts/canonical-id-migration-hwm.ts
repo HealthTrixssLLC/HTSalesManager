@@ -42,17 +42,66 @@ export function computeAllocationBase(i: {
   return computeFinalCounter({ ...i, migrationMax: 0 });
 }
 
-// An existing id_patterns row's counter only counts toward the high-water mark
-// when its pattern is in the same prefix/format family as the target canonical
-// pattern — i.e. its generated IDs share the target's prefix, so its counter
-// tracks sequences of the same identity space. A counter for a differently
-// prefixed legacy pattern (e.g. "ACT-..." for accounts) counts sequences of IDs
-// that are being renamed away and must NOT inflate the new counter.
+// An existing id_patterns row's counter contributes to the high-water mark ONLY
+// when its pattern is exactly equal to the canonical target pattern — i.e. the
+// generator was already producing IDs in the same format as the target and its
+// counter directly tracks sequences in the same namespace.
+//
+// A different-format variant of the same prefix (e.g. ACCT-{YY}-{SEQ:4} vs
+// ACCT-{YYYY}-{SEQ:5}) uses a different date segment and/or sequence width and
+// is NOT assumed to share the target's monotonically increasing sequence
+// namespace.  A historical pattern may be added to an explicit whitelist only
+// when it has been proven — not inferred — to share that namespace.
+//
+// Currently no historical patterns are whitelisted.
 export function isCompatiblePattern(existingPattern: string | null | undefined, targetPattern: string): boolean {
   if (!existingPattern) return false;
-  const prefixOf = (p: string) => p.split(/[-{]/, 1)[0];
-  const target = prefixOf(targetPattern);
-  return target.length > 0 && prefixOf(existingPattern) === target;
+  // Exact pattern equality is the only guaranteed-compatible relationship.
+  if (existingPattern === targetPattern) return true;
+  // Explicit whitelist of historically proven same-namespace patterns.
+  // (None at this time — do not add entries here without proof.)
+  const WHITELIST: ReadonlyMap<string, ReadonlySet<string>> = new Map();
+  const targets = WHITELIST.get(targetPattern);
+  return targets !== undefined && targets.has(existingPattern);
+}
+
+// ---------------------------------------------------------------------------
+// Invariant assertion helpers — used by the migration script's pre-migration
+// validation and per-UPDATE checks. Both throw on violation; any thrown error
+// inside the migration's transaction triggers an explicit ROLLBACK.
+// ---------------------------------------------------------------------------
+
+/**
+ * Assert that the given count of global id_patterns rows for `entity` is
+ * exactly 1.  Called before the migration begins — hard-fails on missing
+ * (count 0) or duplicate (count > 1) global rows.  The migration must not
+ * manufacture a missing row or choose between duplicates.
+ */
+export function assertExactlyOneGlobalRow(entity: string, count: number): void {
+  if (count !== 1) {
+    throw new Error(
+      `PRE-MIGRATION INVARIANT VIOLATED: id_patterns has ${count} global row(s) ` +
+      `(organization_id IS NULL) for entity "${entity}" (expected exactly 1). ` +
+      `The migration must not manufacture a missing row or choose between ` +
+      `duplicates. Resolve this manually before running the migration.`
+    );
+  }
+}
+
+/**
+ * Assert that a global id_patterns UPDATE affected exactly 1 row.
+ * rowCount 0 means the global row is missing; rowCount > 1 means duplicates
+ * exist — both are hard failures that must trigger ROLLBACK.
+ */
+export function assertGlobalUpdateRowCount(entity: string, rowCount: number): void {
+  if (rowCount !== 1) {
+    throw new Error(
+      `id_patterns global UPDATE invariant violated for entity "${entity}": ` +
+      `expected rowCount 1, got ${rowCount}. ` +
+      `rowCount 0 = missing global row; rowCount > 1 = duplicate global rows. ` +
+      `Both are hard failures — transaction must be rolled back.`
+    );
+  }
 }
 
 // Deterministic combination of checksum input parts into the final SHA-256.
