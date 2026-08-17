@@ -309,3 +309,30 @@ describe("Opportunities list filters", () => {
     expect(body.data[0].account?.id).toBe(accountIds[0]);
   });
 });
+
+describe("Pagination clamping", () => {
+  it("clamps negative limit to a positive page size", async () => {
+    const res = await get(`/accounts?limit=-1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pagination.limit).toBeGreaterThanOrEqual(1);
+    expect(body.data.length).toBeLessThanOrEqual(body.pagination.limit);
+
+    const opp = await (await get(`/opportunities?limit=-1&includeInForecast=all`)).json();
+    expect(opp.pagination.limit).toBeGreaterThanOrEqual(1);
+
+    const contacts = await (await get(`/contacts?limit=-5`)).json();
+    expect(contacts.pagination.limit).toBeGreaterThanOrEqual(1);
+
+    const leads = await (await get(`/leads?limit=0`)).json();
+    expect(leads.pagination.limit).toBeGreaterThanOrEqual(1);
+  });
+
+  it("clamps negative offset to zero", async () => {
+    const acc = await (await get(`/accounts?offset=-10`)).json();
+    expect(acc.pagination.offset).toBe(0);
+
+    const opp = await (await get(`/opportunities?offset=-10&includeInForecast=all`)).json();
+    expect(opp.pagination.offset).toBe(0);
+  });
+});

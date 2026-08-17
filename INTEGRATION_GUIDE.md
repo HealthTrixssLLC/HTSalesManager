@@ -22,11 +22,16 @@ Complete guide for integrating with the Health Trixss CRM External API for custo
 
 ## Overview
 
-The Health Trixss CRM External API provides secure, RESTful access to accounts, opportunities, and audit logs for building custom forecasting applications and automated workflows.
+The Health Trixss CRM External API provides secure, RESTful access to accounts, opportunities, contacts, leads, activities, and audit logs for building custom forecasting applications and automated workflows.
+
+> **Canonical contract**: [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.1) is the authoritative specification for every endpoint. See also [`docs/API_IMPLEMENTATION_GUIDE.md`](docs/API_IMPLEMENTATION_GUIDE.md) for full details on permission scopes, PATCH semantics, and relationship rules.
+>
+> **Monetary values**: `amount`, `estRevenue`, and `actualRevenue` are decimal **strings** in currency units (e.g. `"50000.00"`), not integer cents. `ownerId` is a UUID string.
 
 ### Key Features
 
-- **Secure Authentication**: Crypto-based API keys with bcrypt hashing
+- **Secure Authentication**: Crypto-based API keys stored as bcrypt hashes
+- **Permission Scopes**: Per-key scopes (`crm.read`, `crm.write`, `activities.write`) enforced on every route
 - **Rate Limiting**: Configurable per-key limits (default 100 req/min)
 - **Comprehensive Logging**: All API requests logged for debugging and compliance
 - **Incremental Sync**: `updatedSince` parameter for efficient data synchronization
@@ -156,6 +161,8 @@ Retrieve all accounts with optional filtering and pagination.
 **Query Parameters**:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `search` | string | - | Case-insensitive substring match on account name |
+| `name` | string | - | Case-insensitive substring match on account name (alias of `search`) |
 | `updatedSince` | ISO 8601 | - | Only return accounts updated after this timestamp |
 | `limit` | integer | 100 | Number of results (max: 1000) |
 | `offset` | integer | 0 | Number of results to skip |
@@ -175,7 +182,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
       "id": "ACCT-2025-00001",
       "name": "Example Corp",
       "accountNumber": "ACCT-2025-00001",
-      "type": "Customer",
+      "type": "customer",
       "category": "Healthcare",
       "ownerId": "user-uuid-here",
       "industry": "Medical Devices",
@@ -184,11 +191,11 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
       "updatedAt": "2025-01-20T14:22:00Z",
       "opportunities": [
         {
-          "id": "OPP-2025-00001",
+          "id": "OPP-2025-000001",
           "name": "Q1 2025 Contract Renewal",
-          "stage": "Proposal",
-          "amount": 50000,
-          "closeDate": "2025-03-31",
+          "stage": "proposal",
+          "amount": "50000.00",
+          "closeDate": "2025-03-31T00:00:00.000Z",
           "probability": 75
         }
       ]
@@ -238,7 +245,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
     "id": "ACCT-2025-00001",
     "name": "Example Corp",
     "accountNumber": "ACCT-2025-00001",
-    "type": "Customer",
+    "type": "customer",
     "category": "Healthcare",
     "ownerId": "user-uuid-here",
     "industry": "Medical Devices",
@@ -249,18 +256,18 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
     "updatedAt": "2025-01-20T14:22:00Z",
     "opportunities": [
       {
-        "id": "OPP-2025-00001",
+        "id": "OPP-2025-000001",
         "name": "Q1 2025 Contract Renewal",
-        "stage": "Proposal",
-        "amount": 50000,
-        "closeDate": "2025-03-31",
+        "stage": "proposal",
+        "amount": "50000.00",
+        "closeDate": "2025-03-31T00:00:00.000Z",
         "probability": 75,
-        "rating": "Hot"
+        "rating": "hot"
       }
     ],
     "contacts": [
       {
-        "id": "CON-2025-00001",
+        "id": "CONT-2511-00001",
         "firstName": "Jane",
         "lastName": "Smith",
         "email": "jane.smith@example.com",
@@ -296,11 +303,17 @@ Retrieve all opportunities with optional filtering and pagination.
 **Query Parameters**:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `search` | string | - | Case-insensitive substring match on opportunity name |
+| `accountId` | string | - | Exact match on the parent account ID |
+| `status` | string | - | Case-insensitive exact match on the free-text status field |
+| `stage` | string | - | One of `prospecting`, `qualification`, `proposal`, `negotiation`, `closed_won`, `closed_lost` (invalid → 400) |
+| `ownerId` | string | - | Exact match on the owning user's ID |
+| `rating` | string | - | Case-insensitive exact match on the free-text rating |
 | `updatedSince` | ISO 8601 | - | Only return opportunities updated after this timestamp |
 | `includeInForecast` | string | `true` | Filter by forecast inclusion: `true`, `false`, or `all` |
 | `limit` | integer | 100 | Number of results (max: 1000) |
 | `offset` | integer | 0 | Number of results to skip |
-| `expand` | string | - | Comma-separated list: `account` |
+| `expand` | string | - | Comma-separated list: `account`, `resources` |
 
 **`includeInForecast` values**:
 | Value | Behavior |
@@ -332,20 +345,20 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
 {
   "data": [
     {
-      "id": "OPP-2025-00001",
+      "id": "OPP-2025-000001",
       "accountId": "ACCT-2025-00001",
       "name": "Q1 2025 Contract Renewal",
-      "stage": "Proposal",
-      "amount": 50000,
-      "closeDate": "2025-03-31",
+      "stage": "proposal",
+      "amount": "50000.00",
+      "closeDate": "2025-03-31T00:00:00.000Z",
       "ownerId": "user-uuid-here",
       "probability": 75,
       "status": "open",
       "actualCloseDate": null,
       "actualRevenue": null,
-      "estCloseDate": "2025-03-15",
-      "estRevenue": 50000,
-      "rating": "Hot",
+      "estCloseDate": "2025-03-15T00:00:00.000Z",
+      "estRevenue": "50000.00",
+      "rating": "hot",
       "includeInForecast": true,
       "externalId": "SF-OPP-54321",
       "createdAt": "2025-01-10T09:00:00Z",
@@ -354,7 +367,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
         "id": "ACCT-2025-00001",
         "name": "Example Corp",
         "accountNumber": "ACCT-2025-00001",
-        "type": "Customer",
+        "type": "customer",
         "category": "Healthcare"
       }
     }
@@ -379,37 +392,37 @@ Retrieve detailed information about a specific opportunity.
 **URL Parameters**:
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `id` | string | Opportunity ID (e.g., `OPP-2025-00001`) |
+| `id` | string | Opportunity ID (e.g., `OPP-2025-000001`) |
 
 **Query Parameters**:
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `expand` | string | Comma-separated list: `account` |
+| `expand` | string | Comma-separated list: `account`, `resources`, `contacts` |
 
 **Example Request**:
 ```bash
 curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
-  "https://your-domain.repl.co/api/v1/external/opportunities/OPP-2025-00001?expand=account"
+  "https://your-domain.repl.co/api/v1/external/opportunities/OPP-2025-000001?expand=account"
 ```
 
 **Example Response**:
 ```json
 {
   "data": {
-    "id": "OPP-2025-00001",
+    "id": "OPP-2025-000001",
     "accountId": "ACCT-2025-00001",
     "name": "Q1 2025 Contract Renewal",
-    "stage": "Proposal",
-    "amount": 50000,
-    "closeDate": "2025-03-31",
+    "stage": "proposal",
+    "amount": "50000.00",
+    "closeDate": "2025-03-31T00:00:00.000Z",
     "ownerId": "user-uuid-here",
     "probability": 75,
     "status": "open",
     "actualCloseDate": null,
     "actualRevenue": null,
-    "estCloseDate": "2025-03-15",
-    "estRevenue": 50000,
-    "rating": "Hot",
+    "estCloseDate": "2025-03-15T00:00:00.000Z",
+    "estRevenue": "50000.00",
+    "rating": "hot",
     "includeInForecast": true,
     "externalId": "SF-OPP-54321",
     "createdAt": "2025-01-10T09:00:00Z",
@@ -418,7 +431,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
       "id": "ACCT-2025-00001",
       "name": "Example Corp",
       "accountNumber": "ACCT-2025-00001",
-      "type": "Customer",
+      "type": "customer",
       "category": "Healthcare",
       "industry": "Medical Devices"
     }
@@ -430,7 +443,7 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
 ```json
 {
   "error": "Opportunity not found",
-  "message": "No opportunity found with ID: OPP-2025-99999"
+  "message": "No opportunity found with ID: OPP-2025-999999"
 }
 ```
 
@@ -491,6 +504,34 @@ curl -H "X-API-Key: $HEALTH_TRIXSS_API_KEY" \
   }
 }
 ```
+
+---
+
+### 6. Additional Endpoints
+
+Beyond the read endpoints above, the API also provides (see
+[`docs/openapi.yaml`](docs/openapi.yaml) and
+[`docs/API_IMPLEMENTATION_GUIDE.md`](docs/API_IMPLEMENTATION_GUIDE.md) for full
+schemas and examples):
+
+| Method | Path | Scope | Notes |
+|--------|------|-------|-------|
+| GET | `/contacts`, `/contacts/:id` | `crm.read` | Requires an **organization-scoped** key; `expand=account`; list filters: `search`, `email`, `accountId` |
+| POST | `/leads` | `crm.write` | Org-scoped key; email dedup returns `200` + `duplicate: true`. See [`docs/EXTERNAL_LEAD_API_GUIDE.md`](docs/EXTERNAL_LEAD_API_GUIDE.md) |
+| GET | `/leads`, `/leads/:id` | `crm.read` | Org-scoped key; list filters: `search`, `email`, `status`, `rating`, `source` |
+| POST | `/activities` | `activities.write` | Org-scoped key; optional `relatedType`+`relatedId` pair |
+| POST | `/opportunities/:id/contacts` | `crm.write` | Link a contact with a role (`champion`, `economic_buyer`, …); `409` on duplicate |
+| DELETE | `/opportunities/:id/contacts/:contactId` | `crm.write` | Unlink (`204`) |
+| PATCH | `/accounts/:id`, `/contacts/:id`, `/leads/:id`, `/opportunities/:id` | `crm.write` | Strict partial update; only allowlisted mutable fields |
+| PATCH | `/activities/:id` | `activities.write` | Strict partial update |
+| POST | `/documents` | `documents.write` | Org-scoped key; create a document reference (title + stable canonical URL) |
+| GET | `/documents`, `/documents/:id` | `documents.read` | Org-scoped key; filter by `entityType`+`entityId`; detail includes `links` |
+| POST | `/documents/:id/links` | `documents.write` | Link a document to an `account`/`opportunity`/`contact`/`lead` in the same org |
+| DELETE | `/documents/:id/links/:entityType/:entityId` | `documents.write` | Unlink (`204`) |
+
+Opportunity responses also include `implementationStartDate`,
+`implementationEndDate`, and `billingEndDate` (ISO 8601 or null), omitted from
+the examples above for brevity.
 
 ---
 

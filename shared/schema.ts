@@ -231,7 +231,7 @@ export const opportunities = pgTable("opportunities", {
 }));
 
 export const activities = pgTable("activities", {
-  id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACV-2501-00001
+  id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: ACT-2501-00001
   organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   type: activityTypeEnum("type").notNull(),
   subject: text("subject").notNull(),

@@ -213,8 +213,8 @@ router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest
     } = req.query;
     
     // Parse and validate parameters
-    const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
-    const offsetNum = parseInt(offset as string) || 0;
+    const limitNum = Math.min(Math.max(parseInt(limit as string) || 100, 1), 1000);
+    const offsetNum = Math.max(parseInt(offset as string) || 0, 0);
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
@@ -397,8 +397,8 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
     } = req.query;
     
     // Parse parameters
-    const limitNum = Math.min(parseInt(limit as string) || 100, 1000);
-    const offsetNum = parseInt(offset as string) || 0;
+    const limitNum = Math.min(Math.max(parseInt(limit as string) || 100, 1), 1000);
+    const offsetNum = Math.max(parseInt(offset as string) || 0, 0);
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
@@ -768,7 +768,7 @@ router.get("/contacts", requirePermission("crm.read"), async (req: ApiKeyRequest
     }
 
     const { limit = "100", offset = "0", expand = "" } = req.query;
-    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
     const expandList = (expand as string).split(",").filter(Boolean);
 
@@ -914,7 +914,7 @@ router.get("/logs", requirePermission("crm.read"), async (req: ApiKeyRequest, re
     }
     
     // Validate and parse parameters
-    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
     
     // Validate date parameters (strict ISO 8601)
@@ -1219,7 +1219,7 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
     }
 
     const { limit = "100", offset = "0" } = req.query;
-    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
 
     const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
@@ -1797,7 +1797,7 @@ router.get("/documents", requirePermission("documents.read"), async (req: ApiKey
     }
 
     const { entityType, entityId, updatedSince, limit = "100", offset = "0" } = req.query;
-    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
 
     if (entityType && !DOCUMENT_ENTITY_TYPES.includes(entityType as DocEntityType)) {

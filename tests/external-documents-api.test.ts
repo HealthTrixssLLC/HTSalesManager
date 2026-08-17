@@ -405,3 +405,55 @@ describe("External Documents API", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("Documents pagination & updatedSince contract", () => {
+  it("clamps negative and zero limit to a positive page size", async () => {
+    const neg = await fetch(`${BASE}/documents?limit=-1`, { headers: headers(orgAKey) });
+    expect(neg.status).toBe(200);
+    const negBody = await neg.json();
+    expect(negBody.pagination.limit).toBeGreaterThanOrEqual(1);
+
+    const zero = await fetch(`${BASE}/documents?limit=0`, { headers: headers(orgAKey) });
+    expect(zero.status).toBe(200);
+    const zeroBody = await zero.json();
+    expect(zeroBody.pagination.limit).toBeGreaterThanOrEqual(1);
+  });
+
+  it("clamps negative offset to zero", async () => {
+    const res = await fetch(`${BASE}/documents?offset=-10`, { headers: headers(orgAKey) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.pagination.offset).toBe(0);
+  });
+
+  it("updatedSince is strictly-after (record's own updatedAt excludes it)", async () => {
+    const created = await createDoc({
+      title: `Boundary Doc ${Date.now()}`,
+      canonicalUrl: `https://example.com/boundary-${Date.now()}.pdf`,
+    }, orgAKey);
+    expect(created.status).toBe(201);
+    const doc = (await created.json()).data;
+    createdDocIds.push(doc.id);
+
+    // Pin updatedAt to an exact millisecond value so the boundary comparison
+    // isn't skewed by sub-millisecond database precision.
+    const pinned = new Date();
+    pinned.setMilliseconds(0);
+    await db.update(schema.documents)
+      .set({ updatedAt: pinned })
+      .where(eq(schema.documents.id, doc.id));
+    doc.updatedAt = pinned.toISOString();
+
+    // Exactly at updatedAt: strict > must exclude the record
+    const at = await fetch(`${BASE}/documents?updatedSince=${encodeURIComponent(doc.updatedAt)}`, { headers: headers(orgAKey) });
+    expect(at.status).toBe(200);
+    const atBody = await at.json();
+    expect(atBody.data.some((d: any) => d.id === doc.id)).toBe(false);
+
+    // One second before: must include the record
+    const before = new Date(new Date(doc.updatedAt).getTime() - 1000).toISOString();
+    const beforeRes = await fetch(`${BASE}/documents?updatedSince=${encodeURIComponent(before)}`, { headers: headers(orgAKey) });
+    const beforeBody = await beforeRes.json();
+    expect(beforeBody.data.some((d: any) => d.id === doc.id)).toBe(true);
+  });
+});

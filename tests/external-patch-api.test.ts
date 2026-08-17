@@ -27,7 +27,7 @@ const ids = {
   contact: `CONT-VITEST-${suffix}`,
   lead: `LEAD-VITEST-${suffix}`,
   opportunity: `OPP-VITEST-${suffix}`,
-  activity: `ACV-VITEST-${suffix}`,
+  activity: `ACT-VITEST-${suffix}`,
 };
 
 function patch(path: string, body: any, key: string) {

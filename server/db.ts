@@ -7,7 +7,7 @@ import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
 import { Pool as PgPool } from "pg";
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { eq, sql, and, gte, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
+import { eq, sql, and, gte, gt, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
   IStorage,
@@ -1545,7 +1545,7 @@ export class PostgresStorage implements IStorage {
 
     const conditions: any[] = [];
     if (orgId) conditions.push(eq(schema.documents.organizationId, orgId));
-    if (updatedSince) conditions.push(gte(schema.documents.updatedAt, updatedSince));
+    if (updatedSince) conditions.push(gt(schema.documents.updatedAt, updatedSince));
 
     // Filter by linked entity via the documentLinks join table
     if (entityType || entityId) {

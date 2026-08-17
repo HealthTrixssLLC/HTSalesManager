@@ -366,7 +366,7 @@ export default function HelpPage() {
                       <pre className="text-xs overflow-x-auto">
 {`{
   "error": "Account not found",
-  "message": "No account found with ID: ACT-1234"
+  "message": "No account found with ID: ACCT-2025-99999"
 }`}
                       </pre>
                     </div>
@@ -433,7 +433,7 @@ export default function HelpPage() {
 {`{
   "data": [
     {
-      "id": "ACT-1019",
+      "id": "ACCT-2025-00001",
       "name": "Allied Behavioral Health",
       "accountNumber": "A001",
       "type": "Provider",
@@ -515,12 +515,12 @@ export default function HelpPage() {
 {`{
   "data": [
     {
-      "id": "OPP-2025-00042",
+      "id": "OPP-2025-000042",
       "name": "Q1 Software License Renewal",
-      "accountId": "ACT-1019",
-      "stage": "Proposal",
-      "amount": 150000,
-      "closeDate": "2025-03-31",
+      "accountId": "ACCT-2025-00001",
+      "stage": "proposal",
+      "amount": "150000.00",
+      "closeDate": "2025-03-31T00:00:00.000Z",
       "probability": 75,
       "includeInForecast": true,
       "ownerId": "user-123",
@@ -674,7 +674,7 @@ setInterval(syncNewOpportunities, 60 * 60 * 1000);`}
                 <div className="bg-muted p-4 rounded-md">
                   <pre className="text-xs overflow-x-auto">
 {`// Fetch account with all related opportunities
-const account = await crmRequest('/accounts/ACT-1019', {
+const account = await crmRequest('/accounts/ACCT-2025-00001', {
   expand: 'opportunities'
 });
 

@@ -49,7 +49,7 @@ POST /api/v1/external/leads
 | `title` | string | — | Job title, max 200 chars |
 | `topic` | string | — | Subject / message / notes, max 2000 chars |
 | `notes` | string | — | Alias for `topic` (used if `topic` is not provided), max 2000 chars |
-| `source` | string | — | One of: `website`, `referral`, `phone`, `email`, `event`, `partner`, `other` |
+| `source` | string | — | One of: `website`, `referral`, `phone`, `email`, `event`, `partner`, `lead_generation`, `other` |
 | `rating` | string | — | One of: `hot`, `warm`, `cold` |
 
 Unknown fields are rejected (400). You **cannot** send `organizationId` — it is derived from the API key.

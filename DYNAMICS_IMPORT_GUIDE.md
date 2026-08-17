@@ -58,7 +58,7 @@ You need three files:
   },
   "id_rules": {
     "internal_id_field": "id",
-    "internal_id_pattern": "ACC-{{YYYY}}{{MM}}-{{00001}}",
+    "internal_id_pattern": "ACCT-{{YYYY}}-{{00001}}",
     "external_id_fields": ["accountNumber", "externalId"],
     "preserve_external_format": true
   },
@@ -150,9 +150,9 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
 #### How ID Preservation Works
 
 1. **For Accounts**:
-   - If "HT Account Number" exists in your Dynamics export (e.g., `ACT-1019`)
+   - If "HT Account Number" exists in your Dynamics export (e.g., `ACCT-1019`)
    - The transformation preserves it EXACTLY as-is in the `id` field
-   - Result: CRM record id = `ACT-1019` (not a generated ID)
+   - Result: CRM record id = `ACCT-1019` (not a generated ID)
 
 2. **For Opportunities**:
    - If "HT Opportunity Number" exists (e.g., `Opp-1024`)
@@ -161,13 +161,13 @@ id,name,accountNumber,type,category,industry,website,phone,primaryContactName,pr
 
 3. **For Contacts & Leads**:
    - Dynamics only has GUIDs (no "Contact Number" or "Lead Number" fields)
-   - System **generates new IDs** using patterns: `CON-202511-00001`, `LEAD-000001`
+   - System **generates new IDs** using patterns: `CONT-2511-00001`, `LEAD-000001`
    - Dynamics GUID is preserved in `externalId` field for tracking
-   - Result: CRM record id = `CON-202511-00001` (generated), externalId = `{dynamics-guid}`
+   - Result: CRM record id = `CONT-2511-00001` (generated), externalId = `{dynamics-guid}`
 
 4. **Fallback (only if no external ID exists for Accounts/Opportunities)**:
    - System generates new ID using the configured pattern
-   - Example: `ACC-202511-00001` for the first account in November 2025
+   - Example: `ACCT-2025-00001` for the first account created in 2025
 
 #### Why This Matters
 
@@ -194,7 +194,7 @@ This behavior is controlled by `preserve_external_format` in the mapping configu
 ```json
 "id_rules": {
   "internal_id_field": "id",
-  "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
+  "internal_id_pattern": "CONT-{{YY}}{{MM}}-{{00001}}",
   "external_id_fields": ["externalId"],
   "preserve_external_format": false  // ← Generate new IDs, preserve GUID in externalId
 }
@@ -297,7 +297,7 @@ Export contacts with these columns:
   },
   "id_rules": {
     "internal_id_field": "id",
-    "internal_id_pattern": "CON-{{YYYY}}{{MM}}-{{00001}}",
+    "internal_id_pattern": "CONT-{{YY}}{{MM}}-{{00001}}",
     "external_id_fields": []
   },
   "validation_rules": {

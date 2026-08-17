@@ -1,0 +1,2192 @@
+openapi: 3.1.0
+info:
+  title: Health Trixss CRM External API
+  version: "1.2"
+  description: |
+    Secure external access to Health Trixss CRM data for forecasting
+    applications, BI tools, and third-party integrations.
+
+    ## Authentication
+    Every request must carry an API key in the `x-api-key` header.
+    Keys are generated in Admin Console → API Keys and shown only once.
+
+    ## Key scoping
+    - **System keys** (not bound to an organization) may read accounts and
+      opportunities across all organizations.
+    - **Organization-scoped keys** see only their organization's data.
+      Contacts, leads, and activities endpoints REQUIRE an org-scoped key
+      (system keys receive `403 Organization-bound API key required`).
+
+    ## Permission scopes
+    Each key carries permission scopes. Routes enforce:
+    - `crm.read` — all GET endpoints (accounts, opportunities, contacts, leads, logs)
+    - `crm.write` — POST /leads, PATCH on accounts/contacts/leads/opportunities,
+      POST/DELETE opportunity-contact links
+    - `activities.write` — POST /activities, PATCH /activities/:id
+    Missing scopes return `403` with a `requiredPermission` field. Legacy keys
+    with no explicit scopes are treated as having all scopes; an explicit empty
+    list grants nothing.
+
+    ## Monetary values
+    `amount`, `actualRevenue`, and `estRevenue` are decimal values with
+    2-decimal precision (currency units, e.g. US dollars), serialized as
+    JSON strings such as `"50000.00"`. They are NOT integer cents.
+
+    ## Canonical record ID prefixes
+    Account `ACCT-*`, Contact `CONT-*`, Lead `LEAD-*`, Opportunity `OPP-*`,
+    Activity `ACT-*`, Document `DOC-*`.
+servers:
+  - url: https://{crm-domain}/api/v1/external
+    variables:
+      crm-domain:
+        default: your-crm-domain.example.com
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Accounts
+  - name: Opportunities
+  - name: Contacts
+  - name: Leads
+  - name: Activities
+  - name: Documents
+  - name: Logs
+
+paths:
+  /accounts:
+    get:
+      tags: [Accounts]
+      operationId: listAccounts
+      summary: List accounts
+      description: >
+        Lists accounts visible to the API key (all orgs for a system key,
+        one org for an org-scoped key). Requires the `crm.read` scope.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on account name.
+        - name: name
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on account name (alias of `search`).
+        - $ref: "#/components/parameters/UpdatedSince"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: expand
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Comma-separated related entities. Supported: `opportunities`
+            (adds forecast-flagged opportunities to each account).
+      responses:
+        "200":
+          description: Paginated account list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AccountListItem"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - id: ACCT-2025-00001
+                    name: Acme Healthcare
+                    accountNumber: AN-00001
+                    type: customer
+                    category: Hospital
+                    ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                    industry: Healthcare
+                    externalId: null
+                    createdAt: "2025-01-15T10:00:00.000Z"
+                    updatedAt: "2025-02-01T14:30:00.000Z"
+                pagination: { total: 150, limit: 100, offset: 0, hasMore: true }
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /accounts/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAccount
+      summary: Get account details
+      description: Requires the `crm.read` scope. 404 for missing or cross-org records.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: expand
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Comma-separated. Supported: `opportunities`, `contacts`."
+      responses:
+        "200":
+          description: Account detail (adds `website` and `phone` over the list shape)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountDetail"
+              example:
+                data:
+                  id: ACCT-2025-00001
+                  name: Acme Healthcare
+                  accountNumber: AN-00001
+                  type: customer
+                  category: Hospital
+                  ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                  industry: Healthcare
+                  website: https://acmehealthcare.com
+                  phone: "+1-555-0100"
+                  externalId: null
+                  createdAt: "2025-01-15T10:00:00.000Z"
+                  updatedAt: "2025-02-01T14:30:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    patch:
+      tags: [Accounts]
+      operationId: patchAccount
+      summary: Update an account (partial)
+      description: >
+        Strict partial update. Requires the `crm.write` scope. Only allowlisted
+        mutable fields are accepted; immutable fields (`id`, `organizationId`,
+        `createdAt`, `updatedAt`, `sourceSystem`, `sourceRecordId`,
+        `importStatus`, `importNotes`) and unknown fields return 400 listing
+        the rejected keys.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountPatch"
+            example: { name: "Acme Healthcare Group", industry: "Healthcare" }
+      responses:
+        "200":
+          description: Updated account record (full database row)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AccountRecord"
+        "400": { $ref: "#/components/responses/PatchValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /opportunities:
+    get:
+      tags: [Opportunities]
+      operationId: listOpportunities
+      summary: List opportunities
+      description: Requires the `crm.read` scope.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on opportunity name.
+        - name: accountId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Exact match on the parent account ID (ACCT-*).
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive exact match on the free-text status field (e.g. open, Won, Lost).
+        - name: stage
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+          description: Filter by pipeline stage; invalid values return 400.
+        - name: ownerId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Exact match on the owning user's ID (UUID string).
+        - name: rating
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive exact match on the free-text rating (e.g. hot, warm, cold).
+        - $ref: "#/components/parameters/UpdatedSince"
+        - name: includeInForecast
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["true", "false", "all"]
+            default: "true"
+          description: >
+            `true` (default) returns only forecast-flagged opportunities,
+            `false` only excluded ones, `all` returns everything.
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: expand
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Comma-separated. Supported: `account`, `resources`."
+      responses:
+        "200":
+          description: Paginated opportunity list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Opportunity"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - id: OPP-2025-000001
+                    accountId: ACCT-2025-00001
+                    name: Enterprise Software License
+                    stage: proposal
+                    amount: "150000.00"
+                    closeDate: "2025-03-15T00:00:00.000Z"
+                    ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                    probability: 75
+                    status: open
+                    actualCloseDate: null
+                    actualRevenue: null
+                    estCloseDate: "2025-03-15T00:00:00.000Z"
+                    estRevenue: "150000.00"
+                    rating: warm
+                    includeInForecast: true
+                    implementationStartDate: "2025-04-01T00:00:00.000Z"
+                    implementationEndDate: "2025-06-30T00:00:00.000Z"
+                    billingEndDate: "2026-06-30T00:00:00.000Z"
+                    externalId: null
+                    createdAt: "2025-01-10T09:00:00.000Z"
+                    updatedAt: "2025-02-05T11:20:00.000Z"
+                pagination: { total: 85, limit: 100, offset: 0, hasMore: false }
+        "400":
+          description: Invalid `updatedSince`, `stage`, or `includeInForecast` value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: Invalid stage
+                message: "stage must be one of: prospecting, qualification, proposal, negotiation, closed_won, closed_lost"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /opportunities/{id}:
+    get:
+      tags: [Opportunities]
+      operationId: getOpportunity
+      summary: Get opportunity details
+      description: >
+        Requires the `crm.read` scope. The detail endpoint additionally
+        supports `expand=contacts` (associated contacts with role and
+        isPrimary flag), which the list endpoint does not.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: expand
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Comma-separated. Supported: `account`, `resources`, `contacts`."
+      responses:
+        "200":
+          description: Opportunity detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    allOf:
+                      - $ref: "#/components/schemas/Opportunity"
+                      - type: object
+                        properties:
+                          account:
+                            $ref: "#/components/schemas/EmbeddedAccountWithIndustry"
+                          resources:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OpportunityResource"
+                          contacts:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/OpportunityContactLinkExpanded"
+              example:
+                data:
+                  id: OPP-2025-000001
+                  accountId: ACCT-2025-00001
+                  name: Enterprise Software License
+                  stage: proposal
+                  amount: "150000.00"
+                  closeDate: "2025-03-15T00:00:00.000Z"
+                  ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                  probability: 75
+                  status: open
+                  actualCloseDate: null
+                  actualRevenue: null
+                  estCloseDate: "2025-03-15T00:00:00.000Z"
+                  estRevenue: "150000.00"
+                  rating: warm
+                  includeInForecast: true
+                  implementationStartDate: "2025-04-01T00:00:00.000Z"
+                  implementationEndDate: "2025-06-30T00:00:00.000Z"
+                  billingEndDate: "2026-06-30T00:00:00.000Z"
+                  externalId: null
+                  createdAt: "2025-01-10T09:00:00.000Z"
+                  updatedAt: "2025-02-05T11:20:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    patch:
+      tags: [Opportunities]
+      operationId: patchOpportunity
+      summary: Update an opportunity (partial)
+      description: >
+        Strict partial update; requires the `crm.write` scope. Date invariants
+        are validated against the merged record: `implementationStartDate`
+        must not be after `implementationEndDate`, and `billingEndDate` must
+        not be before `implementationEndDate`. A mutable `accountId` must
+        reference an account in the record's own organization (404 otherwise);
+        a mutable `ownerId` must reference a member of the record's
+        organization (404 otherwise).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpportunityPatch"
+            example: { stage: negotiation, probability: 80, amount: "175000.00" }
+      responses:
+        "200":
+          description: Updated opportunity record (full database row)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/OpportunityRecord"
+        "400": { $ref: "#/components/responses/PatchValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /opportunities/{id}/contacts:
+    post:
+      tags: [Opportunities]
+      operationId: linkOpportunityContact
+      summary: Link a contact to an opportunity
+      description: >
+        Requires the `crm.write` scope. The contact must exist and be visible
+        to the key's organization. Only one contact per opportunity may be
+        `isPrimary`. Duplicate links return 409.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [contactId, role]
+              properties:
+                contactId:
+                  type: string
+                  description: Contact ID (e.g. CONT-2511-00001)
+                role:
+                  type: string
+                  enum: [economic_buyer, champion, technical_contact, contract_contact, executive_sponsor, decision_maker, influencer, other]
+                isPrimary:
+                  type: boolean
+                  default: false
+            example: { contactId: CONT-2511-00001, role: champion, isPrimary: true }
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: object, description: The created opportunity-contact link row }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Contact already linked to this opportunity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: Contact already linked
+                message: This contact is already linked to the opportunity
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /opportunities/{id}/contacts/{contactId}:
+    delete:
+      tags: [Opportunities]
+      operationId: unlinkOpportunityContact
+      summary: Unlink a contact from an opportunity
+      description: >
+        Requires the `crm.write` scope. Removes the relationship only; the
+        contact record itself is not deleted.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: string }
+          description: Contact ID (e.g. CONT-2511-00001)
+      responses:
+        "204":
+          description: Relationship removed (no body)
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /contacts:
+    get:
+      tags: [Contacts]
+      operationId: listContacts
+      summary: List contacts (org-scoped key required)
+      description: >
+        Requires the `crm.read` scope AND an organization-scoped key
+        (system keys receive 403).
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on the contact's "first last" name.
+        - name: email
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive exact email match.
+        - name: accountId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Exact match on the parent account ID (ACCT-*).
+        - $ref: "#/components/parameters/UpdatedSince"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+        - name: expand
+          in: query
+          required: false
+          schema: { type: string }
+          description: "Supported: `account` — adds `{ id, name }` (or null) to each contact."
+      responses:
+        "200":
+          description: Paginated contact list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Contact"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - id: CONT-2511-00001
+                    firstName: Jane
+                    lastName: Smith
+                    title: VP of Operations
+                    email: jane@acme.com
+                    phone: "+1-555-0101"
+                    mobile: null
+                    accountId: ACCT-2025-00001
+                    ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                    externalId: null
+                    createdAt: "2025-01-20T08:00:00.000Z"
+                    updatedAt: "2025-02-10T09:00:00.000Z"
+                pagination: { total: 42, limit: 100, offset: 0, hasMore: false }
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /contacts/{id}:
+    get:
+      tags: [Contacts]
+      operationId: getContact
+      summary: Get contact details (org-scoped key required)
+      description: Requires the `crm.read` scope AND an organization-scoped key.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - name: expand
+          in: query
+          required: false
+          schema: { type: string }
+          description: "Supported: `account` — adds `{ id, name }` (or null)."
+      responses:
+        "200":
+          description: Contact detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Contact"
+              example:
+                data:
+                  id: CONT-2511-00001
+                  firstName: Jane
+                  lastName: Smith
+                  title: VP of Operations
+                  email: jane@acme.com
+                  phone: "+1-555-0101"
+                  mobile: null
+                  accountId: ACCT-2025-00001
+                  ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
+                  externalId: null
+                  createdAt: "2025-01-20T08:00:00.000Z"
+                  updatedAt: "2025-02-10T09:00:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    patch:
+      tags: [Contacts]
+      operationId: patchContact
+      summary: Update a contact (partial)
+      description: >
+        Strict partial update; requires the `crm.write` scope. Unlike contact
+        reads, this route accepts system keys (org-scoped keys can only modify
+        their own organization's records). A mutable `accountId` must
+        reference an account in the record's own organization.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactPatch"
+            example: { title: "SVP of Operations", phone: "+1-555-0199" }
+      responses:
+        "200":
+          description: Updated contact record (full database row)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ContactRecord"
+        "400": { $ref: "#/components/responses/PatchValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /leads:
+    post:
+      tags: [Leads]
+      operationId: createLead
+      summary: Create a lead (org-scoped key required)
+      description: >
+        Requires the `crm.write` scope AND an organization-scoped key. The lead
+        is always assigned to the key's organization. Unknown fields are
+        rejected (400). Duplicate detection: if a lead with the same email
+        (case-insensitive) already exists in the organization, no new record
+        is created and the existing lead is returned with `duplicate: true`
+        and HTTP 200.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadCreate"
+            example:
+              firstName: John
+              lastName: Doe
+              email: john.doe@example.com
+              company: Acme Corp
+              topic: Interested in product demo
+              source: website
+              rating: warm
+      responses:
+        "201":
+          description: New lead created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [duplicate, data]
+                properties:
+                  duplicate: { type: boolean, const: false }
+                  data:
+                    $ref: "#/components/schemas/Lead"
+              example:
+                duplicate: false
+                data:
+                  id: LEAD-000042
+                  firstName: John
+                  lastName: Doe
+                  email: john.doe@example.com
+                  phone: null
+                  company: Acme Corp
+                  title: null
+                  topic: Interested in product demo
+                  status: new
+                  source: website
+                  rating: warm
+                  organizationId: 2f5e350e-5cb9-45a8-aef7-8ca8194c5081
+                  organizationName: Health Trixss
+                  createdAt: "2026-08-12T10:00:00.000Z"
+                  updatedAt: "2026-08-12T10:00:00.000Z"
+        "200":
+          description: Duplicate — existing lead returned, nothing created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [duplicate, message, data]
+                properties:
+                  duplicate: { type: boolean, const: true }
+                  message: { type: string }
+                  data:
+                    $ref: "#/components/schemas/Lead"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    get:
+      tags: [Leads]
+      operationId: listLeads
+      summary: List leads (org-scoped key required)
+      description: >
+        Requires the `crm.read` scope AND an organization-scoped key.
+        Invalid `status`, `rating`, or `source` values return 400 listing the
+        allowed values.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on the lead's "first last" name or company.
+        - name: email
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive exact email match.
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [new, contacted, qualified, unqualified, converted]
+        - name: rating
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [hot, warm, cold]
+          description: Case-insensitive (value is lowercased before matching).
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [website, referral, phone, email, event, partner, lead_generation, other]
+        - $ref: "#/components/parameters/UpdatedSince"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated lead list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Lead"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /leads/{id}:
+    get:
+      tags: [Leads]
+      operationId: getLead
+      summary: Get lead details (org-scoped key required)
+      description: Requires the `crm.read` scope AND an organization-scoped key.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Lead detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Lead"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    patch:
+      tags: [Leads]
+      operationId: patchLead
+      summary: Update a lead (partial)
+      description: >
+        Strict partial update; requires the `crm.write` scope. Unlike lead
+        reads and creation, this route accepts system keys (org-scoped keys
+        can only modify their own organization's records).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadPatch"
+            example: { status: contacted, rating: hot }
+      responses:
+        "200":
+          description: Updated lead record (full database row)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LeadRecord"
+        "400": { $ref: "#/components/responses/PatchValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /activities:
+    post:
+      tags: [Activities]
+      operationId: createActivity
+      summary: Create an activity (org-scoped key required)
+      description: >
+        Requires the `activities.write` scope AND an organization-scoped key.
+        `relatedType` and `relatedId` must both be provided or both omitted;
+        when provided, the referenced record must belong to the key's
+        organization (404 otherwise). An activity-association row is created
+        so the activity appears on the related record's timeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityCreate"
+            example:
+              type: call
+              subject: Discovery call
+              status: completed
+              completedAt: "2026-08-12T14:00:00.000Z"
+              notes: Discussed product fit
+              relatedType: Lead
+              relatedId: LEAD-000042
+      responses:
+        "201":
+          description: Activity created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Activity"
+              example:
+                data:
+                  id: ACT-2608-00099
+                  type: call
+                  subject: Discovery call
+                  status: completed
+                  priority: medium
+                  notes: Discussed product fit
+                  dueAt: null
+                  completedAt: "2026-08-12T14:00:00.000Z"
+                  relatedType: Lead
+                  relatedId: LEAD-000042
+                  organizationId: 2f5e350e-5cb9-45a8-aef7-8ca8194c5081
+                  createdAt: "2026-08-12T14:05:00.000Z"
+                  updatedAt: "2026-08-12T14:05:00.000Z"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /activities/{id}:
+    patch:
+      tags: [Activities]
+      operationId: patchActivity
+      summary: Update an activity (partial)
+      description: Strict partial update; requires the `activities.write` scope.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityPatch"
+            example: { status: completed, completedAt: "2026-08-12T15:00:00.000Z" }
+      responses:
+        "200":
+          description: Updated activity record (full database row)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ActivityRecord"
+        "400": { $ref: "#/components/responses/PatchValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /documents:
+    post:
+      tags: [Documents]
+      operationId: createDocument
+      summary: Create a document reference
+      description: >
+        Requires the `documents.write` scope and an organization-bound key.
+        Documents are references — a title plus a stable canonical URL to an
+        external system — not file uploads. `canonicalUrl` must be an absolute
+        http(s) URL without embedded credentials and without signed or
+        temporary query/fragment parameters (e.g. `X-Amz-Signature`, `sig`,
+        or any parameter name containing `token`, `auth`, `key`, ...); such
+        URLs are rejected with `400`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+            example:
+              title: Master Services Agreement — Vitest Hospital
+              documentType: contract
+              sourceSystem: sharepoint
+              canonicalUrl: https://contoso.sharepoint.com/sites/sales/msa-2026.pdf
+              version: "2.1"
+              status: active
+              mimeType: application/pdf
+      responses:
+        "201":
+          description: Created document reference (with empty links array)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentRecord"
+              example:
+                data:
+                  id: DOC-000001
+                  organizationId: 4f8f6a2e-0000-0000-0000-000000000000
+                  title: Master Services Agreement — Vitest Hospital
+                  documentType: contract
+                  sourceSystem: sharepoint
+                  canonicalUrl: https://contoso.sharepoint.com/sites/sales/msa-2026.pdf
+                  version: "2.1"
+                  status: active
+                  mimeType: application/pdf
+                  externalId: null
+                  createdAt: "2026-08-17T12:00:00.000Z"
+                  updatedAt: "2026-08-17T12:00:00.000Z"
+                  links: []
+        "400":
+          description: Validation failure or credential-bearing/unstable canonicalUrl
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    get:
+      tags: [Documents]
+      operationId: listDocuments
+      summary: List document references
+      description: >
+        Requires the `documents.read` scope and an organization-bound key.
+        `entityType` + `entityId` filter to documents linked to that record.
+      parameters:
+        - name: entityType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [account, opportunity, contact, lead]
+          description: Invalid values return `400`.
+        - name: entityId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Entity record ID (used with entityType).
+        - $ref: "#/components/parameters/UpdatedSince"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated document list (without links)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DocumentRecord"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - id: DOC-000001
+                    organizationId: 4f8f6a2e-0000-0000-0000-000000000000
+                    title: Master Services Agreement — Vitest Hospital
+                    documentType: contract
+                    sourceSystem: sharepoint
+                    canonicalUrl: https://contoso.sharepoint.com/sites/sales/msa-2026.pdf
+                    version: "2.1"
+                    status: active
+                    mimeType: application/pdf
+                    externalId: null
+                    createdAt: "2026-08-17T12:00:00.000Z"
+                    updatedAt: "2026-08-17T12:00:00.000Z"
+                pagination: { total: 1, limit: 100, offset: 0, hasMore: false }
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /documents/{id}:
+    get:
+      tags: [Documents]
+      operationId: getDocument
+      summary: Get a document reference (with links)
+      description: >
+        Requires the `documents.read` scope and an organization-bound key.
+        Includes the document's entity links.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: DOC-000001
+      responses:
+        "200":
+          description: Document with its links
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentRecord"
+              example:
+                data:
+                  id: DOC-000001
+                  organizationId: 4f8f6a2e-0000-0000-0000-000000000000
+                  title: Master Services Agreement — Vitest Hospital
+                  documentType: contract
+                  sourceSystem: sharepoint
+                  canonicalUrl: https://contoso.sharepoint.com/sites/sales/msa-2026.pdf
+                  version: "2.1"
+                  status: active
+                  mimeType: application/pdf
+                  externalId: null
+                  createdAt: "2026-08-17T12:00:00.000Z"
+                  updatedAt: "2026-08-17T12:00:00.000Z"
+                  links:
+                    - entityType: opportunity
+                      entityId: OPP-2025-000001
+                      createdAt: "2026-08-17T12:05:00.000Z"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /documents/{id}/links:
+    post:
+      tags: [Documents]
+      operationId: linkDocument
+      summary: Link a document to a CRM entity
+      description: >
+        Requires the `documents.write` scope and an organization-bound key.
+        The target entity must exist in the same organization as the document
+        (`404` otherwise). Linking an already-linked pair is idempotent:
+        returns `200` with `created: false` instead of `201`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: DOC-000001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entityType, entityId]
+              properties:
+                entityType:
+                  type: string
+                  enum: [account, opportunity, contact, lead]
+                entityId:
+                  type: string
+                  maxLength: 100
+            example:
+              entityType: opportunity
+              entityId: OPP-2025-000001
+      responses:
+        "201":
+          description: Link created (200 with created=false when it already existed)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, created]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentLink"
+                  created: { type: boolean }
+              example:
+                data:
+                  documentId: DOC-000001
+                  entityType: opportunity
+                  entityId: OPP-2025-000001
+                  createdAt: "2026-08-17T12:05:00.000Z"
+                created: true
+        "200":
+          description: Link already existed (idempotent repeat)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, created]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/DocumentLink"
+                  created: { type: boolean }
+        "400":
+          description: Validation failure (missing/invalid entityType or entityId)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404":
+          description: Document not found, or entity not found in the document's organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /documents/{id}/links/{entityType}/{entityId}:
+    delete:
+      tags: [Documents]
+      operationId: unlinkDocument
+      summary: Remove a document-to-entity link
+      description: >
+        Requires the `documents.write` scope and an organization-bound key.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          example: DOC-000001
+        - name: entityType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [account, opportunity, contact, lead]
+        - name: entityId
+          in: path
+          required: true
+          schema: { type: string }
+          example: OPP-2025-000001
+      responses:
+        "204":
+          description: Link removed
+        "400":
+          description: Invalid entityType
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404":
+          description: Document not found, or no such link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /logs:
+    get:
+      tags: [Logs]
+      operationId: listLogs
+      summary: List API access logs for this key
+      description: >
+        Requires the `crm.read` scope. Each API key can only ever access its
+        own logs (filtered server-side by API key ID).
+      parameters:
+        - name: startDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only logs at or after this ISO 8601 timestamp.
+        - name: endDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only logs at or before this ISO 8601 timestamp.
+        - name: status
+          in: query
+          required: false
+          schema: { type: integer, minimum: 100, maximum: 599 }
+          description: Filter by HTTP status code.
+        - name: action
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [auth_success, auth_failure, request_success, request_failure]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated log list (newest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LogEntry"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - timestamp: "2026-08-12T10:05:00.000Z"
+                    action: external_api_request_success
+                    endpoint: /accounts
+                    method: GET
+                    statusCode: 200
+                    latencyMs: 42
+                    responseSizeBytes: 1840
+                    aborted: false
+                    errorType: null
+                    errorCode: null
+                    errorMessage: null
+                    resourceType: null
+                    resourceId: null
+                    queryParams: { limit: "50", offset: "0" }
+                    ipAddress: 203.0.113.5
+                    userAgent: MyApp/1.0
+                pagination: { total: 512, limit: 100, offset: 0, hasMore: true }
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: >
+        API key generated in Admin Console → API Keys. Format:
+        `htcrm_` followed by a URL-safe base64 value (~49 chars total).
+
+  parameters:
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: >
+        Record ID with the canonical entity prefix (ACCT-*, CONT-*, LEAD-*,
+        OPP-*, ACT-*), e.g. ACCT-2025-00001.
+    UpdatedSince:
+      name: updatedSince
+      in: query
+      required: false
+      schema: { type: string, format: date-time }
+      description: >
+        ISO 8601 timestamp; only records with `updatedAt` strictly after this
+        instant are returned. Use for incremental sync.
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, default: 100, minimum: 1, maximum: 1000 }
+      description: Records per page (default 100, max 1000).
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema: { type: integer, default: 0, minimum: 0 }
+      description: Records to skip (0-based).
+
+  responses:
+    Unauthorized:
+      description: >
+        Missing, malformed, invalid, revoked, or expired API key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: API key required
+            message: Please provide your API key in the x-api-key header
+    OrgKeyRequired:
+      description: >
+        This endpoint requires an organization-scoped API key; a system key
+        was used. (Also returned as `Insufficient permissions` when the key
+        lacks the required scope.)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Organization-bound API key required
+            message: Lead access requires an API key bound to an organization
+    InsufficientPermissions:
+      description: The API key lacks the required permission scope.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Error"
+              - type: object
+                properties:
+                  requiredPermission: { type: string }
+          example:
+            error: Insufficient permissions
+            message: This API key does not have the 'crm.write' permission required for this operation
+            requiredPermission: crm.write
+    NotFound:
+      description: >
+        Record does not exist, or belongs to another organization (cross-org
+        records are indistinguishable from missing records by design).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Account not found
+            message: "No account found with ID: ACCT-2025-99999"
+    ValidationError:
+      description: Request body failed validation (unknown fields are rejected).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationError"
+          example:
+            error: Validation failed
+            message: The lead payload is invalid
+            details:
+              - { field: email, message: Invalid email address }
+    PatchValidationError:
+      description: >
+        PATCH body invalid — immutable fields present, unknown fields present,
+        empty body, or field-level validation failure. Immutable/unknown-field
+        errors include `rejectedFields` (and `allowedFields` for unknowns).
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/ValidationError"
+              - $ref: "#/components/schemas/RejectedFieldsError"
+          examples:
+            immutable:
+              value:
+                error: Immutable fields cannot be modified
+                message: "The following fields are immutable: id, organizationId"
+                rejectedFields: [id, organizationId]
+            unknown:
+              value:
+                error: Unknown fields rejected
+                message: "The following fields are not allowed for Lead updates: nickname"
+                rejectedFields: [nickname]
+                allowedFields: [firstName, lastName, title, company, email, phone, topic, status, source, rating, ownerId, externalId]
+    BadTimestamp:
+      description: A date/timestamp query parameter is not valid ISO 8601.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Invalid updatedSince
+            message: updatedSince must be a valid ISO 8601 timestamp
+    RateLimited:
+      description: >
+        Per-key rate limit exceeded (default 100 requests/minute, configurable
+        per key). Standard `RateLimit-*` headers are included on all responses;
+        `Retry-After` (seconds) is included on 429.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before retrying.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Too many requests
+            message: You have exceeded the rate limit for this API key. Please try again later.
+    ServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Failed to fetch accounts
+            message: Unknown error
+
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Short machine-readable error name.
+        message:
+          type: string
+          description: Human-readable detail.
+    ValidationError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+    RejectedFieldsError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            rejectedFields:
+              type: array
+              items: { type: string }
+            allowedFields:
+              type: array
+              items: { type: string }
+
+    Pagination:
+      type: object
+      required: [total, limit, offset, hasMore]
+      properties:
+        total:
+          type: integer
+          description: Total records matching the filters (before pagination).
+        limit:
+          type: integer
+          description: Effective page size used.
+        offset:
+          type: integer
+          description: Effective offset used.
+        hasMore:
+          type: boolean
+          description: True when more records exist beyond this page.
+
+    Money:
+      type: [string, "null"]
+      description: >
+        Decimal amount in currency units (e.g. US dollars) with up to
+        2-decimal precision, serialized as a string (e.g. "50000.00").
+        NOT integer cents.
+      examples: ["50000.00"]
+
+    AccountListItem:
+      type: object
+      description: Lean account shape returned by list endpoints.
+      properties:
+        id:
+          type: string
+          description: Canonical account ID, prefix ACCT- (e.g. ACCT-2025-00001).
+        name: { type: string }
+        accountNumber:
+          type: [string, "null"]
+          description: External account number (e.g. from Dynamics 365).
+        type:
+          type: [string, "null"]
+          enum: [customer, prospect, partner, vendor, other, null]
+        category:
+          type: [string, "null"]
+          description: Business category (e.g. Provider, Payer, Vendor).
+        ownerId:
+          type: [string, "null"]
+          description: Owning user's ID (UUID string).
+        industry: { type: [string, "null"] }
+        externalId:
+          type: [string, "null"]
+          description: External system ID (e.g. Dynamics GUID).
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        opportunities:
+          type: array
+          description: >
+            Present only with expand=opportunities; contains forecast-flagged
+            opportunities only.
+          items:
+            $ref: "#/components/schemas/EmbeddedOpportunity"
+
+    AccountDetail:
+      allOf:
+        - $ref: "#/components/schemas/AccountListItem"
+        - type: object
+          properties:
+            website: { type: [string, "null"] }
+            phone: { type: [string, "null"] }
+            contacts:
+              type: array
+              description: Present only with expand=contacts.
+              items:
+                type: object
+                properties:
+                  id: { type: string, description: "CONT-* contact ID" }
+                  firstName: { type: string }
+                  lastName: { type: string }
+                  email: { type: [string, "null"] }
+                  phone: { type: [string, "null"] }
+                  mobile: { type: [string, "null"] }
+                  title: { type: [string, "null"] }
+
+    EmbeddedOpportunity:
+      type: object
+      description: >
+        Lean opportunity embedded under an account (expand=opportunities).
+        The account-detail variant additionally includes `rating`.
+      properties:
+        id: { type: string, description: "OPP-* opportunity ID" }
+        name: { type: string }
+        stage:
+          type: string
+          enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+        amount: { $ref: "#/components/schemas/Money" }
+        closeDate: { type: string, format: date-time }
+        probability: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        rating:
+          type: [string, "null"]
+          description: Present only in the account-detail expand variant.
+        implementationStartDate: { type: [string, "null"], format: date-time }
+        implementationEndDate: { type: [string, "null"], format: date-time }
+        billingEndDate: { type: [string, "null"], format: date-time }
+
+    EmbeddedAccount:
+      type: object
+      description: Lean account embedded under an opportunity (expand=account).
+      properties:
+        id: { type: string, description: "ACCT-* account ID" }
+        name: { type: string }
+        accountNumber: { type: [string, "null"] }
+        type: { type: [string, "null"] }
+        category: { type: [string, "null"] }
+
+    EmbeddedAccountWithIndustry:
+      allOf:
+        - $ref: "#/components/schemas/EmbeddedAccount"
+        - type: object
+          description: The opportunity-detail expand additionally includes industry.
+          properties:
+            industry: { type: [string, "null"] }
+
+    Opportunity:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Canonical opportunity ID, prefix OPP- (e.g. OPP-2025-000001).
+        accountId: { type: string, description: "Parent account ID (ACCT-*)" }
+        name: { type: string }
+        stage:
+          type: string
+          enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+        amount: { $ref: "#/components/schemas/Money" }
+        closeDate:
+          type: string
+          format: date-time
+          description: Expected close date (ISO 8601 timestamp).
+        ownerId: { type: [string, "null"], description: Owning user's ID (UUID string). }
+        probability: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        status:
+          type: [string, "null"]
+          description: Free-text status from the source system (e.g. open, Won, Lost).
+        actualCloseDate: { type: [string, "null"], format: date-time }
+        actualRevenue: { $ref: "#/components/schemas/Money" }
+        estCloseDate: { type: [string, "null"], format: date-time }
+        estRevenue: { $ref: "#/components/schemas/Money" }
+        rating:
+          type: [string, "null"]
+          description: Free-text temperature (e.g. hot, warm, cold).
+        includeInForecast: { type: boolean }
+        implementationStartDate: { type: [string, "null"], format: date-time }
+        implementationEndDate: { type: [string, "null"], format: date-time }
+        billingEndDate: { type: [string, "null"], format: date-time }
+        externalId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        account:
+          $ref: "#/components/schemas/EmbeddedAccount"
+        resources:
+          type: array
+          description: Present only with expand=resources.
+          items:
+            $ref: "#/components/schemas/OpportunityResource"
+
+    OpportunityResource:
+      type: object
+      properties:
+        userId: { type: string, description: Assigned user's ID (UUID string). }
+        role: { type: [string, "null"] }
+        allocationPercentage: { type: [integer, "null"], description: "0–100" }
+        startDate: { type: [string, "null"], format: date-time }
+        endDate: { type: [string, "null"], format: date-time }
+
+    OpportunityContactLinkExpanded:
+      type: object
+      description: Contact association returned by expand=contacts on the opportunity detail endpoint.
+      properties:
+        contactId: { type: string, description: "CONT-* contact ID" }
+        role:
+          type: string
+          enum: [economic_buyer, champion, technical_contact, contract_contact, executive_sponsor, decision_maker, influencer, other]
+        isPrimary: { type: boolean }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Contact:
+      type: object
+      description: All fields are always present; unset values are null.
+      properties:
+        id:
+          type: string
+          description: Canonical contact ID, prefix CONT- (e.g. CONT-2511-00001).
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        mobile: { type: [string, "null"] }
+        accountId: { type: [string, "null"], description: "Parent account ID (ACCT-*)" }
+        ownerId: { type: [string, "null"], description: Owning user's ID (UUID string). }
+        externalId: { type: [string, "null"] }
+        createdAt: { type: [string, "null"], format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+        account:
+          type: [object, "null"]
+          description: Present only with expand=account; null when the contact has no (visible) account.
+          properties:
+            id: { type: string }
+            name: { type: string }
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Canonical lead ID, prefix LEAD- (e.g. LEAD-000042).
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        company: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        topic: { type: [string, "null"] }
+        status:
+          type: string
+          enum: [new, contacted, qualified, unqualified, converted]
+        source:
+          type: [string, "null"]
+          enum: [website, referral, phone, email, event, partner, lead_generation, other, null]
+        rating:
+          type: [string, "null"]
+          description: hot, warm, or cold.
+        organizationId: { type: [string, "null"], description: Organization UUID. }
+        organizationName: { type: [string, "null"] }
+        createdAt: { type: [string, "null"], format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+
+    LeadCreate:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 200 }
+        lastName: { type: string, minLength: 1, maxLength: 200 }
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: Used for case-insensitive duplicate detection within the organization.
+        phone: { type: string, maxLength: 50 }
+        company: { type: string, maxLength: 300 }
+        title: { type: string, maxLength: 200 }
+        topic: { type: string, maxLength: 2000 }
+        notes:
+          type: string
+          maxLength: 2000
+          description: Used as `topic` when `topic` is omitted.
+        source:
+          type: string
+          enum: [website, referral, phone, email, event, partner, lead_generation, other]
+        rating:
+          type: string
+          enum: [hot, warm, cold]
+
+    Activity:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Canonical activity ID, prefix ACT- (e.g. ACT-2608-00099).
+        type:
+          type: string
+          enum: [call, email, meeting, task, note]
+        subject: { type: string }
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        notes: { type: [string, "null"] }
+        dueAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        relatedType:
+          type: [string, "null"]
+          enum: [Contact, Lead, Account, Opportunity, null]
+        relatedId: { type: [string, "null"] }
+        organizationId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ActivityCreate:
+      type: object
+      additionalProperties: false
+      required: [type, subject]
+      properties:
+        type:
+          type: string
+          enum: [call, email, meeting, task, note]
+        subject: { type: string, minLength: 1, maxLength: 500 }
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          default: completed
+        notes: { type: string, maxLength: 10000 }
+        dueAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        priority:
+          type: string
+          enum: [low, medium, high]
+          description: Defaults to medium when omitted.
+        relatedType:
+          type: string
+          enum: [Contact, Lead, Account, Opportunity]
+          description: Must be provided together with relatedId.
+        relatedId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Must be provided together with relatedType.
+
+    LogEntry:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        action:
+          type: string
+          description: >
+            One of external_api_auth_success, external_api_auth_failure,
+            external_api_request_success, external_api_request_failure.
+        endpoint: { type: [string, "null"] }
+        method: { type: [string, "null"] }
+        statusCode: { type: [integer, "null"] }
+        latencyMs: { type: [integer, "null"] }
+        responseSizeBytes: { type: [integer, "null"] }
+        aborted:
+          type: boolean
+          description: True if the client disconnected before the response finished.
+        errorType: { type: [string, "null"], description: client_error or server_error. }
+        errorCode: { type: [string, "null"] }
+        errorMessage: { type: [string, "null"] }
+        resourceType: { type: [string, "null"] }
+        resourceId: { type: [string, "null"] }
+        queryParams: { type: [object, "null"] }
+        ipAddress: { type: [string, "null"] }
+        userAgent: { type: [string, "null"] }
+
+    CreateDocumentRequest:
+      type: object
+      required: [title, canonicalUrl]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        documentType:
+          type: [string, "null"]
+          maxLength: 100
+          description: Free-text type, e.g. contract, proposal, sow.
+        sourceSystem:
+          type: [string, "null"]
+          maxLength: 100
+          description: Where the document lives, e.g. sharepoint, gdrive.
+        canonicalUrl:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: >
+            Stable absolute http(s) URL. Must not embed credentials or carry
+            signed/temporary query or fragment parameters.
+        version: { type: [string, "null"], maxLength: 100 }
+        status:
+          type: [string, "null"]
+          maxLength: 50
+          description: Free-text status; defaults to `active`.
+        mimeType: { type: [string, "null"], maxLength: 255 }
+        externalId: { type: [string, "null"], maxLength: 255 }
+
+    DocumentRecord:
+      type: object
+      description: >
+        Document reference. The `links` array is present only on
+        `POST /documents` (empty) and `GET /documents/:id` responses.
+      required: [id, organizationId, title, canonicalUrl, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, description: "DOC-* document ID (DOC-{seq:6})" }
+        organizationId: { type: string }
+        title: { type: string }
+        documentType: { type: [string, "null"] }
+        sourceSystem: { type: [string, "null"] }
+        canonicalUrl: { type: string }
+        version: { type: [string, "null"] }
+        status: { type: string }
+        mimeType: { type: [string, "null"] }
+        externalId: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        links:
+          type: array
+          items:
+            type: object
+            required: [entityType, entityId, createdAt]
+            properties:
+              entityType:
+                type: string
+                enum: [account, opportunity, contact, lead]
+              entityId: { type: string }
+              createdAt: { type: string, format: date-time }
+
+    DocumentLink:
+      type: object
+      required: [documentId, entityType, entityId, createdAt]
+      properties:
+        documentId: { type: string }
+        entityType:
+          type: string
+          enum: [account, opportunity, contact, lead]
+        entityId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ImportMetadata:
+      type: object
+      description: >
+        Source-system and import-tracking columns present on every full
+        database record. All are immutable via the external API.
+      properties:
+        organizationId: { type: string, description: Owning organization UUID. }
+        externalId: { type: [string, "null"], description: External system ID (e.g. Dynamics GUID). }
+        sourceSystem: { type: [string, "null"] }
+        sourceRecordId: { type: [string, "null"] }
+        importStatus: { type: [string, "null"] }
+        importNotes: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AccountRecord:
+      description: Full account database row, as returned by PATCH.
+      allOf:
+        - $ref: "#/components/schemas/ImportMetadata"
+        - type: object
+          properties:
+            id: { type: string, description: "ACCT-* account ID" }
+            name: { type: string }
+            accountNumber: { type: [string, "null"] }
+            type:
+              type: [string, "null"]
+              enum: [customer, prospect, partner, vendor, other, null]
+            category: { type: [string, "null"] }
+            ownerId: { type: [string, "null"] }
+            industry: { type: [string, "null"] }
+            website: { type: [string, "null"] }
+            phone: { type: [string, "null"] }
+            billingAddress: { type: [string, "null"] }
+            shippingAddress: { type: [string, "null"] }
+
+    ContactRecord:
+      description: Full contact database row, as returned by PATCH.
+      allOf:
+        - $ref: "#/components/schemas/ImportMetadata"
+        - type: object
+          properties:
+            id: { type: string, description: "CONT-* contact ID" }
+            accountId: { type: [string, "null"] }
+            firstName: { type: [string, "null"] }
+            lastName: { type: [string, "null"] }
+            email: { type: [string, "null"] }
+            phone: { type: [string, "null"] }
+            mobile: { type: [string, "null"] }
+            title: { type: [string, "null"] }
+            department: { type: [string, "null"] }
+            mailingStreet: { type: [string, "null"] }
+            mailingCity: { type: [string, "null"] }
+            mailingState: { type: [string, "null"] }
+            mailingPostalCode: { type: [string, "null"] }
+            mailingCountry: { type: [string, "null"] }
+            description: { type: [string, "null"] }
+            ownerId: { type: [string, "null"] }
+
+    LeadRecord:
+      description: Full lead database row, as returned by PATCH.
+      allOf:
+        - $ref: "#/components/schemas/ImportMetadata"
+        - type: object
+          properties:
+            id: { type: string, description: "LEAD-* lead ID" }
+            firstName: { type: [string, "null"] }
+            lastName: { type: [string, "null"] }
+            title: { type: [string, "null"] }
+            company: { type: [string, "null"] }
+            email: { type: [string, "null"] }
+            phone: { type: [string, "null"] }
+            topic: { type: [string, "null"] }
+            status:
+              type: string
+              enum: [new, contacted, qualified, unqualified, converted]
+            source:
+              type: [string, "null"]
+              enum: [website, referral, phone, email, event, partner, lead_generation, other, null]
+            rating: { type: [string, "null"] }
+            ownerId: { type: [string, "null"] }
+            convertedAccountId: { type: [string, "null"] }
+            convertedContactId: { type: [string, "null"] }
+            convertedOpportunityId: { type: [string, "null"] }
+            convertedAt: { type: [string, "null"], format: date-time }
+
+    OpportunityRecord:
+      description: Full opportunity database row, as returned by PATCH.
+      allOf:
+        - $ref: "#/components/schemas/ImportMetadata"
+        - type: object
+          properties:
+            id: { type: string, description: "OPP-* opportunity ID" }
+            accountId: { type: string }
+            name: { type: string }
+            stage:
+              type: string
+              enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+            amount: { $ref: "#/components/schemas/Money" }
+            closeDate: { type: string, format: date-time }
+            ownerId: { type: [string, "null"] }
+            probability: { type: [integer, "null"] }
+            status: { type: [string, "null"] }
+            actualCloseDate: { type: [string, "null"], format: date-time }
+            actualRevenue: { $ref: "#/components/schemas/Money" }
+            estCloseDate: { type: [string, "null"], format: date-time }
+            estRevenue: { $ref: "#/components/schemas/Money" }
+            rating: { type: [string, "null"] }
+            includeInForecast: { type: boolean }
+            implementationStartDate: { type: [string, "null"], format: date-time }
+            implementationEndDate: { type: [string, "null"], format: date-time }
+            billingEndDate: { type: [string, "null"], format: date-time }
+            categories:
+              type: [array, "null"]
+              items: { type: string }
+              description: Not mutable via the external API.
+            operationalAreas:
+              type: [array, "null"]
+              items: { type: string }
+              description: Not mutable via the external API.
+            description: { type: [string, "null"] }
+
+    ActivityRecord:
+      description: Full activity database row, as returned by PATCH.
+      allOf:
+        - $ref: "#/components/schemas/ImportMetadata"
+        - type: object
+          properties:
+            id: { type: string, description: "ACT-* activity ID" }
+            type:
+              type: string
+              enum: [call, email, meeting, task, note]
+            subject: { type: string }
+            status:
+              type: string
+              enum: [pending, completed, cancelled]
+            priority:
+              type: string
+              enum: [low, medium, high]
+            dueAt: { type: [string, "null"], format: date-time }
+            completedAt: { type: [string, "null"], format: date-time }
+            ownerId: { type: [string, "null"] }
+            relatedType:
+              type: [string, "null"]
+              enum: [Contact, Lead, Account, Opportunity, null]
+            relatedId: { type: [string, "null"] }
+            notes: { type: [string, "null"] }
+
+    # ---- PATCH request bodies (mutable-field allowlists) ----
+
+    AccountPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: >
+        Any subset of the mutable account fields. Immutable fields and unknown
+        fields are rejected with 400.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 300 }
+        accountNumber: { type: [string, "null"], maxLength: 100 }
+        type:
+          type: [string, "null"]
+          enum: [customer, prospect, partner, vendor, other, null]
+        category: { type: [string, "null"], maxLength: 200 }
+        ownerId: { type: [string, "null"], maxLength: 50 }
+        industry: { type: [string, "null"], maxLength: 200 }
+        website: { type: [string, "null"], maxLength: 500 }
+        phone: { type: [string, "null"], maxLength: 50 }
+        billingAddress: { type: [string, "null"], maxLength: 1000 }
+        shippingAddress: { type: [string, "null"], maxLength: 1000 }
+        externalId: { type: [string, "null"], maxLength: 200 }
+
+    ContactPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        accountId:
+          type: [string, "null"]
+          maxLength: 100
+          description: Must reference an account in the record's own organization.
+        firstName: { type: string, minLength: 1, maxLength: 200 }
+        lastName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: [string, "null"], format: email, maxLength: 320 }
+        phone: { type: [string, "null"], maxLength: 50 }
+        mobile: { type: [string, "null"], maxLength: 50 }
+        title: { type: [string, "null"], maxLength: 200 }
+        department: { type: [string, "null"], maxLength: 200 }
+        mailingStreet: { type: [string, "null"], maxLength: 300 }
+        mailingCity: { type: [string, "null"], maxLength: 200 }
+        mailingState: { type: [string, "null"], maxLength: 100 }
+        mailingPostalCode: { type: [string, "null"], maxLength: 40 }
+        mailingCountry: { type: [string, "null"], maxLength: 100 }
+        description: { type: [string, "null"], maxLength: 5000 }
+        ownerId: { type: [string, "null"], maxLength: 50 }
+        externalId: { type: [string, "null"], maxLength: 200 }
+
+    LeadPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 200 }
+        lastName: { type: string, minLength: 1, maxLength: 200 }
+        title: { type: [string, "null"], maxLength: 200 }
+        company: { type: [string, "null"], maxLength: 300 }
+        email: { type: [string, "null"], format: email, maxLength: 320 }
+        phone: { type: [string, "null"], maxLength: 50 }
+        topic: { type: [string, "null"], maxLength: 2000 }
+        status:
+          type: string
+          enum: [new, contacted, qualified, unqualified, converted]
+        source:
+          type: [string, "null"]
+          enum: [website, referral, phone, email, event, partner, lead_generation, other, null]
+        rating:
+          type: [string, "null"]
+          enum: [hot, warm, cold, null]
+        ownerId: { type: [string, "null"], maxLength: 50 }
+        externalId: { type: [string, "null"], maxLength: 200 }
+
+    OpportunityPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: >
+        `categories` and `operationalAreas` are intentionally NOT mutable via
+        the external API.
+      properties:
+        accountId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Must reference an account in the record's own organization.
+        name: { type: string, minLength: 1, maxLength: 300 }
+        stage:
+          type: string
+          enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
+        amount:
+          type: [string, number, "null"]
+          description: Decimal number (or numeric string), e.g. "175000.00".
+        closeDate: { type: string, format: date-time }
+        ownerId: { type: [string, "null"], maxLength: 50 }
+        probability: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        status: { type: [string, "null"], maxLength: 100 }
+        actualCloseDate: { type: [string, "null"], format: date-time }
+        actualRevenue: { type: [string, number, "null"] }
+        estCloseDate: { type: [string, "null"], format: date-time }
+        estRevenue: { type: [string, number, "null"] }
+        rating: { type: [string, "null"], maxLength: 50 }
+        includeInForecast: { type: boolean }
+        implementationStartDate:
+          type: [string, "null"]
+          format: date-time
+          description: Must not be after implementationEndDate (merged-record check).
+        implementationEndDate: { type: [string, "null"], format: date-time }
+        billingEndDate:
+          type: [string, "null"]
+          format: date-time
+          description: Must not be before implementationEndDate (merged-record check).
+        description: { type: [string, "null"], maxLength: 10000 }
+        externalId: { type: [string, "null"], maxLength: 200 }
+
+    ActivityPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        type:
+          type: string
+          enum: [call, email, meeting, task, note]
+        subject: { type: string, minLength: 1, maxLength: 500 }
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+        priority:
+          type: string
+          enum: [low, medium, high]
+        dueAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        notes: { type: [string, "null"], maxLength: 10000 }
+        ownerId: { type: [string, "null"], maxLength: 50 }
+        externalId: { type: [string, "null"], maxLength: 200 }

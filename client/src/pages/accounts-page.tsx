@@ -452,7 +452,7 @@ export default function AccountsPage() {
                         <FormItem>
                           <FormLabel>Account Number</FormLabel>
                           <FormControl>
-                            <Input placeholder="ACC-12345" {...field} value={field.value || ""} data-testid="input-account-number" />
+                            <Input placeholder="AN-12345" {...field} value={field.value || ""} data-testid="input-account-number" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1001,7 +1001,7 @@ export default function AccountsPage() {
                     <FormItem>
                       <FormLabel>Account Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="ACC-12345" {...field} value={field.value || ""} data-testid="input-edit-account-number" />
+                        <Input placeholder="AN-12345" {...field} value={field.value || ""} data-testid="input-edit-account-number" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
