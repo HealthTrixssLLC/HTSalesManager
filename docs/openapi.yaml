@@ -22,6 +22,7 @@ info:
     - `crm.read` — all GET endpoints (accounts, opportunities, contacts, leads, logs)
     - `crm.write` — POST /leads, PATCH on accounts/contacts/leads/opportunities,
       POST/DELETE opportunity-contact links
+    - `activities.read` — GET /activities, GET /activities/:id
     - `activities.write` — POST /activities, PATCH /activities/:id
     Missing scopes return `403` with a `requiredPermission` field. Legacy keys
     with no explicit scopes are treated as having all scopes; an explicit empty
@@ -838,6 +839,98 @@ paths:
         "500": { $ref: "#/components/responses/ServerError" }
 
   /activities:
+    get:
+      tags: [Activities]
+      operationId: listActivities
+      summary: List activities (org-scoped key required)
+      description: >
+        Requires the `activities.read` scope AND an organization-scoped key.
+        Returns activities belonging to the key's organization with optional
+        server-side filtering and pagination. `dueBefore` and `dueAfter`
+        compare against the activity's `dueAt` timestamp (strict comparison;
+        activities without a `dueAt` are excluded by either filter).
+      parameters:
+        - name: relatedType
+          in: query
+          description: Exact match on the related record type.
+          schema:
+            type: string
+            enum: [Contact, Lead, Account, Opportunity]
+        - name: relatedId
+          in: query
+          description: Exact match on the related record ID.
+          schema: { type: string }
+        - name: type
+          in: query
+          description: Activity type filter. Invalid values return 400.
+          schema:
+            type: string
+            enum: [call, email, meeting, task, note]
+        - name: status
+          in: query
+          description: Activity status filter. Invalid values return 400.
+          schema:
+            type: string
+            enum: [pending, completed, cancelled]
+        - name: priority
+          in: query
+          description: Activity priority filter. Invalid values return 400.
+          schema:
+            type: string
+            enum: [low, medium, high]
+        - name: dueBefore
+          in: query
+          description: >-
+            ISO 8601 timestamp; only activities with `dueAt` strictly before
+            this instant. Invalid timestamps return 400.
+          schema: { type: string, format: date-time }
+        - name: dueAfter
+          in: query
+          description: >-
+            ISO 8601 timestamp; only activities with `dueAt` strictly after
+            this instant. Invalid timestamps return 400.
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/UpdatedSince"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated activity list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivityRead"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - id: ACT-2608-00099
+                    type: call
+                    subject: Discovery call
+                    status: completed
+                    priority: medium
+                    notes: Discussed product fit
+                    dueAt: null
+                    completedAt: "2026-08-12T14:00:00.000Z"
+                    ownerId: null
+                    relatedType: Lead
+                    relatedId: LEAD-000042
+                    organizationId: 2f5e350e-5cb9-45a8-aef7-8ca8194c5081
+                    externalId: null
+                    createdAt: "2026-08-12T14:05:00.000Z"
+                    updatedAt: "2026-08-12T14:05:00.000Z"
+                pagination: { total: 1, limit: 100, offset: 0, hasMore: false }
+        "400": { $ref: "#/components/responses/BadTimestamp" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
     post:
       tags: [Activities]
       operationId: createActivity
@@ -896,6 +989,32 @@ paths:
         "500": { $ref: "#/components/responses/ServerError" }
 
   /activities/{id}:
+    get:
+      tags: [Activities]
+      operationId: getActivity
+      summary: Get an activity by ID (org-scoped key required)
+      description: >
+        Requires the `activities.read` scope AND an organization-scoped key.
+        The lookup is organization-scoped: a missing record and another
+        organization's record are indistinguishable — both return 404.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Activity detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ActivityRead"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
     patch:
       tags: [Activities]
       operationId: patchActivity
@@ -1781,6 +1900,15 @@ components:
         organizationId: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    ActivityRead:
+      description: Activity as returned by the read (GET) endpoints.
+      allOf:
+        - $ref: "#/components/schemas/Activity"
+        - type: object
+          properties:
+            ownerId: { type: [string, "null"] }
+            externalId: { type: [string, "null"] }
 
     ActivityCreate:
       type: object

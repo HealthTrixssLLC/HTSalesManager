@@ -12,7 +12,7 @@ Every roadmap phase is confirmed present in code:
 
 | Phase | Deliverable | Evidence |
 |---|---|---|
-| A | ~~Activity Read API~~ | **Not implemented — see NOT IMPLEMENTED.** Activity *write* API (`POST /activities`, `PATCH /activities/:id`) exists. |
+| A | Activity Read API: `GET /activities` (org-scoped list, `activities.read` scope, filters `relatedType`, `relatedId`, `type`, `status`, `priority`, `dueBefore`/`dueAfter` on `dueAt`, `updatedSince`, `limit`, `offset`) and `GET /activities/:id` (org-scoped detail; cross-org and missing records both 404) | `server/external-api-routes.ts` activity read section, `server/db.ts` (`getActivities`, org-scoped `getActivityById`); `tests/external-activity-api.test.ts` |
 | B | Server-side list filters (accounts `search`/`name`; opportunities `search`, `accountId`, `status`, `stage`, `ownerId`, `rating`; contacts `search`, `email`, `accountId`; leads `search`, `email`, `status`, `rating`, `source`), strict ISO 8601 validation, enum validation | `server/external-api-routes.ts` (`qs`, `parseDateParam`, `parseEnumParam`), `server/storage.ts` filters; `tests/external-list-filters.test.ts` |
 | C | Opportunity-contact relationship model: join table, roles, single primary, link/unlink endpoints, `expand=contacts` on opportunity detail | `migrations/0013_opportunity_contacts.sql`, `POST /opportunities/:id/contacts`, `DELETE /opportunities/:id/contacts/:contactId`; `tests/opportunity-contacts-api.test.ts` |
 | D | Document reference model (`documents` + `document_links`), DOC-* IDs, five endpoints, `documents.read`/`documents.write` scopes, credential-safe `canonicalUrl` guard | `migrations/0015_add_documents.sql`, `server/external-api-routes.ts` document section; `tests/external-documents-api.test.ts` |
@@ -79,8 +79,10 @@ GET  /leads               GET  /leads/:id       POST /leads
 POST /activities          GET  /logs
 ```
 
-**Added by the roadmap (11 new routes):**
+**Added by the roadmap (13 new routes):**
 ```
+GET    /activities
+GET    /activities/:id
 PATCH  /accounts/:id
 PATCH  /contacts/:id
 PATCH  /leads/:id
@@ -95,12 +97,11 @@ POST   /documents/:id/links
 DELETE /documents/:id/links/:entityType/:entityId
 ```
 
-Total: **22 registered routes**, all now guarded by `requirePermission(...)` (baseline had no scope guards). All 22 routes are documented in `docs/openapi.yaml` (17 path items covering the 22 method+path combinations); path-by-path comparison found **no mismatch in either direction**.
+Total: **24 registered routes**, all guarded by `requirePermission(...)` (baseline had no scope guards). All 24 routes are documented in `docs/openapi.yaml`; path-by-path comparison found **no mismatch in either direction**.
 
 ## NOT IMPLEMENTED
 
-- **Phase A — Activity Read API (`GET /activities`, `GET /activities/:id`)**: not built; project task #155 remains PROPOSED. The docs explicitly state "There are no GET /activities read endpoints in the current API version." Reason: the phase task was never scheduled/executed; the roadmap shipped activity *writes* only. This is additive and can ship later without breaking changes.
-- Everything else in the approval document (Phases B–H) is implemented.
+- Nothing. Phase A (Activity Read API) — the last outstanding phase — is now implemented: `GET /activities` and `GET /activities/:id` guarded by `activities.read`, org-scoped-key required, with the full filter set (`relatedType`, `relatedId`, `type`, `status`, `priority`, `dueBefore`, `dueAfter`, `updatedSince`, `limit`, `offset`), documented in `docs/openapi.yaml`, and covered by `tests/external-activity-api.test.ts`. All phases A–H of the approval document are implemented.
 
 ## FILES CHANGED
 

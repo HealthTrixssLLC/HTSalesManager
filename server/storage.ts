@@ -78,7 +78,8 @@ export interface IStorage {
   
   // ========== ACTIVITIES ==========
   getAllActivities(orgId?: string): Promise<Activity[]>;
-  getActivityById(id: string): Promise<Activity | undefined>;
+  getActivities(orgId: string, filters?: ActivityListFilters): Promise<Activity[]>;
+  getActivityById(id: string, orgId?: string): Promise<Activity | undefined>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;
@@ -238,6 +239,17 @@ export interface OpportunityListFilters {
   rating?: string;             // Case-insensitive exact match
   includeInForecast?: boolean; // Exact boolean match (omit for "all")
   updatedSince?: Date;
+}
+
+export interface ActivityListFilters {
+  relatedType?: string;   // Exact match on related record type ("Account", "Contact", "Lead", "Opportunity")
+  relatedId?: string;     // Exact match on related record ID
+  type?: string;          // activity_type enum value
+  status?: string;        // activity_status enum value
+  priority?: string;      // activity_priority enum value
+  dueBefore?: Date;       // due_at strictly before this timestamp
+  dueAfter?: Date;        // due_at strictly after this timestamp
+  updatedSince?: Date;    // updated_at strictly after this timestamp
 }
 
 export interface ContactListFilters {

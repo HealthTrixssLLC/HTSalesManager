@@ -45,6 +45,7 @@ Each key carries a list of permission scopes, enforced per route:
 |---|---|
 | `crm.read` | All GET endpoints: accounts, opportunities, contacts, leads, logs |
 | `crm.write` | `POST /leads`, `PATCH` on accounts/contacts/leads/opportunities, `POST`/`DELETE` opportunity-contact links |
+| `activities.read` | `GET /activities`, `GET /activities/:id` |
 | `activities.write` | `POST /activities`, `PATCH /activities/:id` |
 | `documents.read` | `GET /documents`, `GET /documents/:id` |
 | `documents.write` | `POST /documents`, `POST /documents/:id/links`, `DELETE /documents/:id/links/:entityType/:entityId` |
@@ -67,7 +68,8 @@ Two kinds of keys:
 Endpoints that **require** an org-scoped key (system keys get `403
 Organization-bound API key required`): contact reads (`GET /contacts`,
 `GET /contacts/:id`), lead reads and creation (`GET /leads`, `GET /leads/:id`,
-`POST /leads`), and `POST /activities`. The PATCH routes (including
+`POST /leads`), activity reads and creation (`GET /activities`,
+`GET /activities/:id`, `POST /activities`), and document routes. The PATCH routes (including
 `PATCH /contacts/:id` and `PATCH /leads/:id`) accept system keys — but an
 org-scoped key can still only modify records in its own organization.
 
@@ -111,6 +113,8 @@ User IDs (`ownerId`, resource `userId`) are UUID **strings**, not numbers.
 | GET | `/leads` | crm.read | **required** | List leads |
 | GET | `/leads/:id` | crm.read | **required** | Lead detail |
 | PATCH | `/leads/:id` | crm.write | optional* | Partial update |
+| GET | `/activities` | activities.read | **required** | List activities |
+| GET | `/activities/:id` | activities.read | **required** | Activity detail |
 | POST | `/activities` | activities.write | **required** | Create activity |
 | PATCH | `/activities/:id` | activities.write | optional* | Partial update |
 | POST | `/documents` | documents.write | **required** | Create document reference |
@@ -122,8 +126,6 @@ User IDs (`ownerId`, resource `userId`) are UUID **strings**, not numbers.
 
 \* "optional" for writes means a system key is accepted, but org-scoped keys
 can only touch records in their own organization (`404` otherwise).
-
-There are **no** `GET /activities` read endpoints in the current API version.
 
 **Documents** are *references* (title + canonical URL to an external system),
 not file uploads. `canonicalUrl` must be a stable http(s) URL: URLs embedding
@@ -168,6 +170,13 @@ Per-entity list filters (applied server-side, before pagination):
 | | `status` | Enum: `new|contacted|qualified|unqualified|converted`; invalid → 400 |
 | | `rating` | Enum: `hot|warm|cold` (case-insensitive); invalid → 400 |
 | | `source` | Enum: `website|referral|phone|email|event|partner|lead_generation|other`; invalid → 400 |
+| `GET /activities` | `relatedType` | Exact match on the related record type (`Contact|Lead|Account|Opportunity`) |
+| | `relatedId` | Exact match on the related record ID |
+| | `type` | Enum: `call|email|meeting|task|note`; invalid → 400 |
+| | `status` | Enum: `pending|completed|cancelled`; invalid → 400 |
+| | `priority` | Enum: `low|medium|high`; invalid → 400 |
+| | `dueBefore` | ISO 8601; activities with `dueAt` **strictly before** this instant (no `dueAt` → excluded); invalid → 400 |
+| | `dueAfter` | ISO 8601; activities with `dueAt` **strictly after** this instant (no `dueAt` → excluded); invalid → 400 |
 
 Invalid enum values return `400` with a message listing the allowed values.
 
@@ -343,6 +352,7 @@ curl -X POST -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
 
 | Version | Changes |
 |---|---|
+| 1.4 | Activity read endpoints (`GET /activities`, `GET /activities/:id`) with the `activities.read` scope, org-scoped key requirement, and server-side filters (`relatedType`, `relatedId`, `type`, `status`, `priority`, `dueBefore`, `dueAfter`, `updatedSince`, `limit`, `offset`). |
 | 1.3 | Document reference endpoints (`POST/GET /documents`, `GET /documents/:id`, `POST /documents/:id/links`, `DELETE /documents/:id/links/:entityType/:entityId`) with `documents.read`/`documents.write` scopes, org-bound key requirement, credential-safe `canonicalUrl` validation, and entity linking to accounts/opportunities/contacts/leads. |
 | 1.2 | Server-side list filters on accounts (`search`/`name`), opportunities (`search`, `accountId`, `status`, `stage`, `ownerId`, `rating`), contacts (`search`, `email`, `accountId`), and leads (`search`, `email`, `status`, `rating`, `source`); permission scopes (`crm.read`, `crm.write`, `activities.write`) enforced on every route; PATCH endpoints for accounts, contacts, leads, opportunities, activities with per-entity allowlists, immutable-field rejection, and opportunity date invariants; opportunity-contact link/unlink endpoints and `expand=contacts` on opportunity detail; `POST /activities`; authoritative OpenAPI 3.1 spec (`docs/openapi.yaml`). |
 | 1.1 | Contacts read endpoints (org-scoped); leads create/read with email dedup; `GET /logs` self-service access logs; per-key rate limiting with standard `RateLimit-*` headers. |

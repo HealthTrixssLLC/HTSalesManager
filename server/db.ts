@@ -7,11 +7,12 @@ import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
 import { Pool as PgPool } from "pg";
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
-import { eq, sql, and, gte, gt, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
+import { eq, sql, and, gte, gt, lt, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type {
   IStorage,
   AccountListFilters,
+  ActivityListFilters,
   ContactListFilters,
   LeadListFilters,
   OpportunityListFilters,
@@ -688,8 +689,29 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(schema.activities);
   }
   
-  async getActivityById(id: string): Promise<Activity | undefined> {
-    const result = await db.select().from(schema.activities).where(eq(schema.activities.id, id)).limit(1);
+  async getActivities(orgId: string, filters?: ActivityListFilters): Promise<Activity[]> {
+    // Org scope is mandatory — external Activity reads never span organizations
+    const conditions = [eq(schema.activities.organizationId, orgId)];
+    if (filters?.relatedType) conditions.push(eq(schema.activities.relatedType, filters.relatedType));
+    if (filters?.relatedId) conditions.push(eq(schema.activities.relatedId, filters.relatedId));
+    if (filters?.type) conditions.push(eq(schema.activities.type, filters.type as any));
+    if (filters?.status) conditions.push(eq(schema.activities.status, filters.status as any));
+    if (filters?.priority) conditions.push(eq(schema.activities.priority, filters.priority as any));
+    if (filters?.dueBefore) conditions.push(lt(schema.activities.dueAt, filters.dueBefore));
+    if (filters?.dueAfter) conditions.push(gt(schema.activities.dueAt, filters.dueAfter));
+    if (filters?.updatedSince) conditions.push(gt(schema.activities.updatedAt, filters.updatedSince));
+    return await db.select().from(schema.activities)
+      .where(and(...conditions))
+      .orderBy(desc(schema.activities.createdAt));
+  }
+
+  async getActivityById(id: string, orgId?: string): Promise<Activity | undefined> {
+    // When orgId is provided the lookup is org-scoped: a cross-org record is
+    // indistinguishable from a missing one (returns undefined).
+    const where = orgId
+      ? and(eq(schema.activities.id, id), eq(schema.activities.organizationId, orgId))
+      : eq(schema.activities.id, id);
+    const result = await db.select().from(schema.activities).where(where).limit(1);
     return result[0];
   }
   

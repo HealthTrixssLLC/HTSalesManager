@@ -1423,6 +1423,147 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
   }
 });
 
+// ========== PHASE A: ACTIVITY READ ENDPOINTS ==========
+
+const ACTIVITY_TYPES = ["call", "email", "meeting", "task", "note"] as const;
+const ACTIVITY_STATUSES = ["pending", "completed", "cancelled"] as const;
+const ACTIVITY_PRIORITIES = ["low", "medium", "high"] as const;
+const ACTIVITY_RELATED_TYPES = ["Contact", "Lead", "Account", "Opportunity"] as const;
+
+/** Format an activity record for external API responses */
+function formatActivityResponse(activity: any) {
+  return {
+    id: activity.id,
+    type: activity.type,
+    subject: activity.subject,
+    status: activity.status,
+    priority: activity.priority,
+    notes: activity.notes,
+    dueAt: activity.dueAt,
+    completedAt: activity.completedAt,
+    ownerId: activity.ownerId,
+    relatedType: activity.relatedType,
+    relatedId: activity.relatedId,
+    organizationId: activity.organizationId,
+    externalId: activity.externalId,
+    createdAt: activity.createdAt,
+    updatedAt: activity.updatedAt,
+  };
+}
+
+/**
+ * GET /api/v1/external/activities
+ * List activities for the API key's organization with filtering and pagination.
+ *
+ * Query Parameters:
+ * - relatedType: Enum (Contact, Lead, Account, Opportunity); invalid → 400
+ * - relatedId: Exact match on related record ID
+ * - type: Enum (call, email, meeting, task, note); invalid → 400
+ * - status: Enum (pending, completed, cancelled); invalid → 400
+ * - priority: Enum (low, medium, high); invalid → 400
+ * - dueBefore: ISO 8601 — activities with dueAt strictly before this timestamp
+ * - dueAfter: ISO 8601 — activities with dueAt strictly after this timestamp
+ * - updatedSince: ISO 8601 — activities updated strictly after this timestamp
+ * - limit: Number of results (default: 100, max: 1000)
+ * - offset: Number of results to skip (default: 0)
+ */
+router.get("/activities", requirePermission("activities.read"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Activity access requires an API key bound to an organization",
+      });
+    }
+
+    const { limit = "100", offset = "0" } = req.query;
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+
+    const dueBeforeParsed = parseDateParam(req.query.dueBefore, "dueBefore");
+    if (dueBeforeParsed.error) return res.status(400).json(dueBeforeParsed.error);
+    const dueAfterParsed = parseDateParam(req.query.dueAfter, "dueAfter");
+    if (dueAfterParsed.error) return res.status(400).json(dueAfterParsed.error);
+    const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
+    if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
+
+    const typeParsed = parseEnumParam(req.query.type, "type", ACTIVITY_TYPES);
+    if (typeParsed.error) return res.status(400).json(typeParsed.error);
+    const statusParsed = parseEnumParam(req.query.status, "status", ACTIVITY_STATUSES);
+    if (statusParsed.error) return res.status(400).json(statusParsed.error);
+    const priorityParsed = parseEnumParam(req.query.priority, "priority", ACTIVITY_PRIORITIES);
+    if (priorityParsed.error) return res.status(400).json(priorityParsed.error);
+    const relatedTypeParsed = parseEnumParam(req.query.relatedType, "relatedType", ACTIVITY_RELATED_TYPES);
+    if (relatedTypeParsed.error) return res.status(400).json(relatedTypeParsed.error);
+
+    // Org-scoped, filtered server-side
+    const activities = await storage.getActivities(orgId, {
+      relatedType: relatedTypeParsed.value,
+      relatedId: qs(req.query.relatedId),
+      type: typeParsed.value,
+      status: statusParsed.value,
+      priority: priorityParsed.value,
+      dueBefore: dueBeforeParsed.date,
+      dueAfter: dueAfterParsed.date,
+      updatedSince: updatedSinceParsed.date,
+    });
+
+    const total = activities.length;
+    const page = activities.slice(offsetNum, offsetNum + limitNum);
+
+    return res.json({
+      data: page.map(formatActivityResponse),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + page.length < total,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching activities:", error);
+    return res.status(500).json({
+      error: "Failed to fetch activities",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/activities/:id
+ * Get a specific activity by ID (org-scoped: a cross-org record is
+ * indistinguishable from a missing one — both return 404).
+ */
+router.get("/activities/:id", requirePermission("activities.read"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Activity access requires an API key bound to an organization",
+      });
+    }
+
+    // Org-scoped lookup: missing and cross-org records are indistinguishable
+    const activity = await storage.getActivityById(req.params.id, orgId);
+    if (!activity) {
+      return res.status(404).json({
+        error: "Not Found",
+        message: `No activity found with ID: ${req.params.id}`,
+      });
+    }
+
+    return res.json({ data: formatActivityResponse(activity) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching activity:", error);
+    return res.status(500).json({
+      error: "Failed to fetch activity",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 // ========== PHASE E: CONTROLLED PATCH ENDPOINTS ==========
 // Strict partial updates with per-entity mutable-field allowlists.
 // See server/external-patch-config.ts for the allowlists and schemas.

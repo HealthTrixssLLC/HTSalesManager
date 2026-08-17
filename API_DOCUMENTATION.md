@@ -23,10 +23,11 @@ curl -H "x-api-key: htcrm_your_key_here" \
 - Keys may be organization-scoped (see only that org's data) or system-wide
   (read accounts/opportunities across orgs). Contacts, leads, and activity
   creation **require** an organization-scoped key.
-- Keys carry permission scopes: `crm.read` (all GETs), `crm.write`
-  (lead creation, PATCHes, opportunity-contact links), `activities.write`
-  (activity creation and update). Missing scopes → `403` with
-  `requiredPermission`.
+- Keys carry permission scopes: `crm.read` (accounts/opportunities/contacts/
+  leads GETs and `/logs`), `crm.write` (lead creation, PATCHes,
+  opportunity-contact links), `activities.read` (activity reads),
+  `activities.write` (activity creation and update). Missing scopes → `403`
+  with `requiredPermission`.
 - Keys can be revoked or given an expiration date; such keys get `401`.
 
 ## Record ID formats
@@ -141,8 +142,16 @@ reads; `PATCH /contacts/:id` accepts system keys.
 - `PATCH /leads/:id` — partial update. Accepts system keys (unlike lead reads
   and creation).
 
-### Activities
+### Activities (org-scoped key required)
 
+- `GET /activities` (`activities.read`) — list. Query: `relatedType`
+  (`Contact|Lead|Account|Opportunity`), `relatedId` (exact), `type`
+  (`call|email|meeting|task|note`), `status` (`pending|completed|cancelled`),
+  `priority` (`low|medium|high`), `dueBefore` / `dueAfter` (ISO 8601, strict
+  comparison against `dueAt`; activities without a `dueAt` are excluded),
+  `updatedSince`, `limit`, `offset`. Invalid enum or date values → 400.
+- `GET /activities/:id` (`activities.read`) — detail; org-scoped lookup, so a
+  missing record and another org's record both return `404`.
 - `POST /activities` (org-scoped key + `activities.write`) — create.
   Required: `type` (`call|email|meeting|task|note`), `subject`. Optional:
   `status` (`pending|completed|cancelled`, default `completed`), `priority`
@@ -150,8 +159,6 @@ reads; `PATCH /contacts/:id` accepts system keys.
   `relatedType` (`Contact|Lead|Account|Opportunity`) + `relatedId`
   (must be provided together; record must be in your org).
 - `PATCH /activities/:id` — partial update.
-
-There are **no** activity read (GET) endpoints in this API version.
 
 ### Documents (organization-scoped key required)
 
@@ -232,6 +239,7 @@ via `GET /logs`.
 
 | Version | Changes |
 |---|---|
+| 1.4 | Activity read endpoints (`GET /activities`, `GET /activities/:id`) with the `activities.read` scope and nine server-side filters. |
 | 1.3 | Document reference endpoints (`/documents`, entity linking) with `documents.read`/`documents.write` scopes. |
 | 1.2 | Server-side list filters for accounts, opportunities, contacts, and leads; permission scopes enforced on every route; PATCH endpoints for all five entities; opportunity-contact link/unlink + `expand=contacts`; `POST /activities`; authoritative OpenAPI 3.1 spec at `docs/openapi.yaml`; documentation corrected (decimal-string money, `RateLimit-*` headers, canonical ID prefixes). |
 | 1.1 | Contacts and leads endpoints (org-scoped), `GET /logs`, per-key rate limiting. |
