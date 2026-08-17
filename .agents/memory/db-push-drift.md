@@ -18,3 +18,6 @@ Server suites hit the live dev server, which does not watch server code.
 - Test files must not run in parallel (`fileParallelism: false` in tests/vitest.server.config.ts): they share one server/DB, and API-key auth bcrypt-scans all active keys per request, so parallel files compound latency into 30s timeouts.
 - Task-branch DBs can lag migrations (missing tables/columns/unique indexes). Apply the missing `migrations/*.sql` with psql before blaming test code; the leads org+lower(email) unique index is required for the duplicate-lead race test.
 - `tests/opportunity-activity-creation.test.ts` is a plain tsx script (own workflow), excluded from the vitest config on purpose.
+
+## DB drift check before trusting test failures
+500s in the server suite (e.g. "relation does not exist") usually mean the dev DB is missing a migration, not a code bug. Verify `opportunity_contacts`, `documents`, `api_keys.permissions`, and the partial unique index `leads_org_email_unique_idx` (created by `scripts/migrate-lead-email-unique.ts`, not a numbered migration) exist before debugging. POST /leads concurrent-dedup relies on that index.
