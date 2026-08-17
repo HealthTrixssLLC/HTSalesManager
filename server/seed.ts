@@ -157,6 +157,49 @@ export async function runStartupColumnMigration(): Promise<void> {
       )
     `));
 
+    // 7a. Ensure api_keys.permissions exists (Phase F scopes). Auth reads this
+    //     column on every external request, so deployments upgrading from a
+    //     pre-Phase-F database must get it here. Default = all scopes (legacy keys keep access).
+    await db.execute(sql.raw(`
+      ALTER TABLE api_keys
+        ADD COLUMN IF NOT EXISTS permissions text[]
+        DEFAULT ARRAY['crm.read','crm.write','activities.read','activities.write','documents.read','documents.write']::text[]
+    `));
+
+    // 7b. Create documents + document_links tables (Phase D document references).
+    //     Mirrors migrations/0013_add_documents.sql; fully idempotent for deployments.
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id VARCHAR(100) PRIMARY KEY,
+        organization_id VARCHAR(50) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        document_type TEXT,
+        source_system TEXT,
+        canonical_url TEXT NOT NULL,
+        version TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        mime_type TEXT,
+        external_id TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+    await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS documents_org_id_idx ON documents (organization_id)`));
+    await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS documents_external_id_idx ON documents (external_id)`));
+    await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS documents_updated_at_idx ON documents (updated_at)`));
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS document_links (
+        id VARCHAR(50) PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+        document_id VARCHAR(100) NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        entity_type TEXT NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `));
+    await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS document_links_document_id_idx ON document_links (document_id)`));
+    await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS document_links_entity_idx ON document_links (entity_type, entity_id)`));
+    await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS document_links_unique_idx ON document_links (document_id, entity_type, entity_id)`));
+
     // 8. Add 'lead_generation' to the lead_source enum if not already present.
     //    ALTER TYPE ... ADD VALUE IF NOT EXISTS is idempotent and safe on existing DBs.
     await db.execute(sql.raw(`
@@ -816,6 +859,7 @@ export async function initializeOrgSettings(orgId: string): Promise<void> {
         { entity: "Lead", pattern: "LEAD-{SEQ:6}" },
         { entity: "Opportunity", pattern: "OPP-{YYYY}-{SEQ:6}" },
         { entity: "Activity", pattern: "ACT-{YY}{MM}-{SEQ:5}" },
+        { entity: "Document", pattern: "DOC-{SEQ:6}" },
       ];
       for (const d of defaults) {
         await db.insert(idPatterns).values({

@@ -1344,5 +1344,63 @@ export const insertCrmDocumentSchema = createInsertSchema(crmDocuments).omit({ i
 export type InsertCrmDocument = z.infer<typeof insertCrmDocumentSchema>;
 export type CrmDocument = typeof crmDocuments.$inferSelect;
 export type CrmDocumentEntityType = "lead" | "account" | "contact" | "opportunity";
-
 export type ApiKeyPermission = (typeof API_KEY_PERMISSIONS)[number];
+
+export const documentLinkEntityTypes = ["account", "opportunity", "contact", "lead"] as const;
+export type DocumentLinkEntityType = (typeof documentLinkEntityTypes)[number];
+
+export const documents = pgTable("documents", {
+  id: varchar("id", { length: 100 }).primaryKey(), // Custom ID pattern: DOC-{SEQ:6}
+  organizationId: varchar("organization_id", { length: 50 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  documentType: text("document_type"), // e.g., "contract", "proposal", "sow"
+  sourceSystem: text("source_system"), // e.g., "SharePoint", "OneDrive", "GitHub"
+  canonicalUrl: text("canonical_url").notNull(), // Stable, non-credential URL (no signed/temporary URLs)
+  version: text("version"),
+  status: text("status").notNull().default("active"), // e.g., "active", "archived", "superseded"
+  mimeType: text("mime_type"),
+  externalId: text("external_id"), // ID of the document in the source system
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  orgIdIdx: index("documents_org_id_idx").on(table.organizationId),
+  externalIdIdx: index("documents_external_id_idx").on(table.externalId),
+  updatedAtIdx: index("documents_updated_at_idx").on(table.updatedAt),
+}));
+
+export const documentLinks = pgTable("document_links", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id", { length: 100 }).notNull().references(() => documents.id, { onDelete: "cascade" }),
+  entityType: text("entity_type").notNull(), // "account" | "opportunity" | "contact" | "lead"
+  entityId: varchar("entity_id", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  documentIdIdx: index("document_links_document_id_idx").on(table.documentId),
+  entityIdx: index("document_links_entity_idx").on(table.entityType, table.entityId),
+  uniqueLink: uniqueIndex("document_links_unique_idx").on(table.documentId, table.entityType, table.entityId),
+}));
+
+export const documentsRelations = relations(documents, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [documents.organizationId],
+    references: [organizations.id],
+  }),
+  links: many(documentLinks),
+}));
+
+export const documentLinksRelations = relations(documentLinks, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentLinks.documentId],
+    references: [documents.id],
+  }),
+}));
+
+export const insertDocumentSchema = createInsertSchema(documents).omit({ createdAt: true, updatedAt: true }).extend({
+  id: z.string().optional(),
+});
+export type InsertDocument = z.infer<typeof insertDocumentSchema>;
+export type Document = typeof documents.$inferSelect;
+
+export const insertDocumentLinkSchema = createInsertSchema(documentLinks).omit({ id: true, createdAt: true });
+export type InsertDocumentLink = z.infer<typeof insertDocumentLinkSchema>;
+export type DocumentLink = typeof documentLinks.$inferSelect;

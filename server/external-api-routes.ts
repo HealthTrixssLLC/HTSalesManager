@@ -1616,4 +1616,374 @@ for (const [path, cfg] of Object.entries(PATCH_ENTITIES)) {
   router.patch(`/${path}/:id`, requirePermission(writePermission), makePatchHandler(cfg));
 }
 
+// ========== DOCUMENT REFERENCE ENDPOINTS ==========
+// Documents live in external systems (SharePoint, OneDrive, GitHub, ...);
+// the CRM stores only the reference (canonical URL + metadata) and links
+// to CRM entities. No binaries and no temporary signed URLs.
+
+const DOCUMENT_ENTITY_TYPES = ["account", "opportunity", "contact", "lead"] as const;
+type DocEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
+
+/**
+ * Reject canonical URLs that carry credentials or temporary signatures.
+ * Returns an error string when the URL is unacceptable, null when OK.
+ *
+ * Checks BOTH the query string and the URL fragment (OAuth implicit-flow
+ * tokens arrive as `#access_token=...`), and matches credential parameter
+ * names by pattern rather than a fixed list, so spelling variants like
+ * `api_key`, `apikey`, `X-Amz-*`, `id_token`, `client_secret` are all caught.
+ */
+function isCredentialParamName(rawName: string): boolean {
+  const name = rawName.toLowerCase();
+  // Exact short names used by signed-URL schemes (Azure SAS et al.)
+  const exact = new Set([
+    "sig", "se", "sp", "sv", "st", "spr", "sr", "skoid", "sktid", // Azure SAS
+    "sas", "tempurl", "temp_url_sig", "temp_url_expires",
+    "signature", "expires", "awsaccesskeyid", // AWS legacy presigned
+    "key", "code",
+  ]);
+  if (exact.has(name)) return true;
+  // Cloud-provider presigned prefixes
+  if (name.startsWith("x-amz-") || name.startsWith("x-goog-")) return true;
+  // Any parameter whose name contains a credential-ish word
+  return /(token|secret|password|passwd|credential|signature|apikey|api_key|api-key|accesskey|access_key|access-key|auth|bearer|session)/.test(name);
+}
+
+function findCredentialParam(pairs: Iterable<string>): string | null {
+  const keys = Array.from(pairs);
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (key && isCredentialParamName(key)) return key;
+  }
+  return null;
+}
+
+function validateCanonicalUrl(rawUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return "canonicalUrl must be a valid absolute URL";
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return "canonicalUrl must use http or https";
+  }
+  if (url.username || url.password) {
+    return "canonicalUrl must not embed credentials";
+  }
+  // Query string check
+  const badQueryParam = findCredentialParam(url.searchParams.keys());
+  if (badQueryParam) {
+    return `canonicalUrl must be a stable, non-credential URL (query parameter '${badQueryParam}' indicates a temporary, signed, or credential-bearing URL)`;
+  }
+  // Fragment check: OAuth implicit-flow and similar tokens are delivered in
+  // the fragment (e.g., #access_token=...). Parse it as a query string when it
+  // contains key=value pairs.
+  const fragment = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  if (fragment.includes("=")) {
+    const fragParams = new URLSearchParams(fragment.startsWith("?") ? fragment.slice(1) : fragment);
+    const badFragParam = findCredentialParam(fragParams.keys());
+    if (badFragParam) {
+      return `canonicalUrl must be a stable, non-credential URL (fragment parameter '${badFragParam}' indicates a credential-bearing URL)`;
+    }
+  }
+  return null;
+}
+
+const createDocumentSchema = z.object({
+  title: z.string().min(1, "title is required").max(500),
+  documentType: z.string().max(100).nullish(),
+  sourceSystem: z.string().max(100).nullish(),
+  canonicalUrl: z.string().min(1, "canonicalUrl is required").max(2048),
+  version: z.string().max(100).nullish(),
+  status: z.string().max(50).nullish(),
+  mimeType: z.string().max(255).nullish(),
+  externalId: z.string().max(255).nullish(),
+});
+
+const createDocumentLinkSchema = z.object({
+  entityType: z.enum(DOCUMENT_ENTITY_TYPES),
+  entityId: z.string().min(1, "entityId is required").max(100),
+});
+
+function formatDocumentResponse(doc: any, links?: any[]) {
+  const response: any = {
+    id: doc.id,
+    organizationId: doc.organizationId,
+    title: doc.title,
+    documentType: doc.documentType ?? null,
+    sourceSystem: doc.sourceSystem ?? null,
+    canonicalUrl: doc.canonicalUrl,
+    version: doc.version ?? null,
+    status: doc.status,
+    mimeType: doc.mimeType ?? null,
+    externalId: doc.externalId ?? null,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+  if (links !== undefined) {
+    response.links = links.map(l => ({
+      entityType: l.entityType,
+      entityId: l.entityId,
+      createdAt: l.createdAt,
+    }));
+  }
+  return response;
+}
+
+/**
+ * POST /api/v1/external/documents
+ * Create a document reference. Requires an org-bound API key.
+ */
+router.post("/documents", requirePermission("documents.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Document creation requires an API key bound to an organization",
+      });
+    }
+
+    const parsed = createDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.errors.map(e => ({ field: e.path.join("."), message: e.message })),
+      });
+    }
+    const data = parsed.data;
+
+    const urlError = validateCanonicalUrl(data.canonicalUrl);
+    if (urlError) {
+      return res.status(400).json({ error: "Invalid canonicalUrl", message: urlError });
+    }
+
+    const doc = await storage.createDocumentReference({
+      organizationId: orgId,
+      title: data.title,
+      documentType: data.documentType ?? null,
+      sourceSystem: data.sourceSystem ?? null,
+      canonicalUrl: data.canonicalUrl,
+      version: data.version ?? null,
+      status: data.status ?? "active",
+      mimeType: data.mimeType ?? null,
+      externalId: data.externalId ?? null,
+    });
+
+    return res.status(201).json({ data: formatDocumentResponse(doc, []) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating document:", error);
+    return res.status(500).json({
+      error: "Failed to create document",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/documents
+ * List document references for the org.
+ * Query params: entityType, entityId, updatedSince, limit, offset
+ */
+router.get("/documents", requirePermission("documents.read"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Document access requires an API key bound to an organization",
+      });
+    }
+
+    const { entityType, entityId, updatedSince, limit = "100", offset = "0" } = req.query;
+    const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+
+    if (entityType && !DOCUMENT_ENTITY_TYPES.includes(entityType as DocEntityType)) {
+      return res.status(400).json({
+        error: "Invalid entityType",
+        message: `entityType must be one of: ${DOCUMENT_ENTITY_TYPES.join(", ")}`,
+      });
+    }
+
+    let sinceDate: Date | undefined;
+    if (updatedSince && typeof updatedSince === "string") {
+      sinceDate = new Date(updatedSince);
+      if (isNaN(sinceDate.getTime())) {
+        return res.status(400).json({
+          error: "Invalid updatedSince",
+          message: "updatedSince must be a valid ISO 8601 timestamp",
+        });
+      }
+    }
+
+    const { data, total } = await storage.listDocumentReferences({
+      orgId,
+      entityType: entityType as DocEntityType | undefined,
+      entityId: entityId as string | undefined,
+      updatedSince: sinceDate,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+
+    return res.json({
+      data: data.map(d => formatDocumentResponse(d)),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + data.length < total,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error listing documents:", error);
+    return res.status(500).json({
+      error: "Failed to list documents",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/v1/external/documents/:id
+ * Retrieve a single document reference (with its entity links).
+ */
+router.get("/documents/:id", requirePermission("documents.read"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Document access requires an API key bound to an organization",
+      });
+    }
+
+    const doc = await storage.getDocumentReferenceById(req.params.id, orgId);
+    if (!doc) {
+      return res.status(404).json({
+        error: "Document not found",
+        message: `No document found with ID: ${req.params.id}`,
+      });
+    }
+
+    const links = await storage.getDocumentLinks(doc.id);
+    return res.json({ data: formatDocumentResponse(doc, links) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching document:", error);
+    return res.status(500).json({
+      error: "Failed to fetch document",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * POST /api/v1/external/documents/:id/links
+ * Link a document reference to a CRM entity in the same organization.
+ * Body: { entityType, entityId }
+ */
+router.post("/documents/:id/links", requirePermission("documents.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Document linking requires an API key bound to an organization",
+      });
+    }
+
+    const parsed = createDocumentLinkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.errors.map(e => ({ field: e.path.join("."), message: e.message })),
+      });
+    }
+    const { entityType, entityId } = parsed.data;
+
+    const doc = await storage.getDocumentReferenceById(req.params.id, orgId);
+    if (!doc) {
+      return res.status(404).json({
+        error: "Document not found",
+        message: `No document found with ID: ${req.params.id}`,
+      });
+    }
+
+    // Entity must exist and belong to the same organization as the document
+    const entityOrgId = await storage.getEntityOrganizationId(entityType, entityId);
+    if (!entityOrgId || entityOrgId !== doc.organizationId) {
+      return res.status(404).json({
+        error: "Entity not found",
+        message: `No ${entityType} found with ID: ${entityId}`,
+      });
+    }
+
+    const { link, created } = await storage.createDocumentLink(doc.id, entityType, entityId);
+    return res.status(created ? 201 : 200).json({
+      data: {
+        documentId: doc.id,
+        entityType: link.entityType,
+        entityId: link.entityId,
+        createdAt: link.createdAt,
+      },
+      created,
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error linking document:", error);
+    return res.status(500).json({
+      error: "Failed to link document",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/external/documents/:id/links/:entityType/:entityId
+ * Remove a document-to-entity link.
+ */
+router.delete("/documents/:id/links/:entityType/:entityId", requirePermission("documents.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return res.status(403).json({
+        error: "Organization-bound API key required",
+        message: "Document linking requires an API key bound to an organization",
+      });
+    }
+
+    const { entityType, entityId } = req.params;
+    if (!DOCUMENT_ENTITY_TYPES.includes(entityType as DocEntityType)) {
+      return res.status(400).json({
+        error: "Invalid entityType",
+        message: `entityType must be one of: ${DOCUMENT_ENTITY_TYPES.join(", ")}`,
+      });
+    }
+
+    const doc = await storage.getDocumentReferenceById(req.params.id, orgId);
+    if (!doc) {
+      return res.status(404).json({
+        error: "Document not found",
+        message: `No document found with ID: ${req.params.id}`,
+      });
+    }
+
+    const removed = await storage.deleteDocumentLink(doc.id, entityType as DocEntityType, entityId);
+    if (!removed) {
+      return res.status(404).json({
+        error: "Link not found",
+        message: `Document ${doc.id} is not linked to ${entityType} ${entityId}`,
+      });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error unlinking document:", error);
+    return res.status(500).json({
+      error: "Failed to unlink document",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
 export default router;

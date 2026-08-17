@@ -13,3 +13,5 @@ Indexes/constraints declared in schema.ts may be missing from the dev DB (drift)
 ## Server integration tests
 - Located in `tests/*.test.ts`; must run with `npx vitest run <file> --config tests/vitest.server.config.ts` (root vitest.config.ts only includes `client/src/__tests__`).
 - They hit the live dev server on localhost:5000. The dev workflow runs `tsx server/index.ts` WITHOUT watch — restart the "Start application" workflow after editing server code or tests will exercise stale code.
+
+**Deployment schema mechanism:** the drizzle migrations journal is not the active mechanism; production schema changes apply via the idempotent startup migration run at server boot. New tables/columns must be added there too, or deployments won't get them.

@@ -20,6 +20,7 @@ import type {
   Tag, InsertTag,
   EntityTag,
   CrmDocument, InsertCrmDocument, CrmDocumentEntityType,
+  Document, InsertDocument, DocumentLink, DocumentLinkEntityType,
   Organization, InsertOrganization,
   UserOrganization, InsertUserOrganization,
   ApiKey, InsertApiKey,
@@ -149,6 +150,23 @@ export interface IStorage {
   upsertLlmConfiguration(config: Partial<InsertLlmConfiguration> & { updatedBy?: string }, orgId?: string): Promise<LlmConfiguration>;
   
   // ========== CRM DOCUMENT ATTACHMENTS ==========
+
+  // ========== DOCUMENT REFERENCES (external documents) ==========
+  createDocumentReference(doc: InsertDocument): Promise<Document>;
+  getDocumentReferenceById(id: string, orgId?: string): Promise<Document | undefined>;
+  listDocumentReferences(options: {
+    orgId?: string;
+    entityType?: DocumentLinkEntityType;
+    entityId?: string;
+    updatedSince?: Date;
+    limit: number;
+    offset: number;
+  }): Promise<{ data: Document[]; total: number }>;
+  getDocumentLinks(documentId: string): Promise<DocumentLink[]>;
+  createDocumentLink(documentId: string, entityType: DocumentLinkEntityType, entityId: string): Promise<{ link: DocumentLink; created: boolean }>;
+  deleteDocumentLink(documentId: string, entityType: DocumentLinkEntityType, entityId: string): Promise<boolean>;
+  getEntityOrganizationId(entityType: DocumentLinkEntityType, entityId: string): Promise<string | undefined>;
+
   getDocuments(entityType: CrmDocumentEntityType, entityId: string): Promise<CrmDocument[]>;
   getDocumentById(id: string): Promise<CrmDocument | undefined>;
   createDocument(data: InsertCrmDocument): Promise<CrmDocument>;

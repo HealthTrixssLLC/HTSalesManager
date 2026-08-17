@@ -788,6 +788,7 @@ export class PostgresStorage implements IStorage {
       { entity: "Lead", pattern: "LEAD-{SEQ:6}" },
       { entity: "Opportunity", pattern: "OPP-{YYYY}-{SEQ:6}" },
       { entity: "Activity", pattern: "ACT-{YY}{MM}-{SEQ:5}" },
+      { entity: "Document", pattern: "DOC-{SEQ:6}" },
     ];
 
     for (const { entity, pattern } of defaultPatterns) {
@@ -841,6 +842,7 @@ export class PostgresStorage implements IStorage {
       "Lead": "LEAD-{SEQ:6}",
       "Opportunity": "OPP-{YYYY}-{SEQ:6}",
       "Activity": "ACT-{YY}{MM}-{SEQ:5}",
+      "Document": "DOC-{SEQ:6}",
     };
 
     // --- Step 1: Resolve the global (null-org) counter pattern ---
@@ -1493,6 +1495,144 @@ export class PostgresStorage implements IStorage {
 
   async deleteDocument(id: string): Promise<void> {
     await db.delete(schema.crmDocuments).where(eq(schema.crmDocuments.id, id));
+  }
+
+  // ========== DOCUMENT REFERENCES (external documents) ==========
+
+  async createDocumentReference(doc: schema.InsertDocument): Promise<schema.Document> {
+    if (!doc.id || doc.id === "") {
+      doc.id = await this.generateId("Document", doc.organizationId || undefined);
+    }
+    const result = await db.insert(schema.documents).values(doc).returning();
+    return result[0];
+  }
+
+  async getDocumentReferenceById(id: string, orgId?: string): Promise<schema.Document | undefined> {
+    const conditions = orgId
+      ? and(eq(schema.documents.id, id), eq(schema.documents.organizationId, orgId))
+      : eq(schema.documents.id, id);
+    const result = await db.select().from(schema.documents).where(conditions).limit(1);
+    return result[0];
+  }
+
+  async listDocumentReferences(options: {
+    orgId?: string;
+    entityType?: schema.DocumentLinkEntityType;
+    entityId?: string;
+    updatedSince?: Date;
+    limit: number;
+    offset: number;
+  }): Promise<{ data: schema.Document[]; total: number }> {
+    const { orgId, entityType, entityId, updatedSince, limit, offset } = options;
+
+    const conditions: any[] = [];
+    if (orgId) conditions.push(eq(schema.documents.organizationId, orgId));
+    if (updatedSince) conditions.push(gte(schema.documents.updatedAt, updatedSince));
+
+    // Filter by linked entity via the documentLinks join table
+    if (entityType || entityId) {
+      const linkConditions: any[] = [];
+      if (entityType) linkConditions.push(eq(schema.documentLinks.entityType, entityType));
+      if (entityId) linkConditions.push(eq(schema.documentLinks.entityId, entityId));
+      const linkedIds = db
+        .select({ documentId: schema.documentLinks.documentId })
+        .from(schema.documentLinks)
+        .where(and(...linkConditions));
+      conditions.push(inArray(schema.documents.id, linkedIds));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.documents)
+      .where(whereClause);
+    const total = Number(countResult[0]?.count || 0);
+
+    const data = await db
+      .select()
+      .from(schema.documents)
+      .where(whereClause)
+      .orderBy(desc(schema.documents.updatedAt))
+      .limit(limit)
+      .offset(offset);
+
+    return { data, total };
+  }
+
+  async getDocumentLinks(documentId: string): Promise<schema.DocumentLink[]> {
+    return await db
+      .select()
+      .from(schema.documentLinks)
+      .where(eq(schema.documentLinks.documentId, documentId))
+      .orderBy(asc(schema.documentLinks.createdAt));
+  }
+
+  async createDocumentLink(
+    documentId: string,
+    entityType: schema.DocumentLinkEntityType,
+    entityId: string
+  ): Promise<{ link: schema.DocumentLink; created: boolean }> {
+    const inserted = await db
+      .insert(schema.documentLinks)
+      .values({ documentId, entityType, entityId })
+      .onConflictDoNothing()
+      .returning();
+    if (inserted.length > 0) {
+      return { link: inserted[0], created: true };
+    }
+    // Link already exists — return the existing row
+    const existing = await db
+      .select()
+      .from(schema.documentLinks)
+      .where(and(
+        eq(schema.documentLinks.documentId, documentId),
+        eq(schema.documentLinks.entityType, entityType),
+        eq(schema.documentLinks.entityId, entityId)
+      ))
+      .limit(1);
+    return { link: existing[0], created: false };
+  }
+
+  async deleteDocumentLink(
+    documentId: string,
+    entityType: schema.DocumentLinkEntityType,
+    entityId: string
+  ): Promise<boolean> {
+    const deleted = await db
+      .delete(schema.documentLinks)
+      .where(and(
+        eq(schema.documentLinks.documentId, documentId),
+        eq(schema.documentLinks.entityType, entityType),
+        eq(schema.documentLinks.entityId, entityId)
+      ))
+      .returning();
+    return deleted.length > 0;
+  }
+
+  /** Resolve the organizationId of a CRM entity for document-link org validation */
+  async getEntityOrganizationId(
+    entityType: schema.DocumentLinkEntityType,
+    entityId: string
+  ): Promise<string | undefined> {
+    let record: { organizationId: string | null } | undefined;
+    switch (entityType) {
+      case "account":
+        record = (await db.select({ organizationId: schema.accounts.organizationId }).from(schema.accounts).where(eq(schema.accounts.id, entityId)).limit(1))[0];
+        break;
+      case "opportunity":
+        record = (await db.select({ organizationId: schema.opportunities.organizationId }).from(schema.opportunities).where(eq(schema.opportunities.id, entityId)).limit(1))[0];
+        break;
+      case "contact":
+        record = (await db.select({ organizationId: schema.contacts.organizationId }).from(schema.contacts).where(eq(schema.contacts.id, entityId)).limit(1))[0];
+        break;
+      case "lead":
+        record = (await db.select({ organizationId: schema.leads.organizationId }).from(schema.leads).where(eq(schema.leads.id, entityId)).limit(1))[0];
+        break;
+      default:
+        return undefined;
+    }
+    return record?.organizationId ?? undefined;
   }
 
   // ========== ORGANIZATIONS ==========
