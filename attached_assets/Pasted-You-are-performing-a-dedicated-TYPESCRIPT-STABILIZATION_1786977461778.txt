@@ -1,0 +1,566 @@
+You are performing a dedicated TYPESCRIPT STABILIZATION AND TECHNICAL-DEBT REMEDIATION project on the existing Health Trixss CRM application.
+
+This is NOT a feature-development task.
+
+The application currently has approximately 167 pre-existing TypeScript compiler errors. These errors existed before the recent External API enhancement work.
+
+The objective is:
+
+npx tsc --noEmit
+→ ZERO TypeScript errors
+
+while preserving existing runtime behavior, database behavior, API contracts, UI behavior, tenant isolation, security controls, and backward compatibility.
+
+==================================================
+PRIMARY RULE
+==================================================
+
+DO NOT make the application behave differently merely to satisfy TypeScript.
+
+Type correctness must be achieved by fixing the underlying typing or implementation problem — not by hiding compiler errors.
+
+==================================================
+PROHIBITED SHORTCUTS
+==================================================
+
+Do NOT solve errors by broadly introducing:
+
+any
+
+unknown casts without validation
+
+as any
+
+as unknown as X
+
+@ts-ignore
+
+@ts-nocheck
+
+@ts-expect-error
+
+eslint-disable
+
+tsconfig exclusions
+
+skipLibCheck changes merely to hide project errors
+
+strict=false
+
+noImplicitAny=false
+
+strictNullChecks=false
+
+or weakening existing compiler settings.
+
+Do NOT:
+
+- remove working code because it generates an error
+- comment out functionality
+- disable tests
+- exclude problematic application directories from TypeScript
+- change public API contracts merely to satisfy types
+- change database schemas merely to satisfy TypeScript
+- alter tenant/security behavior
+- upgrade major dependencies as part of this task
+- redesign UI components
+- perform unrelated refactoring
+- rename canonical CRM fields or IDs
+- change monetary units
+- change API response envelopes
+- change External API route behavior
+
+If an error cannot safely be fixed without one of these actions, document it and STOP for review rather than hiding it.
+
+==================================================
+STEP 1 — ESTABLISH BASELINE
+==================================================
+
+Before changing any code:
+
+Run:
+
+npx tsc --noEmit
+
+Capture the complete compiler output.
+
+Determine the exact number of errors.
+
+Create a structured inventory of ALL errors.
+
+Group them by:
+
+1. TypeScript error code
+2. source file
+3. application area
+4. probable root cause
+
+Suggested root-cause categories:
+
+- Drizzle/database schema typing
+- storage/repository interfaces
+- Express request/response typing
+- authentication/user typing
+- RBAC/permissions
+- External API
+- CRM entities
+- React components
+- forms
+- query/data-fetching
+- component props
+- nullability
+- optional properties
+- stale interfaces/types
+- enum mismatches
+- incorrect imports
+- dependency/library typings
+- test typing
+- configuration
+- other
+
+Determine whether many errors originate from a small number of shared root causes.
+
+Example:
+
+Root cause A
+3 incorrect shared interfaces
+→ 61 compiler errors
+
+Root cause B
+Drizzle inferred type mismatch
+→ 38 compiler errors
+
+Root cause C
+React prop mismatch
+→ 22 compiler errors
+
+Do not begin broad remediation until this classification is complete.
+
+==================================================
+STEP 2 — CREATE TYPESCRIPT DEBT REPORT
+==================================================
+
+Create:
+
+docs/TYPESCRIPT_DEBT_AUDIT.md
+
+Include:
+
+BASELINE
+- exact compiler command
+- exact total error count
+- date/time
+- TypeScript version
+- tsconfig used
+
+ERROR DISTRIBUTION
+- error code
+- count
+- files affected
+
+ROOT CAUSE GROUPS
+For each root cause include:
+
+- description
+- affected files
+- number of errors
+- likely underlying problem
+- proposed remediation
+- runtime risk
+- recommended remediation order
+
+RISK LEVEL
+
+Classify each group:
+
+LOW
+Typing-only correction with little/no runtime impact.
+
+MEDIUM
+Requires changes to interfaces, application code, or shared abstractions but should preserve behavior.
+
+HIGH
+Could affect database behavior, authentication, authorization, API contracts, tenant isolation, persistence, or runtime logic.
+
+==================================================
+STEP 3 — REMEDIATION ORDER
+==================================================
+
+Fix errors by ROOT CAUSE, not randomly file-by-file.
+
+Preferred sequence:
+
+1. Shared foundational types/interfaces
+2. Database/Drizzle inferred types
+3. Storage/repository contracts
+4. Authentication/RBAC types
+5. External API types
+6. Server/business logic
+7. Frontend shared types
+8. React component props
+9. Forms/data fetching
+10. Tests
+11. Remaining isolated errors
+
+A single correct foundational fix may eliminate many downstream errors.
+
+Do not make dozens of local casts when a shared type definition is actually wrong.
+
+==================================================
+STEP 4 — WORK IN SMALL BATCHES
+==================================================
+
+Perform remediation in small, reviewable batches.
+
+After EVERY meaningful batch:
+
+1. Run:
+
+npx tsc --noEmit
+
+2. Record:
+   - errors before
+   - errors after
+   - files changed
+   - root cause addressed
+
+3. Run the tests relevant to the changed area.
+
+4. If the change touches shared/server/API/security/database code, run the broader regression suite.
+
+The TypeScript error count should move monotonically toward zero.
+
+If a change creates additional errors, determine why before continuing.
+
+==================================================
+STEP 5 — DATABASE AND DRIZZLE SAFETY
+==================================================
+
+Treat database-related typing errors carefully.
+
+Do NOT change database schema solely to satisfy TypeScript.
+
+Compare:
+
+shared/schema.ts
+server/db.ts
+server/storage.ts
+migrations
+actual ORM usage
+
+Correct mismatches between inferred types and application contracts.
+
+Preserve:
+
+- table structure
+- foreign keys
+- organization scoping
+- canonical CRM IDs
+- monetary units
+- existing migrations
+- runtime query behavior
+
+If fixing a type error would require a database migration, STOP and explain why before creating the migration.
+
+==================================================
+STEP 6 — AUTHENTICATION / RBAC SAFETY
+==================================================
+
+Authentication, API keys, permissions, and tenant isolation are HIGH-RISK.
+
+Do not weaken types or authorization logic.
+
+Preserve:
+
+- authenticated user semantics
+- organization scoping
+- API key permissions
+- read/write scopes
+- expiration
+- revocation
+- IP allowlisting
+- tenant isolation
+- RBAC behavior
+
+If request/user objects need improved typing, extend or augment their types correctly rather than casting them to any.
+
+All existing authorization tests must continue passing.
+
+==================================================
+STEP 7 — EXTERNAL API CONTRACT SAFETY
+==================================================
+
+The External API has recently been enhanced and must remain backward compatible.
+
+Do not change documented behavior merely to resolve TypeScript errors.
+
+Preserve:
+
+- route paths
+- HTTP methods
+- query parameters
+- request bodies
+- response envelopes
+- pagination
+- search/filter behavior
+- permission requirements
+- canonical IDs
+- monetary units
+- tenant isolation
+- error semantics
+
+The authoritative External API documentation and OpenAPI specification must continue matching implementation.
+
+If TypeScript reveals an actual API-contract defect, report it separately rather than silently changing the contract.
+
+==================================================
+STEP 8 — FRONTEND SAFETY
+==================================================
+
+For React/UI errors:
+
+Prefer:
+
+- correcting component prop interfaces
+- deriving types from authoritative schemas
+- correcting null/undefined handling
+- fixing stale interfaces
+- fixing incorrect event types
+- fixing query result typing
+- fixing actual enum mismatches
+
+Do not:
+
+- redesign screens
+- change user workflows
+- remove UI features
+- broadly cast component props
+- suppress errors
+
+Maintain existing visible behavior.
+
+==================================================
+STEP 9 — NULLABILITY
+==================================================
+
+Do not eliminate nullability errors with unsafe non-null assertions unless runtime invariants prove the value cannot be null.
+
+Prefer:
+
+- explicit guards
+- correct optional types
+- safe defaults where semantically appropriate
+- proper conditional rendering
+- validated narrowing
+
+Use the database/schema/business rules to determine whether null is legitimate.
+
+==================================================
+STEP 10 — DEPENDENCY TYPE ERRORS
+==================================================
+
+If errors originate from third-party libraries:
+
+First determine whether the problem is:
+
+- incorrect application usage
+- stale local type definitions
+- version mismatch
+- package typing defect
+
+Do not perform major dependency upgrades automatically.
+
+Minor/patch dependency changes may be proposed if demonstrably necessary, but explain them before making changes that could alter runtime behavior.
+
+Do not use skipLibCheck as a blanket solution.
+
+==================================================
+STEP 11 — TESTING REQUIREMENTS
+==================================================
+
+Throughout remediation, preserve all existing tests.
+
+At completion run:
+
+1. npx tsc --noEmit
+2. complete automated test suite
+3. lint, if configured
+4. External API tests
+5. authentication/RBAC tests
+6. tenant-isolation tests
+7. OpenAPI validation
+
+Expected final compiler result:
+
+0 TypeScript errors
+
+Expected regression result:
+
+all previously passing tests remain passing.
+
+Do not modify tests merely to make broken behavior pass unless the test itself is demonstrably incorrect.
+
+==================================================
+STEP 12 — ADD TYPECHECK QUALITY GATE
+==================================================
+
+After reaching zero errors, establish a permanent typecheck command if one does not already exist.
+
+Preferred package.json script:
+
+"typecheck": "tsc --noEmit"
+
+Do not duplicate an equivalent existing script.
+
+If CI exists, add type checking to the existing CI workflow in the appropriate location.
+
+The future quality gate should require:
+
+TYPECHECK = PASS
+TESTS = PASS
+
+before merge/deployment.
+
+Do not redesign the entire CI pipeline.
+
+==================================================
+STEP 13 — FINAL VERIFICATION
+==================================================
+
+When compiler errors reach zero:
+
+Run npx tsc --noEmit again from a clean state.
+
+Run the complete test suite.
+
+Run lint.
+
+Validate OpenAPI.
+
+Check git diff carefully.
+
+Search the changed code for prohibited suppression patterns introduced during this remediation:
+
+@ts-ignore
+@ts-nocheck
+as any
+eslint-disable
+tsconfig weakening
+
+Determine whether any new occurrences were introduced.
+
+There should be NONE unless explicitly approved and documented.
+
+Also confirm:
+
+- no secrets committed
+- no schema migration unintentionally created
+- no API endpoint removed
+- no authorization check removed
+- no tenant-scoping behavior changed
+- no canonical CRM ID format changed
+- no monetary unit changed
+
+==================================================
+STEP 14 — FINAL REPORT
+==================================================
+
+Create:
+
+docs/TYPESCRIPT_REMEDIATION_REPORT.md
+
+Include:
+
+BASELINE
+
+Original TypeScript error count.
+
+FINAL RESULT
+
+Final TypeScript error count.
+
+ROOT CAUSES
+
+Each major root cause and how it was corrected.
+
+ERROR BURN-DOWN
+
+Show progression such as:
+
+167
+→ 121
+→ 84
+→ 42
+→ 17
+→ 4
+→ 0
+
+Use actual results, not this example.
+
+FILES CHANGED
+
+List major files and why.
+
+BEHAVIORAL CHANGES
+
+Expected answer should ideally be:
+
+None.
+
+If any runtime behavior changed, explain exactly what and why.
+
+DATABASE CHANGES
+
+State whether any schema/migration changes occurred.
+
+API CHANGES
+
+State whether any API contract changed.
+
+SECURITY CHANGES
+
+State whether auth/RBAC/tenant behavior changed.
+
+DEPENDENCY CHANGES
+
+List every dependency version change, if any, and justification.
+
+SUPPRESSIONS
+
+List any TypeScript suppression/cast exceptions that remain.
+
+TEST RESULTS
+
+Include exact results for:
+
+typecheck
+tests
+lint
+External API
+auth/RBAC
+tenant isolation
+OpenAPI
+
+TECHNICAL DEBT REMAINING
+
+Identify legitimate technical debt that remains even though TypeScript is clean.
+
+QUALITY GATE
+
+Document the permanent typecheck/CI check established.
+
+==================================================
+EXECUTION CONTROL
+==================================================
+
+IMPORTANT:
+
+FIRST perform Steps 1 and 2 only.
+
+Run the compiler, analyze all errors, group them by root cause, and create/present the TypeScript Debt Audit.
+
+DO NOT START FIXING THE 167 ERRORS YET.
+
+After presenting the audit, STOP and wait for approval.
+
+I want to review the root-cause groups and remediation order before code changes begin.
