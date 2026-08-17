@@ -5,3 +5,4 @@
 - [External API authorization](external-api-authz.md) — every external route must carry an explicit permission guard; completion review rejects any unguarded read or mutation route, and empty scope lists must never be promoted to full access.
 - [Lead email normalization](lead-email-normalization.md) — blank/whitespace emails must be NULL; normalizeEmail() in server/lib/normalize-email.ts is the canonical function; all write paths (createLead, updateLead, patchLead, lead-gen direct insert) apply it; DB index uses BTRIM/NULLIF.
 - [External API migration drift](external-api-migration-drift.md) — migrations 0013/0014/0015 and leads_org_email_unique_idx must exist in DATABASE_URL (local dev postgres); they were missing after merges and required manual apply; deployment must apply them before code ships.
+- [Prod DB schema drift](prod-db-schema-drift.md) — NEON_DATABASE_URL prod schema/id_patterns diverge from dev+docs; check live rows before ID or migration work.
