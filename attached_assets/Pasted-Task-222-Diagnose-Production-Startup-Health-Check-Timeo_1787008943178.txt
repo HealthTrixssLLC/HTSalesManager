@@ -1,0 +1,75 @@
+Task #222 — Diagnose Production Startup / Health-Check Timeout
+
+Work Task #222 only. No scope expansion. Do not modify database schemas, migrations, canonical IDs, legacy_id_map, Lead email logic, or Task #223.
+
+We have completed the canonical-ID migration and schema reconciliation. The remaining reported blocker is that the Replit autoscale deployment may fail because the application does not become healthy/ready before Replit's startup probe times out.
+
+Step 1 — READ-ONLY DIAGNOSIS FIRST
+
+Trace the complete application startup path from process launch until the HTTP server is listening and Replit's health endpoint can return success.
+
+Identify and report:
+
+The application entry point and exact startup sequence.
+When the HTTP listener begins accepting connections.
+The endpoint Replit uses for deployment health checks.
+What /health and /ready do, if both exist.
+Every synchronous or awaited operation that occurs before the HTTP listener starts.
+Every database query, migration, schema initialization, seed operation, API call, network request, authentication initialization, or other I/O occurring during startup.
+Timing for each startup phase using existing logs or safe local instrumentation.
+Whether database migrations are being executed automatically during application startup.
+Whether the canonical-ID changes or legacy_id_map added any startup work.
+The actual root cause of the slow startup.
+Architecture requirement
+
+/health should be a lightweight liveness check capable of returning success once the HTTP process is alive. It should not require expensive database queries, CRM/API calls, migrations, or external services.
+
+/ready, if used, may perform the minimum checks necessary to establish application readiness, but it should not unnecessarily block process startup.
+
+The HTTP server should generally begin listening before nonessential startup work when that can be done safely.
+
+Do not weaken genuine safety requirements merely to make the health check pass.
+
+Step 2 — Recommend the smallest fix
+
+After diagnosis, identify the minimum code change necessary to make the application reliably satisfy the Replit autoscale startup health check.
+
+Do not redesign startup architecture unless required.
+
+Do not introduce background jobs, queues, caching systems, new infrastructure, or unrelated refactoring.
+
+Step 3 — Implementation authorization
+
+If the root cause is clear and the fix is small, isolated, and does not affect database integrity, authentication/security, or business behavior, implement that minimal fix and test it.
+
+If the fix would alter migrations, database initialization, authentication/security, production data, or application business behavior, STOP before implementation and report the proposed change for review.
+
+Validation
+
+After any permitted fix:
+
+Run npx tsc --noEmit.
+Start the application locally using the same production start command where practical.
+Measure time from process launch to HTTP listener available.
+Test /health.
+Test /ready if present.
+Confirm normal application startup still succeeds.
+Confirm no database migrations or schema changes were introduced.
+STOP CONDITIONS
+
+Do not publish.
+
+Do not modify production.
+
+Do not begin another task.
+
+Report:
+
+root cause;
+files changed;
+before/after startup timing;
+/health and /ready behavior;
+tests performed and results;
+any remaining deployment risk.
+
+No scope creep. Task #222 only.
