@@ -1,0 +1,154 @@
+The production deployment failed while attempting to create:
+
+leads_org_email_unique_idx
+
+CREATE UNIQUE INDEX leads_org_email_unique_idx
+ON leads (organization_id, lower(email))
+WHERE email IS NOT NULL;
+
+DO NOT deploy again yet.
+
+DO NOT copy the development database over production.
+
+DO NOT delete, merge, or modify production records yet.
+
+We need to safely resolve the production data conflict first.
+
+STEP 1 — READ-ONLY DIAGNOSIS
+
+Inspect the production database and identify every duplicate group that would
+prevent this unique index from being created.
+
+The uniqueness rule is:
+
+organization_id + lower(email)
+
+for rows where email IS NOT NULL.
+
+Run the equivalent of:
+
+SELECT
+    organization_id,
+    lower(email) AS normalized_email,
+    COUNT(*) AS duplicate_count,
+    array_agg(id ORDER BY created_at) AS lead_ids
+FROM leads
+WHERE email IS NOT NULL
+GROUP BY organization_id, lower(email)
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC;
+
+Then retrieve the COMPLETE records for every affected lead.
+
+For each duplicate group report:
+
+- organization_id
+- normalized email
+- number of duplicates
+- every Lead ID
+- firstName
+- lastName
+- company
+- status
+- source
+- rating
+- ownerId
+- externalId
+- createdAt
+- updatedAt
+- any other materially populated fields
+
+Also inspect ALL foreign-key, relationship, activity, document, audit,
+or other records that reference each duplicate Lead ID.
+
+We use CRM IDs such as LEAD-* as canonical business identifiers.
+
+DO NOT assume duplicate email means records can simply be deleted.
+
+STEP 2 — CLASSIFY EACH DUPLICATE
+
+For every duplicate group classify it as one of:
+
+A. Exact/near-exact duplicate
+B. Same person with complementary information
+C. Same email but potentially different people/records
+D. Unclear — requires human decision
+
+Recommend which Lead ID should survive, but DO NOT make the change.
+
+Preferred survivor logic should consider:
+
+1. Existing relationships/references
+2. Activities/history
+3. Documents
+4. Opportunity or other business relationships
+5. Most complete record
+6. Original/oldest canonical CRM record
+7. Most recently maintained information
+
+Do not select a survivor based only on creation date.
+
+STEP 3 — IMPACT ANALYSIS
+
+Before proposing deletion of ANY lead, identify everything referencing it.
+
+Determine what would need to be repointed to the surviving Lead ID.
+
+We must not orphan:
+
+- activities
+- document links
+- audit/history records where applicable
+- ownership/history
+- external references
+- any other entity relationships
+
+STEP 4 — PRODUCE A REMEDIATION PLAN
+
+Do NOT execute it.
+
+Give me a table:
+
+Organization
+Email
+Lead IDs
+Recommended survivor
+Duplicates to retire
+Fields requiring merge
+References requiring repointing
+Risk
+Reason
+
+Then provide the exact SQL/transaction strategy you recommend for safely
+remediating the duplicates.
+
+The remediation must:
+
+- run transactionally where possible
+- preserve the selected canonical LEAD-* ID
+- merge useful information rather than blindly overwrite it
+- repoint dependent records before deleting a duplicate
+- avoid changing unrelated leads
+- verify record counts before and after
+- verify there are zero duplicate organization_id/lower(email) groups afterward
+
+STEP 5 — INDEX VALIDATION
+
+After showing the remediation plan, STOP.
+
+DO NOT perform remediation.
+DO NOT create the index.
+DO NOT modify production.
+DO NOT redeploy.
+
+I want to review and approve the duplicate-resolution plan first.
+
+At the end tell me:
+
+1. How many duplicate email groups exist
+2. How many Lead records are affected
+3. Which records are safe automatic merges
+4. Which require my decision
+5. Whether anything references the duplicate Lead IDs
+6. Whether there are any other known blockers to creating
+   leads_org_email_unique_idx
