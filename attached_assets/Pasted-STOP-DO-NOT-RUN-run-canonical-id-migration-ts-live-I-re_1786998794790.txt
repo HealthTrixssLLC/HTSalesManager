@@ -1,0 +1,327 @@
+STOP. DO NOT RUN run-canonical-id-migration.ts --live.
+
+I reviewed the execution script and it still implements the previous partial
+migration plan rather than the final canonical identity contract.
+
+Revise the script before we perform even the production dry-run.
+
+IMPORTANT DATABASE REQUIREMENT
+
+The ONLY valid production database is the Replit-managed PostgreSQL database
+used by the deployed application:
+
+https://htsalesmanager.healthtrixss.com
+
+It is available through the DATABASE_URL bound to the PRODUCTION DEPLOYMENT.
+
+DO NOT use:
+- NEON_DATABASE_URL
+- workspace/development DATABASE_URL
+- any Neon database
+- any inferred or copied production database
+
+Keep the existing production fingerprint gate.
+
+The gate must continue requiring:
+
+HT organization:
+3e369484-0c88-401d-86e3-9c3361ee465e
+
+HT account count:
+56
+
+Known production fingerprints including:
+ACT-2103 = Cavulus
+ACT-2102 = Integrated Psychiatric Consultants
+ACT-2100 = Providence
+ACT-2099 = Humanizing Technologies
+ACT-2098 = Care Oregon
+ACT-2091 = Care Compass
+
+If this fingerprint fails:
+ABORT.
+
+==================================================
+CORRECTION 1 — GLOBAL SCOPE
+==================================================
+
+Remove HT_ONLY as an operator choice.
+
+This migration is GLOBAL.
+
+All organizations must use the same canonical identity grammar.
+
+Do not leave Lucentria or any other organization with legacy IDs.
+
+==================================================
+CORRECTION 2 — CONTACTS
+==================================================
+
+The current script only migrates CON-* contacts.
+
+That is insufficient.
+
+Migrate EVERY Contact whose ID does not match:
+
+^CONT-\d{4}-\d{5}$
+
+This includes:
+
+CON-*
+
+and existing legacy IDs such as:
+
+CONT-0002
+CONT-0003
+...
+CONT-0017
+
+After migration there must be ZERO active Contact IDs outside:
+
+CONT-{YY}{MM}-{SEQ:5}
+
+Change V1 accordingly.
+
+Do NOT allow:
+
+^CONT-(\d{4}-\d{5}|\d{4})$
+
+The ONLY permitted regex is:
+
+^CONT-\d{4}-\d{5}$
+
+==================================================
+CORRECTION 3 — OPPORTUNITIES
+==================================================
+
+The current script only uppercases Opp-*.
+
+That is insufficient.
+
+Migrate EVERY Opportunity whose ID does not match:
+
+^OPP-\d{4}-\d{6}$
+
+This includes:
+
+OPP-{SEQ:4}
+Opp-*
+
+All Opportunities must end in:
+
+OPP-{YYYY}-{SEQ:6}
+
+Do not merely uppercase Opp-*.
+
+Change V1 Opportunity validation from:
+
+^OPP-
+
+to exactly:
+
+^OPP-\d{4}-\d{6}$
+
+==================================================
+CORRECTION 4 — ACCOUNTS
+==================================================
+
+Globally migrate every Account not matching:
+
+^ACCT-\d{4}-\d{5}$
+
+Final format:
+
+ACCT-{YYYY}-{SEQ:5}
+
+==================================================
+CORRECTION 5 — ACTIVITIES
+==================================================
+
+Globally migrate every Activity not matching:
+
+^ACT-\d{4}-\d{5}$
+
+Final format:
+
+ACT-{YY}{MM}-{SEQ:5}
+
+==================================================
+CORRECTION 6 — COMPLETE REFERENCE INVENTORY
+==================================================
+
+Because the migration population is larger, DO NOT rely on the old reference
+counts.
+
+Before modifying the execution script further, dynamically inspect the real
+production PostgreSQL schema for every FK referencing:
+
+accounts.id
+contacts.id
+opportunities.id
+activities.id
+
+Also inspect known soft/text references including:
+
+activities.related_id
+activity_associations.entity_id
+document_links.entity_id
+entity_tags.entity_id
+comments.entity_id
+crm_documents
+research_documents
+leads.converted_account_id
+leads.converted_contact_id
+leads.converted_opportunity_id
+opportunity_contacts.contact_id
+opportunity_contacts.opportunity_id
+opportunity_resources.opportunity_id
+
+Do not assume this list is exhaustive.
+
+Use PostgreSQL catalog metadata to discover actual FK dependencies.
+
+Return every discovered reference and number of rows affected.
+
+Every ACTIVE reference to an ID being migrated must either:
+1. be updated transactionally, or
+2. be explicitly proven not to contain affected IDs.
+
+Audit-history references should remain historical unless application integrity
+requires otherwise.
+
+==================================================
+CORRECTION 7 — DETERMINISTIC MAPPING
+==================================================
+
+Generate mappings for EVERY noncanonical active ID.
+
+Mapping must be deterministic and collision-free.
+
+Use created_at plus existing ID as deterministic ordering.
+
+Before PK changes prove:
+
+- canonical IDs are unique
+- canonical IDs do not already exist
+- no two legacy IDs map to one canonical ID
+- every legacy row has exactly one mapping
+- every reference being migrated resolves to exactly one mapping
+
+==================================================
+CORRECTION 8 — COUNTERS
+==================================================
+
+Do not hard-code Contact=69 or Opportunity=2137 merely because those were
+historical counts/counters.
+
+Calculate the required id_pattern counter for each entity from the COMPLETE
+GLOBAL canonical migration result.
+
+After migration, prove that the NEXT generated ID cannot collide with any
+existing canonical ID.
+
+Final patterns:
+
+Account:
+ACCT-{YYYY}-{SEQ:5}
+
+Contact:
+CONT-{YY}{MM}-{SEQ:5}
+
+Lead:
+LEAD-{SEQ:6}
+
+Opportunity:
+OPP-{YYYY}-{SEQ:6}
+
+Activity:
+ACT-{YY}{MM}-{SEQ:5}
+
+Document:
+DOC-{SEQ:6}
+
+==================================================
+CORRECTION 9 — STRICT VALIDATION
+==================================================
+
+After the simulated migration the ONLY acceptable active formats are:
+
+Account:
+^ACCT-\d{4}-\d{5}$
+
+Contact:
+^CONT-\d{4}-\d{5}$
+
+Lead:
+^LEAD-\d{6}$
+
+Opportunity:
+^OPP-\d{4}-\d{6}$
+
+Activity:
+^ACT-\d{4}-\d{5}$
+
+Document:
+^DOC-\d{6}$
+
+ZERO exceptions.
+
+==================================================
+CORRECTION 10 — LEGACY MAP
+==================================================
+
+Keep legacy_id_map.
+
+It must contain EVERY ID renamed by this migration.
+
+Validate:
+
+mapping rows = renamed rows
+
+for every entity.
+
+Do not rewrite historical audit log IDs.
+
+==================================================
+CORRECTION 11 — EXECUTION SAFETY
+==================================================
+
+Preserve:
+
+--dry-run
+--live
+
+But DO NOT execute --live.
+
+Before --live can ever run require:
+
+1. Production fingerprint PASS
+2. Verified production backup/PITR
+3. Application writes stopped
+4. All actual FK constraint names discovered and verified
+5. Complete reference inventory PASS
+6. Collision analysis PASS
+7. Dry-run PASS
+8. Strict canonical validation PASS
+
+==================================================
+WHAT I WANT BACK NOW
+==================================================
+
+1. Revised global migration counts
+2. Complete FK/reference inventory from the REAL production PostgreSQL DB
+3. Number of Accounts to rename
+4. Number of Contacts to rename
+5. Number of Opportunities to rename
+6. Number of Activities to rename
+7. Proposed global sequence/counter values
+8. Collision analysis
+9. Revised run-canonical-id-migration.ts
+10. Exact dry-run command
+11. Expected dry-run validation output
+12. Any remaining risks
+
+Then STOP.
+
+DO NOT RUN --live.
+DO NOT COMMIT PRODUCTION CHANGES.
