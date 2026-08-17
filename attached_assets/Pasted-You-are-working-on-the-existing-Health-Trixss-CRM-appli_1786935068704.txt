@@ -1,0 +1,71 @@
+You are working on the existing Health Trixss CRM application and External REST API.
+
+This is an UPSTREAM CRM/API project.
+
+Do NOT build an MCP server in this project.
+
+The goal is to strengthen the CRM External API so Health Trixss CRM can serve as the authoritative system of record for an AI-agent organization. A separate MCP project will consume this API later.
+
+FIRST PRINCIPLE
+
+Health Trixss CRM is the authoritative system of record for:
+
+- Leads
+- Contacts
+- Accounts
+- Opportunities
+- Activities / business work
+- Commercial relationships
+- Document relationships
+
+Canonical CRM identities must be preserved across all external systems and AI agents.
+
+Existing canonical IDs:
+
+LED-* = Lead
+CON-* = Contact
+ACT-* = Account
+OPP-* = Opportunity
+
+IMPORTANT:
+The existing system currently also uses ACT-* for Activity IDs. This is an upstream schema/design defect because Account and Activity identities collide.
+
+Target new Activity prefix:
+
+ATV-* = Activity
+
+Do not break existing data or references.
+
+==================================================
+STEP 1 — AUDIT BEFORE CHANGING ANYTHING
+==================================================
+
+Before modifying code:
+
+1. Inspect the existing application architecture.
+2. Locate:
+   - database schema/models
+   - migrations
+   - External API routes
+   - authentication middleware
+   - organization/tenant scoping
+   - ID generation
+   - Account model
+   - Contact model
+   - Lead model
+   - Opportunity model
+   - Activity model
+   - API logging
+   - validation
+   - tests
+   - existing API documentation
+3. Determine the actual implemented behavior versus the existing documentation.
+4. Identify anything below that already exists.
+5. Preserve existing API behavior unless a change is explicitly required.
+6. Prefer additive, backward-compatible changes.
+7. Do not delete or rename production fields without a migration strategy.
+
+Before implementation, summarize your findings and proposed changes.
+
+Then proceed unless you discover a destructive migration, major architectural conflict, or ambiguity that could corrupt existing production data. In those cases STOP and explain the issue.
+

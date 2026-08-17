@@ -1,0 +1,307 @@
+The Step 1 audit is approved with the following corrections and implementation direction.
+
+IMPORTANT IDENTITY CORRECTION
+
+The implemented system is authoritative, not the old documentation examples.
+
+Canonical production ID patterns are:
+
+Account     = ACCT-{YYYY}-{SEQ}
+Contact     = CONT-{YY}{MM}-{SEQ}
+Lead        = LEAD-{SEQ}
+Opportunity = OPP-{YYYY}-{SEQ}
+Activity    = ACT-{YY}{MM}-{SEQ}
+
+There is NO functional Account/Activity collision because Account uses ACCT-* and Activity uses ACT-*.
+
+Do NOT migrate Activity IDs to ATV-* at this time.
+
+Preserve all existing canonical production IDs.
+
+Update all External API documentation, examples, OpenAPI schemas, validation logic, and future agent/MCP guidance to use the actual implemented ID formats.
+
+Proceed with the upstream API enhancement work in this order:
+
+PHASE A — ACTIVITY READ API
+
+Implement:
+
+GET /api/v1/external/activities
+GET /api/v1/external/activities/:id
+
+Support server-side filters where backed by actual Activity fields:
+
+relatedType
+relatedId
+type
+status
+priority
+dueBefore
+dueAfter
+updatedSince
+limit
+offset
+
+Preserve organization scoping and existing API response-envelope conventions.
+
+Add comprehensive automated tests.
+
+PHASE B — SERVER-SIDE SEARCH/FILTERS
+
+Enhance existing list endpoints additively.
+
+Accounts:
+search
+name
+updatedSince
+limit
+offset
+
+Contacts:
+search
+email
+accountId
+updatedSince
+limit
+offset
+
+Leads:
+search
+email
+status
+rating
+source
+updatedSince
+limit
+offset
+
+Opportunities:
+search
+accountId
+status
+stage
+ownerId
+rating
+includeInForecast
+updatedSince
+limit
+offset
+
+Use actual model fields only.
+
+Preserve all existing behavior and parameters.
+
+All filtering must be tenant-safe and server-side.
+
+PHASE C — OPPORTUNITY CONTACT RELATIONSHIPS
+
+Add a normalized Opportunity-to-Contact relationship using existing project ORM and migration conventions.
+
+Include at minimum:
+
+opportunityId
+contactId
+role
+isPrimary
+createdAt
+updatedAt
+
+Suggested roles:
+
+economic_buyer
+champion
+technical_contact
+contract_contact
+executive_sponsor
+decision_maker
+influencer
+other
+
+Do not duplicate Contact data.
+
+Enforce organization boundaries.
+
+Expose suitable External API endpoints and optionally support expand=contacts on Opportunity detail.
+
+Never infer isPrimary. It must be explicit data.
+
+PHASE D — DOCUMENT REFERENCES
+
+Create a CRM document-reference model.
+
+CRM is authoritative for the relationship between business entities and documents, but actual file binaries may remain in SharePoint, OneDrive, GitHub, or another approved document repository.
+
+Canonical Document IDs should follow the project's existing configurable ID-pattern architecture. Prefer DOC-* unless there is a compelling existing convention.
+
+Store at minimum:
+
+id
+organizationId
+title
+documentType
+sourceSystem
+canonicalUrl
+version
+status
+mimeType
+externalId
+createdAt
+updatedAt
+
+Add normalized entity links supporting initially:
+
+Account
+Opportunity
+Contact
+Lead
+
+Do not store access tokens or temporary signed URLs as canonicalUrl.
+
+Expose safe External API read/create/link operations.
+
+Enforce tenant boundaries.
+
+PHASE E — CONTROLLED PATCH API
+
+Audit existing internal mutation methods and expose strict External API PATCH endpoints where safe:
+
+PATCH /accounts/:id
+PATCH /contacts/:id
+PATCH /leads/:id
+PATCH /opportunities/:id
+PATCH /activities/:id
+
+Use explicit per-entity mutable-field allowlists.
+
+Reject unknown fields.
+
+Never allow modification of:
+
+canonical ID
+organization ownership
+createdAt
+system audit fields
+
+unless existing application architecture explicitly requires otherwise.
+
+Do not expose arbitrary database updates.
+
+PHASE F — API KEY PERMISSIONS
+
+Extend API-key security so new keys can be read-only.
+
+Preserve backward compatibility for existing keys.
+
+Preferred capability model:
+
+crm.read
+crm.write
+activities.read
+activities.write
+documents.read
+documents.write
+
+If the existing authorization architecture supports a cleaner equivalent, use that and document it.
+
+A read-only key must receive 403 for write operations.
+
+Organization scoping, expiration, revocation, IP allowlisting, rate limiting, and audit logging must continue functioning.
+
+PHASE G — TEST COVERAGE
+
+Add automated External API tests for both existing and new endpoints.
+
+At minimum cover:
+
+accounts list/detail
+opportunities list/detail
+contacts list/detail
+leads list/detail/create
+activities create/list/detail
+activity filters
+server-side entity search
+opportunity-contact relationships
+document relationships
+PATCH allowlists
+immutable-field rejection
+read-only API keys
+cross-tenant isolation
+pagination
+rate limiting
+audit logging
+
+Existing tests must remain passing.
+
+PHASE H — AUTHORITATIVE DOCUMENTATION
+
+After implementation, create:
+
+docs/API_IMPLEMENTATION_GUIDE.md
+docs/openapi.yaml
+
+OpenAPI version: 3.1.
+
+Update API_DOCUMENTATION.md so it matches the actual implementation.
+
+All documentation must use these canonical IDs:
+
+ACCT-* Account
+CONT-* Contact
+LEAD-* Lead
+OPP-* Opportunity
+ACT-* Activity
+DOC-* Document, if implemented
+
+Documentation must be generated from or verified against actual registered routes and schemas.
+
+Include:
+
+authentication
+permissions/scopes
+tenant scoping
+all endpoints
+query parameters
+request schemas
+response schemas
+filter/search semantics
+pagination
+expand behavior
+errors
+rate limits
+monetary units
+mutable and immutable fields
+relationship rules
+backward compatibility
+examples
+changelog
+
+Do not document anything that does not exist.
+
+PHASE I — FINAL IMPLEMENTATION REPORT
+
+Before completion:
+
+run all tests
+run lint/typecheck
+validate migrations
+validate OpenAPI
+compare registered External API routes against docs
+confirm no secrets are committed
+confirm cross-tenant tests pass
+
+Return:
+
+IMPLEMENTED
+MIGRATIONS
+BACKWARD COMPATIBILITY
+SECURITY
+TEST RESULTS
+API CHANGES
+NOT IMPLEMENTED
+FILES CHANGED
+DEPLOYMENT ORDER
+MCP IMPACT
+
+Proceed with implementation in small, reviewable tasks/commits.
+
+Do not build the MCP server in this project.
