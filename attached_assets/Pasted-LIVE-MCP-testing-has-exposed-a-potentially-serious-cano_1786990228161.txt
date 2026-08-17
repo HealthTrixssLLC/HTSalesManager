@@ -1,0 +1,220 @@
+LIVE MCP testing has exposed a potentially serious canonical-ID issue in
+the production CRM.
+
+DO NOT MODIFY PRODUCTION YET.
+
+The deployed External API contract and MCP documentation define:
+
+ACCT-* = Account
+CONT-* = Contact
+LEAD-* = Lead
+OPP-*  = Opportunity
+ACT-*  = Activity
+DOC-*  = Document
+
+However, a LIVE production call to:
+
+GET /api/v1/external/accounts?limit=10
+
+returned existing Accounts with IDs such as:
+
+ACT-2103 = Cavulus
+ACT-2102 = Integrated Psychiatric Consultants
+ACT-2100 = Providence
+ACT-2098 = Care Oregon
+ACT-2091 = Care Compass
+
+This contradicts the canonical ID contract.
+
+Perform a READ-ONLY production audit.
+
+DO NOT update IDs.
+DO NOT run migrations.
+DO NOT modify foreign keys.
+DO NOT deploy.
+
+==================================================
+1. ACCOUNT ID AUDIT
+==================================================
+
+Inspect ALL production Account IDs.
+
+Report counts grouped by prefix/pattern, including:
+
+ACT-*
+ACCT-*
+anything else
+
+Give me:
+
+total Accounts
+number using ACT-*
+number using ACCT-*
+number using any other pattern
+
+Show representative records from each group.
+
+Determine whether newly created Accounts now receive ACCT-* while historical
+Accounts retain ACT-*.
+
+==================================================
+2. ACTIVITY ID AUDIT
+==================================================
+
+Inspect ALL production Activity IDs.
+
+Report counts grouped by prefix/pattern.
+
+Specifically determine whether Activity records also use ACT-*.
+
+If both Account and Activity IDs currently use ACT-*, state that explicitly.
+
+==================================================
+3. COLLISION AUDIT
+==================================================
+
+Determine whether the SAME literal ID exists in both tables.
+
+For example:
+
+accounts.id = ACT-XXXX
+activities.id = ACT-XXXX
+
+Report:
+
+number of literal cross-table collisions
+every colliding ID if reasonably small
+representative examples otherwise
+
+This is critical.
+
+==================================================
+4. FOREIGN-KEY / REFERENCE IMPACT
+==================================================
+
+Determine every table/column that references Account IDs.
+
+Include at minimum where applicable:
+
+contacts
+opportunities
+activities
+documents/document_links
+leads/conversions
+audit/history
+other relationships
+
+Determine whether changing a historical Account ID from:
+
+ACT-XXXX
+
+to:
+
+ACCT-XXXX
+
+would require cascading/repointing dependent records.
+
+Report counts of dependent references.
+
+Do not change them.
+
+==================================================
+5. EXTERNAL REFERENCE IMPACT
+==================================================
+
+Search the application/database for places where Account IDs may exist as
+non-FK text values, including:
+
+activity related_id
+document entity links
+audit records
+JSON/metadata
+externalId mappings
+integration logs if applicable
+
+We must understand whether an ID migration can be performed safely without
+leaving stale ACT-* Account references.
+
+==================================================
+6. GENERATOR AUDIT
+==================================================
+
+Inspect current Account ID generation.
+
+Confirm exactly what ID a NEW Account receives today.
+
+Do not create a production Account solely to test this unless an existing
+safe test mechanism proves it without persisting data.
+
+Inspect the code/configuration/id_patterns instead.
+
+Also confirm current Activity ID generation.
+
+Expected target:
+
+Account  -> ACCT-*
+Activity -> ACT-*
+
+==================================================
+7. API CONTRACT AUDIT
+==================================================
+
+Confirm whether docs/openapi.yaml and API_IMPLEMENTATION_GUIDE.md currently
+state ACCT-* for Account and ACT-* for Activity.
+
+Identify any runtime validation that assumes ACCT-* Account IDs.
+
+Determine whether:
+
+GET /accounts/ACT-2098
+
+currently succeeds despite the documented ACCT-* contract.
+
+Do not modify behavior yet.
+
+==================================================
+8. REMEDIATION OPTIONS
+==================================================
+
+Propose a safe remediation plan.
+
+Evaluate at least:
+
+A. Transactionally migrate historical Account IDs ACT-* -> ACCT-* and
+   repoint every dependent reference.
+
+B. Preserve legacy ACT-* Account IDs indefinitely and make the API/MCP
+   support both legacy and canonical Account IDs.
+
+C. Any safer approach you identify.
+
+Our architectural goal is ONE unambiguous canonical identity namespace:
+
+ACCT-* Account
+ACT-* Activity
+
+Prefer a permanent root-cause solution over carrying legacy ambiguity into
+the AI/MCP layer.
+
+But DO NOT execute the remediation.
+
+==================================================
+9. REPORT AND STOP
+==================================================
+
+Return:
+
+ACCOUNT ID COUNTS
+ACTIVITY ID COUNTS
+CROSS-TABLE COLLISIONS
+DEPENDENT REFERENCES
+NON-FK/TEXT REFERENCES
+CURRENT ID GENERATORS
+API/DOCUMENTATION IMPACT
+RECOMMENDED REMEDIATION
+MIGRATION RISK
+PROPOSED VALIDATION TESTS
+
+Then STOP.
+
+DO NOT CHANGE PRODUCTION.
