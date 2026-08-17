@@ -1,0 +1,77 @@
+FINAL DIAGNOSIS — legacy_id_map Publishing Drop
+
+The actual Replit Publishing screen has been regenerated after:
+
+adding legacyIdMap to shared/schema.ts;
+adding 0016_add_legacy_id_map.sql;
+adding the migration journal entry;
+manually adding public.legacy_id_map to migrations/meta/0000_snapshot.json.
+
+Despite all of those changes, the actual Replit Publishing preview STILL generates:
+
+DROP TABLE "legacy_id_map" CASCADE;
+
+and reports that this will delete 766 production rows.
+
+Therefore the prior conclusions about what Publishing uses as its authoritative schema were incorrect or incomplete.
+
+DO NOT make another speculative schema/snapshot edit.
+
+Diagnose the actual mechanism
+
+Determine exactly how this Replit project's Publishing “Development database changes detected → Generated migrations to apply to production database” process computes its schema difference.
+
+Specifically investigate whether it is comparing:
+
+the actual Development database schema against the Production database schema;
+shared/schema.ts;
+drizzle.config.ts;
+Drizzle snapshots;
+migration journal/history;
+or another Replit-managed schema state.
+Critical check
+
+Query the actual Replit Development database, not production, and report whether this table physically exists there:
+
+SELECT
+  table_schema,
+  table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name = 'legacy_id_map';
+
+If it exists, introspect its complete DDL and compare it to production.
+
+If it does not exist, determine whether that is why Replit's Development→Production schema comparison is generating the DROP.
+
+Also report the current row counts separately:
+
+Development legacy_id_map: ?
+Production legacy_id_map: 766
+Likely remediation — verify before executing
+
+If Publishing is actually using the physical Development database schema as desired state and Development lacks legacy_id_map, then the likely correct fix is to apply the already-created idempotent 0016 schema migration to DEVELOPMENT ONLY, creating the empty/appropriate table structure there so Development and Production schemas agree.
+
+Do not copy the 766 production mapping records into Development unless there is a demonstrated application requirement. We are reconciling schema, not production data.
+
+But verify this hypothesis before making the change.
+
+Hard constraints
+Do NOT modify Production.
+Do NOT delete or alter the 766 production mapping records.
+Do NOT DROP or recreate the production table.
+Do NOT modify canonical IDs.
+Do NOT modify id_patterns.
+Do NOT change Task #222.
+Do NOT make unrelated schema changes.
+Do NOT publish.
+
+If and only if you prove that the physical Development database is the source of this diff and that Development lacks legacy_id_map, apply the existing idempotent table-creation migration to Development only.
+
+Then verify Development physically contains public.legacy_id_map with the same table structure, constraints and indexes as Production.
+
+STOP after that.
+
+Report the evidence showing what Publishing actually compares and any Development-only action taken.
+
+The final acceptance test will again be the actual Replit Publishing screen, not an expected/generated local diff.
