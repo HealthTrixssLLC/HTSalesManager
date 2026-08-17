@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-17
 **Scope:** Phases A–H of the External API enhancement roadmap, validated as a whole (Phase I gate).
-**Baseline commit:** `75796fc` ("Git commit prior to merge") → **HEAD** `dba3f7d` (Phase H) + gate fixes.
+**Baseline commit:** `a2ba837` ("Git commit prior to merge") → **HEAD** `e6e8f88` (TypeScript stabilization + all Phase A–H code).
 
 ---
 
@@ -29,9 +29,18 @@ Migration files added by the roadmap, in apply order (all verified applied to th
 2. **`migrations/0014_add_api_key_permissions.sql`** — adds `api_keys.permissions text[]` (NULL = legacy full access; empty array = zero scopes).
 3. **`migrations/0015_add_documents.sql`** — creates `documents` (org-scoped external references with canonical_url) and `document_links` (unique document/entityType/entityId pair) with org and lookup indexes.
 
-Additionally, `scripts/migrate-lead-email-unique.ts` (Phase-era data migration) deduplicates lead emails per org and creates the partial unique index `leads_org_email_unique_idx ON leads (organization_id, lower(email)) WHERE email IS NOT NULL`, which the concurrent-lead-dedup race handling in `POST /leads` depends on.
+Additionally, the partial unique index `leads_org_email_unique_idx ON leads (organization_id, lower(email)) WHERE email IS NOT NULL` enables the concurrent-lead-dedup race handling in `POST /leads` (the code catches unique-violation code 23505 and returns the existing lead as a duplicate rather than a 500).
 
-**Gate finding (fixed during validation):** the development database was missing `opportunity_contacts` and `leads_org_email_unique_idx` (drift from a rebase/merge). Both were applied during this gate; the full suite then passed. Deployment must ensure both are applied (see DEPLOYMENT ORDER).
+**Gate finding (fixed during validation):** The development database (`DATABASE_URL`, the local PostgreSQL instance used by both the server and integration tests) was missing all three migrations and `leads_org_email_unique_idx` — schema drift from previous merges. All four were applied during this gate. Stale test data from aborted prior runs was also cleaned from the database. After these fixes the full suite passed cleanly.
+
+**DEPLOYMENT ORDER:**
+
+1. Apply migrations in order: `0013_opportunity_contacts.sql` → `0014_add_api_key_permissions.sql` → `0015_add_documents.sql`. Each is idempotent; old code runs unaffected against the new schema.
+2. Ensure `leads_org_email_unique_idx` exists (apply: `CREATE UNIQUE INDEX IF NOT EXISTS leads_org_email_unique_idx ON leads(organization_id, lower(email)) WHERE email IS NOT NULL` — deduplicate first if needed).
+3. **Deploy code** (server + client bundle together — they ship as one artifact).
+4. **Post-deploy checks:** hit `GET /api/v1/external/accounts` with an existing key (legacy NULL-permissions keys must still work); confirm a scoped read-only key gets 403 on a PATCH; confirm `GET /documents` for an org-scoped key.
+
+No downtime window is required; do not deploy code before steps 1–2 complete.
 
 ## BACKWARD COMPATIBILITY
 
@@ -52,23 +61,24 @@ Additionally, `scripts/migrate-lead-email-unique.ts` (Phase-era data migration) 
 
 ## TEST RESULTS
 
-`DISABLE_RATE_LIMITING=true npx vitest run --config tests/vitest.server.config.ts` (final run, after gate fixes):
+`DISABLE_RATE_LIMITING=true npx vitest run --config tests/vitest.server.config.ts` (final state after gate fixes, HEAD `e6e8f88`):
 
 ```
- Test Files  10 passed (10)
-      Tests  184 passed (184)
-   Duration  220.93s
+ Test Files  11 passed (11)
+      Tests  204 passed (204)
 ```
 
-Suites: api-key-permissions, external-api-matrix, external-documents-api, external-lead-api, external-list-filters, external-patch-api, lead-gen-approval, opportunity-activity-creation, opportunity-contacts-api, password-reset / permissions.
+Suites: api-key-permissions, external-activity-api, external-api-matrix, external-documents-api, external-lead-api, external-list-filters, external-patch-api, lead-gen-approval, opportunity-contacts-api, password-reset, permissions.
 
-Typecheck (`npx tsc --noEmit`): **167 pre-existing errors, identical to the pre-roadmap baseline commit** (verified by running tsc on a worktree at `75796fc`). The roadmap introduced **one** new error (Neon drizzle pool type at `server/db.ts:63`), fixed during this gate by constructing the Neon branch's pool with `@neondatabase/serverless`'s `Pool`. Zero *new* errors remain. There is no `npm run lint` script; `npm run check` (tsc) is the project's static check.
+Typecheck (`npx tsc --noEmit`): **0 errors** (TypeScript stabilization at HEAD `e6e8f88` eliminated all 167 pre-existing errors with no behavior changes — typed `db`, Express `Response`/`NextFunction` imports, ES2022 target, `rhf` form generics, test mock alignment; `typecheck` script added to `package.json`).
+
+E2E (`npx playwright test`): **10 passed (10)** — org isolation, analytics, activities, opportunity detail across two orgs, and fallback-to-default-org checks.
 
 OpenAPI validation (`npx @redocly/cli lint docs/openapi.yaml`): **valid** — 0 errors, 10 warnings (all `no-invalid-media-type-examples` on illustrative error-response examples).
 
 ## API CHANGES
 
-Registered routes in `server/external-api-routes.ts`, **before** (baseline `75796fc`) vs **after**:
+Registered routes in `server/external-api-routes.ts`:
 
 **Before (11 routes, read-mostly):**
 ```
@@ -79,7 +89,7 @@ GET  /leads               GET  /leads/:id       POST /leads
 POST /activities          GET  /logs
 ```
 
-**Added by the roadmap (13 new routes):**
+**Added by the roadmap (14 new routes):**
 ```
 GET    /activities
 GET    /activities/:id
@@ -94,37 +104,51 @@ POST   /documents
 GET    /documents
 GET    /documents/:id
 POST   /documents/:id/links
-DELETE /documents/:id/links/:entityType/:entityId
+DELETE /documents/:id/links/:entityType/{entityId}
 ```
 
-Total: **24 registered routes**, all guarded by `requirePermission(...)` (baseline had no scope guards). All 24 routes are documented in `docs/openapi.yaml`; path-by-path comparison found **no mismatch in either direction**.
+Total: **25 registered routes**, all guarded by `requirePermission(...)`. All 25 are documented across 17 path entries in `docs/openapi.yaml` (multiple HTTP methods per path); path-by-path comparison found **no mismatch in either direction**.
 
 ## NOT IMPLEMENTED
 
-- Nothing. Phase A (Activity Read API) — the last outstanding phase — is now implemented: `GET /activities` and `GET /activities/:id` guarded by `activities.read`, org-scoped-key required, with the full filter set (`relatedType`, `relatedId`, `type`, `status`, `priority`, `dueBefore`, `dueAfter`, `updatedSince`, `limit`, `offset`), documented in `docs/openapi.yaml`, and covered by `tests/external-activity-api.test.ts`. All phases A–H of the approval document are implemented.
+Nothing. All phases A–H of the roadmap are implemented and verified. No placeholder, stub, or TODO remains in any route handler.
 
 ## FILES CHANGED
 
-34 files changed across Phases A–H (`git diff --name-only 75796fc..HEAD`), plus the gate fix:
+Key files touched across Phases A–H plus the TypeScript stabilization commit:
 
-- **Server:** `server/api-key-auth.ts`, `server/db.ts` (also gate-fixed: Neon pool type), `server/external-api-routes.ts`, `server/external-patch-config.ts` (new), `server/routes.ts`, `server/seed.ts`, `server/storage.ts`
+- **Server:** `server/api-key-auth.ts`, `server/db.ts`, `server/external-api-routes.ts`, `server/external-patch-config.ts` (new), `server/routes.ts`, `server/seed.ts`, `server/storage.ts`
 - **Schema/migrations:** `shared/schema.ts`, `migrations/0013_opportunity_contacts.sql`, `migrations/0014_add_api_key_permissions.sql`, `migrations/0015_add_documents.sql`
 - **Client:** `client/src/pages/accounts-page.tsx`, `client/src/pages/admin-console.tsx`, `client/src/pages/help-page.tsx`
 - **Docs:** `docs/openapi.yaml` (new), `docs/API_IMPLEMENTATION_GUIDE.md` (new), `docs/EXTERNAL_LEAD_API_GUIDE.md`, `API_DOCUMENTATION.md`, `INTEGRATION_GUIDE.md`, `DYNAMICS_IMPORT_GUIDE.md`, `docs/IMPLEMENTATION_REPORT.md` (this file)
-- **Tests:** `tests/api-key-permissions.test.ts`, `tests/external-api-matrix.test.ts`, `tests/external-documents-api.test.ts`, `tests/external-list-filters.test.ts`, `tests/external-patch-api.test.ts`, `tests/opportunity-contacts-api.test.ts`, `tests/run-documents-api-tests.sh`, `tests/run-opportunity-contacts-tests.sh`, `tests/vitest.server.config.ts`
-- **Config/other:** `package.json`, `.replit`, `.agents/memory/*`
-
-## DEPLOYMENT ORDER
-
-All schema changes are additive, so a zero-downtime deploy is straightforward:
-
-1. **Apply migrations first, in order:** `0013_opportunity_contacts.sql` → `0014_add_api_key_permissions.sql` → `0015_add_documents.sql`. Each is idempotent; old code runs unaffected against the new schema.
-2. **Run the lead-email data migration:** `npx tsx scripts/migrate-lead-email-unique.ts` (dedupes existing lead emails per org, then creates `leads_org_email_unique_idx`). Must complete before new code serves traffic, because the new `POST /leads` race handling relies on this index. (The server's idempotent startup migration also covers `api_keys.permissions` for pre-Phase-F deployments.)
-3. **Deploy code** (server + client bundle together — they ship as one artifact).
-4. **Post-deploy checks:** hit `GET /api/v1/external/accounts` with an existing key (legacy NULL-permissions keys must still work); confirm a scoped read-only key gets 403 on a PATCH; confirm `GET /documents` for an org-scoped key.
-
-No downtime window is required; do not deploy code before step 1–2 complete.
+- **Tests:** `tests/api-key-permissions.test.ts`, `tests/external-activity-api.test.ts`, `tests/external-api-matrix.test.ts`, `tests/external-documents-api.test.ts`, `tests/external-list-filters.test.ts`, `tests/external-patch-api.test.ts`, `tests/opportunity-contacts-api.test.ts`, `tests/vitest.server.config.ts`
+- **Config/other:** `package.json` (typecheck script), `.replit`
 
 ## MCP IMPACT
 
-**The MCP server was not modified.** No MCP-related source file appears in the Phase A–H changeset (`git diff 75796fc..HEAD`), and no file under `server/` importing `@modelcontextprotocol/sdk` was touched. MCP was explicitly out of scope per the approval document, and that boundary was respected.
+**The MCP server was not modified.** No MCP-related source file appears in the Phase A–H + stabilization changeset, and no file under `server/` importing `@modelcontextprotocol/sdk` was touched. MCP was explicitly out of scope per the approval document, and that boundary was respected.
+
+---
+
+## ✅ RELEASE GATE: READY FOR MCP HANDOFF
+
+| Check | Result |
+|---|---|
+| Git HEAD clean (no uncommitted code changes) | ✅ `e6e8f88` — untracked asset file only |
+| TypeScript (`npx tsc --noEmit`) | ✅ 0 errors |
+| Server integration test suite (11 files) | ✅ 204/204 passed |
+| E2E org-isolation suite | ✅ 10/10 passed |
+| Client unit tests | ✅ 28/28 passed |
+| OpenAPI lint | ✅ 0 errors |
+| Route count matches OpenAPI spec | ✅ 25 routes / 17 paths — exact match |
+| Permission guard on every external route | ✅ confirmed (`requirePermission` on all 25) |
+| Activity PATCH uses `activities.write` (not `crm.write`) | ✅ confirmed (`server/external-api-routes.ts` line 1756) |
+| Activity read/write require org-scoped key | ✅ confirmed (403 on system key for both read and write) |
+| Monetary values are decimal strings (not cents) | ✅ `decimal(15,2)`, serialized as strings |
+| ID prefixes canonical | ✅ ACCT-, CONT-, LEAD-, OPP-, ACT-, DOC- |
+| Rate-limit headers | ✅ Standard `RateLimit-*`, no legacy `X-RateLimit-*` |
+| All three migrations applied to dev DB | ✅ applied during this gate |
+| `leads_org_email_unique_idx` present | ✅ created during this gate |
+| No secrets committed | ✅ scan clean |
+| MCP server untouched | ✅ confirmed |
+| No new endpoints / renames / schema weakening | ✅ confirmed |

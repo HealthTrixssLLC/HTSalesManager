@@ -1,0 +1,848 @@
+You are performing the FINAL RECONCILIATION, VALIDATION, AND DOCUMENTATION
+FREEZE for the Health Trixss CRM External API.
+
+The External API enhancement roadmap has been implemented, including:
+
+- Activity Read API
+- server-side search/filtering
+- Opportunity ↔ Contact relationships
+- Document references
+- controlled PATCH APIs
+- API-key permission scopes
+- tenant isolation
+- expanded automated testing
+- OpenAPI 3.1 documentation
+
+DO NOT add new features during this task.
+
+The purpose of this task is to verify that:
+
+CODE
+DATABASE/MIGRATIONS
+TESTS
+OPENAPI
+API IMPLEMENTATION GUIDE
+API DOCUMENTATION
+IMPLEMENTATION REPORT
+
+all describe the SAME final production API.
+
+The actual implemented code is authoritative.
+
+==================================================
+CRITICAL RULES
+==================================================
+
+Do NOT redesign the API.
+
+Do NOT add new endpoints.
+
+Do NOT rename routes.
+
+Do NOT change canonical IDs.
+
+Do NOT change database schema unless a genuine implementation defect is
+discovered and explicitly reported before changing it.
+
+Do NOT change API behavior merely to make documentation agree.
+
+Do NOT weaken authorization, permission scopes, or tenant isolation.
+
+Do NOT introduce TypeScript suppressions.
+
+Do NOT modify the MCP project.
+
+Do NOT create an MCP server.
+
+This task should primarily be validation, reconciliation, documentation
+correction, and final reporting.
+
+If documentation conflicts with code:
+
+1. Determine actual implemented behavior.
+2. Determine whether that behavior is intentional and secure.
+3. Correct documentation to match implementation.
+
+If the implemented behavior appears insecure or inconsistent with the
+approved architecture, STOP and report the discrepancy before changing
+runtime behavior.
+
+==================================================
+STEP 1 — ESTABLISH FINAL SOURCE-OF-TRUTH
+==================================================
+
+Inspect the ACTUAL current implementation, including:
+
+server/external-api-routes.ts
+server/api-key-auth.ts
+server/external-patch-config.ts
+server/storage.ts
+server/db.ts
+shared/schema.ts
+all migrations
+all External API tests
+docs/openapi.yaml
+docs/API_IMPLEMENTATION_GUIDE.md
+API_DOCUMENTATION.md
+docs/IMPLEMENTATION_REPORT.md
+package.json
+tsconfig.json
+
+Also inspect any relevant helper/middleware files used by the External API.
+
+Record the current:
+
+- Git HEAD commit SHA
+- branch
+- working-tree status
+- TypeScript version
+- Node version
+- package version if applicable
+
+Do not rely on an old implementation report for these values.
+
+==================================================
+STEP 2 — VERIFY ALL REGISTERED EXTERNAL API ROUTES
+==================================================
+
+Enumerate every route actually registered under:
+
+/api/v1/external
+
+Create a definitive matrix containing:
+
+METHOD
+PATH
+AUTH REQUIREMENT
+PERMISSION SCOPE
+ORG-SCOPED KEY REQUIRED?
+SYSTEM KEY ALLOWED?
+TENANT ISOLATION BEHAVIOR
+IMPLEMENTATION FILE
+OPENAPI DOCUMENTED?
+IMPLEMENTATION GUIDE DOCUMENTED?
+API_DOCUMENTATION DOCUMENTED?
+AUTOMATED TEST COVERAGE?
+
+The current expectation is approximately 24 routes.
+
+Do NOT assume 24 is correct.
+
+Count the actual registered routes.
+
+Compare the route inventory in BOTH directions:
+
+CODE → OPENAPI
+
+and
+
+OPENAPI → CODE
+
+There must be no undocumented implemented endpoint and no documented
+endpoint that does not exist.
+
+==================================================
+STEP 3 — RESOLVE ACTIVITY KEY-SCOPING DISCREPANCY
+==================================================
+
+There is currently an apparent documentation discrepancy around:
+
+PATCH /activities/:id
+
+Some documentation suggests Activities require an organization-scoped key.
+
+Other documentation suggests PATCH routes may accept system keys.
+
+Determine the ACTUAL implementation from middleware and route logic.
+
+Specifically verify:
+
+GET /activities
+GET /activities/:id
+POST /activities
+PATCH /activities/:id
+
+For each determine:
+
+- required permission scope
+- whether organization-scoped key is mandatory
+- whether system key is accepted
+- tenant-isolation behavior
+- cross-tenant behavior
+
+DO NOT guess.
+
+If the implementation is internally consistent and secure, update all
+documentation to state the actual behavior clearly.
+
+If PATCH /activities/:id permits system-level mutation across organizations
+and that behavior appears inconsistent with the intended Activity security
+model, STOP and report the finding before changing runtime behavior.
+
+Do not silently change authorization behavior.
+
+==================================================
+STEP 4 — VERIFY PERMISSION SCOPES
+==================================================
+
+Confirm the actual supported permission scopes.
+
+Expected:
+
+crm.read
+crm.write
+activities.read
+activities.write
+documents.read
+documents.write
+
+Verify these against code.
+
+Then verify every route has the correct explicit permission guard.
+
+Confirm behavior for:
+
+legacy key with permissions = NULL
+explicit empty permissions []
+read-only scoped key
+write-enabled scoped key
+revoked key
+expired key
+system key
+organization-scoped key
+
+Confirm:
+
+NULL legacy permissions retain backward-compatible behavior.
+
+[] grants no permissions.
+
+Missing required scope returns 403.
+
+Update ALL documentation so the complete permission list is present.
+
+IMPORTANT:
+
+API_DOCUMENTATION.md currently needs to be checked specifically for
+documents.read and documents.write.
+
+Make sure the short API documentation includes the complete scope model.
+
+==================================================
+STEP 5 — VERIFY CANONICAL IDENTITY MODEL
+==================================================
+
+Confirm actual ID generation and documentation agree.
+
+Expected canonical patterns:
+
+Account:
+ACCT-*
+
+Contact:
+CONT-*
+
+Lead:
+LEAD-*
+
+Opportunity:
+OPP-*
+
+Activity:
+ACT-*
+
+Document:
+DOC-*
+
+Do not reintroduce old documentation patterns such as:
+
+ACT-* for Account
+CON-*
+LED-*
+ATV-*
+
+unless the actual implementation proves otherwise.
+
+Confirm all examples, schemas, guides, tests, and OpenAPI examples use the
+correct canonical formats.
+
+==================================================
+STEP 6 — VERIFY MONETARY SEMANTICS
+==================================================
+
+This is especially important for downstream MCP development.
+
+Verify actual database schema, serialization, PATCH behavior, OpenAPI, and
+documentation for:
+
+amount
+actualRevenue
+estRevenue
+
+Current expected implementation:
+
+decimal(15,2)
+
+serialized as decimal strings in CURRENCY UNITS.
+
+Example:
+
+"50000.00"
+
+means:
+
+$50,000.00
+
+NOT 5,000,000 cents.
+
+Confirm this against actual code/schema.
+
+Search documentation for outdated statements about:
+
+cents
+amountCents
+revenueCents
+dividing by 100
+
+Remove/correct those statements if present.
+
+The final API documentation must explicitly warn downstream consumers:
+
+DO NOT divide monetary values by 100.
+
+For arithmetic, consumers should use a decimal-safe implementation rather
+than binary floating-point where precision matters.
+
+==================================================
+STEP 7 — VERIFY RATE-LIMIT CONTRACT
+==================================================
+
+Confirm actual rate-limit response headers.
+
+Expected:
+
+RateLimit-Limit
+RateLimit-Remaining
+RateLimit-Reset
+
+and:
+
+Retry-After
+
+on HTTP 429.
+
+Confirm whether legacy:
+
+X-RateLimit-*
+
+headers are absent.
+
+Update all documentation and OpenAPI examples to match actual behavior.
+
+==================================================
+STEP 8 — VERIFY ACTIVITY READ API
+==================================================
+
+Confirm these are fully implemented:
+
+GET /activities
+GET /activities/:id
+
+Verify GET /activities supports actual implemented filters:
+
+relatedType
+relatedId
+type
+status
+priority
+dueBefore
+dueAfter
+updatedSince
+limit
+offset
+
+Verify:
+
+- strict date validation
+- enum validation
+- filtering before pagination
+- tenant isolation
+- appropriate permission scope
+- missing and cross-org Activity behavior
+- pagination envelope
+
+Confirm tests cover these behaviors.
+
+==================================================
+STEP 9 — VERIFY SEARCH/FILTER CONTRACT
+==================================================
+
+Compare code, OpenAPI, and documentation for server-side filters.
+
+Accounts:
+
+search
+name
+updatedSince
+limit
+offset
+
+Contacts:
+
+search
+email
+accountId
+updatedSince
+limit
+offset
+
+Leads:
+
+search
+email
+status
+rating
+source
+updatedSince
+limit
+offset
+
+Opportunities:
+
+search
+accountId
+status
+stage
+ownerId
+rating
+includeInForecast
+updatedSince
+limit
+offset
+
+Activities:
+
+relatedType
+relatedId
+type
+status
+priority
+dueBefore
+dueAfter
+updatedSince
+limit
+offset
+
+Documents:
+
+entityType
+entityId
+updatedSince
+limit
+offset
+
+Do not add filters merely because they appear in this list.
+
+The code is authoritative.
+
+Correct documentation where necessary.
+
+==================================================
+STEP 10 — VERIFY RELATIONSHIPS
+==================================================
+
+Verify Opportunity ↔ Contact behavior:
+
+- supported roles
+- isPrimary
+- one-primary enforcement
+- duplicate-link behavior
+- cross-org prevention
+- unlink behavior
+- expand=contacts behavior
+
+Verify Document relationships:
+
+- DOC-* identity
+- document reference rather than binary storage
+- canonicalUrl security validation
+- entityType support
+- entityId behavior
+- same-org enforcement
+- idempotent linking
+- unlink behavior
+
+Verify Activity relationships:
+
+- relatedType
+- relatedId
+- paired-field requirement
+- same-org validation
+- association/timeline behavior
+
+Update docs only where they disagree with actual code.
+
+==================================================
+STEP 11 — VERIFY PATCH CONTRACTS
+==================================================
+
+For:
+
+PATCH /accounts/:id
+PATCH /contacts/:id
+PATCH /leads/:id
+PATCH /opportunities/:id
+PATCH /activities/:id
+
+Verify:
+
+- exact mutable-field allowlist
+- immutable fields
+- unknown-field rejection
+- empty-body rejection
+- organization/reference validation
+- owner validation
+- opportunity date invariants
+- response envelope
+- 400/403/404 behavior
+
+Compare:
+
+server/external-patch-config.ts
+OpenAPI
+Implementation Guide
+API_DOCUMENTATION.md
+
+They must agree.
+
+==================================================
+STEP 12 — VERIFY DATABASE MIGRATIONS
+==================================================
+
+Verify migration status for:
+
+0013_opportunity_contacts.sql
+0014_add_api_key_permissions.sql
+0015_add_documents.sql
+
+Also verify:
+
+leads_org_email_unique_idx
+
+and the lead-email dedup migration/process.
+
+Determine whether the current development database contains every expected
+migration/index.
+
+Do NOT apply destructive changes.
+
+Document the exact required production deployment order.
+
+==================================================
+STEP 13 — RUN FINAL TEST SUITE FROM CURRENT HEAD
+==================================================
+
+Run the complete test suite from CURRENT HEAD.
+
+Do not copy old results into the report.
+
+Use the project's correct test command.
+
+Record:
+
+number of test files
+number of tests
+passed
+failed
+skipped
+duration
+
+Specifically confirm that:
+
+tests/external-activity-api.test.ts
+
+is included if that is the actual Activity Read test file.
+
+The previous implementation report showed:
+
+10 test files
+184 tests
+
+Those values may now be stale.
+
+Replace them with actual current results.
+
+The final implementation report must list ALL relevant test suites,
+including the Activity Read API suite.
+
+==================================================
+STEP 14 — RUN TYPESCRIPT CHECK
+==================================================
+
+Run:
+
+npx tsc --noEmit
+
+or the project's authoritative equivalent.
+
+DO NOT rely on the old statement that 167 pre-existing errors remain.
+
+Report the CURRENT result.
+
+If TypeScript remediation has already occurred, the final report must reflect
+the new result.
+
+Target:
+
+0 TypeScript errors
+
+If errors remain:
+
+- report exact count
+- categorize them
+- do not hide them
+- do not weaken tsconfig
+- do not introduce suppressions merely to reach zero
+
+If TypeScript errors remain after a separate remediation effort was expected
+to have completed, flag this as a release-readiness issue.
+
+==================================================
+STEP 15 — RUN STATIC/QUALITY CHECKS
+==================================================
+
+Run all applicable project checks:
+
+TypeScript
+tests
+lint if configured
+OpenAPI validation
+
+If there is no lint script, state that clearly.
+
+Do not claim lint passed if no lint command exists.
+
+==================================================
+STEP 16 — VALIDATE OPENAPI 3.1
+==================================================
+
+Validate:
+
+docs/openapi.yaml
+
+using the project's established validation command.
+
+Record:
+
+errors
+warnings
+
+Investigate warnings.
+
+If warnings are harmless example-format warnings, document that.
+
+If warnings indicate actual schema/contract problems, fix them.
+
+Compare every OpenAPI path against registered routes.
+
+Expected result:
+
+0 route mismatches.
+
+==================================================
+STEP 17 — RECONCILE DOCUMENTATION
+==================================================
+
+Update as necessary:
+
+docs/API_IMPLEMENTATION_GUIDE.md
+API_DOCUMENTATION.md
+docs/openapi.yaml
+docs/IMPLEMENTATION_REPORT.md
+
+All four must agree.
+
+Specifically correct:
+
+1. final Git HEAD SHA
+2. final test-file count
+3. final test count
+4. Activity Read test-suite listing
+5. Activity PATCH key/scoping semantics
+6. complete permission scopes including:
+   documents.read
+   documents.write
+7. canonical ID prefixes
+8. monetary semantics
+9. rate-limit headers
+10. final route count
+11. final TypeScript status
+12. final migration state
+13. final OpenAPI validation status
+
+==================================================
+STEP 18 — FINAL IMPLEMENTATION REPORT
+==================================================
+
+Regenerate:
+
+docs/IMPLEMENTATION_REPORT.md
+
+from the CURRENT implementation.
+
+Do not merely edit the old numbers manually.
+
+Include:
+
+FINAL BUILD IDENTITY
+
+- branch
+- final HEAD SHA
+- working tree status
+- Node version
+- TypeScript version
+
+IMPLEMENTED
+
+Every completed roadmap phase.
+
+ROUTE INVENTORY
+
+Exact final route count.
+
+PERMISSION MATRIX
+
+Each scope and protected routes.
+
+TENANT MODEL
+
+System-key versus organization-key behavior.
+
+CANONICAL IDENTITIES
+
+ACCT
+CONT
+LEAD
+OPP
+ACT
+DOC
+
+MIGRATIONS
+
+Exact required migration order and current development status.
+
+SECURITY
+
+Permission enforcement
+tenant isolation
+secret handling
+document URL protections
+immutable-field protections
+
+TEST RESULTS
+
+Actual fresh results.
+
+TYPESCRIPT
+
+Actual fresh result.
+
+OPENAPI
+
+Actual fresh validation result.
+
+DOCUMENTATION RECONCILIATION
+
+Describe discrepancies found and corrected.
+
+BACKWARD COMPATIBILITY
+
+Confirm existing API behavior preserved.
+
+KNOWN ISSUES
+
+List anything still unresolved.
+
+DEPLOYMENT ORDER
+
+Exact production sequence.
+
+MCP HANDOFF
+
+Provide a concise section specifically for the downstream
+healthtrixss-crm-mcp project.
+
+It should state that the MCP implementation must treat:
+
+docs/openapi.yaml
+
+as the authoritative machine-readable contract
+
+and:
+
+docs/API_IMPLEMENTATION_GUIDE.md
+
+as the authoritative developer guide.
+
+Explicitly tell downstream MCP developers:
+
+- do not use previous API assumptions
+- use actual canonical ID formats
+- use server-side search/filtering
+- use read-only permission scopes for Phase 1
+- Activity reads are available
+- Opportunity Contacts are explicit
+- Documents are references
+- monetary values are decimal currency strings, NOT cents
+- respect RateLimit-* and Retry-After
+- never infer cross-tenant relationships
+
+==================================================
+STEP 19 — FINAL RELEASE GATE
+==================================================
+
+At the end provide a release-gate table:
+
+CHECK                         RESULT
+
+All migrations present        PASS/FAIL
+All registered routes tested  PASS/FAIL
+Tenant isolation              PASS/FAIL
+Permission enforcement        PASS/FAIL
+TypeScript                    PASS/FAIL
+Automated tests               PASS/FAIL
+OpenAPI validation            PASS/FAIL
+Code/OpenAPI route parity     PASS/FAIL
+Documentation reconciliation  PASS/FAIL
+Secrets scan                  PASS/FAIL
+Working tree clean            PASS/FAIL
+
+Then provide exactly one overall conclusion:
+
+READY FOR MCP HANDOFF
+
+or
+
+NOT READY FOR MCP HANDOFF
+
+If NOT READY, list the exact blockers.
+
+==================================================
+EXECUTION INSTRUCTION
+==================================================
+
+Proceed with the reconciliation and validation now.
+
+You MAY correct documentation, OpenAPI, tests, or obvious non-behavioral
+implementation defects discovered during validation.
+
+Do NOT make a material runtime authorization, schema, or API-contract change
+without stopping and presenting the issue for approval first.
+
+When finished, give me:
+
+1. the final release-gate result
+2. the updated IMPLEMENTATION_REPORT.md
+3. a concise list of files changed during reconciliation
+4. the exact Git HEAD SHA
+5. any remaining blockers before MCP development

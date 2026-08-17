@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Health Trixss CRM External API
-  version: "1.2"
+  version: "1.4"
   description: |
     Secure external access to Health Trixss CRM data for forecasting
     applications, BI tools, and third-party integrations.
