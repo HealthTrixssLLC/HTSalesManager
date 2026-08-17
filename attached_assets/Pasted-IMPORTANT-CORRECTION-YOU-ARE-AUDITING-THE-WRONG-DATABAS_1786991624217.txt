@@ -1,0 +1,300 @@
+IMPORTANT CORRECTION — YOU ARE AUDITING THE WRONG DATABASE.
+
+STOP USING NEON_DATABASE_URL.
+
+NEON IS NOT THE PRODUCTION DATABASE FOR THIS TASK.
+
+The actual production CRM is the deployed application:
+
+https://htsalesmanager.healthtrixss.com
+
+The production database backing this deployed CRM is POSTGRESQL.
+
+The previous canonical-ID audits incorrectly treated NEON_DATABASE_URL
+as production. Do not use those audit results to make production changes.
+
+The Neon database containing 41 Accounts / ACT-1000 through ACT-1041
+is NOT the production data source we are trying to remediate.
+
+DO NOT QUERY NEON_DATABASE_URL FOR THIS TASK.
+DO NOT MIGRATE NEON.
+DO NOT MODIFY NEON.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Identify and connect READ-ONLY to the POSTGRESQL database actually used by
+the DEPLOYED production application at:
+
+https://htsalesmanager.healthtrixss.com
+
+Do this from the deployed application's production configuration, NOT from
+the Replit development workspace environment.
+
+==================================================
+1. FIND THE DEPLOYED PRODUCTION DATABASE CONFIG
+==================================================
+
+Inspect the production/deployment configuration for the application serving:
+
+htsalesmanager.healthtrixss.com
+
+Determine which environment variable or connection configuration the
+DEPLOYED application actually uses to initialize PostgreSQL.
+
+Trace this from the application startup/database initialization code.
+
+Look for variables/configuration such as:
+
+DATABASE_URL
+PGHOST
+PGPORT
+PGDATABASE
+PGUSER
+PGPASSWORD
+POSTGRES_URL
+POSTGRESQL_URL
+production deployment secrets
+Replit deployment environment variables
+
+These are examples only. Determine the ACTUAL variable from the code.
+
+CRITICAL:
+
+Do NOT select NEON_DATABASE_URL merely because it exists.
+Do NOT assume a database is production based on its variable name.
+Trace the connection used by the running deployed application.
+
+Do not print passwords, usernames where sensitive, connection strings,
+tokens, or credentials.
+
+==================================================
+2. TRACE THE DATABASE CONNECTION FROM CODE
+==================================================
+
+Start at the deployed server's database initialization code.
+
+Show the path:
+
+deployed application
+    ->
+database initialization
+    ->
+environment/config variable
+    ->
+PostgreSQL client / ORM
+    ->
+actual production PostgreSQL database
+
+Identify the exact code files/functions responsible for establishing the
+production connection.
+
+Also determine whether development and production choose different database
+connections.
+
+==================================================
+3. PROVE YOU FOUND THE CORRECT DATABASE
+==================================================
+
+Before performing ANY canonical-ID analysis, the candidate production
+PostgreSQL database MUST pass this fingerprint.
+
+READ ONLY.
+
+Search for these known production Account records:
+
+ACT-2103 = Cavulus
+ACT-2102 = Integrated Psychiatric Consultants, P.A (IPC)
+ACT-2100 = Providence
+ACT-2099 = Humanizing Technologies
+ACT-2098 = Care Oregon
+ACT-2091 = Care Compass
+
+These records were returned directly from the live authenticated API at:
+
+GET https://htsalesmanager.healthtrixss.com/api/v1/external/accounts
+
+using the Health Trixss organization-scoped API key.
+
+The same API reported:
+
+total Accounts visible to the Health Trixss organization = 56
+
+DO NOT proceed unless the PostgreSQL database you identify contains these
+known records or you can definitively trace why the deployed API returns them.
+
+==================================================
+4. VERIFY ORGANIZATION SCOPING
+==================================================
+
+The CRM API key used by MCP is scoped to the HEALTH TRIXSS organization.
+
+Trace how the production PostgreSQL schema represents this.
+
+Identify:
+
+organizations table or equivalent
+Health Trixss organization record
+organization ID
+account organization relationship
+API-key organization relationship
+
+Then reproduce the equivalent of the API query directly against PostgreSQL:
+
+Accounts belonging to the SAME Health Trixss organization as the MCP key.
+
+Expected result:
+
+56 Accounts
+
+Compare:
+
+LIVE API ACCOUNT COUNT
+DIRECT PRODUCTION POSTGRES ACCOUNT COUNT
+
+They must match.
+
+Report:
+
+HT API ACCOUNT COUNT:
+HT POSTGRES ACCOUNT COUNT:
+PARITY: PASS / FAIL
+
+==================================================
+5. REJECT THE WRONG DATABASE EXPLICITLY
+==================================================
+
+Also identify the Neon database previously audited.
+
+Report:
+
+PREVIOUS AUDIT DATABASE:
+Neon
+
+PREVIOUS AUDIT ACCOUNT COUNT:
+41
+
+PREVIOUS AUDIT RANGE:
+ACT-1000 through ACT-1041
+
+PRODUCTION DATABASE:
+[actual PostgreSQL database identity, credentials redacted]
+
+PRODUCTION HT ACCOUNT COUNT:
+[expected 56 if parity established]
+
+Then state explicitly:
+
+NEON DATABASE IS PRODUCTION: NO
+
+or, if your tracing proves otherwise:
+
+NEON DATABASE IS PRODUCTION: YES
+
+Do not infer this. Prove it.
+
+==================================================
+6. ONLY AFTER PRODUCTION PARITY PASSES
+==================================================
+
+ONLY if:
+
+HT API ACCOUNT COUNT == HT POSTGRES ACCOUNT COUNT
+
+AND the known records such as ACT-2103 / Cavulus exist,
+
+perform the READ-ONLY canonical-ID audit against THAT PostgreSQL database
+and the HEALTH TRIXSS organization.
+
+Report:
+
+Account prefix counts
+Contact prefix counts
+Lead prefix counts
+Opportunity prefix counts
+Activity prefix counts
+Document prefix counts
+
+Then inspect the id_patterns configuration used by THAT production database.
+
+Report:
+
+Account effective pattern
+Contact effective pattern
+Lead effective pattern
+Opportunity effective pattern
+Activity effective pattern
+Document effective pattern
+
+==================================================
+7. DO NOT MIGRATE YET
+==================================================
+
+Even after identifying the correct database:
+
+DO NOT:
+- update id_patterns
+- change Account IDs
+- change Activity IDs
+- change Contact IDs
+- change Opportunity IDs
+- run a migration
+- modify foreign keys
+- modify organization records
+- modify API keys
+- modify deployment configuration
+- redeploy
+
+This task is still READ ONLY.
+
+==================================================
+8. REQUIRED REPORT
+==================================================
+
+Return:
+
+DEPLOYED APPLICATION:
+DEPLOYED REVISION:
+
+PRODUCTION DB TYPE:
+PRODUCTION DB HOST/INSTANCE: [safe identifier only]
+PRODUCTION DB NAME: [if safe]
+PRODUCTION CONNECTION CONFIG SOURCE:
+
+NEON DB:
+NEON IS PRODUCTION: YES / NO
+
+HEALTH TRIXSS ORGANIZATION:
+HEALTH TRIXSS ORGANIZATION ID:
+
+ACT-2103 / CAVULUS FOUND: YES / NO
+ACT-2098 / CARE OREGON FOUND: YES / NO
+
+LIVE API HT ACCOUNT COUNT:
+PRODUCTION POSTGRES HT ACCOUNT COUNT:
+API/POSTGRES PARITY: PASS / FAIL
+
+PRODUCTION POSTGRES ID PREFIX COUNTS:
+Account:
+Contact:
+Lead:
+Opportunity:
+Activity:
+Document:
+
+PRODUCTION POSTGRES EFFECTIVE ID PATTERNS:
+Account:
+Contact:
+Lead:
+Opportunity:
+Activity:
+Document:
+
+ROOT CAUSE OF PREVIOUS WRONG-DATABASE AUDIT:
+
+RECOMMENDED NEXT STEP:
+
+Then STOP.
+
+DO NOT MAKE ANY CHANGES.
