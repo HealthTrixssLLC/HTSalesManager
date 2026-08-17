@@ -1,0 +1,331 @@
+The production database has now been positively identified and API/DB parity
+for the Health Trixss organization is confirmed.
+
+DO NOT EXECUTE THE MIGRATION YET.
+
+We need a final production canonical-ID migration plan against the actual
+Replit production PostgreSQL database.
+
+TARGET CANONICAL IDENTITIES
+
+Account      ACCT-{YYYY}-{SEQ:5}
+Contact      CONT-{YY}{MM}-{SEQ:5}
+Lead         LEAD-{SEQ:6}
+Opportunity  OPP-{YYYY}-{SEQ:6}
+Activity     ACT-{YY}{MM}-{SEQ:5}
+Document     DOC-{SEQ:6}
+
+CURRENT HEALTH TRIXSS PRODUCTION STATE
+
+Account:
+56 ACT-* rows
+
+Contact:
+69 CON-* rows
+16 CONT-* rows
+
+Lead:
+59 LEAD-* rows
+
+Opportunity:
+85 OPP-* rows
+2 Opp-* rows
+
+Activity:
+530 ACV-* rows
+
+Document:
+0 rows
+
+Current id_patterns:
+
+Account     ACT-{SEQ:4}
+Activity    ACV-{YY}{MM}-{SEQ:5}
+Contact     CONT-{SEQ:4}
+Lead        LEAD-{SEQ:6}
+Opportunity OPP-{SEQ:4}
+Document    DOC-{SEQ:6}
+
+==================================================
+1. BUILD COMPLETE OLD -> NEW ID MAPPINGS
+==================================================
+
+For every noncanonical record, generate a proposed canonical replacement ID.
+
+Do NOT update production.
+
+Produce mappings for:
+
+Accounts:
+ACT-* -> ACCT-*
+
+Contacts:
+CON-* -> CONT-*
+
+Opportunities:
+Opp-* -> OPP-* where needed
+
+Activities:
+ACV-* -> ACT-*
+
+Existing canonical IDs must not be changed merely for cosmetic consistency
+unless required to avoid collision or establish the documented canonical
+format.
+
+Before proposing IDs, detect potential collisions with existing canonical
+records.
+
+Examples:
+
+- A migrated CON-* Contact must not receive a CONT-* ID that already exists.
+- A migrated ACV-* Activity must not receive an ACT-* ID used elsewhere.
+- Opportunity mapping must not collide with existing OPP-* rows.
+
+Use the existing canonical generators/pattern semantics to create unique,
+deterministic IDs.
+
+Do not reuse an existing ID.
+
+==================================================
+2. INVENTORY ALL REFERENCES
+==================================================
+
+For each entity being renamed, identify every FK and non-FK reference.
+
+Account references may include:
+
+contacts.account_id
+opportunities.account_id
+leads.converted_account_id
+activities.related_id
+activity_associations.entity_id
+document_links.entity_id
+tags/comments
+other relationship tables
+
+Contact references may include:
+
+opportunity_contacts.contact_id
+activities.related_id
+activity_associations.entity_id
+document_links.entity_id
+leads conversions
+other tables
+
+Opportunity references may include:
+
+activities.related_id
+activity_associations.entity_id
+opportunity_contacts.opportunity_id
+document_links.entity_id
+resources
+billing/project tables
+other tables
+
+Activity references may include:
+
+activity_associations.activity_id
+audit/history
+other related tables
+
+Enumerate exact production table/column counts.
+
+Separate:
+
+FK / live references
+non-FK historical/audit references
+
+Do not assume old audit findings apply to this production database.
+
+==================================================
+3. AUDIT LOG POLICY
+==================================================
+
+Recommend whether historical audit logs should remain untouched.
+
+Preferred principle:
+
+Audit history records the identifier that existed at the time of the event.
+
+Therefore old IDs in immutable audit history generally should remain as
+historical values.
+
+But active/current references must be migrated.
+
+Document this distinction clearly.
+
+==================================================
+4. MIGRATION ORDER
+==================================================
+
+Design the exact transaction/order required to preserve referential integrity.
+
+Consider:
+
+- foreign key constraints
+- lack/presence of ON UPDATE CASCADE
+- temporarily deferred constraints where supported
+- dependency ordering
+- id_patterns row locking
+- preventing new IDs during migration
+- maintenance window
+
+The entire canonical-ID migration should be atomic where practical.
+
+If it cannot safely be one transaction, explain exactly why and design
+checkpoints/rollback.
+
+==================================================
+5. UPDATE ID_PATTERNS
+==================================================
+
+After existing data is migrated, update production id_patterns to:
+
+Account     ACCT-{YYYY}-{SEQ:5}
+Contact     CONT-{YY}{MM}-{SEQ:5}
+Lead        LEAD-{SEQ:6}
+Opportunity OPP-{YYYY}-{SEQ:6}
+Activity    ACT-{YY}{MM}-{SEQ:5}
+Document    DOC-{SEQ:6}
+
+Determine safe counter values so future generated IDs:
+
+- never collide with migrated IDs
+- never reuse historical IDs
+- continue monotonically/safely according to the generator logic
+
+Explain exactly how each counter/start_value/last_issued should be set.
+
+==================================================
+6. COMPATIBILITY STRATEGY
+==================================================
+
+We want a clean canonical namespace.
+
+Preferred final behavior:
+
+old Account ACT-* IDs are no longer canonical
+old Activity ACV-* IDs are no longer canonical
+old Contact CON-* IDs are no longer canonical
+old mixed-case Opp-* IDs are no longer canonical
+
+Evaluate whether we should keep a TEMPORARY legacy mapping table or alias
+lookup for one release.
+
+Preferred if needed:
+
+legacy_id -> canonical_id
+
+for transition only.
+
+Do NOT recommend permanent dual-prefix identity support unless absolutely
+necessary.
+
+==================================================
+7. API AND MCP IMPACT
+==================================================
+
+Explain what changes after migration for:
+
+External API
+MCP
+cached IDs
+saved links/bookmarks
+reports
+integrations
+forecasting tools
+
+MCP contract must remain:
+
+ACCT = Account
+CONT = Contact
+LEAD = Lead
+OPP = Opportunity
+ACT = Activity
+DOC = Document
+
+Do not change the MCP contract to match legacy data.
+
+==================================================
+8. VALIDATION TESTS
+==================================================
+
+Design pre-COMMIT validation checks.
+
+At minimum:
+
+Accounts:
+all HT Account IDs match canonical ACCT pattern
+
+Contacts:
+all HT Contact IDs match canonical CONT pattern
+
+Leads:
+all HT Lead IDs match canonical LEAD pattern
+
+Opportunities:
+all HT Opportunity IDs match canonical OPP pattern
+
+Activities:
+all HT Activity IDs match canonical ACT pattern
+
+Documents:
+all HT Document IDs match canonical DOC pattern when present
+
+Also verify:
+
+- zero duplicate IDs per table
+- zero broken foreign keys
+- zero active references to old IDs
+- zero cross-entity canonical prefix ambiguity
+- all id_patterns equal canonical patterns
+- generator can create the next ID without collision
+- live External API counts unchanged
+- opportunity/account/contact/activity relationships unchanged
+- MCP read tools can resolve migrated IDs
+
+==================================================
+9. ROLLBACK PLAN
+==================================================
+
+Create a production rollback strategy.
+
+Include:
+
+- snapshot/backup requirement
+- old->new mapping table/file
+- transaction rollback behavior
+- recovery if post-migration validation fails
+- recovery if deployed application fails smoke tests
+
+==================================================
+10. FINAL REPORT
+==================================================
+
+Return:
+
+PRODUCTION ENTITY COUNTS
+OLD -> NEW ID MAPPING STRATEGY
+COLLISION ANALYSIS
+REFERENCE COUNTS
+AUDIT-LOG POLICY
+MIGRATION TRANSACTION ORDER
+ID_PATTERN CHANGES
+COUNTER VALUES
+TEMPORARY COMPATIBILITY PLAN
+VALIDATION QUERIES
+ROLLBACK PLAN
+EXPECTED DOWNTIME / MAINTENANCE WINDOW
+API IMPACT
+MCP IMPACT
+RISK ASSESSMENT
+
+Then STOP.
+
+DO NOT:
+- run migration
+- change IDs
+- update id_patterns
+- deploy
+- change API behavior
+- change MCP behavior
