@@ -2,7 +2,7 @@
 // Based on CPDO requirements for lightweight self-hosted CRM
 
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb, decimal, pgEnum, index, uniqueIndex, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1404,3 +1404,26 @@ export type Document = typeof documents.$inferSelect;
 export const insertDocumentLinkSchema = createInsertSchema(documentLinks).omit({ id: true, createdAt: true });
 export type InsertDocumentLink = z.infer<typeof insertDocumentLinkSchema>;
 export type DocumentLink = typeof documentLinks.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Legacy ID map — created and populated by the canonical-ID migration script.
+// This table is intentional and permanent. It maps every pre-canonical legacy
+// ID to its new canonical form (766 rows in production). Drizzle must declare
+// it here so that Replit Publishing does not generate a DROP TABLE.
+//
+// Schema must exactly match the production table created by the migration:
+//   PRIMARY KEY (entity, legacy_id)
+//   UNIQUE      (entity, canonical_id)  — named legacy_id_map_entity_canonical_id_key
+//   migrated_at timestamptz NOT NULL DEFAULT now()
+// ---------------------------------------------------------------------------
+export const legacyIdMap = pgTable("legacy_id_map", {
+  entity:      text("entity").notNull(),
+  legacyId:    text("legacy_id").notNull(),
+  canonicalId: text("canonical_id").notNull(),
+  migratedAt:  timestamp("migrated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  pk:                    primaryKey({ columns: [table.entity, table.legacyId] }),
+  entityCanonicalUnique: uniqueIndex("legacy_id_map_entity_canonical_id_key").on(table.entity, table.canonicalId),
+}));
+
+export type LegacyIdMap = typeof legacyIdMap.$inferSelect;
