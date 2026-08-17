@@ -50,6 +50,10 @@ args = "e2e-org-isolation"
 task = "workflow.run"
 args = "test-opportunity-contacts"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-external-patch-api"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -99,6 +103,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash tests/run-opportunity-contacts-tests.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "test-external-patch-api"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run tests/external-patch-api.test.ts --config tests/vitest.server.config.ts"
 
 [workflows.workflow.metadata]
 outputType = "console"

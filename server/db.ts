@@ -47,11 +47,11 @@ if (isNeonDatabase) {
   neonConfig.webSocketConstructor = ws;
   
   // Configure connection pooling for better reliability
-  const pool = new NeonPool({ 
+  const pool = new PgPool({ 
     connectionString: process.env.DATABASE_URL,
-    max: 10,                    // Maximum 10 connections in pool
+    max: 20,                    // Maximum 20 connections in pool
     idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 60000, // 60s timeout for new connections
+    connectionTimeoutMillis: 10000, // 10s timeout for new connections
   });
   
   db = neonDrizzle(pool, { schema });
@@ -649,7 +649,74 @@ export class PostgresStorage implements IStorage {
   async deleteActivity(id: string): Promise<void> {
     await db.delete(schema.activities).where(eq(schema.activities.id, id));
   }
-  
+
+  // ========== EXTERNAL API PATCH (org-scoped partial updates) ==========
+  // Phase E: these methods accept only allowlisted fields (validated at the
+  // route layer), always strip id/organizationId/createdAt defensively, and
+  // scope the UPDATE to the owning organization when orgId is provided.
+
+  private stripImmutable<T extends Record<string, any>>(fields: T): Record<string, any> {
+    const { id, organizationId, createdAt, updatedAt, sourceSystem, sourceRecordId, importStatus, importNotes, ...safe } = fields;
+    return safe;
+  }
+
+  async patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Account | undefined> {
+    const where = orgId
+      ? and(eq(schema.accounts.id, id), eq(schema.accounts.organizationId, orgId))
+      : eq(schema.accounts.id, id);
+    const result = await db.update(schema.accounts)
+      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .where(where)
+      .returning();
+    return result[0];
+  }
+
+  async patchContact(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Contact | undefined> {
+    const where = orgId
+      ? and(eq(schema.contacts.id, id), eq(schema.contacts.organizationId, orgId))
+      : eq(schema.contacts.id, id);
+    const result = await db.update(schema.contacts)
+      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .where(where)
+      .returning();
+    return result[0];
+  }
+
+  async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Lead | undefined> {
+    const where = orgId
+      ? and(eq(schema.leads.id, id), eq(schema.leads.organizationId, orgId))
+      : eq(schema.leads.id, id);
+    const result = await db.update(schema.leads)
+      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .where(where)
+      .returning();
+    return result[0];
+  }
+
+  async patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Opportunity | undefined> {
+    const where = orgId
+      ? and(eq(schema.opportunities.id, id), eq(schema.opportunities.organizationId, orgId))
+      : eq(schema.opportunities.id, id);
+    // Array columns (categories/operationalAreas) are excluded from the PATCH
+    // allowlist, so a plain Drizzle update is safe here.
+    const result = await db.update(schema.opportunities)
+      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .where(where)
+      .returning();
+    return result[0];
+  }
+
+  async patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Activity | undefined> {
+    const where = orgId
+      ? and(eq(schema.activities.id, id), eq(schema.activities.organizationId, orgId))
+      : eq(schema.activities.id, id);
+    const result = await db.update(schema.activities)
+      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .where(where)
+      .returning();
+    return result[0];
+  }
+
   // ========== AUDIT LOGS ==========
   
   async getAllAuditLogs(): Promise<AuditLog[]> {

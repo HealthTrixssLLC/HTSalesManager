@@ -1355,4 +1355,216 @@ router.post("/activities", async (req: ApiKeyRequest, res) => {
   }
 });
 
+// ========== PHASE E: CONTROLLED PATCH ENDPOINTS ==========
+// Strict partial updates with per-entity mutable-field allowlists.
+// See server/external-patch-config.ts for the allowlists and schemas.
+
+import { MUTABLE_FIELDS, IMMUTABLE_FIELDS, PATCH_SCHEMAS, classifyPatchFields } from "./external-patch-config";
+
+/**
+ * Phase F stub: key-level write permissions arrive in Phase F.
+ * Until then, a key is treated as read-only when its name or description
+ * contains the marker "[read-only]". TODO(Phase F): replace with a real
+ * permissions column on api_keys.
+ */
+function keyIsReadOnly(req: ApiKeyRequest): boolean {
+  const marker = "[read-only]";
+  return !!(
+    req.apiKey?.name?.toLowerCase().includes(marker) ||
+    req.apiKey?.description?.toLowerCase().includes(marker)
+  );
+}
+
+type PatchEntity = "account" | "contact" | "lead" | "opportunity" | "activity";
+
+interface PatchEntityConfig {
+  entity: PatchEntity;
+  label: string;
+  getById: (id: string) => Promise<any>;
+  patch: (id: string, orgId: string | undefined, fields: Record<string, any>) => Promise<any>;
+}
+
+const PATCH_ENTITIES: Record<string, PatchEntityConfig> = {
+  accounts: { entity: "account", label: "Account", getById: (id) => storage.getAccountById(id), patch: (id, o, f) => storage.patchAccount(id, o, f) },
+  contacts: { entity: "contact", label: "Contact", getById: (id) => storage.getContactById(id), patch: (id, o, f) => storage.patchContact(id, o, f) },
+  leads: { entity: "lead", label: "Lead", getById: (id) => storage.getLeadById(id), patch: (id, o, f) => storage.patchLead(id, o, f) },
+  opportunities: { entity: "opportunity", label: "Opportunity", getById: (id) => storage.getOpportunityById(id), patch: (id, o, f) => storage.patchOpportunity(id, o, f) },
+  activities: { entity: "activity", label: "Activity", getById: (id) => storage.getActivityById(id), patch: (id, o, f) => storage.patchActivity(id, o, f) },
+};
+
+function makePatchHandler(cfg: PatchEntityConfig) {
+  return async (req: ApiKeyRequest, res: Response) => {
+    try {
+      // Write-permission check (Phase F stub)
+      if (keyIsReadOnly(req)) {
+        return res.status(403).json({
+          error: "Read-only API key",
+          message: "This API key does not have write permissions",
+        });
+      }
+
+      const orgId = getKeyOrgId(req);
+      const body = req.body;
+
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return res.status(400).json({
+          error: "Invalid request body",
+          message: "Request body must be a JSON object of fields to update",
+        });
+      }
+
+      // Immutability check — canonical id, org ownership, createdAt, audit fields
+      const { immutable, unknown } = classifyPatchFields(cfg.entity, body);
+      if (immutable.length > 0) {
+        return res.status(400).json({
+          error: "Immutable fields cannot be modified",
+          message: `The following fields are immutable: ${immutable.join(", ")}`,
+          rejectedFields: immutable,
+        });
+      }
+
+      // Allowlist check — reject unknown fields with the offending keys
+      if (unknown.length > 0) {
+        return res.status(400).json({
+          error: "Unknown fields rejected",
+          message: `The following fields are not allowed for ${cfg.label} updates: ${unknown.join(", ")}`,
+          rejectedFields: unknown,
+          allowedFields: MUTABLE_FIELDS[cfg.entity],
+        });
+      }
+
+      if (Object.keys(body).length === 0) {
+        return res.status(400).json({
+          error: "Empty update",
+          message: "Provide at least one field to update",
+          allowedFields: MUTABLE_FIELDS[cfg.entity],
+        });
+      }
+
+      // Value validation for the allowlisted fields
+      const parsed = PATCH_SCHEMAS[cfg.entity].safeParse(body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Validation failed",
+          message: `The ${cfg.label.toLowerCase()} payload is invalid`,
+          details: parsed.error.errors.map(e => ({
+            field: e.path.join(".") || "(root)",
+            message: e.message,
+          })),
+        });
+      }
+      // Only apply fields that were actually provided (partial update semantics)
+      const updates: Record<string, any> = {};
+      for (const key of Object.keys(body)) {
+        if (key in parsed.data && parsed.data[key] !== undefined) updates[key] = parsed.data[key];
+      }
+
+      // Fetch + org-scope check (404 for missing or cross-org records)
+      const existing = await cfg.getById(req.params.id);
+      if (!existing || !keyOrgOwns(existing, orgId)) {
+        return res.status(404).json({
+          error: `${cfg.label} not found`,
+          message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
+        });
+      }
+
+      // Referenced-record ownership: a mutable accountId must point to an
+      // account in the record's own organization (tenant-safe relationships)
+      if (typeof updates.accountId === "string" && updates.accountId.length > 0) {
+        const refAccount = await storage.getAccountById(updates.accountId);
+        const recordOrgId = (existing as any).organizationId ?? orgId;
+        if (!refAccount || (recordOrgId && refAccount.organizationId !== recordOrgId)) {
+          return res.status(404).json({
+            error: "Related account not found",
+            message: `No account found with ID: ${updates.accountId}`,
+          });
+        }
+      }
+
+      // Referenced-user ownership: a mutable ownerId must belong to a user
+      // with an active membership in the record's organization
+      if (typeof updates.ownerId === "string" && updates.ownerId.length > 0) {
+        const recordOrgId = (existing as any).organizationId ?? orgId;
+        const membership = recordOrgId
+          ? await storage.getOrgMembership(updates.ownerId, recordOrgId)
+          : undefined;
+        if (recordOrgId && !membership) {
+          return res.status(404).json({
+            error: "Related owner not found",
+            message: `No user with ID ${updates.ownerId} is a member of this record's organization`,
+          });
+        }
+      }
+
+      // Opportunity date invariants, validated against the merged record
+      // (mirrors the internal opportunity update route)
+      if (cfg.entity === "opportunity") {
+        const startDate = updates.implementationStartDate !== undefined ? updates.implementationStartDate : (existing as any).implementationStartDate;
+        const endDate = updates.implementationEndDate !== undefined ? updates.implementationEndDate : (existing as any).implementationEndDate;
+        const billingEnd = updates.billingEndDate !== undefined ? updates.billingEndDate : (existing as any).billingEndDate;
+        if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+          return res.status(400).json({
+            error: "Implementation start date must be before end date",
+            message: "implementationStartDate must not be after implementationEndDate",
+          });
+        }
+        if (endDate && billingEnd && new Date(billingEnd) < new Date(endDate)) {
+          return res.status(400).json({
+            error: "Billing end date must not be before implementation end date (billing start)",
+            message: "billingEndDate must not be before implementationEndDate",
+          });
+        }
+      }
+
+      // Org-scoped update (WHERE also constrains organizationId as defense in depth)
+      const updated = await cfg.patch(req.params.id, orgId, updates);
+      if (!updated) {
+        return res.status(404).json({
+          error: `${cfg.label} not found`,
+          message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
+        });
+      }
+
+      // Record-level mutation audit log (in addition to the request-level middleware log)
+      const before: Record<string, any> = {};
+      for (const key of Object.keys(updates)) before[key] = (existing as any)[key] ?? null;
+      storage.createAuditLog({
+        actorId: null,
+        action: "external_api_patch",
+        resource: cfg.label,
+        resourceId: req.params.id,
+        before,
+        after: { ...updates, apiKeyId: req.apiKey?.id, apiKeyName: req.apiKey?.name },
+        ipAddress: req.ip || req.connection.remoteAddress || null,
+        userAgent: req.headers["user-agent"] || null,
+      }).catch(err => {
+        console.error("[EXTERNAL-API] Failed to create PATCH audit log:", err);
+      });
+
+      return res.json({ data: updated });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error patching ${cfg.label.toLowerCase()}:`, error);
+      return res.status(500).json({
+        error: `Failed to update ${cfg.label.toLowerCase()}`,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+}
+
+/**
+ * PATCH /api/v1/external/accounts/:id
+ * PATCH /api/v1/external/contacts/:id
+ * PATCH /api/v1/external/leads/:id
+ * PATCH /api/v1/external/opportunities/:id
+ * PATCH /api/v1/external/activities/:id
+ *
+ * Strict partial update: only allowlisted fields may be changed; immutable
+ * fields (id, organizationId, createdAt, audit fields) and unknown fields
+ * return 400 listing the rejected keys. Org scoping enforced (404 cross-org).
+ */
+for (const [path, cfg] of Object.entries(PATCH_ENTITIES)) {
+  router.patch(`/${path}/:id`, makePatchHandler(cfg));
+}
+
 export default router;
