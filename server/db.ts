@@ -9,7 +9,13 @@ import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import { eq, sql, and, gte, lte, ne, asc, desc, inArray, notInArray, or, isNotNull, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
-import type { IStorage } from "./storage";
+import type {
+  IStorage,
+  AccountListFilters,
+  ContactListFilters,
+  LeadListFilters,
+  OpportunityListFilters,
+} from "./storage";
 import type {
   User, InsertUser,
   Account, InsertAccount,
@@ -49,9 +55,9 @@ if (isNeonDatabase) {
   // Configure connection pooling for better reliability
   const pool = new NeonPool({ 
     connectionString: process.env.DATABASE_URL,
-    max: 20,                    // Maximum 20 connections in pool
+    max: 10,                    // Maximum 10 connections in pool
     idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 10000, // 10s timeout for new connections
+    connectionTimeoutMillis: 60000, // 60s timeout for new connections
   });
   
   db = neonDrizzle(pool, { schema });
@@ -69,6 +75,18 @@ if (isNeonDatabase) {
 }
 
 export { db };
+
+/** Escape LIKE/ILIKE wildcards in user input and wrap as a contains pattern */
+function containsPattern(input: string): string {
+  return `%${input.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+}
+
+/** Combine SQL condition fragments into a WHERE clause (empty when no conditions) */
+function buildWhere(conditions: ReturnType<typeof sql>[]) {
+  return conditions.length > 0
+    ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+    : sql``;
+}
 
 export class PostgresStorage implements IStorage {
   // ========== AUTH & USER MANAGEMENT ==========
@@ -230,10 +248,15 @@ export class PostgresStorage implements IStorage {
   
   // ========== ACCOUNTS ==========
   
-  async getAllAccounts(orgId?: string): Promise<Account[]> {
+  async getAllAccounts(orgId?: string, filters?: AccountListFilters): Promise<Account[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
-      const orgFilter = orgId ? sql`WHERE a.organization_id = ${orgId}` : sql``;
+      const conditions: ReturnType<typeof sql>[] = [];
+      if (orgId) conditions.push(sql`a.organization_id = ${orgId}`);
+      if (filters?.search) conditions.push(sql`a.name ILIKE ${containsPattern(filters.search)}`);
+      if (filters?.name) conditions.push(sql`a.name ILIKE ${containsPattern(filters.name)}`);
+      if (filters?.updatedSince) conditions.push(sql`a.updated_at > ${filters.updatedSince}`);
+      const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
           a.*,
@@ -298,10 +321,16 @@ export class PostgresStorage implements IStorage {
   
   // ========== CONTACTS ==========
   
-  async getAllContacts(orgId?: string): Promise<Contact[]> {
+  async getAllContacts(orgId?: string, filters?: ContactListFilters): Promise<Contact[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
-      const orgFilter = orgId ? sql`WHERE c.organization_id = ${orgId}` : sql``;
+      const conditions: ReturnType<typeof sql>[] = [];
+      if (orgId) conditions.push(sql`c.organization_id = ${orgId}`);
+      if (filters?.search) conditions.push(sql`(c.first_name || ' ' || c.last_name) ILIKE ${containsPattern(filters.search)}`);
+      if (filters?.email) conditions.push(sql`lower(c.email) = lower(${filters.email})`);
+      if (filters?.accountId) conditions.push(sql`c.account_id = ${filters.accountId}`);
+      if (filters?.updatedSince) conditions.push(sql`c.updated_at > ${filters.updatedSince}`);
+      const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
           c.id,
@@ -377,15 +406,26 @@ export class PostgresStorage implements IStorage {
   
   // ========== LEADS ==========
   
-  async getAllLeads(orgId?: string | string[]): Promise<Lead[]> {
+  async getAllLeads(orgId?: string | string[], filters?: LeadListFilters): Promise<Lead[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
       const orgIds = orgId ? (Array.isArray(orgId) ? orgId : [orgId]) : null;
       // An empty array means "no orgs" — return nothing (deny-safe).
       if (orgIds !== null && orgIds.length === 0) return [];
-      const orgFilter = orgIds && orgIds.length > 0
-        ? sql`WHERE l.organization_id IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`
-        : sql``;
+      const conditions: ReturnType<typeof sql>[] = [];
+      if (orgIds && orgIds.length > 0) {
+        conditions.push(sql`l.organization_id IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+      if (filters?.search) {
+        const p = containsPattern(filters.search);
+        conditions.push(sql`((l.first_name || ' ' || l.last_name) ILIKE ${p} OR l.company ILIKE ${p})`);
+      }
+      if (filters?.email) conditions.push(sql`lower(l.email) = lower(${filters.email})`);
+      if (filters?.status) conditions.push(sql`l.status::text = ${filters.status}`);
+      if (filters?.rating) conditions.push(sql`lower(l.rating) = lower(${filters.rating})`);
+      if (filters?.source) conditions.push(sql`l.source::text = ${filters.source}`);
+      if (filters?.updatedSince) conditions.push(sql`l.updated_at > ${filters.updatedSince}`);
+      const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
           l.*,
@@ -449,11 +489,21 @@ export class PostgresStorage implements IStorage {
   
   // ========== OPPORTUNITIES ==========
   
-  async getAllOpportunities(orgId?: string): Promise<Opportunity[]> {
+  async getAllOpportunities(orgId?: string, filters?: OpportunityListFilters): Promise<Opportunity[]> {
     try {
       // Use raw SQL for tag aggregation to avoid N+1 queries
       // Explicitly alias all columns to ensure proper snake_case to camelCase conversion
-      const orgFilter = orgId ? sql`WHERE o.organization_id = ${orgId}` : sql``;
+      const conditions: ReturnType<typeof sql>[] = [];
+      if (orgId) conditions.push(sql`o.organization_id = ${orgId}`);
+      if (filters?.search) conditions.push(sql`o.name ILIKE ${containsPattern(filters.search)}`);
+      if (filters?.accountId) conditions.push(sql`o.account_id = ${filters.accountId}`);
+      if (filters?.status) conditions.push(sql`lower(o.status) = lower(${filters.status})`);
+      if (filters?.stage) conditions.push(sql`o.stage::text = ${filters.stage}`);
+      if (filters?.ownerId) conditions.push(sql`o.owner_id = ${filters.ownerId}`);
+      if (filters?.rating) conditions.push(sql`lower(o.rating) = lower(${filters.rating})`);
+      if (filters?.includeInForecast !== undefined) conditions.push(sql`o.include_in_forecast = ${filters.includeInForecast}`);
+      if (filters?.updatedSince) conditions.push(sql`o.updated_at > ${filters.updatedSince}`);
+      const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
           o.id,

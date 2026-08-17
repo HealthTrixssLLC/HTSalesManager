@@ -54,6 +54,10 @@ args = "test-opportunity-contacts"
 task = "workflow.run"
 args = "test-external-patch-api"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-external-list-filters"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -114,6 +118,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npx vitest run tests/external-patch-api.test.ts --config tests/vitest.server.config.ts"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "test-external-list-filters"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npx vitest run tests/external-list-filters.test.ts --config tests/vitest.server.config.ts"
 
 [workflows.workflow.metadata]
 outputType = "console"

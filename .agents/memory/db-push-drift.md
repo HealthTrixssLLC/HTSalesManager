@@ -7,6 +7,9 @@ description: Quirks when applying schema changes and running server integration 
 **Why:** the constraint exists in schema.ts but drizzle sees it as new, and the prompt cannot be answered non-interactively.
 **How to apply:** for new indexes/constraints, add them to `shared/schema.ts` AND create them directly with `psql "$DATABASE_URL"` so schema and DB stay in sync without running the interactive push.
 
+## Drift symptom: uniqueness tests fail
+Indexes/constraints declared in schema.ts may be missing from the dev DB (drift). If a uniqueness-dependent test fails, check `pg_indexes` before debugging app code; existing duplicate rows (often test residue) must be cleaned before a unique index can be created.
+
 ## Server integration tests
 - Located in `tests/*.test.ts`; must run with `npx vitest run <file> --config tests/vitest.server.config.ts` (root vitest.config.ts only includes `client/src/__tests__`).
 - They hit the live dev server on localhost:5000. The dev workflow runs `tsx server/index.ts` WITHOUT watch — restart the "Start application" workflow after editing server code or tests will exercise stale code.

@@ -18,6 +18,59 @@ function keyOrgOwns(record: { organizationId?: string | null } | null | undefine
   return record.organizationId === orgId;
 }
 
+// ===== Query-parameter parsing helpers (Phase B list filters) =====
+
+/** Return trimmed string value of a query param, or undefined when absent/empty */
+function qs(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+// Strict ISO 8601 timestamp: YYYY-MM-DDTHH:MM(:SS(.fff)?)? with optional Z/±HH:MM offset.
+// The T separator and a time component are required (date-only values are rejected).
+const ISO_8601_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+/**
+ * Parse an ISO 8601 timestamp query param strictly. Returns { error } when present but invalid.
+ * Rejects malformed strings (including date-only and space-separated forms) AND invalid
+ * calendar values (e.g., 2024-02-30, hour 25) that new Date() would silently normalize.
+ */
+function parseDateParam(value: unknown, name: string): { date?: Date; error?: { error: string; message: string } } {
+  const raw = qs(value);
+  if (!raw) return {};
+  const invalid = { error: { error: `Invalid ${name}`, message: `${name} must be a valid ISO 8601 timestamp (e.g., 2024-01-01T00:00:00Z)` } };
+
+  const m = ISO_8601_RE.exec(raw);
+  if (!m) return invalid;
+  const [, y, mo, da, h, mi, s] = m;
+  const year = +y, month = +mo, day = +da;
+  if (month < 1 || month > 12) return invalid;
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > daysInMonth) return invalid;
+  if (+h > 23 || +mi > 59 || (s !== undefined && +s > 59)) return invalid;
+
+  const parsed = new Date(raw);
+  if (isNaN(parsed.getTime())) return invalid;
+  return { date: parsed };
+}
+
+/** Validate an enum query param. Returns { error } when present but not in allowed list. */
+function parseEnumParam(value: unknown, name: string, allowed: readonly string[], lowercase = false): { value?: string; error?: { error: string; message: string } } {
+  let raw = qs(value);
+  if (!raw) return {};
+  if (lowercase) raw = raw.toLowerCase();
+  if (!allowed.includes(raw)) {
+    return { error: { error: `Invalid ${name}`, message: `${name} must be one of: ${allowed.join(", ")}` } };
+  }
+  return { value: raw };
+}
+
+const LEAD_STATUSES = ["new", "contacted", "qualified", "unqualified", "converted"] as const;
+const LEAD_SOURCES = ["website", "referral", "phone", "email", "event", "partner", "lead_generation", "other"] as const;
+const LEAD_RATINGS = ["hot", "warm", "cold"] as const;
+const OPPORTUNITY_STAGES = ["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"] as const;
+
 const router = Router();
 
 // Apply API key authentication to all external routes
@@ -144,6 +197,8 @@ router.use(createApiKeyRateLimiter());
  * List all accounts with optional filtering and pagination
  * 
  * Query Parameters:
+ * - search: Case-insensitive substring match on account name
+ * - name: Case-insensitive substring match on account name
  * - updatedSince: ISO 8601 timestamp (e.g., 2024-01-01T00:00:00Z)
  * - limit: Number of results (default: 100, max: 1000)
  * - offset: Number of results to skip (default: 0)
@@ -152,7 +207,6 @@ router.use(createApiKeyRateLimiter());
 router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const {
-      updatedSince,
       limit = "100",
       offset = "0",
       expand = "",
@@ -164,18 +218,15 @@ router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
-    // Get accounts scoped to the API key's org
-    let accounts = await storage.getAllAccounts(orgId);
+    const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
+    if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
     
-    // Filter by updatedSince if provided
-    if (updatedSince) {
-      const sinceDate = new Date(updatedSince as string);
-      if (!isNaN(sinceDate.getTime())) {
-        accounts = accounts.filter(a => 
-          new Date(a.updatedAt) > sinceDate
-        );
-      }
-    }
+    // Get accounts scoped to the API key's org, filtered server-side
+    const accounts = await storage.getAllAccounts(orgId, {
+      search: qs(req.query.search),
+      name: qs(req.query.name),
+      updatedSince: updatedSinceParsed.date,
+    });
     
     // Apply pagination
     const total = accounts.length;
@@ -324,6 +375,12 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
  * List all opportunities with optional filtering and pagination
  * 
  * Query Parameters:
+ * - search: Case-insensitive substring match on opportunity name
+ * - accountId: Exact account ID match
+ * - status: Case-insensitive exact match on status text (e.g., Won, Lost, Open)
+ * - stage: Pipeline stage (prospecting, qualification, proposal, negotiation, closed_won, closed_lost)
+ * - ownerId: Exact owner (user) ID match
+ * - rating: Case-insensitive exact match (e.g., Hot, Warm, Cold)
  * - updatedSince: ISO 8601 timestamp
  * - includeInForecast: Filter by forecast inclusion (true/false/all, default: true)
  * - limit: Number of results (default: 100, max: 1000)
@@ -333,7 +390,6 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
 router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
     const {
-      updatedSince,
       includeInForecast = "true",
       limit = "100",
       offset = "0",
@@ -346,24 +402,31 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
-    // Get opportunities scoped to the API key's org
-    let opportunities = await storage.getAllOpportunities(orgId);
+    // Validate filter parameters
+    const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
+    if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
     
-    // Filter by includeInForecast (default to true for forecasting app)
-    if (includeInForecast !== "all") {
-      const shouldInclude = includeInForecast === "true";
-      opportunities = opportunities.filter(o => o.includeInForecast === shouldInclude);
+    const stageParsed = parseEnumParam(req.query.stage, "stage", OPPORTUNITY_STAGES);
+    if (stageParsed.error) return res.status(400).json(stageParsed.error);
+    
+    if (!["true", "false", "all"].includes(includeInForecast as string)) {
+      return res.status(400).json({
+        error: "Invalid includeInForecast",
+        message: "includeInForecast must be one of: true, false, all",
+      });
     }
     
-    // Filter by updatedSince if provided
-    if (updatedSince) {
-      const sinceDate = new Date(updatedSince as string);
-      if (!isNaN(sinceDate.getTime())) {
-        opportunities = opportunities.filter(o => 
-          new Date(o.updatedAt) > sinceDate
-        );
-      }
-    }
+    // Get opportunities scoped to the API key's org, filtered server-side
+    const opportunities = await storage.getAllOpportunities(orgId, {
+      search: qs(req.query.search),
+      accountId: qs(req.query.accountId),
+      status: qs(req.query.status),
+      stage: stageParsed.value,
+      ownerId: qs(req.query.ownerId),
+      rating: qs(req.query.rating),
+      includeInForecast: includeInForecast === "all" ? undefined : includeInForecast === "true",
+      updatedSince: updatedSinceParsed.date,
+    });
     
     // Apply pagination
     const total = opportunities.length;
@@ -686,6 +749,9 @@ function formatContactResponse(contact: any, account?: { id: string; name: strin
  * List all contacts for the API key's organization with optional filtering and pagination.
  *
  * Query Parameters:
+ * - search: Case-insensitive substring match on "first last" name
+ * - email: Case-insensitive exact email match
+ * - accountId: Exact account ID match
  * - updatedSince: ISO 8601 timestamp
  * - limit: Number of results (default: 100, max: 1000)
  * - offset: Number of results to skip (default: 0)
@@ -701,31 +767,21 @@ router.get("/contacts", requirePermission("crm.read"), async (req: ApiKeyRequest
       });
     }
 
-    const { updatedSince, limit = "100", offset = "0", expand = "" } = req.query;
+    const { limit = "100", offset = "0", expand = "" } = req.query;
     const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
     const expandList = (expand as string).split(",").filter(Boolean);
 
-    if (updatedSince && typeof updatedSince === "string") {
-      const parsed = new Date(updatedSince);
-      if (isNaN(parsed.getTime())) {
-        return res.status(400).json({
-          error: "Invalid updatedSince",
-          message: "updatedSince must be a valid ISO 8601 timestamp",
-        });
-      }
-    }
+    const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
+    if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
 
-    let contacts = await storage.getAllContacts(orgId);
-
-    // Filter by updatedSince if provided
-    if (updatedSince && typeof updatedSince === "string") {
-      const sinceDate = new Date(updatedSince);
-      contacts = contacts.filter((c: any) => {
-        const updated = c.updatedAt ?? c.updated_at;
-        return updated ? new Date(updated) > sinceDate : false;
-      });
-    }
+    // Get contacts scoped to the API key's org, filtered server-side
+    const contacts = await storage.getAllContacts(orgId, {
+      search: qs(req.query.search),
+      email: qs(req.query.email),
+      accountId: qs(req.query.accountId),
+      updatedSince: updatedSinceParsed.date,
+    });
 
     const total = contacts.length;
     const page = contacts.slice(offsetNum, offsetNum + limitNum);
@@ -1143,7 +1199,14 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
 /**
  * GET /api/v1/external/leads
  * List leads for the API key's organization (read-back/confirmation).
- * Query params: updatedSince (ISO 8601), limit (default 100, max 1000), offset
+ * Query params:
+ * - search: Case-insensitive substring match on "first last" name or company
+ * - email: Case-insensitive exact email match
+ * - status: Lead status (new, contacted, qualified, unqualified, converted)
+ * - rating: Lead temperature (hot, warm, cold)
+ * - source: Lead source (website, referral, phone, email, event, partner, lead_generation, other)
+ * - updatedSince: ISO 8601 timestamp
+ * - limit (default 100, max 1000), offset
  */
 router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
   try {
@@ -1155,26 +1218,31 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
       });
     }
 
-    const { updatedSince, limit = "100", offset = "0" } = req.query;
+    const { limit = "100", offset = "0" } = req.query;
     const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
     const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
 
-    const organization = await storage.getOrganizationById(orgId);
-    let leads = await storage.getAllLeads(orgId);
+    const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
+    if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
 
-    if (updatedSince && typeof updatedSince === "string") {
-      const sinceDate = new Date(updatedSince);
-      if (isNaN(sinceDate.getTime())) {
-        return res.status(400).json({
-          error: "Invalid updatedSince",
-          message: "updatedSince must be a valid ISO 8601 timestamp",
-        });
-      }
-      leads = leads.filter((l: any) => {
-        const updated = l.updatedAt ?? l.updated_at;
-        return updated ? new Date(updated) > sinceDate : false;
-      });
-    }
+    const statusParsed = parseEnumParam(req.query.status, "status", LEAD_STATUSES);
+    if (statusParsed.error) return res.status(400).json(statusParsed.error);
+
+    const ratingParsed = parseEnumParam(req.query.rating, "rating", LEAD_RATINGS, true);
+    if (ratingParsed.error) return res.status(400).json(ratingParsed.error);
+
+    const sourceParsed = parseEnumParam(req.query.source, "source", LEAD_SOURCES);
+    if (sourceParsed.error) return res.status(400).json(sourceParsed.error);
+
+    const organization = await storage.getOrganizationById(orgId);
+    const leads = await storage.getAllLeads(orgId, {
+      search: qs(req.query.search),
+      email: qs(req.query.email),
+      status: statusParsed.value,
+      rating: ratingParsed.value,
+      source: sourceParsed.value,
+      updatedSince: updatedSinceParsed.date,
+    });
 
     const total = leads.length;
     const page = leads.slice(offsetNum, offsetNum + limitNum);

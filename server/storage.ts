@@ -25,6 +25,10 @@ import type {
   ApiKey, InsertApiKey,
 } from "@shared/schema";
 
+// ========== EXTERNAL API LIST FILTERS ==========
+// Server-side filters for the external list endpoints (Phase B).
+// All fields are optional; storage builds conditional WHERE clauses.
+
 export interface IStorage {
   // ========== AUTH & USER MANAGEMENT ==========
   getUserByEmail(email: string): Promise<(User & { password: string }) | undefined>;
@@ -44,28 +48,28 @@ export interface IStorage {
   assignPermissionToRole(roleId: string, permissionId: string): Promise<void>;
   
   // ========== ACCOUNTS ==========
-  getAllAccounts(orgId?: string): Promise<Account[]>;
+  getAllAccounts(orgId?: string, filters?: AccountListFilters): Promise<Account[]>;
   getAccountById(id: string): Promise<Account | undefined>;
   createAccount(account: InsertAccount): Promise<Account>;
   updateAccount(id: string, account: Partial<InsertAccount>): Promise<Account>;
   deleteAccount(id: string): Promise<void>;
   
   // ========== CONTACTS ==========
-  getAllContacts(orgId?: string): Promise<Contact[]>;
+  getAllContacts(orgId?: string, filters?: ContactListFilters): Promise<Contact[]>;
   getContactById(id: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
   
   // ========== LEADS ==========
-  getAllLeads(orgId?: string | string[]): Promise<Lead[]>;
+  getAllLeads(orgId?: string | string[], filters?: LeadListFilters): Promise<Lead[]>;
   getLeadById(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead>;
   deleteLead(id: string): Promise<void>;
   
   // ========== OPPORTUNITIES ==========
-  getAllOpportunities(orgId?: string): Promise<Opportunity[]>;
+  getAllOpportunities(orgId?: string, filters?: OpportunityListFilters): Promise<Opportunity[]>;
   getOpportunityById(id: string): Promise<Opportunity | undefined>;
   createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity>;
   updateOpportunity(id: string, opportunity: Partial<InsertOpportunity>): Promise<Opportunity>;
@@ -190,4 +194,37 @@ export interface IStorage {
     stage: string;
     closeDate: string | null;
   }[]>;
+}
+
+export interface AccountListFilters {
+  search?: string;       // Case-insensitive substring match on account name
+  name?: string;         // Case-insensitive substring match on account name
+  updatedSince?: Date;   // updated_at strictly after this timestamp
+}
+
+export interface LeadListFilters {
+  search?: string;       // Case-insensitive substring match on "first last" name or company
+  email?: string;        // Case-insensitive exact email match
+  status?: string;       // lead_status enum value
+  rating?: string;       // Case-insensitive exact match (hot/warm/cold)
+  source?: string;       // lead_source enum value
+  updatedSince?: Date;
+}
+
+export interface OpportunityListFilters {
+  search?: string;             // Case-insensitive substring match on opportunity name
+  accountId?: string;          // Exact account ID match
+  status?: string;             // Case-insensitive exact match on status text
+  stage?: string;              // opportunity_stage enum value
+  ownerId?: string;            // Exact owner ID match
+  rating?: string;             // Case-insensitive exact match
+  includeInForecast?: boolean; // Exact boolean match (omit for "all")
+  updatedSince?: Date;
+}
+
+export interface ContactListFilters {
+  search?: string;       // Case-insensitive substring match on "first last" name
+  email?: string;        // Case-insensitive exact email match
+  accountId?: string;    // Exact account ID match
+  updatedSince?: Date;
 }
