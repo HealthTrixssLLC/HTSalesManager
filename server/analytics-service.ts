@@ -137,7 +137,7 @@ export async function getStageConversionRates(dateRange: DateRange, orgId?: stri
   stageChanges.forEach((log) => {
     try {
       // Only process audit logs for opportunities that are included in forecast
-      if (!includedOppIds.has(log.resourceId)) {
+      if (!log.resourceId || !includedOppIds.has(log.resourceId)) {
         return; // Skip this log entry
       }
 

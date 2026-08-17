@@ -11,7 +11,7 @@
 // - 1 CSRF token endpoint (/api/csrf-token in server/index.ts): Intentionally exempt (public endpoint)
 // Total: 124 routes, 123 with rate limiting, 1 exempt with justification
 
-import type { Express } from "express";
+import type { Express, Response, NextFunction } from "express";
 import { z } from "zod";
 import crypto from "crypto";
 import { storage, db, eq, and, sql, asc, desc, inArray, gte, lte, ne } from "./db";
@@ -4674,12 +4674,9 @@ export async function registerRoutes(app: Express) {
         .where(and(...conditions));
       
       // Apply sorting
-      let query = baseQuery;
-      if (sort === "oldest") {
-        query = query.orderBy(asc(comments.createdAt));
-      } else {
-        query = query.orderBy(desc(comments.createdAt));
-      }
+      const query = sort === "oldest"
+        ? baseQuery.orderBy(asc(comments.createdAt))
+        : baseQuery.orderBy(desc(comments.createdAt));
       
       // Apply pagination
       const results = await query.limit(pageSize).offset(offset);
@@ -4693,10 +4690,10 @@ export async function registerRoutes(app: Express) {
       const [allReactions, allAttachments, allReplyCounts, editors] = await Promise.all([
         commentIds.length > 0
           ? db.select().from(commentReactions).where(inArray(commentReactions.commentId, commentIds))
-          : Promise.resolve([]),
+          : Promise.resolve([] as (typeof commentReactions.$inferSelect)[]),
         commentIds.length > 0
           ? db.select().from(commentAttachments).where(inArray(commentAttachments.commentId, commentIds))
-          : Promise.resolve([]),
+          : Promise.resolve([] as (typeof commentAttachments.$inferSelect)[]),
         commentIds.length > 0
           ? db.select({ 
               parentId: comments.parentId, 
@@ -4705,7 +4702,7 @@ export async function registerRoutes(app: Express) {
             .from(comments)
             .where(inArray(comments.parentId, commentIds))
             .groupBy(comments.parentId)
-          : Promise.resolve([]),
+          : Promise.resolve([] as { parentId: string | null; count: number }[]),
         editorIds.length > 0
           ? db.select({ 
               id: users.id, 
@@ -5699,7 +5696,13 @@ export async function registerRoutes(app: Express) {
       const csvRows = [headers.join(",")];
       
       for (const log of logs) {
-        const metadata = log.after || {};
+        const metadata = (log.after || {}) as {
+          endpoint?: string; method?: string; statusCode?: number | string;
+          apiKeyName?: string; apiKeyId?: string; latency?: number | string;
+          responseSize?: number | string; aborted?: boolean; errorType?: string;
+          errorCode?: string; errorMessage?: string; resourceType?: string;
+          resourceId?: string; query?: string;
+        };
         const row = [
           new Date(log.createdAt).toISOString(),
           log.action,

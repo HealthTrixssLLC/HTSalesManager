@@ -2,8 +2,8 @@
 // PostgreSQL with Drizzle ORM
 // Auto-detects Neon serverless vs standard PostgreSQL
 
-import { drizzle as pgDrizzle } from "drizzle-orm/node-postgres";
-import { drizzle as neonDrizzle } from "drizzle-orm/neon-serverless";
+import { drizzle as pgDrizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle as neonDrizzle, type NeonDatabase } from "drizzle-orm/neon-serverless";
 import { Pool as PgPool } from "pg";
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
@@ -42,8 +42,11 @@ const isNeonDatabase = process.env.DATABASE_URL.includes('neon.tech') ||
                        process.env.DATABASE_URL.includes('pooler') ||
                        process.env.DATABASE_URL.includes('neon.ai');
 
+// Typed Drizzle database — union of the two supported drivers (Neon serverless / standard pg)
+type DrizzleDb = NodePgDatabase<typeof schema> | NeonDatabase<typeof schema>;
+
 // Initialize database connection based on environment
-let db: any;
+let db: DrizzleDb;
 // Expose a module-level raw pg Pool for operations that need direct parameterized queries
 // (e.g., updating PostgreSQL text[] array columns which Drizzle sql template can't handle)
 let rawPgPool: PgPool | null = null;
@@ -321,7 +324,7 @@ export class PostgresStorage implements IStorage {
     if (!account.id || account.id === "") {
       account.id = await this.generateId("Account", account.organizationId || undefined);
     }
-    const result = await db.insert(schema.accounts).values(account).returning();
+    const result = await db.insert(schema.accounts).values({ ...account, id: account.id!, organizationId: account.organizationId! }).returning();
     return result[0];
   }
   
@@ -406,7 +409,7 @@ export class PostgresStorage implements IStorage {
     if (!contact.id || contact.id === "") {
       contact.id = await this.generateId("Contact", contact.organizationId || undefined);
     }
-    const result = await db.insert(schema.contacts).values(contact).returning();
+    const result = await db.insert(schema.contacts).values({ ...contact, id: contact.id!, organizationId: contact.organizationId! }).returning();
     return result[0];
   }
   
@@ -489,7 +492,7 @@ export class PostgresStorage implements IStorage {
     if (!lead.id || lead.id === "") {
       lead.id = await this.generateId("Lead", lead.organizationId || undefined);
     }
-    const result = await db.insert(schema.leads).values(lead).returning();
+    const result = await db.insert(schema.leads).values({ ...lead, id: lead.id!, organizationId: lead.organizationId! }).returning();
     return result[0];
   }
   
@@ -596,7 +599,7 @@ export class PostgresStorage implements IStorage {
     if (!opportunity.id || opportunity.id === "") {
       opportunity.id = await this.generateId("Opportunity", opportunity.organizationId || undefined);
     }
-    const result = await db.insert(schema.opportunities).values(opportunity).returning();
+    const result = await db.insert(schema.opportunities).values({ ...opportunity, id: opportunity.id!, organizationId: opportunity.organizationId! }).returning();
     return result[0];
   }
   
@@ -728,9 +731,15 @@ export class PostgresStorage implements IStorage {
   }
   
   async updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity> {
-    const { organizationId: _orgId, ...safeUpdates } = activity;
+    const { organizationId: _orgId, dueAt, completedAt, ...safeUpdates } = activity;
     const result = await db.update(schema.activities)
-      .set({ ...safeUpdates, updatedAt: new Date() })
+      .set({
+        ...safeUpdates,
+        // Convert ISO string dates to Date objects for Drizzle timestamp columns
+        ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
+        ...(completedAt !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(schema.activities.id, id))
       .returning();
     return result[0];
@@ -1543,7 +1552,7 @@ export class PostgresStorage implements IStorage {
     if (!doc.id || doc.id === "") {
       doc.id = await this.generateId("Document", doc.organizationId || undefined);
     }
-    const result = await db.insert(schema.documents).values(doc).returning();
+    const result = await db.insert(schema.documents).values({ ...doc, id: doc.id!, organizationId: doc.organizationId! }).returning();
     return result[0];
   }
 

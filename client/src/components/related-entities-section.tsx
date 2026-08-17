@@ -122,7 +122,7 @@ function RelatedEntityCard({ entity, entityType }: RelatedEntityCardProps) {
       const formattedAmount = !canViewFinancials
         ? "—"
         : opp.amount
-          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(opp.amount)
+          ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(opp.amount))
           : undefined;
       return {
         title: opp.name,

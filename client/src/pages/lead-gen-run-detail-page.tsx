@@ -40,7 +40,7 @@ interface PhaseLogEntry {
   errorMessage?: string;
 }
 
-interface RunDetail extends Omit<LeadGenerationRun, "phaseLog"> {
+interface RunDetail extends Omit<LeadGenerationRun, "phaseLog" | "playbookId"> {
   candidates: EnrichedCandidate[];
   phaseLog?: PhaseLogEntry[] | null;
   playbookId?: string | null;

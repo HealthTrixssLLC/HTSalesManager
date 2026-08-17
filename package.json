@@ -11,7 +11,8 @@
     "test:server": "vitest run --config tests/vitest.server.config.ts",
     "test:api-key-permissions": "vitest run tests/api-key-permissions.test.ts --config tests/vitest.server.config.ts",
     "test:documents-api": "bash tests/run-documents-api-tests.sh",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

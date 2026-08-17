@@ -185,6 +185,7 @@ export default function ContactDetailPage() {
                   }
                   if (Object.keys(patch).length > 0) {
                     updateMutation.mutate({
+                      id: contact.id,
                       firstName: contact.firstName,
                       lastName: contact.lastName,
                       ...patch,

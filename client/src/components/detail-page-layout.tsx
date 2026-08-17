@@ -91,7 +91,7 @@ export function DetailPageLayout({
 
 interface DetailFieldProps {
   label: string;
-  value?: string | number | null;
+  value?: string | number | Date | null;
   type?: "text" | "email" | "phone" | "url" | "currency" | "date" | "percent";
 }
 
@@ -102,7 +102,8 @@ export function DetailField({ label, value, type = "text" }: DetailFieldProps) {
     return null;
   }
 
-  let displayValue: string | number | null | undefined = value as string | number | null | undefined;
+  let displayValue: string | number | null | undefined =
+    value instanceof Date ? value.toLocaleDateString() : value;
 
   if (type === "currency") {
     if (!canViewFinancials) {

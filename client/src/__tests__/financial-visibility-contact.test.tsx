@@ -18,12 +18,12 @@ import { useFinancialAccess } from "@/hooks/use-financial-access";
 const mockUseFinancialAccess = vi.mocked(useFinancialAccess);
 
 function makeOpportunity(overrides: Partial<Opportunity> = {}): Opportunity {
-  return {
+  const base: Opportunity = {
     id: "opp-test-001",
     organizationId: "org-001",
     accountId: "acct-001",
     name: "FinTest Deal Q4",
-    stage: "Proposal",
+    stage: "proposal",
     amount: "125000.00",
     closeDate: new Date("2026-12-31"),
     ownerId: null,
@@ -42,13 +42,14 @@ function makeOpportunity(overrides: Partial<Opportunity> = {}): Opportunity {
     includeInForecast: true,
     implementationStartDate: null,
     implementationEndDate: null,
+    billingEndDate: null,
     categories: null,
     operationalAreas: null,
     description: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 describe("Contact page: Related Opportunities financial visibility", () => {

@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient, getOrgHeaders, getErrorMessage } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { AssociationManager, Association } from "@/components/association-manager";
@@ -278,8 +279,13 @@ export default function ActivitiesPage() {
     });
   };
 
-  const form = useForm<InsertActivity>({
-    resolver: zodResolver(insertActivitySchema),
+  // The form includes an optional client-side "id" field; the resolver strips it
+  // before submission (the server auto-generates ids), matching prior behavior.
+  const activityFormSchema = insertActivitySchema.extend({ id: z.string().optional() });
+  type ActivityFormValues = z.infer<typeof activityFormSchema>;
+
+  const form = useForm<ActivityFormValues, unknown, ActivityFormValues>({
+    resolver: zodResolver(activityFormSchema),
     defaultValues: {
       id: "",
       type: "call",
@@ -293,8 +299,10 @@ export default function ActivitiesPage() {
     },
   });
 
-  const onSubmit = (data: InsertActivity) => {
-    createMutation.mutate(data);
+  const onSubmit = (data: ActivityFormValues) => {
+    // Strip the client-only id field (previously removed by the zod resolver)
+    const { id: _id, ...rest } = data;
+    createMutation.mutate(rest);
   };
 
   // Filter and sort activities

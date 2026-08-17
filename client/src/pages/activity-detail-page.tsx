@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -157,8 +158,13 @@ export default function ActivityDetailPage() {
     },
   });
 
-  const form = useForm<InsertActivity>({
-    resolver: zodResolver(insertActivitySchema),
+  // The form includes an optional client-side "id" field; it is stripped before
+  // submission (the server manages ids), matching prior behavior.
+  const activityFormSchema = insertActivitySchema.extend({ id: z.string().optional() });
+  type ActivityFormValues = z.infer<typeof activityFormSchema>;
+
+  const form = useForm<ActivityFormValues, unknown, ActivityFormValues>({
+    resolver: zodResolver(activityFormSchema),
     defaultValues: {
       id: activity?.id || "",
       type: activity?.type || "call",
@@ -172,9 +178,11 @@ export default function ActivityDetailPage() {
     },
   });
 
-  const onSubmit = (data: InsertActivity) => {
+  const onSubmit = (data: ActivityFormValues) => {
+    // Strip the client-only id field (previously removed by the zod resolver)
+    const { id: _id, ...rest } = data;
     const submitData = {
-      ...data,
+      ...rest,
       dueAt: data.dueAt ? new Date(data.dueAt + 'T00:00:00').toISOString() : null,
       completedAt: data.completedAt ? new Date(data.completedAt + 'T00:00:00').toISOString() : null,
     };

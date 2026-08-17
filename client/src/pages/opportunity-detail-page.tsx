@@ -205,9 +205,11 @@ export default function OpportunityDetailPage() {
     implementationStartDate: z.union([z.date(), z.string(), z.null()]).optional(),
     implementationEndDate: z.union([z.date(), z.string(), z.null()]).optional(),
     billingEndDate: z.union([z.date(), z.string(), z.null()]).optional(),
+    includeInForecast: z.boolean().optional(),
   });
+  type OpportunityFormValues = z.infer<typeof formSchema>;
 
-  const form = useForm<InsertOpportunity>({
+  const form = useForm<OpportunityFormValues, unknown, OpportunityFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       id: "",
@@ -234,14 +236,15 @@ export default function OpportunityDetailPage() {
     },
   });
 
-  const activityFormSchema = insertActivitySchema.omit({ id: true }).extend({
+  const activityFormSchema = insertActivitySchema.extend({
     dueAt: z.union([z.date(), z.string(), z.null()]).optional(),
     completedAt: z.union([z.date(), z.string(), z.null()]).optional(),
     ownerId: z.string().nullable().optional(),
     notes: z.string().nullable().optional(),
   });
+  type ActivityFormValues = z.infer<typeof activityFormSchema>;
 
-  const activityForm = useForm({
+  const activityForm = useForm<ActivityFormValues, unknown, ActivityFormValues>({
     resolver: zodResolver(activityFormSchema),
     defaultValues: {
       type: "task" as const,
@@ -290,7 +293,7 @@ export default function OpportunityDetailPage() {
     createActivityMutation.mutate(submitData);
   };
 
-  const onSubmit = (data: InsertOpportunity) => {
+  const onSubmit = (data: OpportunityFormValues) => {
     if (opportunity) {
       // Convert date strings to Date objects for the API
       const submitData: any = { ...data, id: opportunity.id };

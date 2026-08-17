@@ -19,8 +19,8 @@ function makeAuthReturn(roleNames: string[]): AuthReturn {
       id: "test-user",
       email: "test@example.com",
       name: "Test User",
-      password: "hashed",
       status: "active",
+      authProvider: "password",
       createdAt: new Date(),
       updatedAt: new Date(),
       roles: roleNames.map((name, i) => ({
