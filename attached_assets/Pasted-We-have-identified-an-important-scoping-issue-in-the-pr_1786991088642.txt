@@ -1,0 +1,258 @@
+We have identified an important scoping issue in the prior
+CANONICAL_ID_AUDIT.md.
+
+DO NOT MODIFY ANY DATA OR SCHEMA.
+
+The External CRM API keys are ORGANIZATION-SCOPED.
+
+The CRM_API_KEY currently being used by the MCP is attached specifically
+to the HEALTH TRIXSS organization, NOT the Luceintra organization.
+
+Therefore, the previous comparison between:
+
+- live MCP/API results
+- database-wide Account counts
+
+may have compared different organizational scopes.
+
+We need to repeat the canonical-ID audit using the EXACT SAME
+organization scope as the MCP key.
+
+==================================================
+1. IDENTIFY THE HEALTH TRIXSS ORGANIZATION
+==================================================
+
+Identify the organization associated with the CRM API key/configuration
+used for the Health Trixss MCP.
+
+Do not display the API key.
+
+Report:
+
+organization name
+organization ID
+API-key organization scope
+
+Explicitly confirm:
+
+MCP ORGANIZATION = [organization name / ID]
+
+==================================================
+2. HEALTH TRIXSS ACCOUNT AUDIT
+==================================================
+
+Query ONLY Accounts belonging to that exact organization.
+
+Report:
+
+total Accounts
+
+count by ID prefix:
+ACT-*
+ACCT-*
+other
+
+Show the 10 most recent Accounts.
+
+Specifically check for:
+
+ACT-2103 Cavulus
+ACT-2102 Integrated Psychiatric Consultants
+ACT-2100 Providence
+ACT-2099 Humanizing Technologies
+ACT-2098 Care Oregon
+ACT-2091 Care Compass
+
+The live organization-scoped MCP API previously returned these records.
+
+State whether the database query restricted to the Health Trixss
+organization now matches the MCP results.
+
+==================================================
+3. API / DATABASE PARITY
+==================================================
+
+Using the Health Trixss organization scope only, compare:
+
+LIVE EXTERNAL API
+vs
+DIRECT DATABASE QUERY
+
+Compare:
+
+Account total
+Account IDs
+Account names
+latest Accounts
+
+Explicitly report:
+
+HEALTH TRIXSS API/DB PARITY:
+PASS / FAIL
+
+If FAIL, explain every difference.
+
+==================================================
+4. HEALTH TRIXSS ACTIVITY AUDIT
+==================================================
+
+Query ONLY Activities belonging to the Health Trixss organization.
+
+Report:
+
+total Activities
+
+count by prefix:
+ACT-*
+ACV-*
+other
+
+Show representative IDs.
+
+Determine what Activity IDs actually exist inside Health Trixss.
+
+==================================================
+5. HEALTH TRIXSS ID PATTERNS
+==================================================
+
+Determine which id_patterns rows actually control ID generation for
+Health Trixss.
+
+This is especially important because generateId() may resolve:
+
+global pattern
+vs
+organization-specific pattern
+
+Report the effective production pattern for:
+
+Account
+Contact
+Lead
+Opportunity
+Activity
+Document
+
+For each show:
+
+CURRENT EFFECTIVE PATTERN
+CANONICAL TARGET PATTERN
+MATCH = YES/NO
+
+Canonical targets:
+
+Account      ACCT-{YYYY}-{SEQ:5}
+Contact      CONT-{YY}{MM}-{SEQ:5}
+Lead         LEAD-{SEQ:6}
+Opportunity  OPP-{YYYY}-{SEQ:6}
+Activity     ACT-{YY}{MM}-{SEQ:5}
+Document     DOC-{SEQ:6}
+
+==================================================
+6. HEALTH TRIXSS DEPENDENCY AUDIT
+==================================================
+
+For Health Trixss Accounts only, identify all references to Account IDs.
+
+Include:
+
+opportunities.account_id
+contacts.account_id
+leads.converted_account_id
+activities / activity associations
+documents / document links
+tags
+comments
+other FK references
+non-FK references
+
+Report counts.
+
+Do NOT change IDs.
+
+==================================================
+7. OTHER ORGANIZATIONS
+==================================================
+
+Do NOT mix other organizations into the Health Trixss migration analysis.
+
+However, report a high-level summary showing:
+
+organization
+account count
+account prefix patterns
+activity prefix patterns
+
+This is only to determine whether the canonical-ID problem is:
+
+GLOBAL
+or
+ORGANIZATION-SPECIFIC.
+
+Do not expose customer-sensitive record data from other organizations.
+
+==================================================
+8. RECONCILE THE PREVIOUS AUDIT
+==================================================
+
+Explain why CANONICAL_ID_AUDIT.md reported:
+
+41 Accounts
+ACT-1000 through ACT-1041
+
+while the Health Trixss MCP returned:
+
+56 Accounts
+including ACT-2098 through ACT-2103.
+
+Determine whether organization scoping fully explains the difference.
+
+Do not assume. Prove it from the database.
+
+==================================================
+9. RECOMMENDATION
+==================================================
+
+Once the Health Trixss organization is isolated, recommend the safest
+path to reach:
+
+ACCT-* = Account
+CONT-* = Contact
+LEAD-* = Lead
+OPP-* = Opportunity
+ACT-* = Activity
+DOC-* = Document
+
+Consider both:
+
+existing IDs
+future ID generation
+
+The end state must provide an unambiguous canonical identity namespace
+for the CRM, MCP and AI agents.
+
+Do NOT execute the migration.
+
+==================================================
+10. STOP
+==================================================
+
+Return:
+
+HEALTH TRIXSS ORGANIZATION ID
+HT ACCOUNT COUNT
+HT ACCOUNT PREFIX COUNTS
+HT ACTIVITY PREFIX COUNTS
+HT API/DB PARITY
+HT EFFECTIVE ID PATTERNS
+HT DEPENDENT REFERENCES
+OTHER-ORG HIGH-LEVEL SUMMARY
+EXPLANATION OF PREVIOUS DISCREPANCY
+RECOMMENDED MIGRATION PLAN
+
+Then STOP.
+
+NO WRITES.
+NO MIGRATIONS.
+NO DEPLOYMENT.
+NO ID CHANGES.
