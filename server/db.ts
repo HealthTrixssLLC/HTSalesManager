@@ -53,11 +53,11 @@ if (isNeonDatabase) {
   neonConfig.webSocketConstructor = ws;
   
   // Configure connection pooling for better reliability
-  const pool = new NeonPool({ 
+  const pool = new PgPool({ 
     connectionString: process.env.DATABASE_URL,
-    max: 10,                    // Maximum 10 connections in pool
+    max: 20,                    // Maximum 20 connections in pool
     idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 60000, // 60s timeout for new connections
+    connectionTimeoutMillis: 10000, // 10s timeout for new connections
   });
   
   db = neonDrizzle(pool, { schema });
@@ -259,7 +259,25 @@ export class PostgresStorage implements IStorage {
       const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
-          a.*,
+          a.id,
+          a.organization_id as "organizationId",
+          a.name,
+          a.account_number as "accountNumber",
+          a.type,
+          a.category,
+          a.owner_id as "ownerId",
+          a.industry,
+          a.website,
+          a.phone,
+          a.billing_address as "billingAddress",
+          a.shipping_address as "shippingAddress",
+          a.external_id as "externalId",
+          a.source_system as "sourceSystem",
+          a.source_record_id as "sourceRecordId",
+          a.import_status as "importStatus",
+          a.import_notes as "importNotes",
+          a.created_at as "createdAt",
+          a.updated_at as "updatedAt",
           COALESCE(
             json_agg(
               json_build_object(

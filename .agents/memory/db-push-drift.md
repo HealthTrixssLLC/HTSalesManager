@@ -15,3 +15,9 @@ Indexes/constraints declared in schema.ts may be missing from the dev DB (drift)
 - They hit the live dev server on localhost:5000. The dev workflow runs `tsx server/index.ts` WITHOUT watch — restart the "Start application" workflow after editing server code or tests will exercise stale code.
 
 **Deployment schema mechanism:** the drizzle migrations journal is not the active mechanism; production schema changes apply via the idempotent startup migration run at server boot. New tables/columns must be added there too, or deployments won't get them.
+
+## Full server suite quirks (Phase G)
+- The full suite makes >10 logins/min across files; the auth limiter (10/min/IP) 429s them. Set env var `DISABLE_RATE_LIMITING=true` (development) — the external API per-key limiter is separate and stays active, so 429 tests still work.
+- Test files must not run in parallel (`fileParallelism: false` in tests/vitest.server.config.ts): they share one server/DB, and API-key auth bcrypt-scans all active keys per request, so parallel files compound latency into 30s timeouts.
+- Task-branch DBs can lag migrations (missing tables/columns/unique indexes). Apply the missing `migrations/*.sql` with psql before blaming test code; the leads org+lower(email) unique index is required for the duplicate-lead race test.
+- `tests/opportunity-activity-creation.test.ts` is a plain tsx script (own workflow), excluded from the vitest config on purpose.

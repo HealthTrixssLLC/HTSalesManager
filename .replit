@@ -144,6 +144,9 @@ BACKUP_ENCRYPTION_KEY = "qgvZCSMiorcxfGYYFJGIkxSOQZdvpkrGhvwdFH1QIh94eZ5cVqmAJ12
 [userenv.production]
 APP_BASE_URL = "https://htsalesmanager.healthtrixss.com"
 
+[userenv.development]
+DISABLE_RATE_LIMITING = "true"
+
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 180000

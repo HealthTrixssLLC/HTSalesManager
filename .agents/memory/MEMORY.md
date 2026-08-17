@@ -1,3 +1,4 @@
 - [db:push interactive drift](db-push-drift.md) — `npm run db:push` blocks on an interactive prompt about a pre-existing organizations slug constraint; apply new indexes via SQL and keep schema.ts in sync.
 - [Server test config](db-push-drift.md) — server integration tests in `tests/` need `--config tests/vitest.server.config.ts`; root vitest config only covers client tests. Restart the dev server before running them (tsx doesn't hot-reload server code).
-- [External API authorization](external-api-authz.md) — every external route must carry an explicit permission guard, and empty scope lists must never be promoted to full access.
+- [Full suite quirks](db-push-drift.md) — full server suite needs `DISABLE_RATE_LIMITING=true` (dev), sequential test files, and a migrations-current DB; per-key external limiter stays active for 429 tests.
+- [External API authorization](external-api-authz.md) — every external route must carry an explicit permission guard; completion review rejects any unguarded read or mutation route, and empty scope lists must never be promoted to full access.
