@@ -46,6 +46,10 @@ args = "test"
 task = "workflow.run"
 args = "e2e-org-isolation"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "test-opportunity-contacts"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -87,6 +91,17 @@ args = "npx playwright test"
 
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow]]
+name = "test-opportunity-contacts"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash tests/run-opportunity-contacts-tests.sh"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [agent]
 integrations = ["javascript_auth_all_persistance:1.0.0", "javascript_database:1.0.0"]

@@ -516,11 +516,139 @@ router.get("/opportunities/:id", async (req: ApiKeyRequest, res) => {
       }));
     }
     
+    // Optionally include associated contacts with role and isPrimary flag
+    if (expandList.includes("contacts")) {
+      const links = await storage.getOpportunityContacts(opp.id);
+      response.contacts = links.map(l => ({
+        contactId: l.contactId,
+        role: l.role,
+        isPrimary: l.isPrimary,
+        firstName: l.contact.firstName,
+        lastName: l.contact.lastName,
+        email: l.contact.email,
+        phone: l.contact.phone,
+        title: l.contact.title,
+        createdAt: l.createdAt,
+        updatedAt: l.updatedAt,
+      }));
+    }
+    
     return res.json({ data: response });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching opportunity:", error);
     return res.status(500).json({
       error: "Failed to fetch opportunity",
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+// ========== OPPORTUNITY-CONTACT RELATIONSHIP ENDPOINTS ==========
+
+const linkContactSchema = z.object({
+  contactId: z.string().min(1, "contactId is required"),
+  role: z.enum([
+    "economic_buyer", "champion", "technical_contact", "contract_contact",
+    "executive_sponsor", "decision_maker", "influencer", "other",
+  ]),
+  isPrimary: z.boolean().optional().default(false),
+}).strict();
+
+/**
+ * POST /api/v1/external/opportunities/:id/contacts
+ * Link a contact to an opportunity with a role (optional isPrimary flag).
+ */
+router.post("/opportunities/:id/contacts", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    
+    const opp = await storage.getOpportunityById(req.params.id);
+    if (!opp || !keyOrgOwns(opp, orgId)) {
+      return res.status(404).json({
+        error: "Opportunity not found",
+        message: `No opportunity found with ID: ${req.params.id}`
+      });
+    }
+    
+    const parsed = linkContactSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.errors.map(e => ({ field: e.path.join("."), message: e.message })),
+      });
+    }
+    
+    // Contact must exist and be visible to the key's org
+    const contact = await storage.getContactById(parsed.data.contactId);
+    if (!contact || !keyOrgOwns(contact, orgId)) {
+      return res.status(404).json({
+        error: "Contact not found",
+        message: `No contact found with ID: ${parsed.data.contactId}`
+      });
+    }
+    
+    try {
+      const link = await storage.linkContactToOpportunity({
+        opportunityId: opp.id,
+        contactId: parsed.data.contactId,
+        role: parsed.data.role,
+        isPrimary: parsed.data.isPrimary,
+      });
+      return res.status(201).json({ data: link });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "DUPLICATE_LINK") {
+        return res.status(409).json({
+          error: "Contact already linked",
+          message: "This contact is already linked to the opportunity"
+        });
+      }
+      if (msg === "ORG_MISMATCH") {
+        return res.status(404).json({
+          error: "Contact not found",
+          message: `No contact found with ID: ${parsed.data.contactId}`
+        });
+      }
+      throw err;
+    }
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error linking contact to opportunity:", error);
+    return res.status(500).json({
+      error: "Failed to link contact",
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/external/opportunities/:id/contacts/:contactId
+ * Remove the opportunity-contact relationship (does not delete the contact).
+ */
+router.delete("/opportunities/:id/contacts/:contactId", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    
+    const opp = await storage.getOpportunityById(req.params.id);
+    if (!opp || !keyOrgOwns(opp, orgId)) {
+      return res.status(404).json({
+        error: "Opportunity not found",
+        message: `No opportunity found with ID: ${req.params.id}`
+      });
+    }
+    
+    const removed = await storage.unlinkContactFromOpportunity(opp.id, req.params.contactId);
+    if (!removed) {
+      return res.status(404).json({
+        error: "Relationship not found",
+        message: "This contact is not linked to the opportunity"
+      });
+    }
+    
+    return res.status(204).send();
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error unlinking contact from opportunity:", error);
+    return res.status(500).json({
+      error: "Failed to unlink contact",
       message: error instanceof Error ? error.message : "Unknown error"
     });
   }

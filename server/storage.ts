@@ -15,6 +15,7 @@ import type {
   AccountCategory, InsertAccountCategory,
   BackupJob, InsertBackupJob,
   OpportunityResource, InsertOpportunityResource,
+  OpportunityContact, InsertOpportunityContact,
   LlmConfiguration, InsertLlmConfiguration,
   Tag, InsertTag,
   EntityTag,
@@ -126,6 +127,11 @@ export interface IStorage {
   addOpportunityResource(resource: InsertOpportunityResource): Promise<OpportunityResource>;
   removeOpportunityResource(id: string): Promise<void>;
   getAllOpportunityResources(): Promise<OpportunityResource[]>;
+  
+  // ========== OPPORTUNITY CONTACTS ==========
+  getOpportunityContacts(opportunityId: string): Promise<Array<OpportunityContact & { contact: Contact }>>;
+  linkContactToOpportunity(link: InsertOpportunityContact): Promise<OpportunityContact>;
+  unlinkContactFromOpportunity(opportunityId: string, contactId: string): Promise<boolean>;
   
   // ========== LLM CONFIGURATION ==========
   getLlmConfiguration(orgId?: string): Promise<LlmConfiguration | undefined>;

@@ -456,6 +456,31 @@ export const opportunityResources = pgTable("opportunity_resources", {
   uniqueAssignment: uniqueIndex("opportunity_resources_unique_idx").on(table.opportunityId, table.userId),
 }));
 
+// ========== OPPORTUNITY CONTACTS (Many-to-Many Relationship) ==========
+
+export const opportunityContactRoleEnum = pgEnum("opportunity_contact_role", [
+  "economic_buyer", "champion", "technical_contact", "contract_contact",
+  "executive_sponsor", "decision_maker", "influencer", "other",
+]);
+
+export const opportunityContacts = pgTable("opportunity_contacts", {
+  id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
+  opportunityId: varchar("opportunity_id", { length: 100 }).notNull().references(() => opportunities.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id", { length: 100 }).notNull().references(() => contacts.id, { onDelete: "cascade" }),
+  role: opportunityContactRoleEnum("role").notNull(),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  opportunityIdIdx: index("opportunity_contacts_opportunity_id_idx").on(table.opportunityId),
+  contactIdIdx: index("opportunity_contacts_contact_id_idx").on(table.contactId),
+  uniquePair: uniqueIndex("opportunity_contacts_unique_idx").on(table.opportunityId, table.contactId),
+  // Only one primary contact per opportunity
+  uniquePrimary: uniqueIndex("opportunity_contacts_primary_unique_idx")
+    .on(table.opportunityId)
+    .where(sql`${table.isPrimary} = true`),
+}));
+
 // ========== SAVED FILTER PRESETS ==========
 
 export const savedFilters = pgTable("saved_filters", {
@@ -874,6 +899,12 @@ export const opportunitiesRelations = relations(opportunities, ({ one, many }) =
   account: one(accounts, { fields: [opportunities.accountId], references: [accounts.id] }),
   owner: one(users, { fields: [opportunities.ownerId], references: [users.id] }),
   resources: many(opportunityResources),
+  opportunityContacts: many(opportunityContacts),
+}));
+
+export const opportunityContactsRelations = relations(opportunityContacts, ({ one }) => ({
+  opportunity: one(opportunities, { fields: [opportunityContacts.opportunityId], references: [opportunities.id] }),
+  contact: one(contacts, { fields: [opportunityContacts.contactId], references: [contacts.id] }),
 }));
 
 export const opportunityResourcesRelations = relations(opportunityResources, ({ one }) => ({
@@ -1056,6 +1087,15 @@ export const insertOpportunityResourceSchema = createInsertSchema(opportunityRes
 });
 export type InsertOpportunityResource = z.infer<typeof insertOpportunityResourceSchema>;
 export type OpportunityResource = typeof opportunityResources.$inferSelect;
+
+// OpportunityContacts
+export const opportunityContactRoles = [
+  "economic_buyer", "champion", "technical_contact", "contract_contact",
+  "executive_sponsor", "decision_maker", "influencer", "other",
+] as const;
+export const insertOpportunityContactSchema = createInsertSchema(opportunityContacts).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertOpportunityContact = z.infer<typeof insertOpportunityContactSchema>;
+export type OpportunityContact = typeof opportunityContacts.$inferSelect;
 
 // SavedFilters
 export const insertSavedFilterSchema = createInsertSchema(savedFilters).omit({ id: true, createdAt: true, updatedAt: true });

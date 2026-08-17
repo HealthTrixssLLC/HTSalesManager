@@ -1255,6 +1255,58 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(schema.opportunityResources);
   }
   
+  // ========== OPPORTUNITY CONTACTS ==========
+  
+  async getOpportunityContacts(opportunityId: string): Promise<Array<schema.OpportunityContact & { contact: schema.Contact }>> {
+    const rows = await db
+      .select({ link: schema.opportunityContacts, contact: schema.contacts })
+      .from(schema.opportunityContacts)
+      .innerJoin(schema.contacts, eq(schema.opportunityContacts.contactId, schema.contacts.id))
+      .where(eq(schema.opportunityContacts.opportunityId, opportunityId));
+    return rows.map((r: any) => ({ ...r.link, contact: r.contact }));
+  }
+  
+  async linkContactToOpportunity(link: schema.InsertOpportunityContact): Promise<schema.OpportunityContact> {
+    return await db.transaction(async (tx: any) => {
+      // Org boundary: the contact's org must match the opportunity's org
+      const [opp] = await tx.select().from(schema.opportunities).where(eq(schema.opportunities.id, link.opportunityId)).limit(1);
+      if (!opp) throw new Error("OPPORTUNITY_NOT_FOUND");
+      const [contact] = await tx.select().from(schema.contacts).where(eq(schema.contacts.id, link.contactId)).limit(1);
+      if (!contact) throw new Error("CONTACT_NOT_FOUND");
+      if (contact.organizationId !== opp.organizationId) throw new Error("ORG_MISMATCH");
+      
+      // Prevent duplicate pairs
+      const existing = await tx.select().from(schema.opportunityContacts)
+        .where(and(
+          eq(schema.opportunityContacts.opportunityId, link.opportunityId),
+          eq(schema.opportunityContacts.contactId, link.contactId)
+        )).limit(1);
+      if (existing.length > 0) throw new Error("DUPLICATE_LINK");
+      
+      // isPrimary uniqueness: demote existing primary if new link is primary
+      if (link.isPrimary) {
+        await tx.update(schema.opportunityContacts)
+          .set({ isPrimary: false, updatedAt: new Date() })
+          .where(and(
+            eq(schema.opportunityContacts.opportunityId, link.opportunityId),
+            eq(schema.opportunityContacts.isPrimary, true)
+          ));
+      }
+      
+      const result = await tx.insert(schema.opportunityContacts).values(link).returning();
+      return result[0];
+    });
+  }
+  
+  async unlinkContactFromOpportunity(opportunityId: string, contactId: string): Promise<boolean> {
+    const result = await db.delete(schema.opportunityContacts)
+      .where(and(
+        eq(schema.opportunityContacts.opportunityId, opportunityId),
+        eq(schema.opportunityContacts.contactId, contactId)
+      )).returning();
+    return result.length > 0;
+  }
+  
   // ========== LLM CONFIGURATION ==========
   
   async getLlmConfiguration(orgId?: string): Promise<schema.LlmConfiguration | undefined> {
