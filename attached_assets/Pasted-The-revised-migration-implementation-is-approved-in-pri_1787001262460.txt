@@ -1,0 +1,162 @@
+The revised migration implementation is approved in principle.
+
+DO NOT RUN --live.
+
+Before the production dry-run, make two final safety corrections.
+
+==================================================
+1. NEVER REUSE A PREVIOUSLY ISSUED CANONICAL ID
+==================================================
+
+The current script computes id_patterns.counter from MAX(sequence) in
+CURRENT LIVE canonical rows.
+
+That is insufficient.
+
+Canonical CRM IDs are permanent identities and MUST NEVER be reused,
+including IDs belonging to deleted historical records.
+
+For each entity, compute a SAFE HIGH-WATER MARK.
+
+The final counter must be at least the maximum of:
+
+1. highest sequence in live canonical IDs
+2. highest sequence assigned by this migration
+3. existing id_patterns generator high-water mark where the existing
+   pattern is compatible with the target pattern
+4. highest previously issued ID matching the TARGET canonical format that
+   can be proven from audit/history records
+
+For unchanged patterns this is mandatory.
+
+Example:
+
+Lead uses LEAD-{SEQ:6} both before and after migration.
+
+If id_patterns shows that LEAD-000154 has already been issued but the
+highest live Lead is LEAD-000153, the counter MUST NOT be reset to 153.
+
+The next ID must be greater than the historical high-water mark.
+
+Do the same analysis for:
+
+Account
+Contact
+Lead
+Opportunity
+Activity
+Document
+
+For entities whose pattern changes, search audit_logs and other appropriate
+historical sources for IDs matching the NEW target canonical format.
+
+Do not parse arbitrary unrelated JSON matches as IDs without validating the
+entity type and canonical regex.
+
+Produce and log for every entity:
+
+LIVE_MAX
+MIGRATION_MAX
+EXISTING_GENERATOR_HIGH_WATER
+HISTORICAL_CANONICAL_MAX
+FINAL_COUNTER
+NEXT_ID
+
+The next ID must never equal any live OR previously-issued canonical ID.
+
+Add validation tests proving this.
+
+==================================================
+2. STRENGTHEN DRY-RUN INPUT CHECKSUM
+==================================================
+
+The dry-run evidence should become invalid if meaningful migration inputs
+change before the live run.
+
+Extend computeInputChecksum() to include:
+
+A. all relevant global and organization-specific id_patterns rows:
+   entity
+   pattern
+   counter
+   start_value
+   last_issued
+   organization_id
+
+B. the affected values in every dynamically discovered FK column referencing:
+   accounts.id
+   contacts.id
+   opportunities.id
+   activities.id
+
+C. affected values in every declared soft-reference column that currently
+   resolves to a legacy_id_map candidate.
+
+The checksum does not need to contain sensitive business text.
+
+Use stable deterministic hashing of IDs/reference values only.
+
+The purpose is:
+
+if a relationship, generator state, or migration-relevant reference changes
+between --dry-run and --live, the live run must reject the stale dry-run
+report and require a fresh dry-run.
+
+==================================================
+3. PRESERVE ALL EXISTING SAFETY CONTROLS
+==================================================
+
+Do not weaken:
+
+production fingerprint gate
+global canonical migration
+strict canonical regex validation
+dynamic FK discovery
+soft-reference handling
+collision checks
+legacy_id_map
+HMAC dry-run evidence
+same-database verification
+24-hour report expiration
+CI refusal
+backup attestation
+writes-stopped attestation
+CONFIRM_LIVE=yes
+rollback-on-any-failure
+
+==================================================
+4. TESTS
+==================================================
+
+Add tests proving:
+
+- deleted historical ID is never reused
+- existing id_pattern high-water beats lower live MAX
+- migration MAX beats old generator counter when necessary
+- historical canonical MAX beats all lower values
+- reference change invalidates dry-run evidence
+- id_patterns change invalidates dry-run evidence
+- existing forged/stale/tampered/wrong-database gate tests still pass
+
+Run:
+
+npm run typecheck
+full test suite
+
+==================================================
+5. RETURN ONLY
+==================================================
+
+Return:
+
+FINAL HIGH-WATER TABLE
+FINAL EXPECTED NEXT ID PER ENTITY
+UPDATED CHECKSUM INPUTS
+TEST RESULTS
+FILES CHANGED
+EXACT PRODUCTION DRY-RUN COMMAND
+
+Then STOP.
+
+DO NOT RUN THE DRY-RUN automatically.
+DO NOT RUN --live.
