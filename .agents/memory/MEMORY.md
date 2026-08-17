@@ -6,3 +6,4 @@
 - [Lead email normalization](lead-email-normalization.md) — blank/whitespace emails must be NULL; normalizeEmail() in server/lib/normalize-email.ts is the canonical function; all write paths (createLead, updateLead, patchLead, lead-gen direct insert) apply it; DB index uses BTRIM/NULLIF.
 - [External API migration drift](external-api-migration-drift.md) — migrations 0013/0014/0015 and leads_org_email_unique_idx must exist in DATABASE_URL (local dev postgres); they were missing after merges and required manual apply; deployment must apply them before code ships.
 - [Prod DB schema drift](prod-db-schema-drift.md) — NEON_DATABASE_URL prod schema/id_patterns diverge from dev+docs; check live rows before ID or migration work.
+- [Production DB access](production-db-access.md) — real prod is the deployment's DATABASE_URL (query via executeSql environment:"production"); NEON and workspace DATABASE_URL are both NOT production; HT org is named "Primary Organization".
