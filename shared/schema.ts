@@ -186,7 +186,7 @@ export const leads = pgTable("leads", {
   externalIdIdx: index("leads_external_id_idx").on(table.externalId),
   orgEmailUnique: uniqueIndex("leads_org_email_unique_idx")
     .on(table.organizationId, sql`lower(BTRIM(${table.email}))`)
-    .where(sql`NULLIF(BTRIM(${table.email}), '') IS NOT NULL`),
+    .where(sql`NULLIF(BTRIM(${table.email}), ''::text) IS NOT NULL`),
 }));
 
 export const opportunities = pgTable("opportunities", {
