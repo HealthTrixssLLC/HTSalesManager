@@ -1,0 +1,161 @@
+========================================================
+TAGS ARE OPTIONAL — CRITICAL REQUIREMENT
+========================================================
+
+Tags are OPTIONAL metadata.
+
+A tag MUST NOT be required to:
+
+- create a CRM record;
+- update a CRM record;
+- create an activity;
+- update an opportunity;
+- create or update an account;
+- create or update a contact;
+- create or update a lead;
+- perform any other normal CRM transaction.
+
+Existing CRM create/update behavior must continue to work exactly as it does
+today without tags.
+
+Tagging is an independent, optional capability layered on top of CRM records.
+
+The architecture must preserve separation between:
+
+1. CRM RECORD OPERATIONS
+
+   Create/update the CRM record using the normal API.
+
+   No tag or tagId is required.
+
+2. TAG TAXONOMY OPERATIONS
+
+   crm_list_tags
+   crm_create_tag
+
+   These manage the organization's reusable tag vocabulary independently of
+   CRM transactions.
+
+3. OPTIONAL TAG ASSIGNMENT OPERATIONS
+
+   crm_get_entity_tags
+   crm_add_tag
+   crm_remove_tag
+
+   These optionally associate tags with existing CRM records.
+
+========================================================
+NO IMPLICIT TAGGING
+========================================================
+
+Creating or updating a CRM record MUST NOT automatically:
+
+- create a tag;
+- require a tag;
+- assign a tag;
+- remove existing tags;
+- modify tags;
+- validate that the record has a tag.
+
+Likewise, PATCH requests for normal CRM fields must not change tags unless an
+explicit tag operation is separately requested.
+
+For example, this must remain valid by itself:
+
+PATCH /opportunities/OPP-2026-000132
+
+{
+  "closeDate": "2026-09-30"
+}
+
+No tag information is required.
+
+Similarly, creating an activity must work without any tags.
+
+========================================================
+OPTIONAL TAG WORKFLOWS
+========================================================
+
+When the user DOES request tagging, the MCP must support it.
+
+Example:
+
+"Update the opportunity close date to September 30."
+
+Required behavior:
+
+crm_update_opportunity(...)
+
+No tag operation occurs.
+
+Example:
+
+"Tag this opportunity CEO Attention."
+
+Required behavior:
+
+find/create tag as appropriate
+→ crm_add_tag(...)
+→ verify assignment
+
+No opportunity PATCH is required merely to add the tag.
+
+Example:
+
+"Update the close date to September 30 and tag it CEO Attention."
+
+These are TWO independent operations:
+
+1. crm_update_opportunity(...)
+2. crm_add_tag(...)
+
+Each operation should succeed/fail independently and be separately auditable.
+
+========================================================
+NET-NEW TAG CREATION
+========================================================
+
+The MCP MUST still support:
+
+crm_create_tag
+
+This means Gary can create a new tag when the user explicitly requests a
+net-new classification or when the user's tagging instruction clearly requires
+a tag that does not yet exist.
+
+However, crm_create_tag is NOT a prerequisite for normal CRM create/update
+operations.
+
+Likewise, crm_add_tag must never silently create a tag.
+
+Keep:
+
+crm_create_tag
+
+and:
+
+crm_add_tag
+
+as separate API/MCP operations.
+
+========================================================
+BACKWARD COMPATIBILITY
+========================================================
+
+This tagging enhancement must introduce ZERO new tag requirements into
+existing CRM API operations.
+
+Existing integrations that never use tags must continue functioning without
+modification.
+
+Add regression tests proving:
+
+- account operations work without tags;
+- contact operations work without tags;
+- lead operations work without tags;
+- opportunity operations work without tags;
+- activity operations work without tags;
+- PATCH operations work without tags;
+- no tag is automatically created during ordinary record operations;
+- no tag is automatically assigned during ordinary record operations;
+- existing tags remain unchanged during ordinary PATCH operations.
