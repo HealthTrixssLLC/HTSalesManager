@@ -215,6 +215,50 @@ export async function runStartupColumnMigration(): Promise<void> {
       END $$;
     `));
 
+    // 9. Org-scoped tags migration (mirrors migrations/0018_add_org_scoped_tags.sql).
+    //    All statements are fully idempotent; safe to run on every startup.
+    //
+    //    Background: tags were originally global (unique by name across all orgs).
+    //    The External API requires org-scoped tags (unique by name within one org).
+    //    NULL organization_id = legacy/global tag (visible in the CRM UI only).
+    //    Existing tags are left with organization_id = NULL — they cannot be safely
+    //    backfilled to a specific org because some tags are assigned to entities from
+    //    multiple organizations (confirmed from production data).
+    //
+    //    ON DELETE CASCADE: when an org is deleted, its owned tags are deleted too.
+    //    Legacy NULL-org tags are unaffected by org deletions.
+    await db.execute(sql.raw(`
+      ALTER TABLE tags
+        ADD COLUMN IF NOT EXISTS organization_id VARCHAR(50)
+        REFERENCES organizations(id) ON DELETE CASCADE
+    `));
+
+    // Replace the global unique-name constraint with a per-org case-insensitive one.
+    // DROP CONSTRAINT IF EXISTS is idempotent: no-op if already removed.
+    await db.execute(sql.raw(`ALTER TABLE tags DROP CONSTRAINT IF EXISTS tags_name_unique`));
+    await db.execute(sql.raw(`ALTER TABLE tags DROP CONSTRAINT IF EXISTS tags_name_key`));
+
+    // Per-org unique index: same name is allowed in different orgs; global (NULL-org)
+    // tags share one global namespace (COALESCE maps NULL → '').
+    await db.execute(sql.raw(`
+      CREATE UNIQUE INDEX IF NOT EXISTS tags_name_org_unique_idx
+        ON tags (lower(name), COALESCE(organization_id, ''))
+    `));
+
+    await db.execute(sql.raw(`
+      CREATE INDEX IF NOT EXISTS tags_org_idx ON tags (organization_id)
+    `));
+
+    // External API tag creation is key-scoped (no user session), so created_by
+    // must be nullable on both tables.  DROP NOT NULL on an already-nullable column
+    // is a safe no-op in PostgreSQL.
+    await db.execute(sql.raw(`
+      ALTER TABLE tags ALTER COLUMN created_by DROP NOT NULL
+    `));
+    await db.execute(sql.raw(`
+      ALTER TABLE entity_tags ALTER COLUMN created_by DROP NOT NULL
+    `));
+
     console.log('✓ Startup column migration completed');
   } catch (error) {
     console.error('Startup column migration error (non-fatal):', error);

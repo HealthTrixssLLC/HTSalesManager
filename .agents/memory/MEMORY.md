@@ -10,3 +10,4 @@
 - [External router mount order](external-route-mount-order.md) — mount /api/v1/external before internal generic /api/:entity/... matchers, or they silently swallow external paths (e.g. /api/v1/external/tags).
 - [Startup ordering constraint](startup-ordering.md) — setupVite registers an app.use("*",...) catch-all that shadows any routes registered later; serveStatic does too. Both MUST come after registerRoutes. Production-only early listen is safe; dev listen stays last.
 - [External API ETag concurrency](external-api-etag.md) — strong If-Match only (quoted tags), date_trunc ms predicate + GREATEST(+1ms) bump; review rejects lenient ETag parsing.
+- [Startup migration is the production migration path](startup-migration-pattern.md) — numbered SQL files in migrations/ are dev-only (drizzle-kit push); all production schema changes must go into runStartupColumnMigration() in server/seed.ts as idempotent SQL. The Drizzle journal is not used at runtime.
