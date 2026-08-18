@@ -1276,16 +1276,14 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
-      return res.status(403).json({
-        error: "Organization-bound API key required",
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
         message: "Lead creation requires an API key bound to an organization. Ask your CRM administrator to create an organization-scoped API key in the Admin Console.",
       });
     }
 
     const parsed = externalLeadSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        error: "Validation failed",
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
         message: "The lead payload is invalid",
         details: parsed.error.errors.map(e => ({
           field: e.path.join(".") || "(root)",
@@ -1297,8 +1295,7 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
 
     const organization = await storage.getOrganizationById(orgId);
     if (!organization) {
-      return res.status(403).json({
-        error: "Invalid organization",
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Invalid organization", {
         message: "The organization bound to this API key no longer exists",
       });
     }

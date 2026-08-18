@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Health Trixss CRM External API
-  version: "1.5"
+  version: "1.6"
   description: |
     Secure external access to Health Trixss CRM data for forecasting
     applications, BI tools, and third-party integrations.
@@ -39,6 +39,33 @@ info:
     ## Canonical record ID prefixes
     Account `ACCT-*`, Contact `CONT-*`, Lead `LEAD-*`, Opportunity `OPP-*`,
     Activity `ACT-*`, Document `DOC-*`.
+
+    ## Machine-readable error codes
+    Error responses on write endpoints (tags, PATCH, activity creation),
+    permission failures, and rate limiting carry an additive `code` field
+    alongside the legacy `error`/`message` strings:
+    `VALIDATION_ERROR` (400), `INSUFFICIENT_SCOPE` (403), `NOT_FOUND` (404),
+    `TAG_ALREADY_EXISTS` (409), `IDEMPOTENCY_CONFLICT` (409),
+    `STALE_RECORD` (412), `RATE_LIMITED` (429). Older read-endpoint errors
+    may omit `code`; clients should treat it as optional.
+
+    ## Optimistic concurrency (ETag / If-Match)
+    Every entity detail GET (accounts, contacts, leads, opportunities,
+    activities) returns an opaque strong `ETag` response header, mirrored as
+    `_version` in the payload. PATCH endpoints accept an optional `If-Match`
+    header: when present, the update succeeds only if the record's current
+    version matches (strong comparison, RFC 9110). A stale, weak, or
+    malformed `If-Match` returns `412` with `code: STALE_RECORD` and the
+    record's `currentVersion` for retry. `If-Match: *` matches any current
+    version. Without `If-Match`, PATCH is last-write-wins.
+
+    ## Activity idempotency
+    `POST /activities` accepts an optional `externalId` idempotency token,
+    unique per organization. Replaying a request with the same `externalId`
+    and the same intent (`type` + `subject`) returns `200` with the original
+    record instead of creating a duplicate — safe under concurrent retries.
+    Reusing a token with a different `type` or `subject` returns `409` with
+    `code: IDEMPOTENCY_CONFLICT`.
 servers:
   - url: https://{crm-domain}/api/v1/external
     variables:
@@ -773,6 +800,9 @@ paths:
       responses:
         "200":
           description: Account detail (adds `website` and `phone` over the list shape)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -809,9 +839,11 @@ paths:
         mutable fields are accepted; immutable fields (`id`, `organizationId`,
         `createdAt`, `updatedAt`, `sourceSystem`, `sourceRecordId`,
         `importStatus`, `importNotes`) and unknown fields return 400 listing
-        the rejected keys.
+        the rejected keys. Supports optimistic concurrency via the optional
+        `If-Match` header (412 `STALE_RECORD` on version mismatch).
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -822,6 +854,9 @@ paths:
       responses:
         "200":
           description: Updated account record (full database row)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -834,6 +869,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -970,6 +1006,9 @@ paths:
       responses:
         "200":
           description: Opportunity detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1030,9 +1069,11 @@ paths:
         not be before `implementationEndDate`. A mutable `accountId` must
         reference an account in the record's own organization (404 otherwise);
         a mutable `ownerId` must reference a member of the record's
-        organization (404 otherwise).
+        organization (404 otherwise). Supports optimistic concurrency via the
+        optional `If-Match` header (412 `STALE_RECORD` on version mismatch).
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -1043,6 +1084,9 @@ paths:
       responses:
         "200":
           description: Updated opportunity record (full database row)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1055,6 +1099,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -1224,6 +1269,9 @@ paths:
       responses:
         "200":
           description: Contact detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1259,9 +1307,12 @@ paths:
         Strict partial update; requires the `crm.write` scope. Unlike contact
         reads, this route accepts system keys (org-scoped keys can only modify
         their own organization's records). A mutable `accountId` must
-        reference an account in the record's own organization.
+        reference an account in the record's own organization. Supports
+        optimistic concurrency via the optional `If-Match` header (412
+        `STALE_RECORD` on version mismatch).
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -1272,6 +1323,9 @@ paths:
       responses:
         "200":
           description: Updated contact record (full database row)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1284,6 +1338,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -1440,6 +1495,9 @@ paths:
       responses:
         "200":
           description: Lead detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1460,9 +1518,12 @@ paths:
       description: >
         Strict partial update; requires the `crm.write` scope. Unlike lead
         reads and creation, this route accepts system keys (org-scoped keys
-        can only modify their own organization's records).
+        can only modify their own organization's records). Supports
+        optimistic concurrency via the optional `If-Match` header (412
+        `STALE_RECORD` on version mismatch).
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -1473,6 +1534,9 @@ paths:
       responses:
         "200":
           description: Updated lead record (full database row)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1485,6 +1549,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -1593,6 +1658,15 @@ paths:
         when provided, the referenced record must belong to the key's
         organization (404 otherwise). An activity-association row is created
         so the activity appears on the related record's timeline.
+
+
+        **Idempotency:** the optional `externalId` acts as an idempotency
+        token, unique per organization. Replaying the same `externalId` with
+        the same intent (`type` + `subject`) returns `200` with the original
+        activity instead of creating a duplicate — the claim is atomic, so
+        concurrent retries can never create two records. Reusing the token
+        with a different `type` or `subject` returns `409`
+        `IDEMPOTENCY_CONFLICT` with `existingActivityId`.
       requestBody:
         required: true
         content:
@@ -1633,10 +1707,24 @@ paths:
                   organizationId: 2f5e350e-5cb9-45a8-aef7-8ca8194c5081
                   createdAt: "2026-08-12T14:05:00.000Z"
                   updatedAt: "2026-08-12T14:05:00.000Z"
+        "200":
+          description: >
+            Idempotent replay — an activity with this `externalId` and the
+            same `type`/`subject` already exists; the original record is
+            returned and nothing new is created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Activity"
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/OrgKeyRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/IdempotencyConflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -1659,6 +1747,9 @@ paths:
       responses:
         "200":
           description: Activity detail
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1676,9 +1767,13 @@ paths:
       tags: [Activities]
       operationId: patchActivity
       summary: Update an activity (partial)
-      description: Strict partial update; requires the `activities.write` scope.
+      description: >
+        Strict partial update; requires the `activities.write` scope. Supports
+        optimistic concurrency via the optional `If-Match` header (412
+        `STALE_RECORD` on version mismatch).
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         content:
@@ -1689,6 +1784,9 @@ paths:
       responses:
         "200":
           description: Updated activity record (full database row)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
@@ -1701,6 +1799,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -2137,6 +2236,28 @@ components:
       required: true
       schema: { type: string }
       description: ID of the tag to remove from the record.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      schema: { type: string }
+      example: '"MjAyNi0wOC0xOFQxMDowMDowMC4wMDBa"'
+      description: >
+        Optional optimistic-concurrency precondition (RFC 9110, strong
+        comparison). Provide the quoted `ETag` value from a prior detail GET
+        (also available as `_version` in the payload). The PATCH succeeds
+        only when the record's current version matches; otherwise `412` with
+        `code: STALE_RECORD`. Weak validators (`W/"..."`), bare unquoted
+        tokens, and malformed lists never match. `*` matches any current
+        version. When omitted, the update is unconditional (last-write-wins).
+
+  headers:
+    ETag:
+      schema: { type: string }
+      description: >
+        Opaque strong entity tag for the record's current version (also
+        mirrored as `_version` in the payload). Use it in `If-Match` on a
+        subsequent PATCH for optimistic concurrency.
 
   responses:
     Unauthorized:
@@ -2161,6 +2282,7 @@ components:
           example:
             error: Organization-bound API key required
             message: Lead access requires an API key bound to an organization
+            code: INSUFFICIENT_SCOPE
     InsufficientPermissions:
       description: The API key lacks the required permission scope.
       content:
@@ -2174,6 +2296,7 @@ components:
           example:
             error: Insufficient permissions
             message: This API key does not have the 'crm.write' permission required for this operation
+            code: INSUFFICIENT_SCOPE
             requiredPermission: crm.write
     NotFound:
       description: >
@@ -2195,6 +2318,7 @@ components:
           example:
             error: Validation failed
             message: The lead payload is invalid
+            code: VALIDATION_ERROR
             details:
               - { field: email, message: Invalid email address }
     PatchValidationError:
@@ -2213,11 +2337,13 @@ components:
               value:
                 error: Immutable fields cannot be modified
                 message: "The following fields are immutable: id, organizationId"
+                code: VALIDATION_ERROR
                 rejectedFields: [id, organizationId]
             unknown:
               value:
                 error: Unknown fields rejected
                 message: "The following fields are not allowed for Lead updates: nickname"
+                code: VALIDATION_ERROR
                 rejectedFields: [nickname]
                 allowedFields: [firstName, lastName, title, company, email, phone, topic, status, source, rating, ownerId, externalId]
     BadTimestamp:
@@ -2242,6 +2368,7 @@ components:
           example:
             error: Tag already exists
             message: A tag named "priority" already exists in this organization
+            code: TAG_ALREADY_EXISTS
             existingTagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
     RateLimited:
       description: >
@@ -2259,6 +2386,44 @@ components:
           example:
             error: Too many requests
             message: You have exceeded the rate limit for this API key. Please try again later.
+            code: RATE_LIMITED
+    StaleRecord:
+      description: >
+        `If-Match` precondition failed — the record changed since the client's
+        ETag was issued, or the header was weak/malformed. The response
+        includes the record's `currentVersion` for a fresh conditional retry.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Error"
+              - type: object
+                properties:
+                  currentVersion:
+                    type: string
+                    description: The record's current ETag (quoted).
+          example:
+            error: Precondition failed
+            message: The record has been modified since the provided version; refresh and retry
+            code: STALE_RECORD
+            currentVersion: '"MjAyNi0wOC0xOFQxMTowMDowMC4wMDBa"'
+    IdempotencyConflict:
+      description: >
+        The `externalId` idempotency token was already used by an activity
+        with a different `type` or `subject` in this organization.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Error"
+              - type: object
+                properties:
+                  existingActivityId: { type: string }
+          example:
+            error: External ID already used by a different activity
+            message: An activity with this externalId already exists but has a different type or subject.
+            code: IDEMPOTENCY_CONFLICT
+            existingActivityId: ACT-2608-00099
     ServerError:
       description: Internal server error.
       content:
@@ -2272,14 +2437,31 @@ components:
   schemas:
     Error:
       type: object
-      required: [error, message]
+      required: [error]
       properties:
         error:
           type: string
-          description: Short machine-readable error name.
+          description: Short machine-readable error name (legacy; always present).
         message:
           type: string
           description: Human-readable detail.
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+
+    ErrorCode:
+      type: string
+      description: >
+        Stable machine-readable error code (additive; present on write
+        endpoints, permission failures, and rate limiting — treat as optional
+        on older read-endpoint errors).
+      enum:
+        - VALIDATION_ERROR
+        - INSUFFICIENT_SCOPE
+        - NOT_FOUND
+        - TAG_ALREADY_EXISTS
+        - IDEMPOTENCY_CONFLICT
+        - STALE_RECORD
+        - RATE_LIMITED
     ValidationError:
       allOf:
         - $ref: "#/components/schemas/Error"
@@ -2613,6 +2795,9 @@ components:
           enum: [Contact, Lead, Account, Opportunity, null]
         relatedId: { type: [string, "null"] }
         organizationId: { type: string }
+        externalId:
+          type: [string, "null"]
+          description: Idempotency token / external system ID, when set.
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -2654,6 +2839,15 @@ components:
           minLength: 1
           maxLength: 100
           description: Must be provided together with relatedType.
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: >
+            Optional idempotency token, unique per organization. Replaying
+            the same token with the same `type` and `subject` returns 200
+            with the original activity; a different `type` or `subject`
+            returns 409 IDEMPOTENCY_CONFLICT.
 
     LogEntry:
       type: object

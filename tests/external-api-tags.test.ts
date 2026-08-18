@@ -427,6 +427,35 @@ describe("Tags stay optional for record operations", () => {
     }
   });
 
+  it("POST /leads succeeds without any tag fields and starts with zero tags", async () => {
+    const email = `vitag-opt-lead-${suffix}@example.com`;
+    const res = await post("/leads", { firstName: "TagFree", lastName: "Lead", email, source: "other" }, orgKey);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    const leadId = body.data.id;
+    try {
+      const tags = await (await get(`/leads/${leadId}/tags`, orgKey)).json();
+      expect(tags.data).toEqual([]);
+    } finally {
+      await db.delete(schema.entityTags).where(eq(schema.entityTags.entityId, leadId));
+      await db.delete(schema.leads).where(eq(schema.leads.id, leadId));
+    }
+  });
+
+  it("POST /activities succeeds without any tag fields and starts with zero tags", async () => {
+    const res = await post("/activities", { type: "task", subject: `Vitag TagFree Activity ${suffix}` }, orgKey);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    const actId = body.data.id;
+    try {
+      const tags = await (await get(`/activities/${actId}/tags`, orgKey)).json();
+      expect(tags.data).toEqual([]);
+    } finally {
+      await db.delete(schema.entityTags).where(eq(schema.entityTags.entityId, actId));
+      await db.delete(schema.activities).where(eq(schema.activities.id, actId));
+    }
+  });
+
   it("assigning by a non-existent name errors and never creates the tag (each entity)", async () => {
     const missing = `vitag-ghost-${suffix}`;
     const cases: Array<[string, string]> = [
