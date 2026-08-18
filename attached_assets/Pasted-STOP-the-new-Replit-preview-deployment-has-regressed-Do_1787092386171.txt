@@ -1,0 +1,129 @@
+STOP — the new Replit preview deployment has regressed.
+
+Do not publish or deploy production.
+
+The prior preview reached:
+Database migrations validated successfully
+
+After the latest runtime/startup fixes, a new preview now fails at:
+Failed to validate database migrations
+Preview build failed
+
+This is occurring during Provision/database migration validation, before Build/Bundle/Promote.
+
+I need a root-cause investigation based on the actual Replit preview failure, not an inferred explanation.
+
+1. Determine exactly what changed
+
+Compare the code/schema/migration state between:
+
+the revision that previously produced Database migrations validated successfully, and
+the current revision that fails migration validation.
+
+Identify every database/schema/startup-migration-related change between those revisions.
+
+Pay particular attention to:
+
+shared/schema.ts
+runStartupColumnMigration()
+0018_add_org_scoped_tags.sql
+Drizzle migration metadata/journal
+generated migration state
+tags/entity_tags schema
+indexes and constraints
+2. Obtain the actual failure
+
+Retrieve the Replit preview/provisioning logs and report the exact SQL/database error responsible for:
+
+Failed to validate database migrations
+
+Do not modify code until the actual failing statement/error has been identified.
+
+3. Check for competing migration mechanisms
+
+We now appear to have potentially two mechanisms describing the same tag schema changes:
+
+A. Replit-generated deployment migrations
+
+and
+
+B. runStartupColumnMigration() application startup migrations
+
+Determine whether the same tag migration is being applied or represented by both mechanisms.
+
+Specifically determine whether Replit's preview database receives the schema changes during provisioning and then application startup attempts to apply them again, or whether migration/schema drift is causing Replit to generate incompatible SQL.
+
+We need one coherent, safe production migration strategy, not two competing sources of truth.
+
+4. Validate current database states
+
+Compare:
+
+development DB schema
+Replit preview/deployment DB schema, where accessible
+expected production schema
+Drizzle schema
+
+For tags, verify existence/state of:
+
+organization_id
+created_by nullability
+tags_name_unique
+tags_name_org_unique_idx
+tags_org_idx
+tags_organization_id_fkey
+
+For entity_tags, verify created_by nullability.
+
+Also verify the five existing legacy tags remain intact and are not being backfilled or deleted.
+
+5. Preserve required behavior
+
+The final solution must preserve these decisions:
+
+Existing 5 legacy tags remain organization_id = NULL.
+Existing tag assignments remain intact.
+Do not arbitrarily backfill legacy tags.
+New API-created tags are organization scoped.
+Tags remain optional on CRM entities.
+Existing global/legacy tags remain supported.
+No production data may be deleted to resolve the migration.
+6. Correct the migration architecture
+
+Once the exact cause is known, propose the smallest safe correction.
+
+Do not simply add more IF EXISTS / IF NOT EXISTS statements until Replit stops complaining.
+
+Explain which mechanism is authoritative for production schema migration and why.
+
+7. Validate
+
+After the correction, run:
+
+typecheck
+complete automated test suite
+build
+migration against a production-like schema
+migration a second time to prove idempotency where applicable
+production-style startup
+HTTP health probe
+browser/Playwright smoke test
+
+Also test migration from a database representing the current production schema before the tag changes, not merely the already-migrated development database.
+
+STOP CONDITION
+
+Do not deploy.
+Do not publish.
+Do not modify production.
+
+Stop and report:
+
+exact Replit error,
+failing SQL/operation,
+why the previous preview passed but this one failed,
+whether Replit migrations and startup migrations conflict,
+proposed final migration architecture,
+exact changes made,
+test results,
+whether another preview deployment is safe.
