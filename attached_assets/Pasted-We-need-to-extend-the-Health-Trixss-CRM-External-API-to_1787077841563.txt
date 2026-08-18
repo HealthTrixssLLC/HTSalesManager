@@ -1,0 +1,459 @@
+We need to extend the Health Trixss CRM External API to support TAGGING of CRM records.
+
+IMPORTANT:
+This task is for the CRM External API only.
+DO NOT modify the healthtrixss-crm-mcp project.
+The MCP implementation will be performed separately after this API work is complete.
+
+CURRENT EXTERNAL API
+
+The CRM currently exposes external API support for:
+
+- Accounts
+- Contacts
+- Leads
+- Opportunities
+- Activities
+- Documents
+
+The existing API uses:
+- /api/v1/external
+- x-api-key authentication
+- organization scoping
+- crm.read / crm.write
+- activities.read / activities.write
+- documents.read / documents.write
+- strict validation
+- audit logging
+
+Review the existing implementation before making changes, including:
+
+- server/external-api-routes.ts
+- server/external-patch-config.ts
+- docs/openapi.yaml
+- API implementation documentation
+- database schema
+- existing tag/category functionality anywhere in the CRM application
+
+Do not assume a new database schema is required until you determine whether the CRM already has a reusable tag model.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Expose a clean, secure external API that allows integrations to create/use tags and assign/remove tags from CRM records.
+
+The following entity types must support tags:
+
+- Account
+- Contact
+- Lead
+- Opportunity
+- Activity
+
+If the internal CRM already supports tags on additional entity types, document them, but do not unnecessarily expand scope.
+
+Tags must be organization-scoped.
+
+The same tag should be reusable across multiple entities.
+
+Example:
+
+"CEO Attention"
+
+could be attached to:
+
+ACCT-2025-00030
+OPP-2026-000123
+ACT-2608-00099
+
+without creating three independent tag definitions.
+
+==================================================
+1. FIRST INSPECT EXISTING TAG FUNCTIONALITY
+==================================================
+
+Before coding, determine:
+
+1. Does the CRM already have:
+   - tags
+   - labels
+   - categories
+   - entity tags
+   - record tags
+   - many-to-many metadata
+
+2. What database tables/models already exist?
+
+3. Does the UI already allow users to tag records?
+
+4. Are tags organization-specific?
+
+5. Are there existing internal API routes/services for tagging?
+
+Reuse existing production functionality whenever possible.
+
+Do NOT create a parallel tagging system if one already exists.
+
+==================================================
+2. TAG MANAGEMENT API
+==================================================
+
+Implement external API support for tag management.
+
+Preferred API design:
+
+GET /api/v1/external/tags
+
+Returns tags available to the organization.
+
+Support at minimum:
+- search
+- limit
+- offset
+
+POST /api/v1/external/tags
+
+Creates a tag.
+
+Example:
+
+{
+  "name": "CEO Attention"
+}
+
+Tag names should be normalized appropriately to prevent accidental duplicates.
+
+For example:
+
+"CEO Attention"
+"ceo attention"
+" CEO Attention "
+
+should not create unintended duplicate tags if the existing CRM tag model treats these as equivalent.
+
+If the CRM already has tag colors, descriptions, or other metadata, expose them where appropriate.
+
+==================================================
+3. ENTITY TAG API
+==================================================
+
+Implement a consistent API for assigning tags to records.
+
+Preferred pattern:
+
+GET /api/v1/external/{entityType}/{id}/tags
+
+POST /api/v1/external/{entityType}/{id}/tags
+
+DELETE /api/v1/external/{entityType}/{id}/tags/{tagId}
+
+Supported entity routes:
+
+accounts
+contacts
+leads
+opportunities
+activities
+
+Example:
+
+POST /api/v1/external/opportunities/OPP-2026-000123/tags
+
+{
+  "tagId": "TAG-000123"
+}
+
+If appropriate, ALSO support convenient assignment by tag name:
+
+{
+  "name": "CEO Attention"
+}
+
+If assignment by name is supported, define clearly whether a missing tag:
+A. is automatically created, or
+B. returns an error.
+
+Prefer predictable/idempotent behavior.
+
+Adding an already-attached tag should NOT create duplicates.
+
+==================================================
+4. FILTERING
+==================================================
+
+Extend the existing list APIs so records can be filtered by tag.
+
+Examples:
+
+GET /accounts?tag=Strategic
+GET /contacts?tag=Decision-Maker
+GET /leads?tag=Conference-2026
+GET /opportunities?tag=CEO-Attention
+GET /activities?tag=Needs-Follow-Up
+
+If IDs are preferable, support:
+
+?tagId=TAG-000123
+
+Ideally support both tag name and tag ID if it can be implemented cleanly.
+
+Filtering MUST occur before pagination so pagination.total reflects the filtered result.
+
+==================================================
+5. READ RESPONSES
+==================================================
+
+Determine whether tags should be available through expand behavior.
+
+Preferred:
+
+GET /opportunities/:id?expand=tags
+
+and equivalent support for:
+
+accounts
+contacts
+leads
+activities
+
+Return a normalized representation such as:
+
+"tags": [
+  {
+    "id": "TAG-000123",
+    "name": "CEO Attention"
+  }
+]
+
+If the existing CRM tag model includes color or other useful metadata, include it consistently.
+
+==================================================
+6. SECURITY
+==================================================
+
+Preserve existing external API security.
+
+Reading tags:
+crm.read
+
+Creating tags:
+crm.write
+
+Assigning/removing tags:
+crm.write
+
+For activities, determine whether activity tag operations should use:
+activities.read / activities.write
+
+or crm.read / crm.write.
+
+Use whichever model is most consistent with the existing authorization architecture and DOCUMENT the decision.
+
+Organization isolation is mandatory.
+
+An API key must never:
+- see another organization's tags
+- assign another organization's tag
+- tag another organization's record
+- infer the existence of cross-organization records
+
+Follow the existing 404 behavior for cross-org resources.
+
+==================================================
+7. AUDIT LOGGING
+==================================================
+
+Tag mutations must participate in the existing API audit logging.
+
+We need visibility into:
+
+- tag creation
+- tag assignment
+- tag removal
+- API key/user responsible
+- entity type
+- entity ID
+- timestamp
+
+Reuse existing audit infrastructure.
+
+==================================================
+8. OPENAPI
+==================================================
+
+Update:
+
+docs/openapi.yaml
+
+The OpenAPI specification must completely document:
+
+- tag schemas
+- tag list
+- tag creation
+- entity tag retrieval
+- tag assignment
+- tag removal
+- tag filters
+- expand=tags
+- authentication
+- required scopes
+- response structures
+- validation
+- errors
+- examples
+
+The OpenAPI specification must remain the canonical machine-readable contract.
+
+==================================================
+9. TESTS
+==================================================
+
+Add comprehensive tests.
+
+At minimum test:
+
+TAG MANAGEMENT
+- list tags
+- search tags
+- create tag
+- duplicate tag behavior
+
+ASSIGNMENT
+- add tag to account
+- add tag to contact
+- add tag to lead
+- add tag to opportunity
+- add tag to activity
+
+REMOVAL
+- remove tag
+- remove nonexistent assignment
+
+IDEMPOTENCY
+- assign same tag twice
+
+FILTERING
+- filter each entity by tag
+
+EXPANSION
+- expand=tags
+
+SECURITY
+- missing API key
+- missing read permission
+- missing write permission
+- cross-organization tag
+- cross-organization entity
+- system vs organization-scoped key behavior
+
+VALIDATION
+- invalid entity ID
+- invalid tag ID
+- empty tag name
+- excessive tag name
+- malformed requests
+
+Run the existing test suite as well to ensure no regression.
+
+==================================================
+10. DO NOT BREAK EXISTING MCP
+==================================================
+
+The existing healthtrixss-crm-mcp currently consumes this API.
+
+Existing API behavior MUST remain backward compatible.
+
+Do not rename or remove existing:
+- routes
+- response fields
+- permission scopes
+- query parameters
+
+without identifying the issue first.
+
+==================================================
+11. CREATE MCP IMPLEMENTATION GUIDE
+==================================================
+
+After the API implementation and tests are complete, create:
+
+docs/MCP_TAG_IMPLEMENTATION_GUIDE.md
+
+This document will be handed directly to Codex to update the separate:
+
+healthtrixss-crm-mcp
+
+repository.
+
+The guide must contain:
+
+1. Exact production API endpoints
+2. HTTP methods
+3. Authentication requirements
+4. Required permission scopes
+5. Every request schema
+6. Every response schema
+7. Tag object schema
+8. Entity type mapping
+9. Filter parameters
+10. expand=tags behavior
+11. Pagination behavior
+12. Error responses
+13. Idempotency behavior
+14. Organization-scoping behavior
+15. curl examples for every operation
+16. Recommended MCP tool mappings
+
+Recommend MCP tools such as:
+
+crm_list_tags
+crm_get_entity_tags
+crm_add_tag
+crm_remove_tag
+
+For each recommended MCP tool provide:
+
+- purpose
+- input schema
+- corresponding API call
+- expected result
+- possible errors
+- whether it is read-only or mutating
+
+Also document how existing MCP tools should expose tag filtering.
+
+==================================================
+12. FINAL REPORT
+==================================================
+
+When finished, DO NOT simply say "done."
+
+Give me a structured implementation report containing:
+
+A. EXISTING CRM TAG ARCHITECTURE FOUND
+Explain what already existed.
+
+B. DATABASE CHANGES
+List migrations/schema changes, if any.
+
+C. NEW API ENDPOINTS
+List every endpoint implemented.
+
+D. MODIFIED API ENDPOINTS
+List existing endpoints that gained tag filtering or expansion.
+
+E. SECURITY
+Explain scopes and organization isolation.
+
+F. TEST RESULTS
+Give exact pass/fail results.
+
+G. OPENAPI
+Confirm docs/openapi.yaml was updated.
+
+H. MCP IMPLEMENTATION GUIDE
+Confirm the exact location:
+docs/MCP_TAG_IMPLEMENTATION_GUIDE.md
+
+I will review this report and implementation guide before authorizing any changes to the MCP server.
