@@ -607,6 +607,95 @@ const TOOLS: Tool[] = [
     },
   },
 
+  // ── TAGS ──────────────────────────────────────────────────────────────────
+  // Tags are OPTIONAL metadata layered on top of CRM records. No CRM record
+  // tool requires or accepts tag fields; these five tools are the only way to
+  // work with tags, and none of them is a prerequisite for record operations.
+  {
+    name: "crm_list_tags",
+    description:
+      "List the organization's tags. Tags are optional labels; records do not need tags.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Case-insensitive substring match on tag name." },
+        limit: { type: "number", description: "Number of results (default 100, max 1000)." },
+        offset: { type: "number", description: "Number of results to skip (default 0)." },
+      },
+    },
+  },
+  {
+    name: "crm_create_tag",
+    description:
+      "Create a new org-scoped tag. Only use when the user explicitly asks to create a tag — " +
+      "assigning an existing tag to a record is done with crm_add_tag instead, and creating " +
+      "a tag is never required for any CRM record operation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Tag name (1–100 chars, unique per org, case-insensitive)." },
+      },
+      required: ["name"],
+    },
+  },
+  {
+    name: "crm_get_entity_tags",
+    description:
+      "List the tags currently attached to a CRM record (account, contact, lead, opportunity, or activity).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entityType: {
+          type: "string",
+          enum: ["account", "contact", "lead", "opportunity", "activity"],
+          description: "Type of the record.",
+        },
+        entityId: { type: "string", description: "Record ID (e.g. ACCT-2025-00001)." },
+      },
+      required: ["entityType", "entityId"],
+    },
+  },
+  {
+    name: "crm_add_tag",
+    description:
+      "Assign an EXISTING tag to a CRM record, by tagId or exact tag name. " +
+      "Never creates a tag: if the tag does not exist in the organization this returns an error — " +
+      "use crm_create_tag first only if the user explicitly wants a new tag. " +
+      "Provide exactly one of tagId or tagName.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entityType: {
+          type: "string",
+          enum: ["account", "contact", "lead", "opportunity", "activity"],
+          description: "Type of the record.",
+        },
+        entityId: { type: "string", description: "Record ID." },
+        tagId: { type: "string", description: "ID of an existing tag." },
+        tagName: { type: "string", description: "Exact (case-insensitive) name of an existing tag." },
+      },
+      required: ["entityType", "entityId"],
+    },
+  },
+  {
+    name: "crm_remove_tag",
+    description:
+      "Remove a tag assignment from a CRM record. Idempotent: succeeds even if the tag was not assigned.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        entityType: {
+          type: "string",
+          enum: ["account", "contact", "lead", "opportunity", "activity"],
+          description: "Type of the record.",
+        },
+        entityId: { type: "string", description: "Record ID." },
+        tagId: { type: "string", description: "ID of the tag to remove." },
+      },
+      required: ["entityType", "entityId", "tagId"],
+    },
+  },
+
   // ── GLOBAL SEARCH ─────────────────────────────────────────────────────────
   {
     name: "global_search",
@@ -632,6 +721,29 @@ function qs(params: Record<string, unknown>): string {
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
   if (!entries.length) return "";
   return "?" + entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join("&");
+}
+
+/** Map a tag tool's entityType argument to its External API URL segment. */
+const TAG_ENTITY_SEGMENTS: Record<string, string> = {
+  account: "accounts",
+  contact: "contacts",
+  lead: "leads",
+  opportunity: "opportunities",
+  activity: "activities",
+};
+
+function tagEntitySegment(entityType: unknown): string | undefined {
+  return TAG_ENTITY_SEGMENTS[String(entityType).toLowerCase()];
+}
+
+function invalidTagEntityType(entityType: unknown): CallToolResult {
+  return {
+    isError: true,
+    content: [{
+      type: "text",
+      text: `Invalid entityType "${String(entityType)}". Must be one of: account, contact, lead, opportunity, activity.`,
+    }],
+  };
 }
 
 async function handleTool(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
@@ -767,6 +879,74 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
     }
     case "research_candidate":
       return crmFetch(`/api/lead-gen/candidates/${args.id}`);
+
+    // TAGS (proxied to the External API — tags are optional metadata; no CRM
+    // record tool above accepts or requires tag fields)
+    case "crm_list_tags": {
+      const { search, limit, offset } = args;
+      return crmFetch(`/api/v1/external/tags${qs({ search, limit, offset })}`);
+    }
+    case "crm_create_tag": {
+      const { name: tagName } = args;
+      const result = await crmFetch("/api/v1/external/tags", { method: "POST", body: { name: tagName } });
+      // Surface a duplicate as a clear, actionable message rather than a bare HTTP error
+      if (result.isError) {
+        const text = (result.content[0] as { type: string; text: string }).text;
+        if (text.startsWith("HTTP 409")) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `A tag named "${tagName}" already exists in this organization. Use crm_add_tag to assign the existing tag instead of creating a new one.`,
+            }],
+          };
+        }
+      }
+      return result;
+    }
+    case "crm_get_entity_tags": {
+      const seg = tagEntitySegment(args.entityType);
+      if (!seg) return invalidTagEntityType(args.entityType);
+      return crmFetch(`/api/v1/external/${seg}/${encodeURIComponent(String(args.entityId))}/tags`);
+    }
+    case "crm_add_tag": {
+      const seg = tagEntitySegment(args.entityType);
+      if (!seg) return invalidTagEntityType(args.entityType);
+      const { tagId, tagName } = args;
+      if (!!tagId === !!tagName) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Provide exactly one of tagId or tagName." }],
+        };
+      }
+      const body = tagId ? { tagId } : { name: tagName };
+      const result = await crmFetch(
+        `/api/v1/external/${seg}/${encodeURIComponent(String(args.entityId))}/tags`,
+        { method: "POST", body }
+      );
+      // The External API never auto-creates on assignment; make the 404 actionable
+      if (result.isError) {
+        const text = (result.content[0] as { type: string; text: string }).text;
+        if (text.startsWith("HTTP 404") && tagName) {
+          return {
+            isError: true,
+            content: [{
+              type: "text",
+              text: `No tag named "${tagName}" exists in this organization (or the record was not found). Tags are never created implicitly — if the user explicitly wants a new tag, create it first with crm_create_tag, then assign it.`,
+            }],
+          };
+        }
+      }
+      return result;
+    }
+    case "crm_remove_tag": {
+      const seg = tagEntitySegment(args.entityType);
+      if (!seg) return invalidTagEntityType(args.entityType);
+      return crmFetch(
+        `/api/v1/external/${seg}/${encodeURIComponent(String(args.entityId))}/tags/${encodeURIComponent(String(args.tagId))}`,
+        { method: "DELETE" }
+      );
+    }
 
     // GLOBAL SEARCH
     case "global_search": {

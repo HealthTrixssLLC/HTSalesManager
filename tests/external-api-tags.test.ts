@@ -374,6 +374,77 @@ describe("Tag removal", () => {
   });
 });
 
+// ========== TAGS STAY OPTIONAL (MCP design law regression) ==========
+// Tags are optional metadata: no record create/PATCH requires tag fields, and
+// ordinary PATCHes must leave existing tag assignments untouched.
+
+describe("Tags stay optional for record operations", () => {
+  const patch = (p: string, body: any, k: string | null) =>
+    api(p, k, { method: "PATCH", body: JSON.stringify(body) });
+
+  it("PATCH on each entity succeeds with no tag fields present", async () => {
+    const cases: Array<[string, string, any]> = [
+      ["accounts", ids.account, { industry: "TagFree Industry" }],
+      ["contacts", ids.contact, { title: "TagFree Title" }],
+      ["leads", ids.lead, { company: "TagFree Co" }],
+      ["opportunities", ids.opportunity, { probability: 42 }],
+      ["activities", ids.activity, { priority: "high" }],
+    ];
+    for (const [entity, id, body] of cases) {
+      const res = await patch(`/${entity}/${id}`, body, orgKey);
+      expect(res.status, `${entity} PATCH without tags`).toBe(200);
+    }
+  });
+
+  it("a PATCH that changes only non-tag fields leaves tag assignments unchanged", async () => {
+    // ids.account has tags assigned by earlier tests — snapshot, PATCH, re-check
+    const before = await (await get(`/accounts/${ids.account}/tags`, orgKey)).json();
+    const beforeIds = before.data.map((t: any) => t.id).sort();
+    expect(beforeIds.length).toBeGreaterThan(0);
+
+    const res = await patch(`/accounts/${ids.account}`, { website: "https://tagfree.example.com" }, orgKey);
+    expect(res.status).toBe(200);
+
+    const after = await (await get(`/accounts/${ids.account}/tags`, orgKey)).json();
+    expect(after.data.map((t: any) => t.id).sort()).toEqual(beforeIds);
+  });
+
+  it("record creation succeeds without any tag fields (accounts via internal seed shape)", async () => {
+    // Create + delete a throwaway record through the external surface's org:
+    // the schema itself has no tag columns, so a create with only core fields
+    // must succeed and start with zero tags.
+    const newId = `ACCT-VITAGOPT-${suffix}`;
+    await db.insert(schema.accounts).values({ id: newId, organizationId: orgId, name: `Vitag Optional ${suffix}` });
+    try {
+      const tagsRes = await get(`/accounts/${newId}/tags`, orgKey);
+      expect(tagsRes.status).toBe(200);
+      expect((await tagsRes.json()).data).toEqual([]);
+      const patched = await patch(`/accounts/${newId}`, { industry: "NoTags" }, orgKey);
+      expect(patched.status).toBe(200);
+    } finally {
+      await db.delete(schema.entityTags).where(eq(schema.entityTags.entityId, newId));
+      await db.delete(schema.accounts).where(eq(schema.accounts.id, newId));
+    }
+  });
+
+  it("assigning by a non-existent name errors and never creates the tag (each entity)", async () => {
+    const missing = `vitag-ghost-${suffix}`;
+    const cases: Array<[string, string]> = [
+      ["accounts", ids.account],
+      ["contacts", ids.contact],
+      ["leads", ids.lead],
+      ["opportunities", ids.opportunity],
+      ["activities", ids.activity],
+    ];
+    for (const [entity, id] of cases) {
+      const res = await post(`/${entity}/${id}/tags`, { name: missing }, orgKey);
+      expect(res.status, `${entity} unknown tag name`).toBe(404);
+    }
+    const listed = await (await get(`/tags?search=${missing}`, orgKey)).json();
+    expect(listed.data.length).toBe(0);
+  });
+});
+
 // ========== SECURITY ==========
 
 describe("Security", () => {

@@ -31,3 +31,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS leads_org_email_unique_idx ON leads(organizati
 
 ## How to apply
 Before running integration tests after a merge, always run each new migration SQL against `$DATABASE_URL` directly with `psql`.
+- Recurred with the org-scoped tags migration: the tags table lacked organization_id in local dev until the migration was applied manually. Whenever a tag/external-API test fails with "column does not exist", apply pending files from migrations/ to DATABASE_URL before debugging code.
