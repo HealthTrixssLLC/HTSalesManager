@@ -1,0 +1,48 @@
+The Replit deployment preview failed during database migration validation. Do not deploy, publish, or make destructive production database changes.
+
+Review the generated production migration for the new organization-scoped tag implementation and determine exactly why the deployment preview failed.
+
+The generated migration currently includes:
+
+Drop tags_name_unique
+Make entity_tags.created_by nullable
+Make tags.created_by nullable
+Add nullable tags.organization_id varchar(50)
+Add FK tags.organization_id -> organizations.id with ON DELETE CASCADE
+Create unique index tags_name_org_unique_idx on lower(name), COALESCE(organization_id,'')
+Create index tags_org_idx on organization_id
+
+First obtain and report the actual migration validation error from the failed preview rather than assuming the cause.
+
+Then inspect the current database schema and existing tag data. Specifically validate:
+
+whether tags_name_unique actually exists and under that exact name;
+whether organization_id already exists;
+whether either new index already exists;
+whether the organizations table and referenced ID types match;
+whether existing tags contain duplicate names that would violate the proposed new unique index;
+whether existing tag/entity-tag records need migration/backfill;
+whether any existing production tag relationships could be lost;
+whether ON DELETE CASCADE is appropriate;
+whether the migration is safe and idempotent enough for the current production schema.
+
+Important: Existing tags must not be arbitrarily assigned to an organization. Determine their ownership from existing application/business data. If ownership cannot be determined safely, stop and report the ambiguous records.
+
+New tags created through the external API must be organization-scoped, but tags remain optional on CRM transactions.
+
+Do not delete tags, tag assignments, CRM records, or production data to make the migration pass.
+
+Do not deploy or publish.
+
+After diagnosis, propose the corrected migration and explain:
+
+exact root cause of the preview failure,
+existing data affected,
+required backfill, if any,
+corrected SQL/schema changes,
+rollback considerations,
+tests required before another preview deployment.
+
+Run the appropriate schema/database tests, typecheck, automated tests, and build after making any necessary code/migration corrections.
+
+Stop when the application is ready for another preview deployment and report the results. Do not publish production.
