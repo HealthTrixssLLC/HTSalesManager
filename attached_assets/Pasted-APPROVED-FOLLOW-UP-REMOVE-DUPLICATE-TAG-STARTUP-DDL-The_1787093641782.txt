@@ -1,0 +1,94 @@
+APPROVED FOLLOW-UP — REMOVE DUPLICATE TAG STARTUP DDL
+
+The investigation is accepted.
+
+Do not publish or deploy production yet.
+
+We have confirmed:
+
+- Replit Publish schema diff is the intended production schema migration mechanism.
+- shared/schema.ts is the source of truth for the tag schema.
+- Production currently still has the pre-tag schema.
+- Development already has the new tag schema.
+- Existing 5 legacy tags must remain with organization_id = NULL.
+- Existing 10 entity-tag assignments must remain intact.
+- No legacy tag backfill is required.
+- No destructive migration is intended.
+
+The remaining architecture issue is duplicate ownership of the tag schema migration:
+
+1. Replit Publish schema diff
+2. tag-specific DDL inside runStartupColumnMigration()
+
+Implement the smallest safe correction:
+
+REMOVE ONLY the tag-specific schema DDL from runStartupColumnMigration().
+
+Do not remove unrelated startup migrations.
+
+Do not change:
+- shared/schema.ts
+- tag API behavior
+- tag organization-scoping behavior
+- nullable organization_id design
+- existing entity-tag behavior
+- existing legacy/global tag compatibility
+- MCP code
+- OAuth
+- production configuration
+
+The Replit Publish flow must become the sole production mechanism for applying the tag schema changes.
+
+After the change, verify that runStartupColumnMigration() no longer attempts to:
+
+- drop tags_name_unique
+- alter tags.created_by nullability
+- alter entity_tags.created_by nullability
+- add tags.organization_id
+- add tags_organization_id_fkey
+- create tags_name_org_unique_idx
+- create tags_org_idx
+
+Retain unrelated startup migration logic exactly as needed.
+
+Then validate:
+
+1. typecheck
+2. full automated test suite
+3. build
+4. production-style startup
+5. browser/Playwright smoke test
+6. verify Replit Publish schema diff still proposes exactly the intended 7 tag schema operations
+7. verify production data remains untouched
+8. verify no migration logic attempts to backfill legacy tags
+
+Also simulate/validate from a production-like pre-tag schema where practical:
+
+- tags.organization_id missing
+- tags.created_by NOT NULL
+- entity_tags.created_by NOT NULL
+- tags_name_unique exists
+- new tag indexes/FK absent
+
+Confirm that Replit Publish schema diff can transition that schema safely to the new model.
+
+Do not publish or deploy.
+
+Report:
+
+A. exact code removed
+B. unrelated startup migrations preserved
+C. typecheck result
+D. test result
+E. build result
+F. startup/browser result
+G. final Replit schema diff
+H. confirmation that legacy tags remain organization_id = NULL
+I. confirmation that no production data was modified
+J. recommendation:
+
+READY FOR PREVIEW DEPLOYMENT
+
+or
+
+NOT READY FOR PREVIEW DEPLOYMENT
