@@ -1,0 +1,1334 @@
+HEALTH TRIXSS CRM EXTERNAL API
+TAGGING + CONTROLLED CRM WRITES + INTEGRATION READINESS
+
+============================================================
+MISSION
+============================================================
+
+Extend and validate the Health Trixss CRM External API to provide a secure,
+general-purpose integration interface for:
+
+1. CRM record reads
+2. Controlled CRM record writes
+3. Activity creation
+4. Tag management
+5. Optional tag assignment
+6. Safe concurrency
+7. Idempotent/replay-safe operations where appropriate
+8. Organization isolation
+9. Auditability
+10. Predictable machine-readable errors
+
+IMPORTANT:
+
+This task is ONLY for the Health Trixss CRM application and External API.
+
+DO NOT modify any downstream integration, MCP server, AI assistant,
+automation system, or other client application.
+
+The External API must remain CLIENT-AGNOSTIC.
+
+Do not design business logic around any particular:
+
+- AI assistant
+- MCP implementation
+- automation platform
+- CRM agent
+- user interface
+- integration consumer
+
+The External API should expose secure primitives that ANY properly
+authenticated and authorized client can consume.
+
+============================================================
+ARCHITECTURAL RESPONSIBILITY
+============================================================
+
+The External API is responsible for:
+
+- authentication
+- authorization
+- organization isolation
+- canonical record identity
+- validation
+- mutable-field allowlists
+- concurrency protection
+- idempotency where appropriate
+- auditability
+- predictable errors
+- data integrity
+
+The External API is NOT responsible for:
+
+- conversational approval
+- interpreting natural-language intent
+- deciding whether a user intended a particular business action
+- orchestrating multi-step workflows
+- deciding whether a missing tag should be created
+- AI-specific behavior
+- client-specific business rules
+
+Clients may compose multiple API operations into workflows, but each API
+operation must remain explicit, predictable and independently auditable.
+
+============================================================
+CRITICAL REQUIREMENT — TAGS ARE OPTIONAL
+============================================================
+
+Tags are OPTIONAL metadata.
+
+Tags MUST NOT be required to:
+
+- create an Account
+- update an Account
+- create a Contact
+- update a Contact
+- create a Lead
+- update a Lead
+- create an Opportunity
+- update an Opportunity
+- create an Activity
+- update an Activity
+- perform any other normal CRM transaction
+
+Existing CRM operations must continue functioning WITHOUT tags.
+
+There are three independent classes of operations:
+
+1. CRM RECORD OPERATIONS
+2. TAG TAXONOMY OPERATIONS
+3. OPTIONAL TAG ASSIGNMENT OPERATIONS
+
+A normal CRM create/update operation must not create, assign, remove,
+require or otherwise modify tags unless a separate explicit tag operation
+is called.
+
+Backward compatibility is mandatory.
+
+============================================================
+PHASE 1 — INSPECT EXISTING IMPLEMENTATION
+============================================================
+
+Before writing code, inspect the actual repository.
+
+At minimum review:
+
+- server/external-api-routes.ts
+- server/external-patch-config.ts
+- docs/openapi.yaml
+- database schema
+- migrations
+- validation schemas
+- API authentication
+- permission/scope implementation
+- organization scoping
+- audit infrastructure
+- activity creation
+- existing tag functionality
+- existing PATCH functionality
+- existing idempotency functionality
+- existing concurrency/version functionality
+- existing automated tests
+
+If prior design or implementation documents exist for tagging or External
+API writes, review them.
+
+DO NOT assume documentation accurately represents implementation.
+
+Validate everything against actual code and tests.
+
+============================================================
+PHASE 2 — CURRENT API CAPABILITY INVENTORY
+============================================================
+
+Before making changes, inventory the actual External API capabilities for:
+
+Accounts
+Contacts
+Leads
+Opportunities
+Activities
+Documents
+Tags
+
+For each determine:
+
+- GET one?
+- LIST?
+- CREATE?
+- PATCH?
+- DELETE?
+- supported expansions?
+- supported filters?
+- mutable fields?
+- required read scope?
+- required write scope?
+- organization scoped?
+- audit logged?
+- concurrency protected?
+- idempotency protected?
+
+The actual implementation is the source of truth.
+
+============================================================
+PHASE 3 — TAG DATA MODEL
+============================================================
+
+Inspect existing CRM tag functionality before creating anything new.
+
+Determine whether the CRM already has:
+
+- tags
+- labels
+- categories
+- entity tags
+- record tags
+- many-to-many metadata
+
+Reuse existing production functionality whenever practical.
+
+DO NOT create a parallel tagging system if one already exists.
+
+Required conceptual behavior:
+
+A tag belongs to an organization.
+
+A tag can be reused across multiple CRM entity types.
+
+For example:
+
+"CEO Attention"
+
+could be associated with multiple Accounts, Contacts, Leads,
+Opportunities and Activities while remaining one canonical tag.
+
+Tag names must be organization-scoped and normalized.
+
+These should not accidentally become separate tags:
+
+"CEO Attention"
+"ceo attention"
+" CEO Attention "
+
+Preserve the canonical display name.
+
+============================================================
+PHASE 4 — SUPPORTED TAG ENTITIES
+============================================================
+
+External tag assignment must support:
+
+accounts
+contacts
+leads
+opportunities
+activities
+
+If additional internal entity types already support tags, document them,
+but do not unnecessarily expand external scope.
+
+============================================================
+PHASE 5 — TAG MANAGEMENT API
+============================================================
+
+Implement or validate:
+
+GET /api/v1/external/tags
+
+Support:
+
+search
+limit
+offset
+
+Return standard pagination information.
+
+Implement or validate:
+
+POST /api/v1/external/tags
+
+Example:
+
+{
+  "name": "CEO Attention"
+}
+
+Authorized API consumers MUST be able to create NET-NEW tags.
+
+Tag creation must:
+
+- require authentication
+- require the appropriate write permission
+- use the authenticated client's organization
+- prohibit caller-supplied organizationId overrides
+- normalize tag names
+- prevent case-insensitive duplicates
+- reject empty names
+- enforce maximum length
+- audit creation
+- return canonical tag information
+
+If the existing tag model supports:
+
+color
+description
+other safe metadata
+
+document and expose those fields consistently where appropriate.
+
+============================================================
+PHASE 6 — DUPLICATE TAG BEHAVIOR
+============================================================
+
+Creating a tag equivalent to an existing organization tag MUST NOT create
+a duplicate.
+
+Return a predictable machine-readable response.
+
+Preferred behavior:
+
+HTTP 409
+
+Example:
+
+{
+  "error": {
+    "code": "TAG_ALREADY_EXISTS",
+    "existingTagId": "<canonical tag ID>"
+  }
+}
+
+Follow existing API error conventions where they provide an equivalent
+clean contract.
+
+A client must be able to determine the canonical existing tag.
+
+============================================================
+PHASE 7 — ENTITY TAG OPERATIONS
+============================================================
+
+Implement or validate:
+
+GET /api/v1/external/{entity}/{id}/tags
+
+POST /api/v1/external/{entity}/{id}/tags
+
+DELETE /api/v1/external/{entity}/{id}/tags/{tagId}
+
+for:
+
+accounts
+contacts
+leads
+opportunities
+activities
+
+Preferred assignment request:
+
+{
+  "tagId": "<canonical tag ID>"
+}
+
+Assignment must be idempotent.
+
+Assigning an already-associated tag must not create duplicate relationships.
+
+Removal must have predictable behavior and should be idempotent where
+consistent with existing API conventions.
+
+============================================================
+PHASE 8 — TAG CREATION AND ASSIGNMENT REMAIN SEPARATE
+============================================================
+
+Tag assignment MUST NOT silently create a new tag.
+
+Keep these operations separate:
+
+CREATE TAG:
+POST /tags
+
+ASSIGN TAG:
+POST /{entity}/{id}/tags
+
+This separation is required for:
+
+- authorization
+- auditability
+- predictable behavior
+- error handling
+- taxonomy management
+
+An external client may perform:
+
+search tag
+→ create tag if needed
+→ assign tag
+→ verify
+
+but those remain independent API transactions.
+
+============================================================
+PHASE 9 — TAG FILTERING
+============================================================
+
+Support tag filtering on:
+
+GET /accounts
+GET /contacts
+GET /leads
+GET /opportunities
+GET /activities
+
+Support:
+
+?tag=<name>
+
+and, if practical:
+
+?tagId=<canonical tag ID>
+
+Filtering MUST occur before pagination.
+
+pagination.total must reflect the filtered result set.
+
+Document behavior when:
+
+- the tag does not exist
+- the tag exists but has no matching records
+- both tag and tagId are supplied
+
+============================================================
+PHASE 10 — TAG EXPANSION
+============================================================
+
+Support:
+
+?expand=tags
+
+for:
+
+accounts
+contacts
+leads
+opportunities
+activities
+
+Return normalized tag objects.
+
+Example:
+
+"tags": [
+  {
+    "id": "...",
+    "name": "CEO Attention",
+    "color": "..."
+  }
+]
+
+Preserve existing expansion functionality.
+
+============================================================
+PHASE 11 — TAG SECURITY
+============================================================
+
+Document and enforce appropriate scopes.
+
+Preferred:
+
+Tag reads:
+crm.read
+
+Tag creation:
+crm.write
+
+Account/Contact/Lead/Opportunity tag reads:
+crm.read
+
+Account/Contact/Lead/Opportunity tag mutations:
+crm.write
+
+For Activity tag operations, determine whether:
+
+activities.read
+activities.write
+
+are more appropriate under the existing authorization architecture.
+
+Use the most internally consistent approach and document the decision.
+
+============================================================
+PHASE 12 — ORGANIZATION ISOLATION
+============================================================
+
+Organization isolation is mandatory.
+
+An authenticated API consumer must NEVER:
+
+- see another organization's tag
+- retrieve another organization's tag
+- assign another organization's tag
+- tag another organization's record
+- remove another organization's tag assignment
+- use caller-supplied organizationId to escape its organization
+- infer inaccessible cross-organization resources
+
+Follow existing 404/security conventions.
+
+============================================================
+PHASE 13 — CONTROLLED CRM WRITES
+============================================================
+
+The External API must support safe controlled CRM maintenance by authorized
+external clients.
+
+Validate the existing:
+
+PATCH /api/v1/external/opportunities/{id}
+
+and enhance it as necessary.
+
+============================================================
+PHASE 14 — OPPORTUNITY MUTABLE FIELDS
+============================================================
+
+Inspect the actual Opportunity model and existing API implementation.
+
+Document the complete mutable-field allowlist.
+
+Ensure the API can safely update at minimum, where valid in the existing
+CRM model:
+
+closeDate
+rating
+stage
+amount
+probability
+status
+includeInForecast
+
+If additional fields are already safely mutable, document them.
+
+DO NOT expose database fields merely because they exist.
+
+System-controlled fields must remain immutable.
+
+Examples include:
+
+id
+organizationId
+createdAt
+updatedAt
+sourceSystem
+import metadata
+
+Unknown fields must be rejected.
+
+Immutable fields must be rejected.
+
+Invalid enums, dates and types must be rejected.
+
+============================================================
+PHASE 15 — CONTROLLED PATCH FOR OTHER ENTITIES
+============================================================
+
+Review controlled PATCH capabilities for:
+
+Accounts
+Contacts
+Leads
+Opportunities
+Activities
+
+Where PATCH already exists, standardize its safety behavior.
+
+Requirements:
+
+- exact canonical entity ID
+- strict mutable-field allowlist
+- organization isolation
+- appropriate write permission
+- strict validation
+- atomic concurrency protection
+- audit logging
+- structured errors
+- version/ETag behavior
+
+DO NOT add DELETE capabilities as part of this work.
+
+DO NOT create an unrestricted "update anything" endpoint.
+
+If additional PATCH support requires unresolved business/product decisions,
+document those recommendations rather than inventing behavior.
+
+============================================================
+PHASE 16 — ATOMIC STALE-WRITE PROTECTION
+============================================================
+
+Controlled updates must protect against stale writes.
+
+Example:
+
+1. Client reads record.
+2. Another user/system modifies record.
+3. Original client submits update based on stale state.
+4. API must prevent unintended overwrite.
+
+Implement atomic concurrency protection.
+
+Preferred standard:
+
+ETag + If-Match
+
+Example:
+
+GET /opportunities/OPP-123
+
+returns:
+
+ETag: "abc123"
+
+PATCH /opportunities/OPP-123
+
+If-Match: "abc123"
+
+If the underlying record changed, reject the update atomically.
+
+Use:
+
+412 Precondition Failed
+
+or:
+
+409 Conflict
+
+depending on the most appropriate existing architecture.
+
+Provide a machine-readable code such as:
+
+STALE_RECORD
+VERSION_CONFLICT
+PRECONDITION_FAILED
+
+The version check and write MUST be atomic.
+
+A client-side:
+
+GET
+compare
+PATCH
+
+is NOT sufficient.
+
+============================================================
+PHASE 17 — VERSION INFORMATION
+============================================================
+
+Record reads used for controlled writes must expose the current concurrency
+token.
+
+At minimum:
+
+GET /opportunities/{id}
+
+must provide the token required for a conditional update.
+
+Prefer standard ETag semantics.
+
+Successful PATCH must return the new version/ETag.
+
+============================================================
+PHASE 18 — PATCH RESPONSE
+============================================================
+
+Successful PATCH responses must provide sufficient information for a client
+to verify the result.
+
+Return:
+
+- canonical entity ID
+- updated/current record
+- updatedAt
+- new ETag/version
+- correlation/request ID where available
+
+The contract must support an independent GET after mutation for verification.
+
+============================================================
+PHASE 19 — ACTIVITY CREATION
+============================================================
+
+Review the External API activity creation endpoint.
+
+Confirm:
+
+- canonical parent ID validation
+- organization isolation
+- appropriate write scope
+- strict request validation
+- audit logging
+- safe replay/idempotency behavior
+
+Activity creation must remain independent of CRM record PATCH operations.
+
+Updating an Opportunity and creating an Activity are two separate,
+independently auditable API transactions.
+
+============================================================
+PHASE 20 — IDEMPOTENCY
+============================================================
+
+Review POST mutation endpoints, especially:
+
+POST /activities
+POST /tags
+
+Network failures/retries must not accidentally create duplicate transactional
+records.
+
+Implement or document:
+
+Idempotency-Key
+
+or an equivalent deterministic external/reference ID mechanism where
+appropriate.
+
+At minimum, Activity creation must provide a documented safe replay strategy.
+
+Tag creation's uniqueness protection must also provide deterministic retry
+behavior.
+
+============================================================
+PHASE 21 — AUDIT LOGGING
+============================================================
+
+All externally initiated mutations must be auditable.
+
+At minimum audit:
+
+- CRM PATCH
+- Activity creation
+- Tag creation
+- Tag assignment
+- Tag removal
+
+Capture where appropriate:
+
+organization
+API client/API key identity
+entity type
+entity ID
+operation
+changed field names
+tag ID
+timestamp
+correlation/request ID
+result
+
+For record changes, retain appropriate before/after information consistent
+with existing security and audit practices.
+
+DO NOT log:
+
+API key secrets
+bearer tokens
+credentials
+unnecessary sensitive information
+
+============================================================
+PHASE 22 — STRUCTURED ERROR CONTRACT
+============================================================
+
+External clients need predictable machine-readable errors.
+
+Document/standardize:
+
+400 validation
+401 authentication
+403 authorization/scope
+404 missing/inaccessible resource
+409 conflict
+412 stale precondition/version
+429 rate limit
+500 internal error
+503 temporary service/dependency failure where applicable
+
+Provide machine-readable codes.
+
+Examples:
+
+VALIDATION_ERROR
+INSUFFICIENT_SCOPE
+NOT_FOUND
+TAG_ALREADY_EXISTS
+STALE_RECORD
+IDEMPOTENCY_CONFLICT
+
+Use existing conventions where practical.
+
+============================================================
+PHASE 23 — RETRY/RATE-LIMIT BEHAVIOR
+============================================================
+
+Document existing rate limits and retry semantics.
+
+For:
+
+429
+503
+
+document whether:
+
+Retry-After
+
+is provided.
+
+Clearly distinguish operations that can safely be retried from mutation
+operations requiring idempotency protection.
+
+============================================================
+PHASE 24 — REQUIRED INTEGRATION SCENARIOS
+============================================================
+
+Validate the External API against these generic integration scenarios.
+
+SCENARIO A — READ RECORD
+
+External client resolves and retrieves a CRM record.
+
+Expected:
+PASS without any write.
+
+SCENARIO B — UPDATE RECORD WITHOUT TAG
+
+External client changes an Opportunity close date.
+
+Expected:
+
+read record/version
+→ conditional PATCH
+→ readback verification
+
+NO tag required.
+
+SCENARIO C — ASSIGN EXISTING TAG
+
+External client searches for existing tag.
+
+Expected:
+
+find tag
+→ assign tag
+→ readback verification
+
+SCENARIO D — CREATE AND ASSIGN NET-NEW TAG
+
+Expected:
+
+search tag
+→ create tag
+→ receive canonical tag ID
+→ assign tag
+→ readback verification
+
+SCENARIO E — UPDATE + TAG
+
+Expected:
+
+conditional CRM PATCH
++
+separate tag assignment
+
+These are independent API transactions.
+
+SCENARIO F — UPDATE + ACTIVITY
+
+Expected:
+
+conditional CRM PATCH
++
+separate Activity creation
+
+These are independent API transactions.
+
+SCENARIO G — TAG MULTIPLE RECORDS
+
+Expected:
+
+list/filter records
+→ resolve/create tag
+→ explicit assignments
+
+Do not introduce an unrestricted bulk-write API merely for this use case.
+
+SCENARIO H — ORDINARY CRM TRANSACTION
+
+Expected:
+
+Create/update CRM record normally.
+
+NO tag is required, created or assigned.
+
+============================================================
+PHASE 25 — NO SILENT SIDE EFFECTS
+============================================================
+
+CRM PATCH must not silently:
+
+- create activities
+- create tags
+- assign tags
+- remove tags
+- modify unrelated records
+
+Tag assignment must not silently:
+
+- modify CRM fields
+- create activities
+- create new tags
+
+Activity creation must not silently:
+
+- modify Opportunity fields
+- create tags
+
+Each operation must remain explicit and independently auditable.
+
+============================================================
+PHASE 26 — OPENAPI
+============================================================
+
+Update:
+
+docs/openapi.yaml
+
+It is the canonical machine-readable External API contract.
+
+Document actual implemented behavior for:
+
+- authentication
+- authorization scopes
+- organization isolation
+- tag schemas
+- tag list/search
+- tag creation
+- duplicate behavior
+- entity tag retrieval
+- tag assignment
+- tag removal
+- tag filtering
+- tag expansion
+- PATCH endpoints
+- mutable fields
+- ETag/version behavior
+- conditional writes
+- Activity creation
+- idempotency
+- pagination
+- retry/rate-limit behavior
+- correlation headers
+- request schemas
+- response schemas
+- error schemas
+- examples
+
+OpenAPI MUST match implementation.
+
+============================================================
+PHASE 27 — AUTOMATED TESTS
+============================================================
+
+Add comprehensive tests.
+
+TAG MANAGEMENT:
+
+- list tags
+- search tags
+- pagination
+- create net-new tag
+- normalize tag name
+- reject empty tag
+- reject over-length tag
+- prevent exact duplicate
+- prevent case-insensitive duplicate
+- duplicate returns canonical existingTagId
+
+TAG ASSIGNMENT:
+
+- Account
+- Contact
+- Lead
+- Opportunity
+- Activity
+- duplicate assignment
+- removal
+- duplicate removal
+- cross-organization protection
+
+TAG QUERYING:
+
+- filter each supported entity by tag
+- filter by tagId if implemented
+- expand=tags
+- pagination after filtering
+
+OPTIONAL-TAG REGRESSION:
+
+- create/update Account without tags
+- create/update Contact without tags
+- create/update Lead without tags
+- create/update Opportunity without tags
+- create/update Activity without tags
+- PATCH without tags
+- existing tags unchanged by ordinary PATCH
+- no tag automatically created
+- no tag automatically assigned
+
+CONTROLLED PATCH:
+
+- valid Opportunity update
+- multiple valid fields
+- immutable field rejected
+- unknown field rejected
+- invalid enum
+- invalid date
+- invalid type
+- nonexistent record
+- cross-org record
+- missing write permission
+- read returns version
+- conditional PATCH succeeds
+- successful PATCH returns new version
+- stale version rejected
+- stale rejection leaves record unchanged
+- audit event generated
+- readback reflects update
+
+ACTIVITY:
+
+- valid create
+- invalid parent
+- cross-org parent
+- missing write permission
+- audit event
+- safe retry/idempotency
+- idempotency conflict
+
+SECURITY:
+
+- missing API key
+- invalid API key
+- insufficient scope
+- cross-org access
+- organizationId override attempt
+- malformed IDs
+
+REGRESSION:
+
+Run the ENTIRE existing test suite.
+
+No existing integration should require tags after this enhancement.
+
+============================================================
+PHASE 28 — SAFE ENVIRONMENT VALIDATION
+============================================================
+
+After automated tests pass, perform API-level validation against an
+appropriate development/staging environment if available.
+
+Do NOT modify production business data merely to demonstrate functionality.
+
+Validate using appropriate test data:
+
+GET tags
+create test tag
+assign test tag
+read tags
+remove test tag
+conditional PATCH
+stale PATCH rejection
+Activity idempotency
+
+Document the environment used.
+
+============================================================
+PHASE 29 — CREATE DOWNSTREAM INTEGRATION GUIDE
+============================================================
+
+After implementation and validation are complete create:
+
+docs/EXTERNAL_API_TAG_AND_WRITE_INTEGRATION_GUIDE.md
+
+This document must describe the ACTUAL IMPLEMENTED API.
+
+It must be consumer-agnostic.
+
+Do NOT reference any specific:
+
+- AI assistant
+- MCP server
+- Codex configuration
+- automation agent
+- downstream application
+
+Document:
+
+1. Base URL/path
+2. Authentication
+3. Permission scopes
+4. Organization isolation
+5. Tag list/search
+6. Net-new tag creation
+7. Duplicate tag behavior
+8. Entity tag retrieval
+9. Tag assignment
+10. Tag removal
+11. Tag filtering
+12. Tag expansion
+13. Controlled PATCH endpoints
+14. Mutable fields by entity
+15. ETag/version behavior
+16. Conditional PATCH procedure
+17. Activity creation
+18. Idempotency
+19. Audit behavior
+20. Error catalog
+21. Rate-limit/retry behavior
+22. Request examples
+23. Response examples
+24. curl examples
+25. Post-write verification procedure
+
+============================================================
+PHASE 30 — CREATE API READINESS MATRIX
+============================================================
+
+Create:
+
+docs/EXTERNAL_API_INTEGRATION_READINESS_MATRIX.md
+
+Classify each capability:
+
+READY
+PARTIALLY READY
+BLOCKED
+NOT APPLICABLE
+
+Evaluate:
+
+1. Read Accounts
+2. Read Contacts
+3. Read Leads
+4. Read Opportunities
+5. Read Activities
+6. Read Documents
+7. Create Activity
+8. Update Opportunity
+9. Update Account
+10. Update Contact
+11. Update Lead
+12. Update Activity
+13. Atomic stale-write protection
+14. Safe Activity replay/idempotency
+15. List Tags
+16. Create Net-New Tag
+17. Read Entity Tags
+18. Assign Tag
+19. Remove Tag
+20. Filter by Tag
+21. Expand Tags
+22. Tags optional on normal transactions
+23. Organization isolation
+24. Audit logging
+25. Structured machine-readable errors
+26. Post-write verification support
+27. Correlation/request tracing
+28. Safe multi-step integration support
+
+READY means:
+
+IMPLEMENTED
++
+TESTED
++
+DOCUMENTED
++
+SECURITY VALIDATED
+
+Anything else must be PARTIALLY READY or BLOCKED with the exact reason.
+
+============================================================
+PHASE 31 — VALIDATION GATE
+============================================================
+
+Before declaring completion:
+
+1. Run typecheck.
+2. Run lint if applicable.
+3. Validate database/schema changes.
+4. Run External API tests.
+5. Run tag tests.
+6. Run PATCH/concurrency tests.
+7. Run Activity/idempotency tests.
+8. Run security/org-isolation tests.
+9. Run the complete regression suite.
+10. Validate OpenAPI against actual implementation.
+11. Validate the integration guide against actual implementation.
+12. Complete the API readiness matrix.
+
+Do NOT hide incomplete capabilities.
+
+============================================================
+PHASE 32 — FINAL REPORT
+============================================================
+
+Do not simply report "done."
+
+Return:
+
+A. EXECUTIVE SUMMARY
+
+Is the External API ready for secure external reads, controlled writes,
+Activities and optional tagging?
+
+YES / PARTIALLY / NO
+
+B. EXISTING ARCHITECTURE FOUND
+
+Describe what existed before this work for:
+
+tags
+PATCH
+Activities
+audit
+permissions
+concurrency
+idempotency
+
+C. TAG IMPLEMENTATION
+
+Explicitly confirm:
+
+- tags are optional
+- net-new tags can be created
+- tags are reusable
+- tags are organization scoped
+- normal CRM transactions do not require tags
+- tag creation and assignment are separate operations
+
+D. CRM WRITE INVENTORY
+
+Provide table:
+
+Entity
+Create
+Read
+Patch
+Delete
+Read Scope
+Write Scope
+Concurrency
+Idempotency
+Audit
+
+E. API CHANGES
+
+List every added/modified endpoint.
+
+F. MUTABLE FIELDS
+
+List exact mutable fields by entity.
+
+G. CONCURRENCY
+
+Explain exactly how stale writes are atomically prevented.
+
+H. IDEMPOTENCY
+
+Explain exactly how mutation retries are handled.
+
+I. SECURITY
+
+Explain:
+
+authentication
+authorization
+organization isolation
+cross-org behavior
+
+J. AUDIT
+
+Explain mutation audit coverage.
+
+K. INTEGRATION SCENARIO VALIDATION
+
+For each required generic scenario state:
+
+PASS
+FAIL
+PARTIAL
+
+and explain.
+
+L. TEST RESULTS
+
+Provide exact:
+
+passed
+failed
+skipped
+
+and list test suites executed.
+
+M. REGRESSION RESULTS
+
+Confirm whether all pre-existing tests pass.
+
+N. OPENAPI
+
+Confirm docs/openapi.yaml matches implementation.
+
+O. INTEGRATION GUIDE
+
+Confirm creation of:
+
+docs/EXTERNAL_API_TAG_AND_WRITE_INTEGRATION_GUIDE.md
+
+P. READINESS MATRIX
+
+Confirm creation of:
+
+docs/EXTERNAL_API_INTEGRATION_READINESS_MATRIX.md
+
+Summarize every PARTIALLY READY/BLOCKED item.
+
+Q. CHANGED FILES
+
+List:
+
+changed files
+new files
+migrations
+schemas
+tests
+
+R. DEPLOYMENT STATUS
+
+State:
+
+local only
+development deployed
+staging deployed
+production deployed
+
+DO NOT deploy to production unless separately authorized.
+
+============================================================
+FINAL ARCHITECTURAL REQUIREMENT
+============================================================
+
+The resulting External API must not know or care what consumes it.
+
+It should expose secure, well-documented, general-purpose CRM integration
+capabilities usable by any authorized external client.
+
+DO NOT modify any downstream integration as part of this work.
