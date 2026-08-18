@@ -1,0 +1,55 @@
+The Replit deployment preview now successfully validates the database migrations, but opening the generated preview URL returns only:
+
+stream timeout
+
+Do not publish or deploy to production.
+
+Diagnose why the preview application runtime is timing out after the database migrations validate successfully.
+
+Do not assume this is a database migration failure—the Replit publishing screen explicitly reports Database migrations validated successfully.
+
+Investigate the preview deployment/runtime logs and identify the exact cause of the timeout.
+
+Specifically check:
+
+application startup logs and exceptions;
+whether runStartupColumnMigration() completes successfully;
+whether any migration SQL is blocking or waiting on a database lock;
+database connection initialization;
+whether the application reaches the point where the HTTP server starts listening;
+whether the server binds to 0.0.0.0 and the Replit-provided PORT;
+startup order between migrations and HTTP listener;
+whether startup is waiting indefinitely on an external service;
+whether the preview environment is missing required environment variables/secrets;
+whether authentication/session initialization is blocking;
+whether any new tag-related query runs during startup and fails;
+whether the application health/root route responds after startup;
+Replit preview deployment logs immediately before the stream timeout.
+
+Capture and report the actual error/log evidence before changing code.
+
+If runStartupColumnMigration() is the cause, determine exactly which statement or operation is blocking/failing. Do not remove the migration merely to make the deployment start.
+
+If a code correction is required, implement the smallest safe correction.
+
+Then run:
+
+typecheck
+full automated tests
+build
+startup/runtime test using the deployment configuration
+
+Confirm that the application starts, binds to the correct Replit port/interface, database initialization completes, and an HTTP request receives a successful response.
+
+Do not modify production data.
+Do not publish production.
+Do not bypass or remove the tag migration.
+
+Stop when the application is ready for another preview deployment and report:
+
+exact root cause,
+log/error proving the cause,
+changes made,
+tests performed,
+confirmation that the server starts and responds,
+any remaining deployment risks.
