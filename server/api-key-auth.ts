@@ -223,6 +223,7 @@ export function requirePermission(permission: ApiKeyPermission) {
 
       return res.status(403).json({
         error: "Insufficient permissions",
+        code: "INSUFFICIENT_SCOPE",
         message: `This API key does not have the '${permission}' permission required for this operation`,
         requiredPermission: permission,
       });
@@ -252,6 +253,7 @@ export function createApiKeyRateLimiter() {
     legacyHeaders: false,  // Disable X-RateLimit-* headers
     message: {
       error: "Too many requests",
+      code: "RATE_LIMITED",
       message: "You have exceeded the rate limit for this API key. Please try again later.",
     },
     // Skip failed requests (don't count them against the limit)

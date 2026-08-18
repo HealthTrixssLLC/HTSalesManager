@@ -81,6 +81,7 @@ export interface IStorage {
   getAllActivities(orgId?: string): Promise<Activity[]>;
   getActivities(orgId: string, filters?: ActivityListFilters): Promise<Activity[]>;
   getActivityById(id: string, orgId?: string): Promise<Activity | undefined>;
+  findOrCreateActivityByExternalId(externalId: string, orgId: string, activity: InsertActivity): Promise<{ activity: Activity; created: boolean }>;
   createActivity(activity: InsertActivity): Promise<Activity>;
   updateActivity(id: string, activity: Partial<InsertActivity>): Promise<Activity>;
   deleteActivity(id: string): Promise<void>;

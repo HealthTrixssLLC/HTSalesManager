@@ -127,6 +127,31 @@ const LEAD_SOURCES = ["website", "referral", "phone", "email", "event", "partner
 const LEAD_RATINGS = ["hot", "warm", "cold"] as const;
 const OPPORTUNITY_STAGES = ["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"] as const;
 
+/**
+ * Machine-readable error codes for external API error responses.
+ * Purely additive: the existing `error`/`message` string fields are kept
+ * unchanged so existing clients keep working; new clients branch on `code`.
+ */
+export type ExternalApiErrorCode =
+  | "VALIDATION_ERROR"      // 400 — payload or parameter failed validation
+  | "INSUFFICIENT_SCOPE"    // 403 — key lacks a permission or org binding
+  | "NOT_FOUND"             // 404 — missing or cross-org record
+  | "TAG_ALREADY_EXISTS"    // 409 — duplicate tag name in org
+  | "IDEMPOTENCY_CONFLICT"  // 409 — externalId replayed with a different body
+  | "STALE_RECORD"          // 412 — If-Match precondition failed
+  | "RATE_LIMITED";         // 429 — per-key rate limit exceeded
+
+/** Send a consistent error envelope: { error, code, message?, ...extra }. */
+function apiError(
+  res: Response,
+  status: number,
+  code: ExternalApiErrorCode,
+  error: string,
+  extra?: Record<string, any>,
+) {
+  return res.status(status).json({ error, code, ...extra });
+}
+
 const router = Router();
 
 // Apply API key authentication to all external routes
@@ -1475,6 +1500,9 @@ const externalActivitySchema = z.object({
   priority: z.enum(["low", "medium", "high"]).optional(),
   relatedType: z.enum(["Contact", "Lead", "Account", "Opportunity"]).optional(),
   relatedId: z.string().trim().min(1).max(100).optional(),
+  // Optional client-supplied idempotency token: replays with the same
+  // (org, externalId) return the original activity instead of a duplicate.
+  externalId: z.string().trim().min(1).max(100).optional(),
 }).strict().refine(
   (data) => {
     // relatedType and relatedId must both be present or both absent
@@ -1484,6 +1512,26 @@ const externalActivitySchema = z.object({
   },
   { message: "relatedType and relatedId must both be provided together" }
 );
+
+/** Response shape for activity creation (201) and idempotent replay (200). */
+function formatCreatedActivity(activity: any) {
+  return {
+    id: activity.id,
+    type: activity.type,
+    subject: activity.subject,
+    status: activity.status,
+    priority: activity.priority,
+    notes: activity.notes,
+    dueAt: activity.dueAt,
+    completedAt: activity.completedAt,
+    relatedType: activity.relatedType,
+    relatedId: activity.relatedId,
+    externalId: activity.externalId ?? null,
+    organizationId: activity.organizationId,
+    createdAt: activity.createdAt,
+    updatedAt: activity.updatedAt,
+  };
+}
 
 /**
  * POST /api/v1/external/activities
@@ -1499,16 +1547,14 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
-      return res.status(403).json({
-        error: "Organization-bound API key required",
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
         message: "Activity creation requires an API key bound to an organization. Ask your CRM administrator to create an organization-scoped API key in the Admin Console.",
       });
     }
 
     const parsed = externalActivitySchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        error: "Validation failed",
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
         message: "The activity payload is invalid",
         details: parsed.error.errors.map(e => ({
           field: e.path.join(".") || "(root)",
@@ -1517,6 +1563,7 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
       });
     }
     const data = parsed.data;
+
 
     // Related-entity authorization check — verify the record belongs to this org
     if (data.relatedType && data.relatedId) {
@@ -1528,15 +1575,13 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
         case "Opportunity": relatedRecord = await storage.getOpportunityById(data.relatedId); break;
       }
       if (!relatedRecord || !keyOrgOwns(relatedRecord, orgId)) {
-        return res.status(404).json({
-          error: "Related record not found",
+        return apiError(res, 404, "NOT_FOUND", "Related record not found", {
           message: `No ${data.relatedType} found with ID: ${data.relatedId}`,
         });
       }
     }
 
-    // Create the activity record
-    const activity = await storage.createActivity({
+    const activityValues = {
       organizationId: orgId,
       type: data.type,
       subject: data.subject,
@@ -1547,8 +1592,34 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
       priority: data.priority ?? "medium",
       relatedType: data.relatedType ?? null,
       relatedId: data.relatedId ?? null,
+      externalId: data.externalId ?? null,
       ownerId: null,
-    } as any);
+    } as any;
+
+    // Create the activity record. When an externalId idempotency token is
+    // supplied, the claim is atomic (advisory-lock + transaction) so
+    // concurrent retries with the same token can never create duplicates.
+    let activity;
+    let created = true;
+    if (data.externalId) {
+      const result = await storage.findOrCreateActivityByExternalId(data.externalId, orgId, activityValues);
+      activity = result.activity;
+      created = result.created;
+      if (!created) {
+        // Idempotent replay: identical intent (same type + subject) → 200
+        // with the original record; different intent → 409 so a token reuse
+        // bug is surfaced, not hidden.
+        if (activity.type === data.type && activity.subject === data.subject) {
+          return res.status(200).json({ data: formatCreatedActivity(activity) });
+        }
+        return apiError(res, 409, "IDEMPOTENCY_CONFLICT", "External ID already used by a different activity", {
+          message: `An activity with externalId "${data.externalId}" already exists in this organization but has a different type or subject. Use a new externalId for a new activity, or replay with the original payload.`,
+          existingActivityId: activity.id,
+        });
+      }
+    } else {
+      activity = await storage.createActivity(activityValues);
+    }
 
     // Create activity_associations row so the activity appears on the related entity's timeline
     if (data.relatedType && data.relatedId) {
@@ -1561,23 +1632,7 @@ router.post("/activities", requirePermission("activities.write"), async (req: Ap
       });
     }
 
-    return res.status(201).json({
-      data: {
-        id: activity.id,
-        type: activity.type,
-        subject: activity.subject,
-        status: activity.status,
-        priority: activity.priority,
-        notes: activity.notes,
-        dueAt: activity.dueAt,
-        completedAt: activity.completedAt,
-        relatedType: activity.relatedType,
-        relatedId: activity.relatedId,
-        organizationId: activity.organizationId,
-        createdAt: activity.createdAt,
-        updatedAt: activity.updatedAt,
-      },
-    });
+    return res.status(201).json({ data: formatCreatedActivity(activity) });
   } catch (error) {
     console.error("[EXTERNAL-API] Error creating activity:", error);
     return res.status(500).json({
@@ -1635,8 +1690,7 @@ router.get("/activities", requirePermission("activities.read"), async (req: ApiK
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
-      return res.status(403).json({
-        error: "Organization-bound API key required",
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
         message: "Activity access requires an API key bound to an organization",
       });
     }
@@ -1707,8 +1761,7 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
   try {
     const orgId = getKeyOrgId(req);
     if (!orgId) {
-      return res.status(403).json({
-        error: "Organization-bound API key required",
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
         message: "Activity access requires an API key bound to an organization",
       });
     }
@@ -1716,8 +1769,7 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
     // Org-scoped lookup: missing and cross-org records are indistinguishable
     const activity = await storage.getActivityById(req.params.id, orgId);
     if (!activity) {
-      return res.status(404).json({
-        error: "Not Found",
+      return apiError(res, 404, "NOT_FOUND", "Not Found", {
         message: `No activity found with ID: ${req.params.id}`,
       });
     }
@@ -1761,8 +1813,7 @@ const TAG_ENTITIES: Record<string, {
 };
 
 function orgBoundRequired(res: Response, what: string) {
-  return res.status(403).json({
-    error: "Organization-bound API key required",
+  return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
     message: `${what} requires an API key bound to an organization`,
   });
 }
@@ -1828,8 +1879,7 @@ router.post("/tags", requirePermission("crm.write"), async (req: ApiKeyRequest, 
 
     const parsed = externalCreateTagSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({
-        error: "Validation failed",
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
         message: parsed.error.errors.map(e => e.message).join("; "),
         details: parsed.error.errors,
       });
@@ -1837,16 +1887,14 @@ router.post("/tags", requirePermission("crm.write"), async (req: ApiKeyRequest, 
 
     const normalized = parsed.data.name.trim().replace(/\s+/g, " ");
     if (!normalized) {
-      return res.status(400).json({
-        error: "Validation failed",
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
         message: "name is required",
       });
     }
 
     const existing = await storage.getTagByName(normalized, orgId);
     if (existing) {
-      return res.status(409).json({
-        error: "Tag already exists",
+      return apiError(res, 409, "TAG_ALREADY_EXISTS", "Tag already exists", {
         message: `A tag named "${existing.name}" already exists in this organization`,
         existingTagId: existing.id,
       });
@@ -1882,8 +1930,7 @@ async function loadTaggableRecord(entityKey: string, id: string, orgId: string, 
   const record = await cfg.getById(id, orgId);
   // getActivityById is already org-scoped; the others need an explicit ownership check
   if (!record || (entityKey !== "activities" && !keyOrgOwns(record, orgId))) {
-    res.status(404).json({
-      error: `${cfg.label} not found`,
+    apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
       message: `No ${cfg.label.toLowerCase()} found with ID: ${id}`,
     });
     return undefined;
@@ -1931,8 +1978,7 @@ for (const [entityKey, cfg] of Object.entries(TAG_ENTITIES)) {
 
       const parsed = externalAssignTagSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({
-          error: "Validation failed",
+        return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
           message: parsed.error.errors.map(e => e.message).join("; "),
           details: parsed.error.errors,
         });
@@ -1947,8 +1993,7 @@ for (const [entityKey, cfg] of Object.entries(TAG_ENTITIES)) {
         tag = await storage.getTagByName(parsed.data.name!, orgId);
       }
       if (!tag) {
-        return res.status(404).json({
-          error: "Tag not found",
+        return apiError(res, 404, "NOT_FOUND", "Tag not found", {
           message: parsed.data.tagId
             ? `No tag found with ID: ${parsed.data.tagId}`
             : `No tag found with name: ${parsed.data.name}`,
@@ -1984,8 +2029,7 @@ for (const [entityKey, cfg] of Object.entries(TAG_ENTITIES)) {
 
       const tag = await storage.getTagById(req.params.tagId);
       if (!tag || tag.organizationId !== orgId) {
-        return res.status(404).json({
-          error: "Tag not found",
+        return apiError(res, 404, "NOT_FOUND", "Tag not found", {
           message: `No tag found with ID: ${req.params.tagId}`,
         });
       }
@@ -2032,8 +2076,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       const body = req.body;
 
       if (!body || typeof body !== "object" || Array.isArray(body)) {
-        return res.status(400).json({
-          error: "Invalid request body",
+        return apiError(res, 400, "VALIDATION_ERROR", "Invalid request body", {
           message: "Request body must be a JSON object of fields to update",
         });
       }
@@ -2041,8 +2084,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       // Immutability check — canonical id, org ownership, createdAt, audit fields
       const { immutable, unknown } = classifyPatchFields(cfg.entity, body);
       if (immutable.length > 0) {
-        return res.status(400).json({
-          error: "Immutable fields cannot be modified",
+        return apiError(res, 400, "VALIDATION_ERROR", "Immutable fields cannot be modified", {
           message: `The following fields are immutable: ${immutable.join(", ")}`,
           rejectedFields: immutable,
         });
@@ -2050,8 +2092,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
 
       // Allowlist check — reject unknown fields with the offending keys
       if (unknown.length > 0) {
-        return res.status(400).json({
-          error: "Unknown fields rejected",
+        return apiError(res, 400, "VALIDATION_ERROR", "Unknown fields rejected", {
           message: `The following fields are not allowed for ${cfg.label} updates: ${unknown.join(", ")}`,
           rejectedFields: unknown,
           allowedFields: MUTABLE_FIELDS[cfg.entity],
@@ -2059,8 +2100,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       }
 
       if (Object.keys(body).length === 0) {
-        return res.status(400).json({
-          error: "Empty update",
+        return apiError(res, 400, "VALIDATION_ERROR", "Empty update", {
           message: "Provide at least one field to update",
           allowedFields: MUTABLE_FIELDS[cfg.entity],
         });
@@ -2069,8 +2109,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       // Value validation for the allowlisted fields
       const parsed = PATCH_SCHEMAS[cfg.entity].safeParse(body);
       if (!parsed.success) {
-        return res.status(400).json({
-          error: "Validation failed",
+        return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
           message: `The ${cfg.label.toLowerCase()} payload is invalid`,
           details: parsed.error.errors.map(e => ({
             field: e.path.join(".") || "(root)",
@@ -2087,8 +2126,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       // Fetch + org-scope check (404 for missing or cross-org records)
       const existing = await cfg.getById(req.params.id);
       if (!existing || !keyOrgOwns(existing, orgId)) {
-        return res.status(404).json({
-          error: `${cfg.label} not found`,
+        return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
           message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
         });
       }
@@ -2099,8 +2137,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         const refAccount = await storage.getAccountById(updates.accountId);
         const recordOrgId = (existing as any).organizationId ?? orgId;
         if (!refAccount || (recordOrgId && refAccount.organizationId !== recordOrgId)) {
-          return res.status(404).json({
-            error: "Related account not found",
+          return apiError(res, 404, "NOT_FOUND", "Related account not found", {
             message: `No account found with ID: ${updates.accountId}`,
           });
         }
@@ -2114,8 +2151,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
           ? await storage.getOrgMembership(updates.ownerId, recordOrgId)
           : undefined;
         if (recordOrgId && !membership) {
-          return res.status(404).json({
-            error: "Related owner not found",
+          return apiError(res, 404, "NOT_FOUND", "Related owner not found", {
             message: `No user with ID ${updates.ownerId} is a member of this record's organization`,
           });
         }
@@ -2128,14 +2164,12 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         const endDate = updates.implementationEndDate !== undefined ? updates.implementationEndDate : (existing as any).implementationEndDate;
         const billingEnd = updates.billingEndDate !== undefined ? updates.billingEndDate : (existing as any).billingEndDate;
         if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-          return res.status(400).json({
-            error: "Implementation start date must be before end date",
+          return apiError(res, 400, "VALIDATION_ERROR", "Implementation start date must be before end date", {
             message: "implementationStartDate must not be after implementationEndDate",
           });
         }
         if (endDate && billingEnd && new Date(billingEnd) < new Date(endDate)) {
-          return res.status(400).json({
-            error: "Billing end date must not be before implementation end date (billing start)",
+          return apiError(res, 400, "VALIDATION_ERROR", "Billing end date must not be before implementation end date (billing start)", {
             message: "billingEndDate must not be before implementationEndDate",
           });
         }
@@ -2179,8 +2213,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
             });
           }
         }
-        return res.status(404).json({
-          error: `${cfg.label} not found`,
+        return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
           message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
         });
       }

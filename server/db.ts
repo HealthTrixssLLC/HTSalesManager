@@ -735,6 +735,42 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
   
+  async findOrCreateActivityByExternalId(
+    externalId: string,
+    orgId: string,
+    activity: InsertActivity,
+  ): Promise<{ activity: Activity; created: boolean }> {
+    // Atomic idempotency claim: a transaction-scoped advisory lock keyed on
+    // (org, token) serializes concurrent requests carrying the same token, so
+    // exactly one insert wins and the rest observe the existing row. This
+    // avoids a unique constraint on external_id, which is shared with the
+    // import pipeline where duplicates may legitimately exist.
+    // Oldest row wins on lookup so replays are deterministic even if legacy
+    // duplicates predate this mechanism.
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`activity-idem:${orgId}:${externalId}`}))`);
+      const existing = await tx.select().from(schema.activities)
+        .where(and(
+          eq(schema.activities.externalId, externalId),
+          eq(schema.activities.organizationId, orgId),
+        ))
+        .orderBy(asc(schema.activities.createdAt))
+        .limit(1);
+      if (existing[0]) return { activity: existing[0], created: false };
+
+      const id = await this.generateId("Activity", orgId);
+      const result = await tx.insert(schema.activities).values({
+        ...activity,
+        id,
+        organizationId: orgId,
+        externalId,
+        dueAt: activity.dueAt ? new Date(activity.dueAt) : null,
+        completedAt: activity.completedAt ? new Date(activity.completedAt) : null,
+      } as typeof schema.activities.$inferInsert).returning();
+      return { activity: result[0], created: true };
+    });
+  }
+
   async createActivity(activity: InsertActivity): Promise<Activity> {
     const id = await this.generateId("Activity", activity.organizationId || undefined);
     const result = await db.insert(schema.activities).values({
