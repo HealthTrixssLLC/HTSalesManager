@@ -9,3 +9,4 @@
 - [Production DB access](production-db-access.md) — real prod is the deployment's DATABASE_URL (query via executeSql environment:"production"); NEON and workspace DATABASE_URL are both NOT production; HT org is named "Primary Organization".
 - [External router mount order](external-route-mount-order.md) — mount /api/v1/external before internal generic /api/:entity/... matchers, or they silently swallow external paths (e.g. /api/v1/external/tags).
 - [Startup ordering constraint](startup-ordering.md) — setupVite registers an app.use("*",...) catch-all that shadows any routes registered later; serveStatic does too. Both MUST come after registerRoutes. Production-only early listen is safe; dev listen stays last.
+- [External API ETag concurrency](external-api-etag.md) — strong If-Match only (quoted tags), date_trunc ms predicate + GREATEST(+1ms) bump; review rejects lenient ETag parsing.

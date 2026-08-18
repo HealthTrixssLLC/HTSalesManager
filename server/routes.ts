@@ -1441,13 +1441,11 @@ export async function registerRoutes(app: Express) {
       }
       
       // Update lead status — use db directly to set convertedAt which is omitted from InsertLead
-      const [updatedLead] = await db.update(leads).set({
-        status: "converted",
-        convertedAccountId: accountId ?? null,
-        convertedContactId: contactId ?? null,
-        convertedOpportunityId: opportunityId ?? null,
-        convertedAt: new Date(),
-      }).where(eq(leads.id, leadId)).returning();
+      const updatedLead = await storage.markLeadConverted(leadId, {
+        accountId: accountId ?? null,
+        contactId: contactId ?? null,
+        opportunityId: opportunityId ?? null,
+      });
       
       await createAudit(req, "convert", "Lead", leadId, lead, updatedLead);
       
@@ -3350,11 +3348,11 @@ export async function registerRoutes(app: Express) {
       // Set all foreign key references to users to NULL before deleting users
       // This preserves CRM data while removing user ownership
       await db.execute(sql`UPDATE audit_logs SET actor_id = NULL WHERE actor_id IS NOT NULL`);
-      await db.execute(sql`UPDATE accounts SET owner_id = NULL WHERE owner_id IS NOT NULL`);
-      await db.execute(sql`UPDATE contacts SET owner_id = NULL WHERE owner_id IS NOT NULL`);
-      await db.execute(sql`UPDATE leads SET owner_id = NULL WHERE owner_id IS NOT NULL`);
-      await db.execute(sql`UPDATE opportunities SET owner_id = NULL WHERE owner_id IS NOT NULL`);
-      await db.execute(sql`UPDATE activities SET owner_id = NULL WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE accounts SET owner_id = NULL, updated_at = GREATEST(now(), updated_at + interval '1 millisecond') WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE contacts SET owner_id = NULL, updated_at = GREATEST(now(), updated_at + interval '1 millisecond') WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE leads SET owner_id = NULL, updated_at = GREATEST(now(), updated_at + interval '1 millisecond') WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE opportunities SET owner_id = NULL, updated_at = GREATEST(now(), updated_at + interval '1 millisecond') WHERE owner_id IS NOT NULL`);
+      await db.execute(sql`UPDATE activities SET owner_id = NULL, updated_at = GREATEST(now(), updated_at + interval '1 millisecond') WHERE owner_id IS NOT NULL`);
       
       // Delete all user-role associations
       await db.execute(sql`DELETE FROM user_roles`);

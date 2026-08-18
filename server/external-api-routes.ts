@@ -19,6 +19,61 @@ function keyOrgOwns(record: { organizationId?: string | null } | null | undefine
   return record.organizationId === orgId;
 }
 
+// ===== ETag / optimistic-concurrency helpers (Phase: stale-write protection) =====
+
+/**
+ * Derive an opaque ETag token from a record's updatedAt timestamp.
+ * Format: quoted base64url of the ISO-8601 timestamp (millisecond precision).
+ * Returns undefined when the record has no updatedAt.
+ */
+function recordETag(updatedAt: Date | string | null | undefined): string | undefined {
+  if (!updatedAt) return undefined;
+  const d = new Date(updatedAt);
+  if (isNaN(d.getTime())) return undefined;
+  return `"${Buffer.from(d.toISOString()).toString("base64url")}"`;
+}
+
+// RFC 9110 entity-tag grammar: strong form is DQUOTE *etagc DQUOTE, where
+// etagc = %x21 / %x23-7E / obs-text (no embedded double quotes).
+const STRONG_ENTITY_TAG_RE = /^"([\x21\x23-\x7E\x80-\xFF]*)"$/;
+
+/**
+ * RFC 9110 If-Match evaluation with STRONG comparison:
+ * - "*" matches any existing representation
+ * - a comma-separated list of entity tags matches if any strong tag equals the current one
+ * - weak validators ("W/...") are syntactically valid but never satisfy strong comparison
+ * - a blank header or ANY malformed member (e.g. bare unquoted tokens) makes the
+ *   whole header malformed — the precondition must fail rather than be ignored
+ */
+function evaluateIfMatch(header: string, currentTag: string | undefined): "match" | "mismatch" | "malformed" {
+  const h = header.trim();
+  if (h.length === 0) return "malformed";
+  if (h === "*") return currentTag !== undefined ? "match" : "mismatch";
+  const current = currentTag ? STRONG_ENTITY_TAG_RE.exec(currentTag) : null;
+  let matched = false;
+  for (const raw of h.split(",")) {
+    const t = raw.trim();
+    if (t.startsWith("W/")) {
+      // Weak entity-tag: must still be well-formed, but never matches strongly
+      if (!STRONG_ENTITY_TAG_RE.test(t.slice(2))) return "malformed";
+      continue;
+    }
+    const m = STRONG_ENTITY_TAG_RE.exec(t); // requires quoted entity-tag form
+    if (!m) return "malformed";
+    if (current && m[1] === current[1]) matched = true;
+  }
+  return matched ? "match" : "mismatch";
+}
+
+/** Set the ETag response header and mirror it as `_version` on the payload. */
+function attachVersion(res: Response, payload: Record<string, any>, updatedAt: Date | string | null | undefined): void {
+  const tag = recordETag(updatedAt);
+  if (tag) {
+    res.setHeader("ETag", tag);
+    payload._version = tag;
+  }
+}
+
 // ===== Query-parameter parsing helpers (Phase B list filters) =====
 
 /** Return trimmed string value of a query param, or undefined when absent/empty */
@@ -432,6 +487,7 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
       response.tags = orgVisibleTags(entityTags, orgId);
     }
     
+    attachVersion(res, response, account.updatedAt);
     return res.json({ data: response });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching account:", error);
@@ -679,6 +735,7 @@ router.get("/opportunities/:id", requirePermission("crm.read"), async (req: ApiK
       response.tags = orgVisibleTags(entityTags, orgId);
     }
     
+    attachVersion(res, response, opp.updatedAt);
     return res.json({ data: response });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching opportunity:", error);
@@ -959,6 +1016,7 @@ router.get("/contacts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
       contactPayload.tags = orgVisibleTags(entityTags, orgId);
     }
 
+    attachVersion(res, contactPayload, contact.updatedAt);
     return res.json({ data: contactPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching contact:", error);
@@ -1393,6 +1451,7 @@ router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyReques
       const entityTags = await storage.getEntityTags("Lead", lead.id);
       leadPayload.tags = orgVisibleTags(entityTags, orgId);
     }
+    attachVersion(res, leadPayload, lead.updatedAt);
     return res.json({ data: leadPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching lead:", error);
@@ -1669,6 +1728,7 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
       const entityTags = await storage.getEntityTags("Activity", activity.id);
       activityPayload.tags = orgVisibleTags(entityTags, orgId);
     }
+    attachVersion(res, activityPayload, activity.updatedAt);
     return res.json({ data: activityPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching activity:", error);
@@ -1954,15 +2014,15 @@ interface PatchEntityConfig {
   entity: PatchEntity;
   label: string;
   getById: (id: string) => Promise<any>;
-  patch: (id: string, orgId: string | undefined, fields: Record<string, any>) => Promise<any>;
+  patch: (id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date) => Promise<any>;
 }
 
 const PATCH_ENTITIES: Record<string, PatchEntityConfig> = {
-  accounts: { entity: "account", label: "Account", getById: (id) => storage.getAccountById(id), patch: (id, o, f) => storage.patchAccount(id, o, f) },
-  contacts: { entity: "contact", label: "Contact", getById: (id) => storage.getContactById(id), patch: (id, o, f) => storage.patchContact(id, o, f) },
-  leads: { entity: "lead", label: "Lead", getById: (id) => storage.getLeadById(id), patch: (id, o, f) => storage.patchLead(id, o, f) },
-  opportunities: { entity: "opportunity", label: "Opportunity", getById: (id) => storage.getOpportunityById(id), patch: (id, o, f) => storage.patchOpportunity(id, o, f) },
-  activities: { entity: "activity", label: "Activity", getById: (id) => storage.getActivityById(id), patch: (id, o, f) => storage.patchActivity(id, o, f) },
+  accounts: { entity: "account", label: "Account", getById: (id) => storage.getAccountById(id), patch: (id, o, f, e) => storage.patchAccount(id, o, f, e) },
+  contacts: { entity: "contact", label: "Contact", getById: (id) => storage.getContactById(id), patch: (id, o, f, e) => storage.patchContact(id, o, f, e) },
+  leads: { entity: "lead", label: "Lead", getById: (id) => storage.getLeadById(id), patch: (id, o, f, e) => storage.patchLead(id, o, f, e) },
+  opportunities: { entity: "opportunity", label: "Opportunity", getById: (id) => storage.getOpportunityById(id), patch: (id, o, f, e) => storage.patchOpportunity(id, o, f, e) },
+  activities: { entity: "activity", label: "Activity", getById: (id) => storage.getActivityById(id), patch: (id, o, f, e) => storage.patchActivity(id, o, f, e) },
 };
 
 function makePatchHandler(cfg: PatchEntityConfig) {
@@ -2081,9 +2141,44 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         }
       }
 
-      // Org-scoped update (WHERE also constrains organizationId as defense in depth)
-      const updated = await cfg.patch(req.params.id, orgId, updates);
+      // Optional optimistic concurrency: If-Match header carries the ETag the
+      // client last saw. On mismatch the write is rejected with 412 so a stale
+      // client can never silently overwrite a newer version of the record.
+      const ifMatchRaw = req.headers["if-match"];
+      const ifMatch = Array.isArray(ifMatchRaw) ? ifMatchRaw.join(",") : ifMatchRaw;
+      let expectedUpdatedAt: Date | undefined;
+      if (typeof ifMatch === "string") {
+        const currentTag = recordETag((existing as any).updatedAt);
+        if (evaluateIfMatch(ifMatch, currentTag) !== "match") {
+          const staleRes: Record<string, any> = {
+            error: "Precondition failed",
+            code: "STALE_RECORD",
+            message: `The ${cfg.label.toLowerCase()} was modified since you last fetched it. Re-fetch the record and retry with its current version.`,
+          };
+          if (currentTag) staleRes.currentVersion = currentTag;
+          return res.status(412).json(staleRes);
+        }
+        expectedUpdatedAt = new Date((existing as any).updatedAt);
+      }
+
+      // Org-scoped update (WHERE also constrains organizationId as defense in
+      // depth; when If-Match was supplied, WHERE additionally pins updated_at
+      // so a concurrent writer between our read and this UPDATE causes 0 rows)
+      const updated = await cfg.patch(req.params.id, orgId, updates, expectedUpdatedAt);
       if (!updated) {
+        // Distinguish "record vanished" (404) from "record changed underneath
+        // the conditional update" (412) when an If-Match precondition was used.
+        if (expectedUpdatedAt) {
+          const recheck = await cfg.getById(req.params.id);
+          if (recheck && keyOrgOwns(recheck, orgId)) {
+            return res.status(412).json({
+              error: "Precondition failed",
+              code: "STALE_RECORD",
+              message: `The ${cfg.label.toLowerCase()} was modified since you last fetched it. Re-fetch the record and retry with its current version.`,
+              currentVersion: recordETag((recheck as any).updatedAt),
+            });
+          }
+        }
         return res.status(404).json({
           error: `${cfg.label} not found`,
           message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
@@ -2106,7 +2201,9 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         console.error("[EXTERNAL-API] Failed to create PATCH audit log:", err);
       });
 
-      return res.json({ data: updated });
+      const updatedPayload: Record<string, any> = { ...updated };
+      attachVersion(res, updatedPayload, (updated as any).updatedAt);
+      return res.json({ data: updatedPayload });
     } catch (error) {
       console.error(`[EXTERNAL-API] Error patching ${cfg.label.toLowerCase()}:`, error);
       return res.status(500).json({

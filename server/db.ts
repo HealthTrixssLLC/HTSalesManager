@@ -177,11 +177,11 @@ export class PostgresStorage implements IStorage {
   async mergeUsers(primaryId: string, secondaryIds: string[]): Promise<void> {
     await db.transaction(async (tx) => {
       // Re-attribute core CRM FK references
-      await tx.update(schema.accounts).set({ ownerId: primaryId }).where(inArray(schema.accounts.ownerId, secondaryIds));
-      await tx.update(schema.contacts).set({ ownerId: primaryId }).where(inArray(schema.contacts.ownerId, secondaryIds));
-      await tx.update(schema.leads).set({ ownerId: primaryId }).where(inArray(schema.leads.ownerId, secondaryIds));
-      await tx.update(schema.opportunities).set({ ownerId: primaryId }).where(inArray(schema.opportunities.ownerId, secondaryIds));
-      await tx.update(schema.activities).set({ ownerId: primaryId }).where(inArray(schema.activities.ownerId, secondaryIds));
+      await tx.update(schema.accounts).set({ ownerId: primaryId, updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any }).where(inArray(schema.accounts.ownerId, secondaryIds));
+      await tx.update(schema.contacts).set({ ownerId: primaryId, updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any }).where(inArray(schema.contacts.ownerId, secondaryIds));
+      await tx.update(schema.leads).set({ ownerId: primaryId, updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any }).where(inArray(schema.leads.ownerId, secondaryIds));
+      await tx.update(schema.opportunities).set({ ownerId: primaryId, updatedAt: sql`GREATEST(now(), ${schema.opportunities.updatedAt} + interval '1 millisecond')` as any }).where(inArray(schema.opportunities.ownerId, secondaryIds));
+      await tx.update(schema.activities).set({ ownerId: primaryId, updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any }).where(inArray(schema.activities.ownerId, secondaryIds));
       await tx.update(schema.auditLogs).set({ actorId: primaryId }).where(inArray(schema.auditLogs.actorId, secondaryIds));
       await tx.update(schema.comments).set({ createdBy: primaryId }).where(inArray(schema.comments.createdBy, secondaryIds));
       await tx.update(schema.comments).set({ editedBy: primaryId }).where(inArray(schema.comments.editedBy, secondaryIds));
@@ -333,7 +333,7 @@ export class PostgresStorage implements IStorage {
   async updateAccount(id: string, account: Partial<InsertAccount>): Promise<Account> {
     const { organizationId: _orgId, ...safeUpdates } = account;
     const result = await db.update(schema.accounts)
-      .set({ ...safeUpdates, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any })
       .where(eq(schema.accounts.id, id))
       .returning();
     return result[0];
@@ -419,7 +419,7 @@ export class PostgresStorage implements IStorage {
   async updateContact(id: string, contact: Partial<InsertContact>): Promise<Contact> {
     const { organizationId: _orgId, ...safeUpdates } = contact;
     const result = await db.update(schema.contacts)
-      .set({ ...safeUpdates, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any })
       .where(eq(schema.contacts.id, id))
       .returning();
     return result[0];
@@ -509,7 +509,7 @@ export class PostgresStorage implements IStorage {
       safeUpdates.email = normalizeEmail(safeUpdates.email);
     }
     const result = await db.update(schema.leads)
-      .set({ ...safeUpdates, updatedAt: new Date() })
+      .set({ ...safeUpdates, updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any })
       .where(eq(schema.leads.id, id))
       .returning();
     return result[0];
@@ -621,7 +621,7 @@ export class PostgresStorage implements IStorage {
 
     // Step 1: update all standard scalar fields via Drizzle ORM
     await db.update(schema.opportunities)
-      .set({ ...rest, updatedAt: new Date() })
+      .set({ ...rest, updatedAt: sql`GREATEST(now(), ${schema.opportunities.updatedAt} + interval '1 millisecond')` as any })
       .where(eq(schema.opportunities.id, id));
 
     // Step 2: explicitly update array/text fields using raw SQL to guarantee correct persistence
@@ -652,6 +652,10 @@ export class PostgresStorage implements IStorage {
     }
 
     if (setClauses.length > 0) {
+      // The representation changes here too, so this phase must also advance the
+      // version monotonically — otherwise an ETag observed between the two phases
+      // would still satisfy If-Match after this final mutation.
+      setClauses.push(`updated_at = GREATEST(now(), updated_at + interval '1 millisecond')`);
       params.push(id);
       const rawSql = `UPDATE opportunities SET ${setClauses.join(', ')} WHERE id = $${params.length}`;
 
@@ -680,6 +684,7 @@ export class PostgresStorage implements IStorage {
           neonClauses.push(`description = ${escaped !== null ? `'${escaped}'` : 'NULL'}`);
         }
         if (neonClauses.length > 0) {
+          neonClauses.push(`updated_at = GREATEST(now(), updated_at + interval '1 millisecond')`);
           await db.execute(sql.raw(`UPDATE opportunities SET ${neonClauses.join(', ')} WHERE id = '${id.replace(/'/g, "''")}'`));
         }
       }
@@ -750,7 +755,7 @@ export class PostgresStorage implements IStorage {
         // Convert ISO string dates to Date objects for Drizzle timestamp columns
         ...(dueAt !== undefined ? { dueAt: dueAt ? new Date(dueAt) : null } : {}),
         ...(completedAt !== undefined ? { completedAt: completedAt ? new Date(completedAt) : null } : {}),
-        updatedAt: new Date(),
+        updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any,
       })
       .where(eq(schema.activities.id, id))
       .returning();
@@ -771,32 +776,48 @@ export class PostgresStorage implements IStorage {
     return safe;
   }
 
-  async patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Account | undefined> {
-    const where = orgId
-      ? and(eq(schema.accounts.id, id), eq(schema.accounts.organizationId, orgId))
-      : eq(schema.accounts.id, id);
+  async patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Account | undefined> {
+    const conditions = [eq(schema.accounts.id, id)];
+    if (orgId) conditions.push(eq(schema.accounts.organizationId, orgId));
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.accounts.updatedAt}) = ${expectedUpdatedAt}`);
+    const where = and(...conditions);
     const result = await db.update(schema.accounts)
-      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
   }
 
-  async patchContact(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Contact | undefined> {
-    const where = orgId
-      ? and(eq(schema.contacts.id, id), eq(schema.contacts.organizationId, orgId))
-      : eq(schema.contacts.id, id);
+  async patchContact(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Contact | undefined> {
+    const conditions = [eq(schema.contacts.id, id)];
+    if (orgId) conditions.push(eq(schema.contacts.organizationId, orgId));
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.contacts.updatedAt}) = ${expectedUpdatedAt}`);
+    const where = and(...conditions);
     const result = await db.update(schema.contacts)
-      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
   }
 
-  async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Lead | undefined> {
-    const where = orgId
-      ? and(eq(schema.leads.id, id), eq(schema.leads.organizationId, orgId))
-      : eq(schema.leads.id, id);
+  async markLeadConverted(id: string, refs: { accountId: string | null; contactId: string | null; opportunityId: string | null }): Promise<Lead> {
+    const result = await db.update(schema.leads).set({
+      status: "converted",
+      convertedAccountId: refs.accountId,
+      convertedContactId: refs.contactId,
+      convertedOpportunityId: refs.opportunityId,
+      convertedAt: new Date(),
+      // Monotonic version bump: conversion must invalidate outstanding ETags
+      updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any,
+    }).where(eq(schema.leads.id, id)).returning();
+    return result[0];
+  }
+
+  async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
+    const conditions = [eq(schema.leads.id, id)];
+    if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = ${expectedUpdatedAt}`);
+    const where = and(...conditions);
     const stripped = this.stripImmutable(fields);
     // Normalize email when included in PATCH body (defense-in-depth; Zod already
     // validates format for external PATCH, but internal paths do not).
@@ -804,31 +825,33 @@ export class PostgresStorage implements IStorage {
       stripped.email = normalizeEmail(stripped.email);
     }
     const result = await db.update(schema.leads)
-      .set({ ...stripped, updatedAt: new Date() })
+      .set({ ...stripped, updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
   }
 
-  async patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Opportunity | undefined> {
-    const where = orgId
-      ? and(eq(schema.opportunities.id, id), eq(schema.opportunities.organizationId, orgId))
-      : eq(schema.opportunities.id, id);
+  async patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Opportunity | undefined> {
+    const conditions = [eq(schema.opportunities.id, id)];
+    if (orgId) conditions.push(eq(schema.opportunities.organizationId, orgId));
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.opportunities.updatedAt}) = ${expectedUpdatedAt}`);
+    const where = and(...conditions);
     // Array columns (categories/operationalAreas) are excluded from the PATCH
     // allowlist, so a plain Drizzle update is safe here.
     const result = await db.update(schema.opportunities)
-      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.opportunities.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
   }
 
-  async patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Activity | undefined> {
-    const where = orgId
-      ? and(eq(schema.activities.id, id), eq(schema.activities.organizationId, orgId))
-      : eq(schema.activities.id, id);
+  async patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Activity | undefined> {
+    const conditions = [eq(schema.activities.id, id)];
+    if (orgId) conditions.push(eq(schema.activities.organizationId, orgId));
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.activities.updatedAt}) = ${expectedUpdatedAt}`);
+    const where = and(...conditions);
     const result = await db.update(schema.activities)
-      .set({ ...this.stripImmutable(fields), updatedAt: new Date() })
+      .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
@@ -1881,31 +1904,31 @@ export class PostgresStorage implements IStorage {
 
     await db.transaction(async (tx) => {
       const aResult = await tx.update(schema.accounts)
-        .set({ organizationId: targetOrgId })
+        .set({ organizationId: targetOrgId, updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any })
         .where(isAll ? ne(schema.accounts.organizationId, targetOrgId) : eq(schema.accounts.organizationId, sourceOrgId))
         .returning({ id: schema.accounts.id });
       accountsUpdated = aResult.length;
 
       const cResult = await tx.update(schema.contacts)
-        .set({ organizationId: targetOrgId })
+        .set({ organizationId: targetOrgId, updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any })
         .where(isAll ? ne(schema.contacts.organizationId, targetOrgId) : eq(schema.contacts.organizationId, sourceOrgId))
         .returning({ id: schema.contacts.id });
       contactsUpdated = cResult.length;
 
       const lResult = await tx.update(schema.leads)
-        .set({ organizationId: targetOrgId })
+        .set({ organizationId: targetOrgId, updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any })
         .where(isAll ? ne(schema.leads.organizationId, targetOrgId) : eq(schema.leads.organizationId, sourceOrgId))
         .returning({ id: schema.leads.id });
       leadsUpdated = lResult.length;
 
       const oResult = await tx.update(schema.opportunities)
-        .set({ organizationId: targetOrgId })
+        .set({ organizationId: targetOrgId, updatedAt: sql`GREATEST(now(), ${schema.opportunities.updatedAt} + interval '1 millisecond')` as any })
         .where(isAll ? ne(schema.opportunities.organizationId, targetOrgId) : eq(schema.opportunities.organizationId, sourceOrgId))
         .returning({ id: schema.opportunities.id });
       opportunitiesUpdated = oResult.length;
 
       const acResult = await tx.update(schema.activities)
-        .set({ organizationId: targetOrgId })
+        .set({ organizationId: targetOrgId, updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any })
         .where(isAll ? ne(schema.activities.organizationId, targetOrgId) : eq(schema.activities.organizationId, sourceOrgId))
         .returning({ id: schema.activities.id });
       activitiesUpdated = acResult.length;

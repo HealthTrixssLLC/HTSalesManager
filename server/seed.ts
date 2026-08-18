@@ -758,7 +758,7 @@ async function repairLeadGenApprovals(): Promise<void> {
     const leadResult = await db.execute(sql.raw(`
       UPDATE leads l
       SET organization_id = r.organization_id,
-          updated_at = NOW()
+          updated_at = GREATEST(NOW(), l.updated_at + interval '1 millisecond')
       FROM lg_crm_leads lcl
       JOIN candidate_leads cl ON cl.id = lcl.candidate_lead_id
       JOIN lead_generation_runs r ON r.id = COALESCE(lcl.run_id, cl.run_id)
@@ -772,7 +772,7 @@ async function repairLeadGenApprovals(): Promise<void> {
     const activityResult = await db.execute(sql.raw(`
       UPDATE activities a
       SET organization_id = r.organization_id,
-          updated_at = NOW()
+          updated_at = GREATEST(NOW(), a.updated_at + interval '1 millisecond')
       FROM lg_crm_tasks lct
       JOIN candidate_leads cl ON cl.id = lct.candidate_lead_id
       JOIN lead_generation_runs r ON r.id = COALESCE(lct.run_id, cl.run_id)
@@ -791,18 +791,18 @@ async function repairLeadGenApprovals(): Promise<void> {
   }
 }
 
-async function backfillEntityOrganizations(orgId: string): Promise<void> {
+export async function backfillEntityOrganizations(orgId: string): Promise<void> {
   const { accounts, contacts, leads, opportunities, activities, icpProfiles, taskPlaybooks, leadGenerationRuns, llmConfigurations, apiKeys } = await import("@shared/schema");
   const { isNull } = await import("drizzle-orm");
 
   // Wrap each table individually so a missing column on one table does not
   // abort the entire backfill — log the specific failure for diagnostics.
   const coreTables: Array<{ name: string; fn: () => Promise<unknown> }> = [
-    { name: "accounts",            fn: () => db.update(accounts).set({ organizationId: orgId }).where(isNull(accounts.organizationId)) },
-    { name: "contacts",            fn: () => db.update(contacts).set({ organizationId: orgId }).where(isNull(contacts.organizationId)) },
-    { name: "leads",               fn: () => db.update(leads).set({ organizationId: orgId }).where(isNull(leads.organizationId)) },
-    { name: "opportunities",       fn: () => db.update(opportunities).set({ organizationId: orgId }).where(isNull(opportunities.organizationId)) },
-    { name: "activities",          fn: () => db.update(activities).set({ organizationId: orgId }).where(isNull(activities.organizationId)) },
+    { name: "accounts",            fn: () => db.update(accounts).set({ organizationId: orgId, updatedAt: sql`GREATEST(now(), ${accounts.updatedAt} + interval '1 millisecond')` as any }).where(isNull(accounts.organizationId)) },
+    { name: "contacts",            fn: () => db.update(contacts).set({ organizationId: orgId, updatedAt: sql`GREATEST(now(), ${contacts.updatedAt} + interval '1 millisecond')` as any }).where(isNull(contacts.organizationId)) },
+    { name: "leads",               fn: () => db.update(leads).set({ organizationId: orgId, updatedAt: sql`GREATEST(now(), ${leads.updatedAt} + interval '1 millisecond')` as any }).where(isNull(leads.organizationId)) },
+    { name: "opportunities",       fn: () => db.update(opportunities).set({ organizationId: orgId, updatedAt: sql`GREATEST(now(), ${opportunities.updatedAt} + interval '1 millisecond')` as any }).where(isNull(opportunities.organizationId)) },
+    { name: "activities",          fn: () => db.update(activities).set({ organizationId: orgId, updatedAt: sql`GREATEST(now(), ${activities.updatedAt} + interval '1 millisecond')` as any }).where(isNull(activities.organizationId)) },
     { name: "icpProfiles",         fn: () => db.update(icpProfiles).set({ organizationId: orgId }).where(isNull(icpProfiles.organizationId)) },
     { name: "taskPlaybooks",       fn: () => db.update(taskPlaybooks).set({ organizationId: orgId }).where(isNull(taskPlaybooks.organizationId)) },
     { name: "leadGenerationRuns",  fn: () => db.update(leadGenerationRuns).set({ organizationId: orgId }).where(isNull(leadGenerationRuns.organizationId)) },

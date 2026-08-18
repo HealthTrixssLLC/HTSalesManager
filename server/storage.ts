@@ -67,6 +67,7 @@ export interface IStorage {
   getLeadById(id: string): Promise<Lead | undefined>;
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead>;
+  markLeadConverted(id: string, refs: { accountId: string | null; contactId: string | null; opportunityId: string | null }): Promise<Lead>;
   deleteLead(id: string): Promise<void>;
   
   // ========== OPPORTUNITIES ==========
@@ -85,11 +86,11 @@ export interface IStorage {
   deleteActivity(id: string): Promise<void>;
   
   // ========== EXTERNAL API PATCH (org-scoped partial updates) ==========
-  patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Account | undefined>;
-  patchContact(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Contact | undefined>;
-  patchLead(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Lead | undefined>;
-  patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Opportunity | undefined>;
-  patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>): Promise<Activity | undefined>;
+  patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Account | undefined>;
+  patchContact(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Contact | undefined>;
+  patchLead(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Lead | undefined>;
+  patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Opportunity | undefined>;
+  patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Activity | undefined>;
 
   // ========== AUDIT LOGS ==========
   getAllAuditLogs(): Promise<AuditLog[]>;

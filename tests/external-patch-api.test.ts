@@ -308,6 +308,221 @@ describe("External PATCH API — access control", () => {
   });
 });
 
+describe("External PATCH API — ETag / stale-write protection", () => {
+  function get(path: string, key: string) {
+    return fetch(`${BASE}${path}`, { headers: { "x-api-key": key } });
+  }
+  function patchWithMatch(path: string, body: any, key: string, etag: string) {
+    return fetch(`${BASE}${path}`, {
+      method: "PATCH",
+      headers: { "x-api-key": key, "Content-Type": "application/json", "If-Match": etag },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("GET detail exposes ETag header and _version field", async () => {
+    const res = await get(`/accounts/${ids.account}`, orgKey);
+    expect(res.status).toBe(200);
+    const etag = res.headers.get("etag");
+    expect(etag).toBeTruthy();
+    const body = await res.json();
+    expect(body.data._version).toBe(etag);
+  });
+
+  it("PATCH with matching If-Match succeeds and returns a new version", async () => {
+    const getRes = await get(`/contacts/${ids.contact}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    const res = await patchWithMatch(`/contacts/${ids.contact}`, { title: "Versioned Title" }, orgKey, etag);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.title).toBe("Versioned Title");
+    const newTag = res.headers.get("etag");
+    expect(newTag).toBeTruthy();
+    expect(newTag).not.toBe(etag);
+    expect(body.data._version).toBe(newTag);
+  });
+
+  it("PATCH with a stale If-Match returns 412 STALE_RECORD", async () => {
+    const getRes = await get(`/leads/${ids.lead}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    // Concurrent writer bumps the record
+    const first = await patch(`/leads/${ids.lead}`, { title: "Winner Write" }, orgKey);
+    expect(first.status).toBe(200);
+    // Stale client retries with the old version
+    const res = await patchWithMatch(`/leads/${ids.lead}`, { title: "Loser Write" }, orgKey, etag);
+    expect(res.status).toBe(412);
+    const body = await res.json();
+    expect(body.code).toBe("STALE_RECORD");
+    expect(body.currentVersion).toBeTruthy();
+  });
+
+  it("a rejected stale PATCH leaves the record unchanged", async () => {
+    const getRes = await get(`/leads/${ids.lead}`, orgKey);
+    const body = await getRes.json();
+    expect(body.data.title).toBe("Winner Write");
+  });
+
+  it("stale If-Match is rejected even when it races the atomic UPDATE (currentVersion usable for retry)", async () => {
+    const getRes = await get(`/opportunities/${ids.opportunity}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    const res = await patchWithMatch(`/opportunities/${ids.opportunity}`, { probability: 55 }, orgKey, etag);
+    expect(res.status).toBe(200);
+    // Retry with the returned version works
+    const resBody = await res.json();
+    const retry = await patchWithMatch(`/opportunities/${ids.opportunity}`, { probability: 60 }, orgKey, resBody.data._version);
+    expect(retry.status).toBe(200);
+    // But the original (now stale) tag is rejected
+    const stale = await patchWithMatch(`/opportunities/${ids.opportunity}`, { probability: 65 }, orgKey, etag);
+    expect(stale.status).toBe(412);
+  });
+
+  it("every successful write changes the version, even in the same millisecond", async () => {
+    const tags: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await patch(`/accounts/${ids.account}`, { industry: `Rapid-${i}` }, orgKey);
+      expect(res.status).toBe(200);
+      tags.push(res.headers.get("etag")!);
+    }
+    expect(new Set(tags).size).toBe(3);
+  });
+
+  it("two concurrent conditional PATCHes with the same version: exactly one wins", async () => {
+    const getRes = await get(`/contacts/${ids.contact}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    const [a, b] = await Promise.all([
+      patchWithMatch(`/contacts/${ids.contact}`, { title: "Racer A" }, orgKey, etag),
+      patchWithMatch(`/contacts/${ids.contact}`, { title: "Racer B" }, orgKey, etag),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 412]);
+  });
+
+  it("weak ETags never satisfy If-Match (strong comparison)", async () => {
+    const getRes = await get(`/accounts/${ids.account}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    const res = await patchWithMatch(`/accounts/${ids.account}`, { industry: "WeakTag" }, orgKey, `W/${etag}`);
+    expect(res.status).toBe(412);
+    expect((await res.json()).code).toBe("STALE_RECORD");
+  });
+
+  it("malformed If-Match values are rejected with 412 (bare/unquoted tokens)", async () => {
+    const getRes = await get(`/accounts/${ids.account}`, orgKey);
+    const etag = getRes.headers.get("etag")!;
+    const bare = etag.replace(/"/g, ""); // response token without required quotes
+    // Blank headers and lists containing any malformed member are also rejected,
+    // even when a valid matching tag appears alongside the malformed one
+    for (const badTag of [bare, `'${bare}'`, `"unterminated`, `""extra"`, " ", `${etag}, ${bare}`, `${etag},`]) {
+      const res = await patchWithMatch(`/accounts/${ids.account}`, { industry: "MalformedTag" }, orgKey, badTag);
+      expect(res.status).toBe(412);
+      expect((await res.json()).code).toBe("STALE_RECORD");
+    }
+  });
+
+  it("If-Match: * matches any current version", async () => {
+    const res = await patchWithMatch(`/accounts/${ids.account}`, { industry: "StarMatch" }, orgKey, "*");
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.industry).toBe("StarMatch");
+  });
+
+  it("internal (non-external) updates also advance the version monotonically", async () => {
+    // Rapid external PATCHes can push updated_at ahead of wall-clock time; an
+    // internal edit must not move it backward and resurrect an old ETag.
+    const beforeRes = await get(`/accounts/${ids.account}`, orgKey);
+    const oldTag = beforeRes.headers.get("etag")!;
+    // Simulate an internal CRM edit via the storage layer's update path
+    const { storage } = await import("../server/db");
+    await storage.updateAccount(ids.account, { industry: "InternalEdit" });
+    const afterRes = await get(`/accounts/${ids.account}`, orgKey);
+    const newTag = afterRes.headers.get("etag")!;
+    expect(newTag).not.toBe(oldTag);
+    // The pre-internal-edit token must now be stale
+    const stale = await patchWithMatch(`/accounts/${ids.account}`, { industry: "OldTokenWrite" }, orgKey, oldTag);
+    expect(stale.status).toBe(412);
+  });
+
+  it("internal owner reassignment (user merge) invalidates prior versions", async () => {
+    const { storage } = await import("../server/db");
+    // Give the record an owner that the merge flow will reassign
+    await storage.updateOpportunity(ids.opportunity, { ownerId: outOrgUserId });
+    const beforeRes = await get(`/opportunities/${ids.opportunity}`, orgKey);
+    const oldTag = beforeRes.headers.get("etag")!;
+    // Internal admin flow: merge the owner into another user (bulk ownerId rewrite)
+    await storage.mergeUsers(inOrgUserId, [outOrgUserId]);
+    try {
+      const afterRes = await get(`/opportunities/${ids.opportunity}`, orgKey);
+      expect(afterRes.headers.get("etag")).not.toBe(oldTag);
+      const stale = await patchWithMatch(`/opportunities/${ids.opportunity}`, { probability: 75 }, orgKey, oldTag);
+      expect(stale.status).toBe(412);
+      expect((await stale.json()).code).toBe("STALE_RECORD");
+    } finally {
+      await storage.updateOpportunity(ids.opportunity, { ownerId: null as any });
+    }
+  });
+
+  it("internal opportunity edits with raw-SQL fields (description) invalidate mid-update versions", async () => {
+    const { storage } = await import("../server/db");
+    const beforeRes = await get(`/opportunities/${ids.opportunity}`, orgKey);
+    const oldTag = beforeRes.headers.get("etag")!;
+    // updateOpportunity applies description via a second raw-SQL phase; the
+    // resulting version must reject any ETag issued before or between phases
+    await storage.updateOpportunity(ids.opportunity, { description: "Two-phase update check" });
+    const afterRes = await get(`/opportunities/${ids.opportunity}`, orgKey);
+    expect(afterRes.headers.get("etag")).not.toBe(oldTag);
+    const stale = await patchWithMatch(`/opportunities/${ids.opportunity}`, { probability: 55 }, orgKey, oldTag);
+    expect(stale.status).toBe(412);
+  });
+
+  it("lead conversion invalidates prior versions", async () => {
+    const { storage } = await import("../server/db");
+    const beforeRes = await get(`/leads/${ids.lead}`, orgKey);
+    const oldTag = beforeRes.headers.get("etag")!;
+    await storage.markLeadConverted(ids.lead, { accountId: null, contactId: null, opportunityId: null });
+    try {
+      const afterRes = await get(`/leads/${ids.lead}`, orgKey);
+      expect(afterRes.headers.get("etag")).not.toBe(oldTag);
+      const stale = await patchWithMatch(`/leads/${ids.lead}`, { title: "Post-conversion write" }, orgKey, oldTag);
+      expect(stale.status).toBe(412);
+      expect((await stale.json()).code).toBe("STALE_RECORD");
+    } finally {
+      await storage.updateLead(ids.lead, { status: "new" });
+    }
+  });
+
+  it("organization backfill repair invalidates prior versions", async () => {
+    const { db } = await import("../server/db");
+    const schemaMod = await import("@shared/schema");
+    const { backfillEntityOrganizations } = await import("../server/seed");
+    const { sql } = await import("drizzle-orm");
+    const beforeRes = await get(`/accounts/${ids.account}`, orgKey);
+    const oldTag = beforeRes.headers.get("etag")!;
+    // The backfill repairs legacy rows that predate org stamping (NULL org).
+    // The modern schema forbids NULL, so temporarily relax the constraint to
+    // recreate the legacy state this repair path exists for.
+    await db.execute(sql`ALTER TABLE accounts ALTER COLUMN organization_id DROP NOT NULL`);
+    try {
+      await db.update(schemaMod.accounts).set({ organizationId: null as any }).where(eq(schemaMod.accounts.id, ids.account));
+      await backfillEntityOrganizations(orgId);
+      // Re-stamp to the test org in case the backfill targeted a different primary org
+      await db.update(schemaMod.accounts).set({ organizationId: orgId }).where(eq(schemaMod.accounts.id, ids.account));
+    } finally {
+      await db.execute(sql`ALTER TABLE accounts ALTER COLUMN organization_id SET NOT NULL`);
+    }
+    const afterRes = await get(`/accounts/${ids.account}`, orgKey);
+    expect(afterRes.status).toBe(200);
+    expect(afterRes.headers.get("etag")).not.toBe(oldTag);
+    const stale = await patchWithMatch(`/accounts/${ids.account}`, { industry: "Post-backfill write" }, orgKey, oldTag);
+    expect(stale.status).toBe(412);
+  });
+
+  it("PATCH without If-Match still succeeds (backward compatible)", async () => {
+    const res = await patch(`/activities/${ids.activity}`, { subject: "No precondition" }, orgKey);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.subject).toBe("No precondition");
+    expect(res.headers.get("etag")).toBeTruthy();
+  });
+});
+
 describe("External PATCH API — audit logging", () => {
   it("logs the mutation in the audit log", async () => {
     const res = await patch(`/leads/${ids.lead}`, { company: `Audit Co ${suffix}` }, orgKey);
