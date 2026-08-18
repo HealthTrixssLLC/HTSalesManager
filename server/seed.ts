@@ -683,26 +683,33 @@ export async function initializeDefaultOrganization(): Promise<void> {
     // Check if any organizations exist
     const existingOrgs = await db.select().from(organizations);
     if (existingOrgs.length > 0) {
-      // Check for users not yet in any org and assign them to first org
+      // Check for users not yet in any org and assign them to first org.
+      // Fetch memberships once instead of issuing one query per user. On a
+      // remote Neon database the old N+1 loop added tens of seconds to every
+      // cold start even when every user already had a membership.
       const firstOrg = existingOrgs[0];
       const allUsers = await db.select().from(users);
-      const allRoles = await db.select().from(roles);
-      const adminRole = allRoles.find(r => r.name === "Admin");
-      const salesRepRole = allRoles.find(r => r.name === "SalesRep");
+      const existingMemberships = await db
+        .select({ userId: userOrganizations.userId })
+        .from(userOrganizations);
+      const memberUserIds = new Set(existingMemberships.map(row => row.userId));
+      const usersWithoutMembership = allUsers.filter(user => !memberUserIds.has(user.id));
 
-      for (const user of allUsers) {
-        const membershipCheck = await db.select().from(userOrganizations)
-          .where(eq(userOrganizations.userId, user.id));
-        if (membershipCheck.length === 0) {
+      if (usersWithoutMembership.length > 0) {
+        const allRoles = await db.select().from(roles);
+        const adminRole = allRoles.find(r => r.name === "Admin");
+        const salesRepRole = allRoles.find(r => r.name === "SalesRep");
+
+        for (const user of usersWithoutMembership) {
           // Get user's global role
           const userRoleRows = await db.select().from(userRoles)
             .innerJoin(roles, eq(userRoles.roleId, roles.id))
             .where(eq(userRoles.userId, user.id));
-          
+
           const roleId = userRoleRows.length > 0 
             ? userRoleRows[0].roles.id
             : (salesRepRole?.id || adminRole?.id || allRoles[0]?.id);
-          
+
           if (roleId) {
             await db.insert(userOrganizations).values({
               userId: user.id,
@@ -854,12 +861,44 @@ export async function backfillEntityOrganizations(orgId: string): Promise<void> 
     { name: "apiKeys",             fn: () => db.update(apiKeys).set({ organizationId: orgId }).where(isNull(apiKeys.organizationId)) },
   ];
 
-  for (const { name, fn } of coreTables) {
-    try {
-      await fn();
-    } catch (err) {
-      console.warn(`  backfillEntityOrganizations: skipped ${name} — ${(err as Error).message}`);
+  // Most starts have nothing left to backfill. One read-only preflight avoids
+  // ten sequential UPDATE round trips (and their write-lock acquisition) in
+  // that common case. If an older/partial schema makes the preflight fail, fall
+  // back to the original per-table behavior so startup remains self-healing.
+  let needsCoreBackfill = true;
+  try {
+    const preflightResult = await db.execute(sql.raw(`
+      SELECT (
+        EXISTS (SELECT 1 FROM accounts WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM contacts WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM leads WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM opportunities WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM activities WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM icp_profiles WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM task_playbooks WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM lead_generation_runs WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM llm_configurations WHERE organization_id IS NULL)
+        OR EXISTS (SELECT 1 FROM api_keys WHERE organization_id IS NULL)
+      ) AS needs_backfill
+    `));
+    const rows = Array.isArray(preflightResult)
+      ? preflightResult
+      : (preflightResult as unknown as { rows?: Array<{ needs_backfill: boolean }> }).rows ?? [];
+    needsCoreBackfill = Boolean((rows[0] as { needs_backfill?: boolean } | undefined)?.needs_backfill);
+  } catch (err) {
+    console.warn(`  backfillEntityOrganizations: preflight unavailable — ${(err as Error).message}`);
+  }
+
+  if (needsCoreBackfill) {
+    for (const { name, fn } of coreTables) {
+      try {
+        await fn();
+      } catch (err) {
+        console.warn(`  backfillEntityOrganizations: skipped ${name} — ${(err as Error).message}`);
+      }
     }
+  } else {
+    console.log("  ✓ Organization backfill already complete");
   }
 
   // Initialize org-specific ID patterns and account categories
@@ -885,16 +924,16 @@ export async function initializeOrgSettings(orgId: string): Promise<void> {
       .where(isNullOp(idPatterns.organizationId));
 
     if (globalPatterns.length > 0) {
-      for (const p of globalPatterns) {
-        await db.insert(idPatterns).values({
+      await db.insert(idPatterns).values(
+        globalPatterns.map(p => ({
           entity: p.entity,
           pattern: p.pattern,
           startValue: p.startValue,
           counter: 0,
           lastIssued: null,
           organizationId: orgId,
-        }).onConflictDoNothing();
-      }
+        }))
+      ).onConflictDoNothing();
     } else {
       // No global templates exist — seed defaults directly
       const defaults = [
@@ -905,11 +944,11 @@ export async function initializeOrgSettings(orgId: string): Promise<void> {
         { entity: "Activity", pattern: "ACT-{YY}{MM}-{SEQ:5}" },
         { entity: "Document", pattern: "DOC-{SEQ:6}" },
       ];
-      for (const d of defaults) {
-        await db.insert(idPatterns).values({
+      await db.insert(idPatterns).values(
+        defaults.map(d => ({
           ...d, counter: 0, startValue: 1, organizationId: orgId,
-        }).onConflictDoNothing();
-      }
+        }))
+      ).onConflictDoNothing();
     }
   }
 
@@ -921,13 +960,15 @@ export async function initializeOrgSettings(orgId: string): Promise<void> {
     const globalCategories = await db.select().from(accountCategories)
       .where(isNullOp(accountCategories.organizationId));
 
-    for (const c of globalCategories) {
-      await db.insert(accountCategories).values({
-        name: c.name,
-        description: c.description,
-        isActive: c.isActive,
-        organizationId: orgId,
-      }).onConflictDoNothing();
+    if (globalCategories.length > 0) {
+      await db.insert(accountCategories).values(
+        globalCategories.map(c => ({
+          name: c.name,
+          description: c.description,
+          isActive: c.isActive,
+          organizationId: orgId,
+        }))
+      ).onConflictDoNothing();
     }
   }
 }

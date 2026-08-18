@@ -18,3 +18,9 @@ Every production schema change must be added to `runStartupColumnMigration()` in
 3. Also update `migrations/0NNN_*.sql` for dev reference (applied via `npm run db:push` interactively).
 4. Verify idempotency by running the SQL against a DB that already has the change applied — every statement must be a silent no-op (NOTICE is fine, ERROR is not).
 5. Run `npx tsc --noEmit` and the relevant test suite before shipping.
+## Cold-start performance rule
+Avoid N+1 queries and repeated no-op DML in startup initialization. On Autoscale/preview environments with Neon, sequential remote calls can push the app past the preview stream budget even when the schema migration itself succeeds.
+
+**Why:** A preview runtime spent about 31 seconds in organization initialization after the org-scoped tag migration completed in about one second. Production already had no missing memberships, no null organization IDs, and no repairable lead-gen mismatches; the delay came from 19 redundant membership lookups plus routine no-op backfill/settings work.
+
+**How to apply:** Keep the listener and startup gate early; load existing memberships in bulk, preflight before issuing mass backfill updates, and batch independent seed inserts. Preserve the self-healing fallback when a database genuinely needs backfill work.

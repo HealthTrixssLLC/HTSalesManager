@@ -76,6 +76,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const startupStartedAt = Date.now();
   const port = parseInt(process.env.PORT || '5000', 10);
   const httpServer = http.createServer(app);
 
@@ -174,6 +175,7 @@ app.use((req, res, next) => {
     serveStatic(app);
     // Full init complete — release the startup gate so all requests pass through.
     (httpServer as any)._setStartupReady();
+    log(`Application startup complete in ${Date.now() - startupStartedAt}ms`);
   }
 })().catch((err: Error) => {
   // Ensure a failed init exits nonzero rather than leaving a permanently
