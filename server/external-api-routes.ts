@@ -191,6 +191,70 @@ router.use(async (req: ApiKeyRequest, res: Response, next: NextFunction) => {
 // Placed AFTER logging middleware so 429 responses are captured in audit logs
 router.use(createApiKeyRateLimiter());
 
+// ========== TAG HELPERS ==========
+
+/** Lean tag shape returned by all external tag surfaces */
+function formatTagLean(t: { id: string; name: string; color: string }) {
+  return { id: t.id, name: t.name, color: t.color };
+}
+
+/**
+ * Filter a record's tags down to the calling org's tags before exposing them.
+ * Tags from other orgs (or legacy org-less internal tags) attached through
+ * internal paths must never leak through the external API.
+ */
+function orgVisibleTags(tags: Array<{ id: string; name: string; color: string; organizationId?: string | null }>, orgId: string | undefined) {
+  return tags.filter(t => !!orgId && t.organizationId === orgId).map(formatTagLean);
+}
+
+/**
+ * Resolve ?tag=<name> / ?tagId=<id> list-filter params to a tag ID.
+ * - Both params together -> 400
+ * - tag (name) requires an org-bound key (403 otherwise) and must exist in the org (404)
+ * - tagId must exist and, for org-bound keys, belong to the org (404; no info leak)
+ */
+async function resolveTagFilter(req: ApiKeyRequest, orgId: string | undefined): Promise<{ tagId?: string; error?: { status: number; body: any } }> {
+  const tagName = qs(req.query.tag);
+  const tagIdParam = qs(req.query.tagId);
+  if (!tagName && !tagIdParam) return {};
+  if (tagName && tagIdParam) {
+    return { error: { status: 400, body: {
+      error: "Invalid tag filter",
+      message: "Provide either tag or tagId, not both",
+    } } };
+  }
+  if (tagName) {
+    if (!orgId) {
+      return { error: { status: 403, body: {
+        error: "Organization-bound API key required",
+        message: "Filtering by tag name requires an API key bound to an organization",
+      } } };
+    }
+    const tag = await storage.getTagByName(tagName, orgId);
+    if (!tag) {
+      return { error: { status: 404, body: {
+        error: "Tag not found",
+        message: `No tag found with name: ${tagName}`,
+      } } };
+    }
+    return { tagId: tag.id };
+  }
+  if (!orgId) {
+    return { error: { status: 403, body: {
+      error: "Organization-bound API key required",
+      message: "Filtering by tag requires an API key bound to an organization",
+    } } };
+  }
+  const tag = await storage.getTagById(tagIdParam!);
+  if (!tag || tag.organizationId !== orgId) {
+    return { error: { status: 404, body: {
+      error: "Tag not found",
+      message: `No tag found with ID: ${tagIdParam}`,
+    } } };
+  }
+  return { tagId: tag.id };
+}
+
 // ========== ACCOUNTS ENDPOINTS ==========
 
 /**
@@ -222,11 +286,15 @@ router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest
     const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
     if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
     
+    const tagFilter = await resolveTagFilter(req, orgId);
+    if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
+    
     // Get accounts scoped to the API key's org, filtered server-side
     const accounts = await storage.getAllAccounts(orgId, {
       search: qs(req.query.search),
       name: qs(req.query.name),
       updatedSince: updatedSinceParsed.date,
+      tagId: tagFilter.tagId,
     });
     
     // Apply pagination
@@ -359,6 +427,11 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
         }));
     }
     
+    if (expandList.includes("tags")) {
+      const entityTags = await storage.getEntityTags("Account", account.id);
+      response.tags = orgVisibleTags(entityTags, orgId);
+    }
+    
     return res.json({ data: response });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching account:", error);
@@ -417,6 +490,9 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
       });
     }
     
+    const tagFilter = await resolveTagFilter(req, orgId);
+    if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
+    
     // Get opportunities scoped to the API key's org, filtered server-side
     const opportunities = await storage.getAllOpportunities(orgId, {
       search: qs(req.query.search),
@@ -427,6 +503,7 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
       rating: qs(req.query.rating),
       includeInForecast: includeInForecast === "all" ? undefined : includeInForecast === "true",
       updatedSince: updatedSinceParsed.date,
+      tagId: tagFilter.tagId,
     });
     
     // Apply pagination
@@ -595,6 +672,11 @@ router.get("/opportunities/:id", requirePermission("crm.read"), async (req: ApiK
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
       }));
+    }
+    
+    if (expandList.includes("tags")) {
+      const entityTags = await storage.getEntityTags("Opportunity", opp.id);
+      response.tags = orgVisibleTags(entityTags, orgId);
     }
     
     return res.json({ data: response });
@@ -776,12 +858,16 @@ router.get("/contacts", requirePermission("crm.read"), async (req: ApiKeyRequest
     const updatedSinceParsed = parseDateParam(req.query.updatedSince, "updatedSince");
     if (updatedSinceParsed.error) return res.status(400).json(updatedSinceParsed.error);
 
+    const tagFilter = await resolveTagFilter(req, orgId);
+    if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
+
     // Get contacts scoped to the API key's org, filtered server-side
     const contacts = await storage.getAllContacts(orgId, {
       search: qs(req.query.search),
       email: qs(req.query.email),
       accountId: qs(req.query.accountId),
       updatedSince: updatedSinceParsed.date,
+      tagId: tagFilter.tagId,
     });
 
     const total = contacts.length;
@@ -867,7 +953,13 @@ router.get("/contacts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
       }
     }
 
-    return res.json({ data: formatContactResponse(contact, account) });
+    const contactPayload: any = formatContactResponse(contact, account);
+    if (expandList.includes("tags")) {
+      const entityTags = await storage.getEntityTags("Contact", contact.id);
+      contactPayload.tags = orgVisibleTags(entityTags, orgId);
+    }
+
+    return res.json({ data: contactPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching contact:", error);
     return res.status(500).json({
@@ -1237,6 +1329,9 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
     const sourceParsed = parseEnumParam(req.query.source, "source", LEAD_SOURCES);
     if (sourceParsed.error) return res.status(400).json(sourceParsed.error);
 
+    const tagFilter = await resolveTagFilter(req, orgId);
+    if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
+
     const organization = await storage.getOrganizationById(orgId);
     const leads = await storage.getAllLeads(orgId, {
       search: qs(req.query.search),
@@ -1245,6 +1340,7 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
       rating: ratingParsed.value,
       source: sourceParsed.value,
       updatedSince: updatedSinceParsed.date,
+      tagId: tagFilter.tagId,
     });
 
     const total = leads.length;
@@ -1291,7 +1387,13 @@ router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyReques
     }
 
     const organization = await storage.getOrganizationById(orgId);
-    return res.json({ data: formatLeadResponse(lead, organization?.name ?? null) });
+    const expandList = ((req.query.expand as string) || "").split(",").filter(Boolean);
+    const leadPayload: any = formatLeadResponse(lead, organization?.name ?? null);
+    if (expandList.includes("tags")) {
+      const entityTags = await storage.getEntityTags("Lead", lead.id);
+      leadPayload.tags = orgVisibleTags(entityTags, orgId);
+    }
+    return res.json({ data: leadPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching lead:", error);
     return res.status(500).json({
@@ -1500,6 +1602,9 @@ router.get("/activities", requirePermission("activities.read"), async (req: ApiK
     const relatedTypeParsed = parseEnumParam(req.query.relatedType, "relatedType", ACTIVITY_RELATED_TYPES);
     if (relatedTypeParsed.error) return res.status(400).json(relatedTypeParsed.error);
 
+    const tagFilter = await resolveTagFilter(req, orgId);
+    if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
+
     // Org-scoped, filtered server-side
     const activities = await storage.getActivities(orgId, {
       relatedType: relatedTypeParsed.value,
@@ -1510,6 +1615,7 @@ router.get("/activities", requirePermission("activities.read"), async (req: ApiK
       dueBefore: dueBeforeParsed.date,
       dueAfter: dueAfterParsed.date,
       updatedSince: updatedSinceParsed.date,
+      tagId: tagFilter.tagId,
     });
 
     const total = activities.length;
@@ -1557,7 +1663,13 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
       });
     }
 
-    return res.json({ data: formatActivityResponse(activity) });
+    const expandList = ((req.query.expand as string) || "").split(",").filter(Boolean);
+    const activityPayload: any = formatActivityResponse(activity);
+    if (expandList.includes("tags")) {
+      const entityTags = await storage.getEntityTags("Activity", activity.id);
+      activityPayload.tags = orgVisibleTags(entityTags, orgId);
+    }
+    return res.json({ data: activityPayload });
   } catch (error) {
     console.error("[EXTERNAL-API] Error fetching activity:", error);
     return res.status(500).json({
@@ -1566,6 +1678,269 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
     });
   }
 });
+
+
+// ========== TAGS ENDPOINTS ==========
+// External tag management and per-record tag assignment.
+// All tag routes require an org-bound API key; tags are strictly org-scoped
+// and cross-org tags/records are indistinguishable from missing ones (404).
+
+/** Per-entity config for the entity-tag routes */
+type TagRoutePermission = Parameters<typeof requirePermission>[0];
+const TAG_ENTITIES: Record<string, {
+  label: string;
+  readPermission: TagRoutePermission;
+  writePermission: TagRoutePermission;
+  getById: (id: string, orgId: string) => Promise<any>;
+}> = {
+  accounts: { label: "Account", readPermission: "crm.read", writePermission: "crm.write", getById: async (id) => storage.getAccountById(id) },
+  contacts: { label: "Contact", readPermission: "crm.read", writePermission: "crm.write", getById: async (id) => storage.getContactById(id) },
+  leads: { label: "Lead", readPermission: "crm.read", writePermission: "crm.write", getById: async (id) => storage.getLeadById(id) },
+  opportunities: { label: "Opportunity", readPermission: "crm.read", writePermission: "crm.write", getById: async (id) => storage.getOpportunityById(id) },
+  activities: { label: "Activity", readPermission: "activities.read", writePermission: "activities.write", getById: async (id, orgId) => storage.getActivityById(id, orgId) },
+};
+
+function orgBoundRequired(res: Response, what: string) {
+  return res.status(403).json({
+    error: "Organization-bound API key required",
+    message: `${what} requires an API key bound to an organization`,
+  });
+}
+
+/**
+ * GET /api/v1/external/tags
+ * List the calling org's tags.
+ *
+ * Query Parameters:
+ * - search: Case-insensitive substring match on tag name
+ * - limit: Number of results (default: 100, max: 1000)
+ * - offset: Number of results to skip (default: 0)
+ */
+router.get("/tags", requirePermission("crm.read"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) return orgBoundRequired(res, "Tag access");
+
+    const { limit = "100", offset = "0" } = req.query;
+    const limitNum = Math.min(Math.max(parseInt(limit as string, 10) || 100, 1), 1000);
+    const offsetNum = Math.max(parseInt(offset as string, 10) || 0, 0);
+    const search = qs(req.query.search)?.toLowerCase();
+
+    let tags = await storage.getAllTags(orgId);
+    if (search) {
+      tags = tags.filter(t => t.name.toLowerCase().includes(search));
+    }
+
+    const total = tags.length;
+    const page = tags.slice(offsetNum, offsetNum + limitNum);
+
+    return res.json({
+      data: page.map(formatTagLean),
+      pagination: {
+        total,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + page.length < total,
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error fetching tags:", error);
+    return res.status(500).json({
+      error: "Failed to fetch tags",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+const externalCreateTagSchema = z.object({
+  name: z.string().trim().min(1, "name is required").max(100, "name must be at most 100 characters"),
+}).strict();
+
+/**
+ * POST /api/v1/external/tags
+ * Create an org-scoped tag. Name is normalized (trimmed, internal whitespace
+ * collapsed) and must be unique within the org (case-insensitive) — 409 on duplicate.
+ */
+router.post("/tags", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) return orgBoundRequired(res, "Tag creation");
+
+    const parsed = externalCreateTagSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: parsed.error.errors.map(e => e.message).join("; "),
+        details: parsed.error.errors,
+      });
+    }
+
+    const normalized = parsed.data.name.trim().replace(/\s+/g, " ");
+    if (!normalized) {
+      return res.status(400).json({
+        error: "Validation failed",
+        message: "name is required",
+      });
+    }
+
+    const existing = await storage.getTagByName(normalized, orgId);
+    if (existing) {
+      return res.status(409).json({
+        error: "Tag already exists",
+        message: `A tag named "${existing.name}" already exists in this organization`,
+        existingTagId: existing.id,
+      });
+    }
+
+    const tag = await storage.createTag({
+      name: normalized,
+      organizationId: orgId,
+      createdBy: null, // External API requests are key-scoped, not user-scoped
+    });
+
+    return res.status(201).json({ data: formatTagLean(tag) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating tag:", error);
+    return res.status(500).json({
+      error: "Failed to create tag",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+const externalAssignTagSchema = z.object({
+  tagId: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(100).optional(),
+}).strict().refine(
+  (data) => !!data.tagId !== !!data.name,
+  { message: "Provide exactly one of tagId or name" }
+);
+
+/** Fetch the record for an entity-tag route; sends the 404 itself when missing/cross-org. */
+async function loadTaggableRecord(entityKey: string, id: string, orgId: string, res: Response): Promise<any | undefined> {
+  const cfg = TAG_ENTITIES[entityKey];
+  const record = await cfg.getById(id, orgId);
+  // getActivityById is already org-scoped; the others need an explicit ownership check
+  if (!record || (entityKey !== "activities" && !keyOrgOwns(record, orgId))) {
+    res.status(404).json({
+      error: `${cfg.label} not found`,
+      message: `No ${cfg.label.toLowerCase()} found with ID: ${id}`,
+    });
+    return undefined;
+  }
+  return record;
+}
+
+for (const [entityKey, cfg] of Object.entries(TAG_ENTITIES)) {
+  /**
+   * GET /api/v1/external/{entity}/:id/tags
+   * List tags attached to a record (org-scoped; cross-org record -> 404).
+   */
+  router.get(`/${entityKey}/:id/tags`, requirePermission(cfg.readPermission), async (req: ApiKeyRequest, res) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) return orgBoundRequired(res, "Tag access");
+
+      const record = await loadTaggableRecord(entityKey, req.params.id, orgId, res);
+      if (!record) return;
+
+      const entityTags = await storage.getEntityTags(cfg.label, req.params.id);
+      return res.json({ data: orgVisibleTags(entityTags, orgId) });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error fetching ${cfg.label} tags:`, error);
+      return res.status(500).json({
+        error: "Failed to fetch tags",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/external/{entity}/:id/tags
+   * Assign a tag by { tagId } or { name }. The tag must already exist in the
+   * org (404 otherwise — no auto-create). Idempotent: re-assigning an already
+   * assigned tag is a no-op. Returns the record's current tag list.
+   */
+  router.post(`/${entityKey}/:id/tags`, requirePermission(cfg.writePermission), async (req: ApiKeyRequest, res) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) return orgBoundRequired(res, "Tag assignment");
+
+      const record = await loadTaggableRecord(entityKey, req.params.id, orgId, res);
+      if (!record) return;
+
+      const parsed = externalAssignTagSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Validation failed",
+          message: parsed.error.errors.map(e => e.message).join("; "),
+          details: parsed.error.errors,
+        });
+      }
+
+      let tag;
+      if (parsed.data.tagId) {
+        tag = await storage.getTagById(parsed.data.tagId);
+        // Cross-org tags are indistinguishable from missing ones
+        if (tag && tag.organizationId !== orgId) tag = undefined;
+      } else {
+        tag = await storage.getTagByName(parsed.data.name!, orgId);
+      }
+      if (!tag) {
+        return res.status(404).json({
+          error: "Tag not found",
+          message: parsed.data.tagId
+            ? `No tag found with ID: ${parsed.data.tagId}`
+            : `No tag found with name: ${parsed.data.name}`,
+        });
+      }
+
+      // Idempotent: onConflictDoNothing under the hood
+      await storage.addEntityTags(cfg.label, req.params.id, [tag.id], null);
+
+      const entityTags = await storage.getEntityTags(cfg.label, req.params.id);
+      return res.json({ data: orgVisibleTags(entityTags, orgId) });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error assigning ${cfg.label} tag:`, error);
+      return res.status(500).json({
+        error: "Failed to assign tag",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/v1/external/{entity}/:id/tags/:tagId
+   * Remove a tag assignment. Returns 204 even when the assignment did not
+   * exist (idempotent); 404 when the record or tag is missing/cross-org.
+   */
+  router.delete(`/${entityKey}/:id/tags/:tagId`, requirePermission(cfg.writePermission), async (req: ApiKeyRequest, res) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) return orgBoundRequired(res, "Tag removal");
+
+      const record = await loadTaggableRecord(entityKey, req.params.id, orgId, res);
+      if (!record) return;
+
+      const tag = await storage.getTagById(req.params.tagId);
+      if (!tag || tag.organizationId !== orgId) {
+        return res.status(404).json({
+          error: "Tag not found",
+          message: `No tag found with ID: ${req.params.tagId}`,
+        });
+      }
+
+      await storage.removeEntityTag(cfg.label, req.params.id, tag.id);
+      return res.status(204).send();
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error removing ${cfg.label} tag:`, error);
+      return res.status(500).json({
+        error: "Failed to remove tag",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+}
 
 // ========== PHASE E: CONTROLLED PATCH ENDPOINTS ==========
 // Strict partial updates with per-entity mutable-field allowlists.

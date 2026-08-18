@@ -423,13 +423,19 @@ export const apiKeys = pgTable("api_keys", {
 
 export const tags = pgTable("tags", {
   id: varchar("id", { length: 50 }).primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
+  // NULL = legacy/global internal-use tag; set = tag belongs to that organization
+  organizationId: varchar("organization_id", { length: 50 }).references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
   color: text("color").notNull().default("#3b82f6"), // Hex color for tag badge
-  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  // Nullable: external API tag creation is key-scoped, not user-scoped
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   nameIdx: index("tags_name_idx").on(table.name),
+  orgIdx: index("tags_org_idx").on(table.organizationId),
+  // Case-insensitive uniqueness per organization (legacy NULL-org tags share one global namespace)
+  nameOrgUnique: uniqueIndex("tags_name_org_unique_idx").on(sql`lower(${table.name})`, sql`COALESCE(${table.organizationId}, '')`),
 }));
 
 export const entityTags = pgTable("entity_tags", {
@@ -437,7 +443,8 @@ export const entityTags = pgTable("entity_tags", {
   entity: text("entity").notNull(), // "Account", "Contact", "Lead", "Opportunity", "Activity"
   entityId: varchar("entity_id", { length: 100 }).notNull(), // ID of the record
   tagId: varchar("tag_id", { length: 50 }).notNull().references(() => tags.id, { onDelete: "cascade" }),
-  createdBy: varchar("created_by", { length: 50 }).notNull().references(() => users.id),
+  // Nullable: external API tag assignment is key-scoped, not user-scoped
+  createdBy: varchar("created_by", { length: 50 }).references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => ({
   entityIdx: index("entity_tags_entity_idx").on(table.entity, table.entityId),

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Health Trixss CRM External API
-  version: "1.4"
+  version: "1.5"
   description: |
     Secure external access to Health Trixss CRM data for forecasting
     applications, BI tools, and third-party integrations.
@@ -22,8 +22,11 @@ info:
     - `crm.read` — all GET endpoints (accounts, opportunities, contacts, leads, logs)
     - `crm.write` — POST /leads, PATCH on accounts/contacts/leads/opportunities,
       POST/DELETE opportunity-contact links
-    - `activities.read` — GET /activities, GET /activities/:id
-    - `activities.write` — POST /activities, PATCH /activities/:id
+    - `activities.read` — GET /activities, GET /activities/:id, GET /activities/:id/tags
+    - `activities.write` — POST /activities, PATCH /activities/:id,
+      POST/DELETE /activities/:id/tags
+    - Tag management (`/tags`) and CRM entity-tag routes use `crm.read` / `crm.write`.
+      All tag routes require an organization-scoped key.
     Missing scopes return `403` with a `requiredPermission` field. Legacy keys
     with no explicit scopes are treated as having all scopes; an explicit empty
     list grants nothing.
@@ -50,9 +53,643 @@ tags:
   - name: Leads
   - name: Activities
   - name: Documents
+  - name: Tags
   - name: Logs
 
 paths:
+  /tags:
+    get:
+      tags: [Tags]
+      operationId: listTags
+      summary: List the organization's tags
+      description: >
+        Lists tags belonging to the API key's organization. Requires the
+        `crm.read` scope and an organization-scoped key (403 for system keys).
+
+
+        `curl -H "x-api-key: $KEY" "https://crm.example.com/api/v1/external/tags?search=priority&limit=50"`
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+          description: Case-insensitive substring match on tag name.
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated tag list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+              example:
+                data:
+                  - { id: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f, name: priority, color: "#3b82f6" }
+                pagination: { total: 1, limit: 100, offset: 0, hasMore: false }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: createTag
+      summary: Create a tag
+      description: >
+        Creates an organization-scoped tag. Requires the `crm.write` scope and
+        an organization-scoped key (403 for system keys). The name is
+        normalized (trimmed, internal whitespace collapsed) and must be unique
+        within the organization case-insensitively — duplicates return 409
+        with `existingTagId`.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/tags`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                  description: Tag name (normalized; unique per org, case-insensitive).
+            example: { name: priority }
+      responses:
+        "201":
+          description: Created tag
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "409": { $ref: "#/components/responses/DuplicateTag" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /accounts/{id}/tags:
+    get:
+      tags: [Tags]
+      operationId: getAccountTags
+      summary: List tags on a account
+      description: >
+        Returns the tags attached to the account. Requires the
+        `crm.read` scope and an organization-scoped key. 404 for missing or
+        cross-org records.
+
+
+        `curl -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/accounts/ACCT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Tags attached to the record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: addAccountTag
+      summary: Assign a tag to a account
+      description: >
+        Assigns an existing tag by `tagId` or by `name` (exactly one of the
+        two). Requires the `crm.write` scope and an organization-scoped key.
+        A name that does not exist in the organization returns 404 — tags are
+        never auto-created. Idempotent: re-assigning an already-assigned tag
+        is a no-op. Returns the record's current tag list. Cross-org tags and
+        records return 404.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/accounts/ACCT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tagId:
+                  type: string
+                  description: ID of an existing tag in the organization.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Name of an existing tag (case-insensitive lookup).
+            examples:
+              byId: { value: { tagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f } }
+              byName: { value: { name: priority } }
+      responses:
+        "200":
+          description: Current tag list for the record (after assignment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /accounts/{id}/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      operationId: removeAccountTag
+      summary: Remove a tag from a account
+      description: >
+        Removes a tag assignment. Requires the `crm.write` scope and an
+        organization-scoped key. Returns 204 even when the assignment did not
+        exist (idempotent); 404 when the record or tag is missing or cross-org.
+
+
+        `curl -X DELETE -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/accounts/ACCT-2025-00001/tags/$TAG_ID`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TagIdPath"
+      responses:
+        "204":
+          description: Assignment removed (or did not exist).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /contacts/{id}/tags:
+    get:
+      tags: [Tags]
+      operationId: getContactTags
+      summary: List tags on a contact
+      description: >
+        Returns the tags attached to the contact. Requires the
+        `crm.read` scope and an organization-scoped key. 404 for missing or
+        cross-org records.
+
+
+        `curl -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/contacts/CONT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Tags attached to the record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: addContactTag
+      summary: Assign a tag to a contact
+      description: >
+        Assigns an existing tag by `tagId` or by `name` (exactly one of the
+        two). Requires the `crm.write` scope and an organization-scoped key.
+        A name that does not exist in the organization returns 404 — tags are
+        never auto-created. Idempotent: re-assigning an already-assigned tag
+        is a no-op. Returns the record's current tag list. Cross-org tags and
+        records return 404.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/contacts/CONT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tagId:
+                  type: string
+                  description: ID of an existing tag in the organization.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Name of an existing tag (case-insensitive lookup).
+            examples:
+              byId: { value: { tagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f } }
+              byName: { value: { name: priority } }
+      responses:
+        "200":
+          description: Current tag list for the record (after assignment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /contacts/{id}/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      operationId: removeContactTag
+      summary: Remove a tag from a contact
+      description: >
+        Removes a tag assignment. Requires the `crm.write` scope and an
+        organization-scoped key. Returns 204 even when the assignment did not
+        exist (idempotent); 404 when the record or tag is missing or cross-org.
+
+
+        `curl -X DELETE -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/contacts/CONT-2025-00001/tags/$TAG_ID`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TagIdPath"
+      responses:
+        "204":
+          description: Assignment removed (or did not exist).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /leads/{id}/tags:
+    get:
+      tags: [Tags]
+      operationId: getLeadTags
+      summary: List tags on a lead
+      description: >
+        Returns the tags attached to the lead. Requires the
+        `crm.read` scope and an organization-scoped key. 404 for missing or
+        cross-org records.
+
+
+        `curl -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/leads/LEAD-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Tags attached to the record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: addLeadTag
+      summary: Assign a tag to a lead
+      description: >
+        Assigns an existing tag by `tagId` or by `name` (exactly one of the
+        two). Requires the `crm.write` scope and an organization-scoped key.
+        A name that does not exist in the organization returns 404 — tags are
+        never auto-created. Idempotent: re-assigning an already-assigned tag
+        is a no-op. Returns the record's current tag list. Cross-org tags and
+        records return 404.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/leads/LEAD-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tagId:
+                  type: string
+                  description: ID of an existing tag in the organization.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Name of an existing tag (case-insensitive lookup).
+            examples:
+              byId: { value: { tagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f } }
+              byName: { value: { name: priority } }
+      responses:
+        "200":
+          description: Current tag list for the record (after assignment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /leads/{id}/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      operationId: removeLeadTag
+      summary: Remove a tag from a lead
+      description: >
+        Removes a tag assignment. Requires the `crm.write` scope and an
+        organization-scoped key. Returns 204 even when the assignment did not
+        exist (idempotent); 404 when the record or tag is missing or cross-org.
+
+
+        `curl -X DELETE -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/leads/LEAD-2025-00001/tags/$TAG_ID`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TagIdPath"
+      responses:
+        "204":
+          description: Assignment removed (or did not exist).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /opportunities/{id}/tags:
+    get:
+      tags: [Tags]
+      operationId: getOpportunityTags
+      summary: List tags on a opportunity
+      description: >
+        Returns the tags attached to the opportunity. Requires the
+        `crm.read` scope and an organization-scoped key. 404 for missing or
+        cross-org records.
+
+
+        `curl -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/opportunities/OPP-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Tags attached to the record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: addOpportunityTag
+      summary: Assign a tag to a opportunity
+      description: >
+        Assigns an existing tag by `tagId` or by `name` (exactly one of the
+        two). Requires the `crm.write` scope and an organization-scoped key.
+        A name that does not exist in the organization returns 404 — tags are
+        never auto-created. Idempotent: re-assigning an already-assigned tag
+        is a no-op. Returns the record's current tag list. Cross-org tags and
+        records return 404.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/opportunities/OPP-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tagId:
+                  type: string
+                  description: ID of an existing tag in the organization.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Name of an existing tag (case-insensitive lookup).
+            examples:
+              byId: { value: { tagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f } }
+              byName: { value: { name: priority } }
+      responses:
+        "200":
+          description: Current tag list for the record (after assignment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /opportunities/{id}/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      operationId: removeOpportunityTag
+      summary: Remove a tag from a opportunity
+      description: >
+        Removes a tag assignment. Requires the `crm.write` scope and an
+        organization-scoped key. Returns 204 even when the assignment did not
+        exist (idempotent); 404 when the record or tag is missing or cross-org.
+
+
+        `curl -X DELETE -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/opportunities/OPP-2025-00001/tags/$TAG_ID`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TagIdPath"
+      responses:
+        "204":
+          description: Assignment removed (or did not exist).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /activities/{id}/tags:
+    get:
+      tags: [Tags]
+      operationId: getActivityTags
+      summary: List tags on a activity
+      description: >
+        Returns the tags attached to the activity. Requires the
+        `activities.read` scope and an organization-scoped key. 404 for missing or
+        cross-org records.
+
+
+        `curl -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/activities/ACT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Tags attached to the record
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Tags]
+      operationId: addActivityTag
+      summary: Assign a tag to a activity
+      description: >
+        Assigns an existing tag by `tagId` or by `name` (exactly one of the
+        two). Requires the `activities.write` scope and an organization-scoped key.
+        A name that does not exist in the organization returns 404 — tags are
+        never auto-created. Idempotent: re-assigning an already-assigned tag
+        is a no-op. Returns the record's current tag list. Cross-org tags and
+        records return 404.
+
+
+        `curl -X POST -H "x-api-key: $KEY" -H "Content-Type: application/json" -d '{"name":"priority"}' https://crm.example.com/api/v1/external/activities/ACT-2025-00001/tags`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                tagId:
+                  type: string
+                  description: ID of an existing tag in the organization.
+                name:
+                  type: string
+                  maxLength: 100
+                  description: Name of an existing tag (case-insensitive lookup).
+            examples:
+              byId: { value: { tagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f } }
+              byName: { value: { name: priority } }
+      responses:
+        "200":
+          description: Current tag list for the record (after assignment)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TagObject"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+  /activities/{id}/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      operationId: removeActivityTag
+      summary: Remove a tag from a activity
+      description: >
+        Removes a tag assignment. Requires the `activities.write` scope and an
+        organization-scoped key. Returns 204 even when the assignment did not
+        exist (idempotent); 404 when the record or tag is missing or cross-org.
+
+
+        `curl -X DELETE -H "x-api-key: $KEY" https://crm.example.com/api/v1/external/activities/ACT-2025-00001/tags/$TAG_ID`
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/TagIdPath"
+      responses:
+        "204":
+          description: Assignment removed (or did not exist).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
   /accounts:
     get:
       tags: [Accounts]
@@ -62,6 +699,8 @@ paths:
         Lists accounts visible to the API key (all orgs for a system key,
         one org for an org-scoped key). Requires the `crm.read` scope.
       parameters:
+        - $ref: "#/components/parameters/TagNameFilter"
+        - $ref: "#/components/parameters/TagIdFilter"
         - name: search
           in: query
           required: false
@@ -130,7 +769,7 @@ paths:
           required: false
           schema:
             type: string
-          description: "Comma-separated. Supported: `opportunities`, `contacts`."
+          description: "Comma-separated. Supported: `opportunities`, `contacts`, `tags`."
       responses:
         "200":
           description: Account detail (adds `website` and `phone` over the list shape)
@@ -205,6 +844,8 @@ paths:
       summary: List opportunities
       description: Requires the `crm.read` scope.
       parameters:
+        - $ref: "#/components/parameters/TagNameFilter"
+        - $ref: "#/components/parameters/TagIdFilter"
         - name: search
           in: query
           required: false
@@ -325,7 +966,7 @@ paths:
           required: false
           schema:
             type: string
-          description: "Comma-separated. Supported: `account`, `resources`, `contacts`."
+          description: "Comma-separated. Supported: `account`, `resources`, `contacts`, `tags`."
       responses:
         "200":
           description: Opportunity detail
@@ -506,6 +1147,8 @@ paths:
         Requires the `crm.read` scope AND an organization-scoped key
         (system keys receive 403).
       parameters:
+        - $ref: "#/components/parameters/TagNameFilter"
+        - $ref: "#/components/parameters/TagIdFilter"
         - name: search
           in: query
           required: false
@@ -577,7 +1220,7 @@ paths:
           in: query
           required: false
           schema: { type: string }
-          description: "Supported: `account` — adds `{ id, name }` (or null)."
+          description: "Comma-separated. Supported: `account` — adds `{ id, name }` (or null); `tags` — adds the record's tags."
       responses:
         "200":
           description: Contact detail
@@ -726,6 +1369,8 @@ paths:
         Invalid `status`, `rating`, or `source` values return 400 listing the
         allowed values.
       parameters:
+        - $ref: "#/components/parameters/TagNameFilter"
+        - $ref: "#/components/parameters/TagIdFilter"
         - name: search
           in: query
           required: false
@@ -787,6 +1432,11 @@ paths:
       description: Requires the `crm.read` scope AND an organization-scoped key.
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - name: expand
+          in: query
+          required: false
+          schema: { type: string }
+          description: "Comma-separated. Supported: `tags` — adds the record's tags."
       responses:
         "200":
           description: Lead detail
@@ -850,6 +1500,8 @@ paths:
         compare against the activity's `dueAt` timestamp (strict comparison;
         activities without a `dueAt` are excluded by either filter).
       parameters:
+        - $ref: "#/components/parameters/TagNameFilter"
+        - $ref: "#/components/parameters/TagIdFilter"
         - name: relatedType
           in: query
           description: Exact match on the related record type.
@@ -999,6 +1651,11 @@ paths:
         organization's record are indistinguishable — both return 404.
       parameters:
         - $ref: "#/components/parameters/RecordId"
+        - name: expand
+          in: query
+          required: false
+          schema: { type: string }
+          description: "Comma-separated. Supported: `tags` — adds the record's tags."
       responses:
         "200":
           description: Activity detail
@@ -1454,6 +2111,33 @@ components:
       schema: { type: integer, default: 0, minimum: 0 }
       description: Records to skip (0-based).
 
+    TagNameFilter:
+      name: tag
+      in: query
+      required: false
+      schema: { type: string }
+      description: >
+        Only records carrying the tag with this exact name (case-insensitive).
+        Requires an organization-scoped key. Unknown names return 404.
+        Mutually exclusive with `tagId` (400 when both are provided).
+        The pagination `total` reflects the filtered count.
+    TagIdFilter:
+      name: tagId
+      in: query
+      required: false
+      schema: { type: string }
+      description: >
+        Only records carrying the tag with this ID. Requires an
+        organization-scoped key (403 for system keys). Unknown or cross-org
+        tag IDs return 404. Mutually exclusive with `tag`. The pagination
+        `total` reflects the filtered count.
+    TagIdPath:
+      name: tagId
+      in: path
+      required: true
+      schema: { type: string }
+      description: ID of the tag to remove from the record.
+
   responses:
     Unauthorized:
       description: >
@@ -1545,6 +2229,20 @@ components:
           example:
             error: Invalid updatedSince
             message: updatedSince must be a valid ISO 8601 timestamp
+    DuplicateTag:
+      description: A tag with this (normalized, case-insensitive) name already exists in the organization.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Error"
+              - type: object
+                properties:
+                  existingTagId: { type: string }
+          example:
+            error: Tag already exists
+            message: A tag named "priority" already exists in this organization
+            existingTagId: 4f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
     RateLimited:
       description: >
         Per-key rate limit exceeded (default 100 requests/minute, configurable
@@ -1606,6 +2304,23 @@ components:
             allowedFields:
               type: array
               items: { type: string }
+
+    TagObject:
+      type: object
+      required: [id, name, color]
+      description: >
+        Lean tag shape used everywhere tags appear in the external API:
+        tag lists, entity-tag lists, and `expand=tags` arrays.
+      properties:
+        id:
+          type: string
+          description: Tag ID (UUID).
+        name:
+          type: string
+          description: Tag name (unique per organization, case-insensitive).
+        color:
+          type: string
+          description: Hex badge color, e.g. "#3b82f6".
 
     Pagination:
       type: object

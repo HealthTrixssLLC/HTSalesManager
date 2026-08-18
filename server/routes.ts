@@ -176,6 +176,12 @@ export async function registerRoutes(app: Express) {
   // Attach active org ID from X-Organization-Id header to all requests
   app.use(attachActiveOrg);
 
+  // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
+  // Mounted FIRST so generic internal matchers (e.g. /api/:entity/:entityId/tags)
+  // can never shadow /api/v1/external/* paths. The external router applies its
+  // own API-key auth, permission guards, audit logging, and rate limiting.
+  app.use("/api/v1/external", externalApiRoutes);
+
   // ========== MICROSOFT ENTRA ID SSO ROUTES ==========
   registerEntraRoutes(app);
 
@@ -2702,6 +2708,15 @@ export async function registerRoutes(app: Express) {
     return entityNameMap[entity.toLowerCase()] || entity;
   }
 
+  // Now that tags are org-scoped, internal assignment paths must not attach
+  // another org's tags to a record. Legacy org-less tags remain assignable.
+  async function filterAssignableTagIds(tagIds: string[], activeOrgId: string | undefined): Promise<string[]> {
+    const resolved = await Promise.all((tagIds || []).map((id: string) => storage.getTagById(id)));
+    return resolved
+      .filter((t): t is NonNullable<typeof t> => !!t && (!t.organizationId || t.organizationId === activeOrgId))
+      .map(t => t.id);
+  }
+
   app.get("/api/:entity/:entityId/tags", authenticate, readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entityId } = req.params;
@@ -2724,7 +2739,8 @@ export async function registerRoutes(app: Express) {
         return res.status(404).json({ error: `${entity} not found` });
       }
       const { tagIds } = req.body;
-      await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
+      const assignableTagIds = await filterAssignableTagIds(tagIds, req.activeOrgId);
+      await storage.addEntityTags(entity, entityId, assignableTagIds, req.user!.id);
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: "Failed to add entity tags" });
@@ -2750,6 +2766,7 @@ export async function registerRoutes(app: Express) {
     try {
       const entity = normalizeEntityName(req.params.entity);
       const { entityIds, tagIds } = req.body;
+      const assignableTagIds = await filterAssignableTagIds(tagIds, req.activeOrgId);
       
       const validIds: string[] = [];
       for (const entityId of entityIds) {
@@ -2759,7 +2776,7 @@ export async function registerRoutes(app: Express) {
       }
       
       for (const entityId of validIds) {
-        await storage.addEntityTags(entity, entityId, tagIds, req.user!.id);
+        await storage.addEntityTags(entity, entityId, assignableTagIds, req.user!.id);
       }
       
       return res.json({ success: true, count: validIds.length });
@@ -6163,10 +6180,6 @@ export async function registerRoutes(app: Express) {
       });
     }
   });
-
-  // ========== EXTERNAL API ROUTES (FOR FORECASTING APP) ==========
-  // Mount external API routes under /api/v1/external
-  app.use("/api/v1/external", externalApiRoutes);
 
   // ========== CRM DOCUMENT ATTACHMENTS ==========
   // File attachments for Lead, Account, Contact, and Opportunity records.

@@ -122,8 +122,10 @@ export interface IStorage {
   revokeApiKey(id: string, userId: string): Promise<ApiKey>;
   
   // ========== TAGS ==========
-  getAllTags(): Promise<Tag[]>;
+  getAllTags(orgId?: string): Promise<Tag[]>;
   getTagById(id: string): Promise<Tag | undefined>;
+  getTagByName(name: string, orgId: string): Promise<Tag | undefined>;
+  getTagsByIds(ids: string[], orgId: string): Promise<Tag[]>;
   createTag(tag: InsertTag): Promise<Tag>;
   updateTag(id: string, tag: Partial<InsertTag>): Promise<Tag>;
   deleteTag(id: string): Promise<void>;
@@ -132,7 +134,7 @@ export interface IStorage {
   getEntityTagsBulk(entity: string, entityIds: string[]): Promise<Array<{ entityId: string; id: string; name: string; color: string }>>;
   getActivityTagsBulk(activityIds: string[], orgId?: string): Promise<Array<{ entityId: string; id: string; name: string; color: string }>>;
   getEntityTags(entity: string, entityId: string): Promise<Tag[]>;
-  addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void>;
+  addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string | null): Promise<void>;
   removeEntityTag(entity: string, entityId: string, tagId: string): Promise<void>;
   
   // ========== OPPORTUNITY RESOURCES ==========
@@ -216,12 +218,14 @@ export interface IStorage {
 }
 
 export interface AccountListFilters {
+  tagId?: string;         // Only records that carry this tag (entity_tags join)
   search?: string;       // Case-insensitive substring match on account name
   name?: string;         // Case-insensitive substring match on account name
   updatedSince?: Date;   // updated_at strictly after this timestamp
 }
 
 export interface LeadListFilters {
+  tagId?: string;         // Only records that carry this tag (entity_tags join)
   search?: string;       // Case-insensitive substring match on "first last" name or company
   email?: string;        // Case-insensitive exact email match
   status?: string;       // lead_status enum value
@@ -231,6 +235,7 @@ export interface LeadListFilters {
 }
 
 export interface OpportunityListFilters {
+  tagId?: string;         // Only records that carry this tag (entity_tags join)
   search?: string;             // Case-insensitive substring match on opportunity name
   accountId?: string;          // Exact account ID match
   status?: string;             // Case-insensitive exact match on status text
@@ -242,6 +247,7 @@ export interface OpportunityListFilters {
 }
 
 export interface ActivityListFilters {
+  tagId?: string;         // Only records that carry this tag (entity_tags join)
   relatedType?: string;   // Exact match on related record type ("Account", "Contact", "Lead", "Opportunity")
   relatedId?: string;     // Exact match on related record ID
   type?: string;          // activity_type enum value
@@ -253,6 +259,7 @@ export interface ActivityListFilters {
 }
 
 export interface ContactListFilters {
+  tagId?: string;         // Only records that carry this tag (entity_tags join)
   search?: string;       // Case-insensitive substring match on "first last" name
   email?: string;        // Case-insensitive exact email match
   accountId?: string;    // Exact account ID match

@@ -261,6 +261,7 @@ export class PostgresStorage implements IStorage {
       if (filters?.search) conditions.push(sql`a.name ILIKE ${containsPattern(filters.search)}`);
       if (filters?.name) conditions.push(sql`a.name ILIKE ${containsPattern(filters.name)}`);
       if (filters?.updatedSince) conditions.push(sql`a.updated_at > ${filters.updatedSince}`);
+      if (filters?.tagId) conditions.push(sql`EXISTS (SELECT 1 FROM entity_tags etf WHERE etf.entity = 'Account' AND etf.entity_id = a.id AND etf.tag_id = ${filters.tagId})`);
       const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
@@ -353,6 +354,7 @@ export class PostgresStorage implements IStorage {
       if (filters?.email) conditions.push(sql`lower(c.email) = lower(${filters.email})`);
       if (filters?.accountId) conditions.push(sql`c.account_id = ${filters.accountId}`);
       if (filters?.updatedSince) conditions.push(sql`c.updated_at > ${filters.updatedSince}`);
+      if (filters?.tagId) conditions.push(sql`EXISTS (SELECT 1 FROM entity_tags etf WHERE etf.entity = 'Contact' AND etf.entity_id = c.id AND etf.tag_id = ${filters.tagId})`);
       const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
@@ -448,6 +450,7 @@ export class PostgresStorage implements IStorage {
       if (filters?.rating) conditions.push(sql`lower(l.rating) = lower(${filters.rating})`);
       if (filters?.source) conditions.push(sql`l.source::text = ${filters.source}`);
       if (filters?.updatedSince) conditions.push(sql`l.updated_at > ${filters.updatedSince}`);
+      if (filters?.tagId) conditions.push(sql`EXISTS (SELECT 1 FROM entity_tags etf WHERE etf.entity = 'Lead' AND etf.entity_id = l.id AND etf.tag_id = ${filters.tagId})`);
       const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
@@ -532,6 +535,7 @@ export class PostgresStorage implements IStorage {
       if (filters?.rating) conditions.push(sql`lower(o.rating) = lower(${filters.rating})`);
       if (filters?.includeInForecast !== undefined) conditions.push(sql`o.include_in_forecast = ${filters.includeInForecast}`);
       if (filters?.updatedSince) conditions.push(sql`o.updated_at > ${filters.updatedSince}`);
+      if (filters?.tagId) conditions.push(sql`EXISTS (SELECT 1 FROM entity_tags etf WHERE etf.entity = 'Opportunity' AND etf.entity_id = o.id AND etf.tag_id = ${filters.tagId})`);
       const orgFilter = buildWhere(conditions);
       const result: any = await db.execute(sql`
         SELECT 
@@ -710,6 +714,7 @@ export class PostgresStorage implements IStorage {
     if (filters?.dueBefore) conditions.push(lt(schema.activities.dueAt, filters.dueBefore));
     if (filters?.dueAfter) conditions.push(gt(schema.activities.dueAt, filters.dueAfter));
     if (filters?.updatedSince) conditions.push(gt(schema.activities.updatedAt, filters.updatedSince));
+    if (filters?.tagId) conditions.push(sql`EXISTS (SELECT 1 FROM entity_tags etf WHERE etf.entity = 'Activity' AND etf.entity_id = ${schema.activities.id} AND etf.tag_id = ${filters.tagId})` as any);
     return await db.select().from(schema.activities)
       .where(and(...conditions))
       .orderBy(desc(schema.activities.createdAt));
@@ -1304,7 +1309,17 @@ export class PostgresStorage implements IStorage {
   
   // ========== TAGS ==========
   
-  async getAllTags(): Promise<schema.Tag[]> {
+  /** Normalize a tag name: trim and collapse internal whitespace runs */
+  static normalizeTagName(name: string): string {
+    return name.trim().replace(/\s+/g, " ");
+  }
+
+  async getAllTags(orgId?: string): Promise<schema.Tag[]> {
+    if (orgId) {
+      return await db.select().from(schema.tags)
+        .where(eq(schema.tags.organizationId, orgId))
+        .orderBy(schema.tags.name);
+    }
     return await db.select().from(schema.tags).orderBy(schema.tags.name);
   }
   
@@ -1312,10 +1327,30 @@ export class PostgresStorage implements IStorage {
     const result = await db.select().from(schema.tags).where(eq(schema.tags.id, id)).limit(1);
     return result[0];
   }
+
+  async getTagByName(name: string, orgId: string): Promise<schema.Tag | undefined> {
+    const normalized = PostgresStorage.normalizeTagName(name);
+    const result = await db.select().from(schema.tags)
+      .where(and(
+        sql`lower(${schema.tags.name}) = lower(${normalized})`,
+        eq(schema.tags.organizationId, orgId),
+      ))
+      .limit(1);
+    return result[0];
+  }
+
+  async getTagsByIds(ids: string[], orgId: string): Promise<schema.Tag[]> {
+    if (ids.length === 0) return [];
+    return await db.select().from(schema.tags)
+      .where(and(
+        inArray(schema.tags.id, ids),
+        eq(schema.tags.organizationId, orgId),
+      ));
+  }
   
   async createTag(tag: schema.InsertTag): Promise<schema.Tag> {
     const result = await db.insert(schema.tags)
-      .values({ ...tag, updatedAt: new Date() })
+      .values({ ...tag, name: PostgresStorage.normalizeTagName(tag.name), updatedAt: new Date() })
       .returning();
     return result[0];
   }
@@ -1376,6 +1411,7 @@ export class PostgresStorage implements IStorage {
     const result = await db
       .select({
         id: schema.tags.id,
+        organizationId: schema.tags.organizationId,
         name: schema.tags.name,
         color: schema.tags.color,
         createdBy: schema.tags.createdBy,
@@ -1392,7 +1428,7 @@ export class PostgresStorage implements IStorage {
     return result;
   }
   
-  async addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string): Promise<void> {
+  async addEntityTags(entity: string, entityId: string, tagIds: string[], userId: string | null): Promise<void> {
     if (tagIds.length === 0) return;
     
     const values = tagIds.map(tagId => ({
