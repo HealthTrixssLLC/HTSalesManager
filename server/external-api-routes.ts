@@ -337,6 +337,26 @@ async function resolveTagFilter(req: ApiKeyRequest, orgId: string | undefined): 
 
 // ========== ACCOUNTS ENDPOINTS ==========
 
+/** Format the public account detail representation (without optional expansions). */
+function formatAccountDetailResponse(account: any) {
+  return {
+    id: account.id,
+    name: account.name,
+    accountNumber: account.accountNumber ?? null,
+    type: account.type ?? null,
+    category: account.category ?? null,
+    ownerId: account.ownerId ?? null,
+    industry: account.industry ?? null,
+    website: account.website ?? null,
+    phone: account.phone ?? null,
+    billingAddress: account.billingAddress ?? null,
+    shippingAddress: account.shippingAddress ?? null,
+    externalId: account.externalId ?? null,
+    createdAt: account.createdAt ?? null,
+    updatedAt: account.updatedAt ?? null,
+  };
+}
+
 /**
  * GET /api/v1/external/accounts
  * List all accounts with optional filtering and pagination
@@ -457,21 +477,7 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
       });
     }
     
-    // Lean response
-    const response: any = {
-      id: account.id,
-      name: account.name,
-      accountNumber: account.accountNumber,
-      type: account.type,
-      category: account.category,
-      ownerId: account.ownerId,
-      industry: account.industry,
-      website: account.website,
-      phone: account.phone,
-      externalId: account.externalId,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-    };
+    const response: any = formatAccountDetailResponse(account);
     
     // Optionally include related data (scoped to same org)
     if (expandList.includes("opportunities")) {
@@ -524,6 +530,34 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
 });
 
 // ========== OPPORTUNITIES ENDPOINTS ==========
+
+/** Format the public opportunity detail representation (without optional expansions). */
+function formatOpportunityDetailResponse(opp: any) {
+  return {
+    id: opp.id,
+    accountId: opp.accountId,
+    name: opp.name,
+    stage: opp.stage,
+    amount: opp.amount,
+    closeDate: opp.closeDate,
+    ownerId: opp.ownerId ?? null,
+    probability: opp.probability ?? null,
+    status: opp.status ?? null,
+    actualCloseDate: opp.actualCloseDate ?? null,
+    actualRevenue: opp.actualRevenue ?? null,
+    estCloseDate: opp.estCloseDate ?? null,
+    estRevenue: opp.estRevenue ?? null,
+    rating: opp.rating ?? null,
+    includeInForecast: opp.includeInForecast,
+    implementationStartDate: opp.implementationStartDate ?? null,
+    implementationEndDate: opp.implementationEndDate ?? null,
+    billingEndDate: opp.billingEndDate ?? null,
+    description: opp.description ?? null,
+    externalId: opp.externalId ?? null,
+    createdAt: opp.createdAt,
+    updatedAt: opp.updatedAt,
+  };
+}
 
 /**
  * GET /api/v1/external/opportunities
@@ -686,30 +720,7 @@ router.get("/opportunities/:id", requirePermission("crm.read"), async (req: ApiK
       });
     }
     
-    // Lean response
-    const response: any = {
-      id: opp.id,
-      accountId: opp.accountId,
-      name: opp.name,
-      stage: opp.stage,
-      amount: opp.amount,
-      closeDate: opp.closeDate,
-      ownerId: opp.ownerId,
-      probability: opp.probability,
-      status: opp.status,
-      actualCloseDate: opp.actualCloseDate,
-      actualRevenue: opp.actualRevenue,
-      estCloseDate: opp.estCloseDate,
-      estRevenue: opp.estRevenue,
-      rating: opp.rating,
-      includeInForecast: opp.includeInForecast,
-      implementationStartDate: opp.implementationStartDate,
-      implementationEndDate: opp.implementationEndDate,
-      billingEndDate: opp.billingEndDate,
-      externalId: opp.externalId,
-      createdAt: opp.createdAt,
-      updatedAt: opp.updatedAt,
-    };
+    const response: any = formatOpportunityDetailResponse(opp);
     
     // Optionally include account data (only if it belongs to the same org)
     if (expandList.includes("account")) {
@@ -900,6 +911,13 @@ function formatContactResponse(contact: any, account?: { id: string; name: strin
     accountId: contact.accountId ?? contact.account_id ?? null,
     ownerId: contact.ownerId ?? contact.owner_id ?? null,
     externalId: contact.externalId ?? contact.external_id ?? null,
+    department: contact.department ?? null,
+    mailingStreet: contact.mailingStreet ?? contact.mailing_street ?? null,
+    mailingCity: contact.mailingCity ?? contact.mailing_city ?? null,
+    mailingState: contact.mailingState ?? contact.mailing_state ?? null,
+    mailingPostalCode: contact.mailingPostalCode ?? contact.mailing_postal_code ?? null,
+    mailingCountry: contact.mailingCountry ?? contact.mailing_country ?? null,
+    description: contact.description ?? null,
     createdAt: contact.createdAt ?? contact.created_at ?? null,
     updatedAt: contact.updatedAt ?? contact.updated_at ?? null,
   };
@@ -1258,6 +1276,8 @@ function formatLeadResponse(lead: any, orgName: string | null) {
     status: lead.status,
     source: lead.source,
     rating: lead.rating,
+    ownerId: lead.ownerId ?? lead.owner_id ?? null,
+    externalId: lead.externalId ?? lead.external_id ?? null,
     organizationId: lead.organizationId ?? lead.organization_id ?? null,
     organizationName: orgName,
     createdAt: lead.createdAt ?? lead.created_at ?? null,
@@ -2066,6 +2086,32 @@ const PATCH_ENTITIES: Record<string, PatchEntityConfig> = {
   activities: { entity: "activity", label: "Activity", getById: (id) => storage.getActivityById(id), patch: (id, o, f, e) => storage.patchActivity(id, o, f, e) },
 };
 
+async function formatPatchResponse(
+  entity: PatchEntity,
+  updated: any,
+  orgId: string | undefined,
+): Promise<Record<string, any>> {
+  switch (entity) {
+    case "account":
+      return formatAccountDetailResponse(updated);
+    case "contact":
+      return formatContactResponse(updated);
+    case "lead": {
+      const recordOrgId = updated.organizationId ?? updated.organization_id ?? orgId;
+      const organization = recordOrgId
+        ? await storage.getOrganizationById(recordOrgId)
+        : undefined;
+      return formatLeadResponse(updated, organization?.name ?? null);
+    }
+    case "opportunity":
+      return formatOpportunityDetailResponse(updated);
+    case "activity":
+      return formatActivityResponse(updated);
+    default:
+      throw new Error(`Unsupported PATCH entity: ${entity}`);
+  }
+}
+
 function makePatchHandler(cfg: PatchEntityConfig) {
   return async (req: ApiKeyRequest, res: Response) => {
     try {
@@ -2231,7 +2277,7 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         console.error("[EXTERNAL-API] Failed to create PATCH audit log:", err);
       });
 
-      const updatedPayload: Record<string, any> = { ...updated };
+      const updatedPayload = await formatPatchResponse(cfg.entity, updated, orgId);
       attachVersion(res, updatedPayload, (updated as any).updatedAt);
       return res.json({ data: updatedPayload });
     } catch (error) {

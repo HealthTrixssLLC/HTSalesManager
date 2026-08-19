@@ -3,6 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { db } from "../server/db";
 import { generateApiKey } from "../server/api-key-utils";
+import { MUTABLE_FIELDS } from "../server/external-patch-config";
 import * as schema from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 
@@ -36,6 +37,34 @@ function patch(path: string, body: any, key: string) {
     headers: { "x-api-key": key, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function getDetail(path: string, key: string) {
+  return fetch(`${BASE}${path}`, { headers: { "x-api-key": key } });
+}
+
+function patchWithETag(path: string, body: any, key: string, etag: string) {
+  return fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "x-api-key": key, "Content-Type": "application/json", "If-Match": etag },
+    body: JSON.stringify(body),
+  });
+}
+
+const PRIVATE_STORAGE_FIELDS = [
+  "sourceSystem",
+  "sourceRecordId",
+  "importStatus",
+  "importNotes",
+] as const;
+
+function expectPublicProjection(data: any, entity: keyof typeof MUTABLE_FIELDS) {
+  for (const field of MUTABLE_FIELDS[entity]) {
+    expect(data).toHaveProperty(field);
+  }
+  for (const field of PRIVATE_STORAGE_FIELDS) {
+    expect(data).not.toHaveProperty(field);
+  }
 }
 
 beforeAll(async () => {
@@ -520,6 +549,116 @@ describe("External PATCH API — ETag / stale-write protection", () => {
     const body = await res.json();
     expect(body.data.subject).toBe("No precondition");
     expect(res.headers.get("etag")).toBeTruthy();
+  });
+});
+
+describe("External PATCH API — public GET/PATCH readback contract", () => {
+  async function verifyPublicReadback(
+    entity: keyof typeof MUTABLE_FIELDS,
+    path: string,
+    field: string,
+    value: string,
+  ) {
+    const initialRes = await getDetail(path, orgKey);
+    expect(initialRes.status).toBe(200);
+    const initialEtag = initialRes.headers.get("etag");
+    expect(initialEtag).toBeTruthy();
+    const initialData = (await initialRes.json()).data;
+    expect(initialData._version).toBe(initialEtag);
+    expectPublicProjection(initialData, entity);
+
+    const patchRes = await patchWithETag(path, { [field]: value }, orgKey, initialEtag!);
+    expect(patchRes.status).toBe(200);
+    const patchEtag = patchRes.headers.get("etag");
+    const patchData = (await patchRes.json()).data;
+    expect(patchData[field]).toBe(value);
+    expect(patchData._version).toBe(patchEtag);
+    expect(patchData._version).not.toBe(initialData._version);
+    expect(patchData.updatedAt).not.toBe(initialData.updatedAt);
+    expectPublicProjection(patchData, entity);
+
+    const finalRes = await getDetail(path, orgKey);
+    expect(finalRes.status).toBe(200);
+    const finalData = (await finalRes.json()).data;
+    expect(finalData[field]).toBe(value);
+    expect(finalData._version).toBe(patchData._version);
+    expect(finalRes.headers.get("etag")).toBe(patchEtag);
+    expect(Object.keys(finalData).sort()).toEqual(Object.keys(patchData).sort());
+    expectPublicProjection(finalData, entity);
+  }
+
+  it.each([
+    ["account", () => `/accounts/${ids.account}`, "billingAddress", `Readback account ${suffix}`],
+    ["lead", () => `/leads/${ids.lead}`, "externalId", `readback-lead-${suffix}`],
+    ["opportunity", () => `/opportunities/${ids.opportunity}`, "description", `Readback opportunity ${suffix}`],
+    ["activity", () => `/activities/${ids.activity}`, "notes", `Readback activity ${suffix}`],
+  ] as const)(
+    "%s PATCH returns the same public projection as detail GET",
+    async (entity, getPath, field, value) => {
+      await verifyPublicReadback(entity, getPath(), field, value);
+    },
+  );
+
+  it("round-trips Contact.description from null to a value and back to explicit null", async () => {
+    const path = `/contacts/${ids.contact}`;
+    const initialRes = await getDetail(path, orgKey);
+    expect(initialRes.status).toBe(200);
+    const initialEtag = initialRes.headers.get("etag");
+    const initialData = (await initialRes.json()).data;
+    expect(initialData.description).toBeNull();
+    expectPublicProjection(initialData, "contact");
+    for (const field of [
+      "department",
+      "mailingStreet",
+      "mailingCity",
+      "mailingState",
+      "mailingPostalCode",
+      "mailingCountry",
+      "description",
+    ]) {
+      expect(initialData).toHaveProperty(field);
+    }
+
+    const marker = `Readback contact ${suffix}`;
+    const setRes = await patchWithETag(path, { description: marker }, orgKey, initialEtag!);
+    expect(setRes.status).toBe(200);
+    const setData = (await setRes.json()).data;
+    expect(setData.description).toBe(marker);
+    expectPublicProjection(setData, "contact");
+
+    const readSetRes = await getDetail(path, orgKey);
+    const readSetData = (await readSetRes.json()).data;
+    expect(readSetData.description).toBe(marker);
+    expect(readSetData._version).toBe(setData._version);
+    expect(Object.keys(readSetData).sort()).toEqual(Object.keys(setData).sort());
+    expectPublicProjection(readSetData, "contact");
+
+    const clearRes = await patchWithETag(path, { description: null }, orgKey, readSetData._version);
+    expect(clearRes.status).toBe(200);
+    const clearData = (await clearRes.json()).data;
+    expect(clearData.description).toBeNull();
+    expect(clearData._version).not.toBe(readSetData._version);
+    expectPublicProjection(clearData, "contact");
+
+    const finalRes = await getDetail(path, orgKey);
+    const finalData = (await finalRes.json()).data;
+    expect(finalData).toHaveProperty("description", null);
+    expect(finalData._version).toBe(clearData._version);
+    expect(Object.keys(finalData).sort()).toEqual(Object.keys(clearData).sort());
+    expectPublicProjection(finalData, "contact");
+  });
+
+  it("keeps account and opportunity list projections lean", async () => {
+    const accountList = await (await getDetail("/accounts?limit=1000", orgKey)).json();
+    const account = accountList.data.find((record: any) => record.id === ids.account);
+    expect(account).toBeTruthy();
+    expect(account).not.toHaveProperty("billingAddress");
+    expect(account).not.toHaveProperty("shippingAddress");
+
+    const opportunityList = await (await getDetail("/opportunities?limit=1000&includeInForecast=all", orgKey)).json();
+    const opportunity = opportunityList.data.find((record: any) => record.id === ids.opportunity);
+    expect(opportunity).toBeTruthy();
+    expect(opportunity).not.toHaveProperty("description");
   });
 });
 

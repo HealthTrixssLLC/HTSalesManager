@@ -799,7 +799,7 @@ paths:
           description: "Comma-separated. Supported: `opportunities`, `contacts`, `tags`."
       responses:
         "200":
-          description: Account detail (adds `website` and `phone` over the list shape)
+          description: Account detail (adds contact details and addresses over the list shape)
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -822,6 +822,8 @@ paths:
                   industry: Healthcare
                   website: https://acmehealthcare.com
                   phone: "+1-555-0100"
+                  billingAddress: 100 Main Street, Chicago, IL 60601
+                  shippingAddress: null
                   externalId: null
                   createdAt: "2025-01-15T10:00:00.000Z"
                   updatedAt: "2025-02-01T14:30:00.000Z"
@@ -853,7 +855,7 @@ paths:
             example: { name: "Acme Healthcare Group", industry: "Healthcare" }
       responses:
         "200":
-          description: Updated account record (full database row)
+          description: Updated account using the public account detail representation
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -864,7 +866,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    $ref: "#/components/schemas/AccountRecord"
+                    $ref: "#/components/schemas/AccountDetail"
         "400": { $ref: "#/components/responses/PatchValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
@@ -1016,20 +1018,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    allOf:
-                      - $ref: "#/components/schemas/Opportunity"
-                      - type: object
-                        properties:
-                          account:
-                            $ref: "#/components/schemas/EmbeddedAccountWithIndustry"
-                          resources:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/OpportunityResource"
-                          contacts:
-                            type: array
-                            items:
-                              $ref: "#/components/schemas/OpportunityContactLinkExpanded"
+                    $ref: "#/components/schemas/OpportunityDetail"
               example:
                 data:
                   id: OPP-2025-000001
@@ -1050,6 +1039,7 @@ paths:
                   implementationStartDate: "2025-04-01T00:00:00.000Z"
                   implementationEndDate: "2025-06-30T00:00:00.000Z"
                   billingEndDate: "2026-06-30T00:00:00.000Z"
+                  description: Enterprise platform expansion
                   externalId: null
                   createdAt: "2025-01-10T09:00:00.000Z"
                   updatedAt: "2025-02-05T11:20:00.000Z"
@@ -1083,7 +1073,7 @@ paths:
             example: { stage: negotiation, probability: 80, amount: "175000.00" }
       responses:
         "200":
-          description: Updated opportunity record (full database row)
+          description: Updated opportunity using the public opportunity detail representation
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -1094,7 +1084,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    $ref: "#/components/schemas/OpportunityRecord"
+                    $ref: "#/components/schemas/OpportunityDetail"
         "400": { $ref: "#/components/responses/PatchValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
@@ -1292,6 +1282,13 @@ paths:
                   accountId: ACCT-2025-00001
                   ownerId: 7f6c4a3e-2b1d-4c8a-9e50-1a2b3c4d5e6f
                   externalId: null
+                  department: Operations
+                  mailingStreet: 100 Main Street
+                  mailingCity: Chicago
+                  mailingState: IL
+                  mailingPostalCode: "60601"
+                  mailingCountry: US
+                  description: Primary operations contact
                   createdAt: "2025-01-20T08:00:00.000Z"
                   updatedAt: "2025-02-10T09:00:00.000Z"
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1322,7 +1319,7 @@ paths:
             example: { title: "SVP of Operations", phone: "+1-555-0199" }
       responses:
         "200":
-          description: Updated contact record (full database row)
+          description: Updated contact using the public contact representation
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -1333,7 +1330,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    $ref: "#/components/schemas/ContactRecord"
+                    $ref: "#/components/schemas/Contact"
         "400": { $ref: "#/components/responses/PatchValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
@@ -1533,7 +1530,7 @@ paths:
             example: { status: contacted, rating: hot }
       responses:
         "200":
-          description: Updated lead record (full database row)
+          description: Updated lead using the public lead representation
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -1544,7 +1541,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    $ref: "#/components/schemas/LeadRecord"
+                    $ref: "#/components/schemas/Lead"
         "400": { $ref: "#/components/responses/PatchValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
@@ -1783,7 +1780,7 @@ paths:
             example: { status: completed, completedAt: "2026-08-12T15:00:00.000Z" }
       responses:
         "200":
-          description: Updated activity record (full database row)
+          description: Updated activity using the public activity read representation
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -1794,7 +1791,7 @@ paths:
                 required: [data]
                 properties:
                   data:
-                    $ref: "#/components/schemas/ActivityRecord"
+                    $ref: "#/components/schemas/ActivityRead"
         "400": { $ref: "#/components/responses/PatchValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
@@ -2570,6 +2567,8 @@ components:
           properties:
             website: { type: [string, "null"] }
             phone: { type: [string, "null"] }
+            billingAddress: { type: [string, "null"] }
+            shippingAddress: { type: [string, "null"] }
             contacts:
               type: array
               description: Present only with expand=contacts.
@@ -2666,6 +2665,24 @@ components:
           items:
             $ref: "#/components/schemas/OpportunityResource"
 
+    OpportunityDetail:
+      description: Public opportunity detail representation used by detail GET and PATCH responses.
+      allOf:
+        - $ref: "#/components/schemas/Opportunity"
+        - type: object
+          properties:
+            description: { type: [string, "null"] }
+            account:
+              $ref: "#/components/schemas/EmbeddedAccountWithIndustry"
+            resources:
+              type: array
+              items:
+                $ref: "#/components/schemas/OpportunityResource"
+            contacts:
+              type: array
+              items:
+                $ref: "#/components/schemas/OpportunityContactLinkExpanded"
+
     OpportunityResource:
       type: object
       properties:
@@ -2708,6 +2725,13 @@ components:
         accountId: { type: [string, "null"], description: "Parent account ID (ACCT-*)" }
         ownerId: { type: [string, "null"], description: Owning user's ID (UUID string). }
         externalId: { type: [string, "null"] }
+        department: { type: [string, "null"] }
+        mailingStreet: { type: [string, "null"] }
+        mailingCity: { type: [string, "null"] }
+        mailingState: { type: [string, "null"] }
+        mailingPostalCode: { type: [string, "null"] }
+        mailingCountry: { type: [string, "null"] }
+        description: { type: [string, "null"] }
         createdAt: { type: [string, "null"], format: date-time }
         updatedAt: { type: [string, "null"], format: date-time }
         account:
@@ -2739,6 +2763,8 @@ components:
         rating:
           type: [string, "null"]
           description: hot, warm, or cold.
+        ownerId: { type: [string, "null"], description: Owning user's ID (UUID string). }
+        externalId: { type: [string, "null"] }
         organizationId: { type: [string, "null"], description: Organization UUID. }
         organizationName: { type: [string, "null"] }
         createdAt: { type: [string, "null"], format: date-time }
@@ -2944,153 +2970,6 @@ components:
           enum: [account, opportunity, contact, lead]
         entityId: { type: string }
         createdAt: { type: string, format: date-time }
-
-    ImportMetadata:
-      type: object
-      description: >
-        Source-system and import-tracking columns present on every full
-        database record. All are immutable via the external API.
-      properties:
-        organizationId: { type: string, description: Owning organization UUID. }
-        externalId: { type: [string, "null"], description: External system ID (e.g. Dynamics GUID). }
-        sourceSystem: { type: [string, "null"] }
-        sourceRecordId: { type: [string, "null"] }
-        importStatus: { type: [string, "null"] }
-        importNotes: { type: [string, "null"] }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    AccountRecord:
-      description: Full account database row, as returned by PATCH.
-      allOf:
-        - $ref: "#/components/schemas/ImportMetadata"
-        - type: object
-          properties:
-            id: { type: string, description: "ACCT-* account ID" }
-            name: { type: string }
-            accountNumber: { type: [string, "null"] }
-            type:
-              type: [string, "null"]
-              enum: [customer, prospect, partner, vendor, other, null]
-            category: { type: [string, "null"] }
-            ownerId: { type: [string, "null"] }
-            industry: { type: [string, "null"] }
-            website: { type: [string, "null"] }
-            phone: { type: [string, "null"] }
-            billingAddress: { type: [string, "null"] }
-            shippingAddress: { type: [string, "null"] }
-
-    ContactRecord:
-      description: Full contact database row, as returned by PATCH.
-      allOf:
-        - $ref: "#/components/schemas/ImportMetadata"
-        - type: object
-          properties:
-            id: { type: string, description: "CONT-* contact ID" }
-            accountId: { type: [string, "null"] }
-            firstName: { type: [string, "null"] }
-            lastName: { type: [string, "null"] }
-            email: { type: [string, "null"] }
-            phone: { type: [string, "null"] }
-            mobile: { type: [string, "null"] }
-            title: { type: [string, "null"] }
-            department: { type: [string, "null"] }
-            mailingStreet: { type: [string, "null"] }
-            mailingCity: { type: [string, "null"] }
-            mailingState: { type: [string, "null"] }
-            mailingPostalCode: { type: [string, "null"] }
-            mailingCountry: { type: [string, "null"] }
-            description: { type: [string, "null"] }
-            ownerId: { type: [string, "null"] }
-
-    LeadRecord:
-      description: Full lead database row, as returned by PATCH.
-      allOf:
-        - $ref: "#/components/schemas/ImportMetadata"
-        - type: object
-          properties:
-            id: { type: string, description: "LEAD-* lead ID" }
-            firstName: { type: [string, "null"] }
-            lastName: { type: [string, "null"] }
-            title: { type: [string, "null"] }
-            company: { type: [string, "null"] }
-            email: { type: [string, "null"] }
-            phone: { type: [string, "null"] }
-            topic: { type: [string, "null"] }
-            status:
-              type: string
-              enum: [new, contacted, qualified, unqualified, converted]
-            source:
-              type: [string, "null"]
-              enum: [website, referral, phone, email, event, partner, lead_generation, other, null]
-            rating: { type: [string, "null"] }
-            ownerId: { type: [string, "null"] }
-            convertedAccountId: { type: [string, "null"] }
-            convertedContactId: { type: [string, "null"] }
-            convertedOpportunityId: { type: [string, "null"] }
-            convertedAt: { type: [string, "null"], format: date-time }
-
-    OpportunityRecord:
-      description: Full opportunity database row, as returned by PATCH.
-      allOf:
-        - $ref: "#/components/schemas/ImportMetadata"
-        - type: object
-          properties:
-            id: { type: string, description: "OPP-* opportunity ID" }
-            accountId: { type: string }
-            name: { type: string }
-            stage:
-              type: string
-              enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost]
-            amount: { $ref: "#/components/schemas/Money" }
-            closeDate: { type: string, format: date-time }
-            ownerId: { type: [string, "null"] }
-            probability: { type: [integer, "null"] }
-            status: { type: [string, "null"] }
-            actualCloseDate: { type: [string, "null"], format: date-time }
-            actualRevenue: { $ref: "#/components/schemas/Money" }
-            estCloseDate: { type: [string, "null"], format: date-time }
-            estRevenue: { $ref: "#/components/schemas/Money" }
-            rating: { type: [string, "null"] }
-            includeInForecast: { type: boolean }
-            implementationStartDate: { type: [string, "null"], format: date-time }
-            implementationEndDate: { type: [string, "null"], format: date-time }
-            billingEndDate: { type: [string, "null"], format: date-time }
-            categories:
-              type: [array, "null"]
-              items: { type: string }
-              description: Not mutable via the external API.
-            operationalAreas:
-              type: [array, "null"]
-              items: { type: string }
-              description: Not mutable via the external API.
-            description: { type: [string, "null"] }
-
-    ActivityRecord:
-      description: Full activity database row, as returned by PATCH.
-      allOf:
-        - $ref: "#/components/schemas/ImportMetadata"
-        - type: object
-          properties:
-            id: { type: string, description: "ACT-* activity ID" }
-            type:
-              type: string
-              enum: [call, email, meeting, task, note]
-            subject: { type: string }
-            status:
-              type: string
-              enum: [pending, completed, cancelled]
-            priority:
-              type: string
-              enum: [low, medium, high]
-            dueAt: { type: [string, "null"], format: date-time }
-            completedAt: { type: [string, "null"], format: date-time }
-            ownerId: { type: [string, "null"] }
-            relatedType:
-              type: [string, "null"]
-              enum: [Contact, Lead, Account, Opportunity, null]
-            relatedId: { type: [string, "null"] }
-            notes: { type: [string, "null"] }
 
     # ---- PATCH request bodies (mutable-field allowlists) ----
 
