@@ -1,0 +1,338 @@
+Implement the External API PATCH/GET public readback contract correction in the CURRENT Replit HTSalesManager/CpdoSalesLite workspace.
+
+IMPORTANT:
+This is implementation work in the CRM application.
+Do NOT Publish.
+Do NOT deploy.
+Do NOT access or modify production CRM records.
+Do NOT modify MCP verification behavior.
+Do NOT perform database migrations.
+Do NOT redesign unrelated External API functionality.
+
+CURRENT SOURCE FACTS VERIFIED
+
+The previously reported formatter implementation is NOT present.
+
+Current server/external-api-routes.ts still has inline formatters.
+
+Current formatContactResponse omits:
+- department
+- mailingStreet
+- mailingCity
+- mailingState
+- mailingPostalCode
+- mailingCountry
+- description
+
+Current formatLeadResponse omits:
+- ownerId
+- externalId
+
+Account detail still needs:
+- billingAddress
+- shippingAddress
+
+Opportunity detail still needs:
+- description
+
+PATCH currently does approximately:
+
+const updatedPayload = { ...updated };
+attachVersion(res, updatedPayload, updated.updatedAt);
+return res.json({ data: updatedPayload });
+
+This raw-row PATCH response MUST be corrected.
+
+ROOT CAUSE
+
+PATCH successfully persists writable fields such as Contact.description.
+
+MCP performs GET readback after PATCH.
+
+GET detail does not expose every PATCH-allowlisted public field, so MCP correctly returns MCP_VERIFICATION_FAILED even though persistence succeeded.
+
+REQUIRED IMPLEMENTATION
+
+1. PUBLIC FORMATTERS
+
+You may keep the formatters in server/external-api-routes.ts.
+
+Do NOT create a separate formatter file unless there is a clear architectural reason.
+
+Extend the existing public response formatting so DETAIL GET exposes every public PATCH-allowlisted field.
+
+CONTACT
+
+formatContactResponse must always include, null when unset:
+
+id
+firstName
+lastName
+title
+email
+phone
+mobile
+accountId
+ownerId
+externalId
+department
+mailingStreet
+mailingCity
+mailingState
+mailingPostalCode
+mailingCountry
+description
+createdAt
+updatedAt
+
+Preserve optional account expansion and tag expansion.
+
+ACCOUNT
+
+Account DETAIL GET must include the existing public fields plus:
+
+billingAddress
+shippingAddress
+
+Do not unnecessarily expand the account LIST representation.
+Keep lists lean where currently intended.
+
+LEAD
+
+formatLeadResponse must additionally include:
+
+ownerId
+externalId
+
+Preserve existing fields and organization information.
+
+OPPORTUNITY
+
+Opportunity DETAIL GET must additionally include:
+
+description
+
+ACTIVITY
+
+Inspect the activity formatter against the PATCH allowlist.
+
+Expected mismatch: none.
+
+Do not change it unless inspection identifies a genuine writable/readback mismatch.
+
+2. PATCH RESPONSE
+
+PATCH 200 MUST use the SAME PUBLIC DETAIL representation used by GET detail for the entity.
+
+Do NOT return:
+
+{ ...updated }
+
+or the raw storage/database row.
+
+Create or reuse entity-specific public formatting for:
+
+Account
+Contact
+Lead
+Opportunity
+Activity
+
+PATCH response must contain the same externally visible writable fields that subsequent GET detail returns.
+
+Preserve:
+
+ETag
+_version
+updatedAt
+If-Match behavior
+412 STALE_RECORD behavior
+organization isolation
+authentication
+scopes
+tags
+
+Do not weaken concurrency handling.
+
+3. INTERNAL FIELD PRIVACY
+
+Neither GET detail nor PATCH 200 may expose storage/import/audit-only fields including:
+
+sourceSystem
+sourceRecordId
+importStatus
+importNotes
+
+Inspect for any additional obviously internal-only storage fields and ensure the public formatter does not leak them.
+
+Do NOT simply spread database rows into external responses.
+
+4. OPENAPI
+
+Inspect docs/openapi.yaml against the corrected implementation.
+
+Ensure:
+
+Contact includes:
+- department
+- mailingStreet
+- mailingCity
+- mailingState
+- mailingPostalCode
+- mailingCountry
+- description
+
+AccountDetail includes:
+- billingAddress
+- shippingAddress
+
+Lead includes:
+- ownerId
+- externalId
+
+Opportunity read/detail schema includes:
+- description
+
+PATCH 200 schemas must reference the corresponding PUBLIC read/detail response schema.
+
+They must NOT describe raw storage/import records as the PATCH response.
+
+Do not invent fields unsupported by the actual schema.
+
+5. TESTS
+
+Add focused automated tests for this exact contract.
+
+Use local/test storage only.
+Do NOT use production.
+
+For ALL FIVE entities test:
+
+GET detail
+→ capture _version / ETag
+→ PATCH one public allowlisted field
+→ PATCH returns public representation
+→ GET detail
+→ requested value is present and correct
+→ updatedAt/_version changed appropriately
+
+Required field cases:
+
+Contact:
+description
+
+Account:
+billingAddress or shippingAddress
+
+Lead:
+externalId or ownerId using a valid test fixture
+
+Opportunity:
+description
+
+Activity:
+notes or another safely reversible allowlisted field
+
+CONTACT NULLABILITY TEST
+
+Test:
+
+description initially null
+→ PATCH description to test marker
+→ GET returns exact marker
+→ PATCH description to null
+→ GET explicitly returns description: null
+
+PRIVACY TEST
+
+For GET detail and PATCH 200 confirm absence of:
+
+sourceSystem
+sourceRecordId
+importStatus
+importNotes
+
+PUBLIC CONTRACT TEST
+
+Add direct formatter/response tests if useful proving that:
+
+every PATCH-allowlisted public field for each entity is represented in detail GET
+
+and:
+
+PATCH and GET use equivalent public projections.
+
+6. REGRESSION
+
+Confirm:
+
+tag behavior unchanged
+organization isolation unchanged
+API-key scopes unchanged
+If-Match unchanged
+stale ETag still returns 412
+list endpoints retain intended lean representation
+no migrations introduced
+no shared/schema.ts changes unless inspection proves a required field genuinely does not exist
+
+7. VALIDATION
+
+Run:
+
+npm run typecheck
+
+Run the relevant External API tests.
+
+Run the full applicable server test suite.
+
+Run:
+
+npm run build
+
+If an integration test requires a local server/database that cannot be safely established, do NOT use production as a substitute.
+
+Report that test separately as not executed and explain why.
+
+8. FINAL SOURCE INSPECTION
+
+Before declaring success explicitly show that:
+
+formatContactResponse contains description, department and mailing fields
+
+formatLeadResponse contains ownerId and externalId
+
+Account detail contains billingAddress and shippingAddress
+
+Opportunity detail contains description
+
+PATCH no longer responds by spreading the raw updated row
+
+GET/PATCH responses do not expose import/audit fields
+
+9. GIT
+
+Do NOT push yet.
+Do NOT Publish.
+
+Leave the completed implementation in the Replit workspace for review.
+
+Report:
+
+files changed
+exact formatter changes
+exact PATCH response change
+OpenAPI changes
+tests added/changed
+typecheck result
+test results
+build result
+git status
+whether any migration/schema/database change was made
+
+Finish with exactly:
+
+READY FOR CODE REVIEW — NOT PUBLISHED
+
+or
+
+BLOCKED — <specific reason>
