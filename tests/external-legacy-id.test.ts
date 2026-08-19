@@ -17,6 +17,7 @@ const canonicalAccount = `ACCT-LEG-${suffix}`;
 const legacyAccount = `ACT-LEGACY-${suffix}`;
 const canonicalActivity = `ACT-${suffix.toString().slice(-8)}`;
 const otherAccount = `ACCT-LEG-O-${suffix}`;
+const collisionAccount = `ACCT-LEG-C-${suffix}`;
 const otherLegacy = `ACT-OTHER-${suffix}`;
 
 function req(path: string, key: string, init?: { method?: string; body?: any }) {
@@ -40,6 +41,7 @@ beforeAll(async () => {
   await db.insert(schema.accounts).values([
     { id: canonicalAccount, name: `legacy-acct-${suffix}`, organizationId: orgId },
     { id: otherAccount, name: `legacy-other-${suffix}`, organizationId: otherOrgId },
+    { id: collisionAccount, name: `legacy-collision-${suffix}`, organizationId: orgId },
   ]);
   await db.insert(schema.activities).values({
     id: canonicalActivity, type: "note", subject: "legacy-act", organizationId: orgId, status: "completed",
@@ -47,7 +49,7 @@ beforeAll(async () => {
   await db.insert(schema.legacyIdMap).values([
     { entity: "Account", legacyId: legacyAccount, canonicalId: canonicalAccount },
     { entity: "Account", legacyId: otherLegacy, canonicalId: otherAccount },
-    { entity: "Account", legacyId: canonicalActivity, canonicalId: canonicalAccount },
+    { entity: "Account", legacyId: canonicalActivity, canonicalId: collisionAccount },
   ]);
 
   const k1 = generateApiKey();
@@ -59,9 +61,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(schema.legacyIdMap).where(inArray(schema.legacyIdMap.canonicalId, [canonicalAccount, otherAccount]));
+  await db.delete(schema.legacyIdMap).where(inArray(schema.legacyIdMap.canonicalId, [canonicalAccount, otherAccount, collisionAccount]));
   await db.delete(schema.activities).where(eq(schema.activities.id, canonicalActivity));
-  await db.delete(schema.accounts).where(inArray(schema.accounts.id, [canonicalAccount, otherAccount]));
+  await db.delete(schema.accounts).where(inArray(schema.accounts.id, [canonicalAccount, otherAccount, collisionAccount]));
   if (keyIds.length) await db.delete(schema.apiKeys).where(inArray(schema.apiKeys.id, keyIds));
   await db.delete(schema.organizations).where(inArray(schema.organizations.id, [orgId, otherOrgId]));
 });

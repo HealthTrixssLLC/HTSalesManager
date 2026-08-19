@@ -2324,7 +2324,12 @@ function makePatchHandler(cfg: PatchEntityConfig) {
           if (currentTag) staleRes.currentVersion = currentTag;
           return res.status(412).json(staleRes);
         }
-        expectedUpdatedAt = new Date((existing as any).updatedAt);
+        // A specific entity-tag pins the UPDATE to the version the client saw.
+        // If-Match: * only requires that the representation exists; it must not
+        // pin the write to a specific updatedAt value.
+        if (ifMatch.trim() !== "*") {
+          expectedUpdatedAt = new Date((existing as any).updatedAt);
+        }
       }
 
       // Org-scoped update (WHERE also constrains organizationId as defense in
@@ -3189,6 +3194,13 @@ router.post("/leads/:id/convert", requirePermission("crm.write"), async (req: Ap
       created,
       data: {
         lead: leadPayload,
+        
+        // Stable convenience IDs retained at the top level for external API clients.
+        accountId,
+        contactId,
+        opportunityId,
+
+        // Full related resources.
         account: accountPayload,
         contact: contactPayload,
         opportunity: opportunityPayload,

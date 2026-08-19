@@ -817,7 +817,7 @@ export class PostgresStorage implements IStorage {
   async patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Account | undefined> {
     const conditions = [eq(schema.accounts.id, id)];
     if (orgId) conditions.push(eq(schema.accounts.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.accounts.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.accounts.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.accounts)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any })
@@ -829,7 +829,7 @@ export class PostgresStorage implements IStorage {
   async patchContact(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Contact | undefined> {
     const conditions = [eq(schema.contacts.id, id)];
     if (orgId) conditions.push(eq(schema.contacts.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.contacts.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.contacts.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.contacts)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any })
@@ -854,7 +854,7 @@ export class PostgresStorage implements IStorage {
   async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
     const conditions = [eq(schema.leads.id, id)];
     if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const stripped = this.stripImmutable(fields);
     // Normalize email when included in PATCH body (defense-in-depth; Zod already
@@ -872,7 +872,7 @@ export class PostgresStorage implements IStorage {
   async patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Opportunity | undefined> {
     const conditions = [eq(schema.opportunities.id, id)];
     if (orgId) conditions.push(eq(schema.opportunities.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.opportunities.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.opportunities.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     // Array columns (categories/operationalAreas) are excluded from the PATCH
     // allowlist, so a plain Drizzle update is safe here.
@@ -886,7 +886,7 @@ export class PostgresStorage implements IStorage {
   async patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Activity | undefined> {
     const conditions = [eq(schema.activities.id, id)];
     if (orgId) conditions.push(eq(schema.activities.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.activities.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.activities.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.activities)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any })
