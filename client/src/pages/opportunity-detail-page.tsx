@@ -435,6 +435,7 @@ export default function OpportunityDetailPage() {
           <DetailSection title="Opportunity Information">
             <DetailField label="Opportunity Name" value={opportunity.name} />
             <DetailField label="Opportunity ID" value={opportunity.id} />
+            <DetailField label="Legacy ID" value={(opportunity as { legacyId?: string | null }).legacyId} type="copy" />
             <DetailField label="Stage" value={opportunity.stage} />
             <DetailField label="Status" value={opportunity.status} />
             <DetailField label="Rating" value={opportunity.rating} />

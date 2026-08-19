@@ -18,6 +18,7 @@ export interface ApiKeyRequest extends Request {
     rateLimitPerMin: number | null;
     organizationId: string | null;
     permissions: string[];
+    createdBy: string;
   };
 }
 
@@ -170,6 +171,7 @@ export async function authenticateApiKey(
       // are treated as having all permissions. An explicit empty array means
       // zero granted scopes — it is NOT promoted to full access.
       permissions: matchedKey.permissions ?? ALL_API_KEY_PERMISSIONS,
+      createdBy: matchedKey.createdBy,
     };
     
     next();

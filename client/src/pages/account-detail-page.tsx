@@ -175,6 +175,7 @@ export default function AccountDetailPage() {
           <DetailSection title="Account Information">
             <DetailField label="Account Name" value={account.name} />
             <DetailField label="Account ID" value={account.id} />
+            <DetailField label="Legacy ID" value={(account as { legacyId?: string | null }).legacyId} type="copy" />
             <DetailField label="Account Number" value={account.accountNumber} />
             <DetailField label="Category" value={account.category} />
             <DetailField label="Type" value={account.type} />

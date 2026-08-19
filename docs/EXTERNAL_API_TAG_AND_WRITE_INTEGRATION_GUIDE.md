@@ -28,7 +28,7 @@ Each key carries permission scopes; routes enforce them:
 | Scope | Grants |
 |---|---|
 | `crm.read` | All CRM GET endpoints (accounts, opportunities, contacts, leads, tags, logs) |
-| `crm.write` | POST /leads, PATCH accounts/contacts/leads/opportunities, tag management & CRM tag assignment, opportunity-contact links |
+| `crm.write` | POST /leads, POST /accounts, POST /contacts, POST /opportunities, POST /leads/:id/convert, PATCH accounts/contacts/leads/opportunities, tag management & CRM tag assignment, opportunity-contact links, CRM comments |
 | `activities.read` | GET activities and activity tags |
 | `activities.write` | POST/PATCH activities, activity tag assignment/removal |
 | `documents.read` / `documents.write` | Document reference reads / writes |

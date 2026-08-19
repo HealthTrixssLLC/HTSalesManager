@@ -17,6 +17,8 @@ import type {
   ContactListFilters,
   LeadListFilters,
   OpportunityListFilters,
+  ConvertLeadInput,
+  ConvertLeadResult,
 } from "./storage";
 import type {
   User, InsertUser,
@@ -815,7 +817,7 @@ export class PostgresStorage implements IStorage {
   async patchAccount(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Account | undefined> {
     const conditions = [eq(schema.accounts.id, id)];
     if (orgId) conditions.push(eq(schema.accounts.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.accounts.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.accounts.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.accounts)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.accounts.updatedAt} + interval '1 millisecond')` as any })
@@ -827,7 +829,7 @@ export class PostgresStorage implements IStorage {
   async patchContact(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Contact | undefined> {
     const conditions = [eq(schema.contacts.id, id)];
     if (orgId) conditions.push(eq(schema.contacts.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.contacts.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.contacts.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.contacts)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.contacts.updatedAt} + interval '1 millisecond')` as any })
@@ -852,7 +854,7 @@ export class PostgresStorage implements IStorage {
   async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
     const conditions = [eq(schema.leads.id, id)];
     if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const stripped = this.stripImmutable(fields);
     // Normalize email when included in PATCH body (defense-in-depth; Zod already
@@ -870,7 +872,7 @@ export class PostgresStorage implements IStorage {
   async patchOpportunity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Opportunity | undefined> {
     const conditions = [eq(schema.opportunities.id, id)];
     if (orgId) conditions.push(eq(schema.opportunities.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.opportunities.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.opportunities.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     // Array columns (categories/operationalAreas) are excluded from the PATCH
     // allowlist, so a plain Drizzle update is safe here.
@@ -884,13 +886,226 @@ export class PostgresStorage implements IStorage {
   async patchActivity(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Activity | undefined> {
     const conditions = [eq(schema.activities.id, id)];
     if (orgId) conditions.push(eq(schema.activities.organizationId, orgId));
-    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.activities.updatedAt}) = ${expectedUpdatedAt}`);
+    if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.activities.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
     const result = await db.update(schema.activities)
       .set({ ...this.stripImmutable(fields), updatedAt: sql`GREATEST(now(), ${schema.activities.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
       .returning();
     return result[0];
+  }
+
+  // ========== LEGACY ID MAP (read-only) ==========
+
+  async getLegacyId(entity: string, canonicalId: string): Promise<string | null> {
+    const result = await db.select({ legacyId: schema.legacyIdMap.legacyId })
+      .from(schema.legacyIdMap)
+      .where(and(eq(schema.legacyIdMap.entity, entity), eq(schema.legacyIdMap.canonicalId, canonicalId)))
+      .limit(1);
+    return result[0]?.legacyId ?? null;
+  }
+
+  async getLegacyIds(entity: string, canonicalIds: string[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    if (canonicalIds.length === 0) return out;
+    const rows = await db.select({
+      canonicalId: schema.legacyIdMap.canonicalId,
+      legacyId: schema.legacyIdMap.legacyId,
+    }).from(schema.legacyIdMap)
+      .where(and(eq(schema.legacyIdMap.entity, entity), inArray(schema.legacyIdMap.canonicalId, canonicalIds)));
+    for (const row of rows) out[row.canonicalId] = row.legacyId;
+    return out;
+  }
+
+  async findCanonicalIdByLegacy(entity: string, legacyId: string): Promise<string | undefined> {
+    const result = await db.select({ canonicalId: schema.legacyIdMap.canonicalId })
+      .from(schema.legacyIdMap)
+      .where(and(eq(schema.legacyIdMap.entity, entity), eq(schema.legacyIdMap.legacyId, legacyId)))
+      .limit(1);
+    return result[0]?.canonicalId;
+  }
+
+  async findOrCreateAccountByExternalId(
+    externalId: string,
+    orgId: string,
+    account: InsertAccount,
+  ): Promise<{ account: Account; created: boolean }> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`account-idem:${orgId}:${externalId}`}))`);
+      const existing = await tx.select().from(schema.accounts)
+        .where(and(eq(schema.accounts.externalId, externalId), eq(schema.accounts.organizationId, orgId)))
+        .orderBy(asc(schema.accounts.createdAt))
+        .limit(1);
+      if (existing[0]) return { account: existing[0], created: false };
+      const id = await this.generateId("Account", orgId, tx as unknown as DrizzleDb);
+      const result = await tx.insert(schema.accounts).values({
+        ...account,
+        id,
+        organizationId: orgId,
+        externalId,
+      } as typeof schema.accounts.$inferInsert).returning();
+      return { account: result[0], created: true };
+    });
+  }
+
+  async findOrCreateContactByExternalId(
+    externalId: string,
+    orgId: string,
+    contact: InsertContact,
+  ): Promise<{ contact: Contact; created: boolean }> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`contact-idem:${orgId}:${externalId}`}))`);
+      const existing = await tx.select().from(schema.contacts)
+        .where(and(eq(schema.contacts.externalId, externalId), eq(schema.contacts.organizationId, orgId)))
+        .orderBy(asc(schema.contacts.createdAt))
+        .limit(1);
+      if (existing[0]) return { contact: existing[0], created: false };
+      const id = await this.generateId("Contact", orgId, tx as unknown as DrizzleDb);
+      const result = await tx.insert(schema.contacts).values({
+        ...contact,
+        id,
+        organizationId: orgId,
+        externalId,
+      } as typeof schema.contacts.$inferInsert).returning();
+      return { contact: result[0], created: true };
+    });
+  }
+
+  async findOrCreateOpportunityByExternalId(
+    externalId: string,
+    orgId: string,
+    opportunity: InsertOpportunity,
+  ): Promise<{ opportunity: Opportunity; created: boolean }> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`opportunity-idem:${orgId}:${externalId}`}))`);
+      const existing = await tx.select().from(schema.opportunities)
+        .where(and(eq(schema.opportunities.externalId, externalId), eq(schema.opportunities.organizationId, orgId)))
+        .orderBy(asc(schema.opportunities.createdAt))
+        .limit(1);
+      if (existing[0]) return { opportunity: existing[0], created: false };
+      const id = await this.generateId("Opportunity", orgId, tx as unknown as DrizzleDb);
+      const result = await tx.insert(schema.opportunities).values({
+        ...opportunity,
+        id,
+        organizationId: orgId,
+        externalId,
+      } as typeof schema.opportunities.$inferInsert).returning();
+      return { opportunity: result[0], created: true };
+    });
+  }
+
+  async convertLead(leadId: string, orgId: string, input: ConvertLeadInput): Promise<ConvertLeadResult> {
+    return await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`);
+      const [lead] = await tx.select().from(schema.leads).where(eq(schema.leads.id, leadId)).limit(1);
+      if (!lead || lead.organizationId !== orgId) return { status: "not_found" };
+
+      if (lead.status === "converted") {
+        if (input.accountId && lead.convertedAccountId && input.accountId !== lead.convertedAccountId) {
+          return { status: "conflict", lead };
+        }
+        return {
+          status: "already_converted",
+          lead,
+          accountId: lead.convertedAccountId ?? null,
+          contactId: lead.convertedContactId ?? null,
+          opportunityId: lead.convertedOpportunityId ?? null,
+        };
+      }
+
+      let accountId = input.accountId || null;
+      if (accountId) {
+        const [existingAccount] = await tx.select().from(schema.accounts)
+          .where(eq(schema.accounts.id, accountId)).limit(1);
+        if (!existingAccount || existingAccount.organizationId !== orgId) {
+          return { status: "bad_account" };
+        }
+      }
+
+      const shouldCreateAccount = input.createAccount || (!accountId && !!input.accountData);
+      let account: Account | null = null;
+      if (shouldCreateAccount || (!accountId && (input.createAccount !== false))) {
+        if (!accountId) {
+          const newId = await this.generateId("Account", orgId, tx as unknown as DrizzleDb);
+          const [created] = await tx.insert(schema.accounts).values({
+            id: newId,
+            name: input.accountData?.name || input.accountName || lead.company || `${lead.firstName} ${lead.lastName}`,
+            type: (input.accountData?.type as any) || "customer",
+            industry: input.accountData?.industry || null,
+            website: input.accountData?.website || null,
+            phone: input.accountData?.phone || null,
+            billingAddress: input.accountData?.billingAddress || null,
+            shippingAddress: input.accountData?.shippingAddress || null,
+            ownerId: lead.ownerId,
+            organizationId: orgId,
+          }).returning();
+          account = created;
+          accountId = created.id;
+        }
+      }
+
+      if (accountId && !account) {
+        const [existing] = await tx.select().from(schema.accounts).where(eq(schema.accounts.id, accountId)).limit(1);
+        account = existing ?? null;
+      }
+
+      let contact: Contact | null = null;
+      if (input.createContact !== false) {
+        const contactIdValue = await this.generateId("Contact", orgId, tx as unknown as DrizzleDb);
+        const [createdContact] = await tx.insert(schema.contacts).values({
+          id: contactIdValue,
+          firstName: lead.firstName,
+          lastName: lead.lastName,
+          email: lead.email || null,
+          phone: lead.phone || null,
+          title: lead.title || null,
+          accountId: accountId,
+          ownerId: lead.ownerId,
+          organizationId: orgId,
+        }).returning();
+        contact = createdContact;
+      }
+
+      let opportunity: Opportunity | null = null;
+      if (input.createOpportunity && accountId) {
+        const defaultCloseDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+        const closeDate = input.opportunityData?.closeDate
+          ? new Date(input.opportunityData.closeDate)
+          : defaultCloseDate;
+        const oppId = await this.generateId("Opportunity", orgId, tx as unknown as DrizzleDb);
+        const amount = input.opportunityData?.amount ?? input.opportunityAmount ?? "0";
+        const [createdOpp] = await tx.insert(schema.opportunities).values({
+          id: oppId,
+          name: input.opportunityData?.name || input.opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`,
+          accountId,
+          stage: (input.opportunityData?.stage as any) || "prospecting",
+          amount: String(amount),
+          probability: input.opportunityData?.probability !== undefined ? input.opportunityData.probability : 10,
+          closeDate,
+          ownerId: lead.ownerId,
+          organizationId: orgId,
+          includeInForecast: input.opportunityData?.includeInForecast ?? true,
+        }).returning();
+        opportunity = createdOpp;
+      }
+
+      const [updatedLead] = await tx.update(schema.leads).set({
+        status: "converted",
+        convertedAccountId: accountId,
+        convertedContactId: contact?.id ?? null,
+        convertedOpportunityId: opportunity?.id ?? null,
+        convertedAt: new Date(),
+        updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any,
+      }).where(eq(schema.leads.id, leadId)).returning();
+
+      return {
+        status: "converted",
+        lead: updatedLead,
+        account,
+        contact,
+        opportunity,
+      };
+    });
   }
 
   // ========== AUDIT LOGS ==========
@@ -940,15 +1155,15 @@ export class PostgresStorage implements IStorage {
     return await db.select().from(schema.idPatterns).orderBy(schema.idPatterns.entity);
   }
   
-  async getIdPattern(entity: string, orgId?: string): Promise<IdPattern | undefined> {
+  async getIdPattern(entity: string, orgId?: string, executor: DrizzleDb = db): Promise<IdPattern | undefined> {
     if (orgId) {
       // Return only org-specific pattern (strict tenant isolation, no global fallback)
-      const result = await db.select().from(schema.idPatterns)
+      const result = await executor.select().from(schema.idPatterns)
         .where(and(eq(schema.idPatterns.entity, entity), eq(schema.idPatterns.organizationId, orgId))).limit(1);
       return result[0];
     }
     // Admin/global context: return the unscoped global pattern
-    const result = await db.select().from(schema.idPatterns)
+    const result = await executor.select().from(schema.idPatterns)
       .where(and(eq(schema.idPatterns.entity, entity), isNull(schema.idPatterns.organizationId))).limit(1);
     return result[0];
   }
@@ -961,7 +1176,7 @@ export class PostgresStorage implements IStorage {
     return result[0];
   }
   
-  async generateId(entity: string, orgId?: string): Promise<string> {
+  async generateId(entity: string, orgId?: string, executor: DrizzleDb = db): Promise<string> {
     const defaultPatterns: Record<string, string> = {
       "Account": "ACCT-{YYYY}-{SEQ:5}",
       "Contact": "CONT-{YY}{MM}-{SEQ:5}",
@@ -974,10 +1189,10 @@ export class PostgresStorage implements IStorage {
     // --- Step 1: Resolve the global (null-org) counter pattern ---
     // The GLOBAL pattern is always the authoritative counter to ensure IDs are
     // globally unique across all orgs. Per-org patterns only customize the format string.
-    let globalPattern = await this.getIdPattern(entity, undefined);
+    let globalPattern = await this.getIdPattern(entity, undefined, executor);
     if (!globalPattern) {
       const defaultFmt = defaultPatterns[entity] || `${entity.toUpperCase()}-{SEQ:6}`;
-      const inserted = await db.insert(schema.idPatterns).values({
+      const inserted = await executor.insert(schema.idPatterns).values({
         entity,
         pattern: defaultFmt,
         counter: 0,
@@ -991,7 +1206,7 @@ export class PostgresStorage implements IStorage {
     }
 
     // --- Step 2: Atomically increment the GLOBAL counter ---
-    const [updatedGlobal] = await db.update(schema.idPatterns)
+    const [updatedGlobal] = await executor.update(schema.idPatterns)
       .set({ counter: sql`${schema.idPatterns.counter} + 1`, updatedAt: new Date() })
       .where(eq(schema.idPatterns.id, globalPattern.id))
       .returning();
@@ -1004,11 +1219,11 @@ export class PostgresStorage implements IStorage {
     // Prefer org-specific format (for custom prefixes) but NEVER use its counter.
     let formatPattern = updatedGlobal.pattern;
     if (orgId) {
-      const orgSpecific = await this.getIdPattern(entity, orgId);
+      const orgSpecific = await this.getIdPattern(entity, orgId, executor);
       if (orgSpecific) {
         formatPattern = orgSpecific.pattern;
         // Mirror lastIssued on the org-specific row for UI display purposes only
-        await db.update(schema.idPatterns)
+        await executor.update(schema.idPatterns)
           .set({ lastIssued: null, updatedAt: new Date() })
           .where(eq(schema.idPatterns.id, orgSpecific.id));
       }
@@ -1024,7 +1239,7 @@ export class PostgresStorage implements IStorage {
       .replace(/{SEQ:(\d+)}/g, (_: string, len: string) => sequenceNumber.toString().padStart(parseInt(len), "0"));
 
     // Update lastIssued on global pattern for admin visibility
-    await db.update(schema.idPatterns)
+    await executor.update(schema.idPatterns)
       .set({ lastIssued: generatedId })
       .where(eq(schema.idPatterns.id, updatedGlobal.id));
 
@@ -2022,4 +2237,27 @@ export async function fixEntityTagsEntityNames(): Promise<void> {
   }
 
   console.log("Entity tags entity names normalized");
+}
+
+export async function fixCommentEntityNames(): Promise<void> {
+  const mappings: [string, string][] = [
+    ["opportunities", "Opportunity"],
+    ["opportunity", "Opportunity"],
+    ["accounts", "Account"],
+    ["account", "Account"],
+    ["contacts", "Contact"],
+    ["contact", "Contact"],
+    ["leads", "Lead"],
+    ["lead", "Lead"],
+    ["activities", "Activity"],
+    ["activity", "Activity"],
+  ];
+
+  for (const [wrong, correct] of mappings) {
+    await db.execute(
+      sql`UPDATE comments SET entity = ${correct} WHERE entity = ${wrong}`
+    );
+  }
+
+  console.log("Comment entity names normalized");
 }

@@ -21,6 +21,7 @@ import { insertActivitySchema } from "@shared/schema";
 import { AssociationManager, Association } from "@/components/association-manager";
 import { Badge } from "@/components/ui/badge";
 import { TagSelector } from "@/components/tag-selector";
+import { CommentSystem } from "@/components/comment-system";
 
 function toLocalDateString(date: Date): string {
   const year = date.getFullYear();
@@ -288,6 +289,7 @@ export default function ActivityDetailPage() {
           <DetailSection title="Activity Information">
             <DetailField label="Subject" value={activity.subject} />
             <DetailField label="Activity ID" value={activity.id} />
+            <DetailField label="Legacy ID" value={(activity as { legacyId?: string | null }).legacyId} type="copy" />
             <DetailField label="Type" value={activity.type} />
             <DetailField label="Status" value={activity.status} />
             <DetailField label="Priority" value={activity.priority} />
@@ -308,6 +310,8 @@ export default function ActivityDetailPage() {
               </div>
             </DetailSection>
           )}
+
+          <CommentSystem entity="activities" entityId={activity.id} />
         </div>
 
         <div className="space-y-6">

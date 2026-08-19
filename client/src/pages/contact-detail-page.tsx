@@ -160,6 +160,7 @@ export default function ContactDetailPage() {
             <DetailField label="First Name" value={contact.firstName} />
             <DetailField label="Last Name" value={contact.lastName} />
             <DetailField label="Contact ID" value={contact.id} />
+            <DetailField label="Legacy ID" value={(contact as { legacyId?: string | null }).legacyId} type="copy" />
             <DetailField label="Title" value={contact.title} />
             <DetailField label="Email" value={contact.email} type="email" />
             <DetailField label="Phone" value={contact.phone} type="phone" />
@@ -223,7 +224,7 @@ export default function ContactDetailPage() {
             entityId={contact.id}
           />
 
-          <CommentSystem entity="Contact" entityId={contact.id} />
+          <CommentSystem entity="contacts" entityId={contact.id} />
 
           <ResearchDocumentsPanel
             entityType="contact"

@@ -65,6 +65,7 @@ import { registerOrgRoutes } from "./org-routes";
 import multer from "multer";
 import { parse } from "csv-parse/sync";
 import * as XLSX from "xlsx";
+import { canonicalizeCommentEntity, commentEntityAliases } from "./comment-entity";
 import {
   accountCsvRowSchema,
   contactCsvRowSchema,
@@ -105,6 +106,37 @@ function assertOrgOwnership(record: { organizationId?: string | null } | null | 
   if (!record) return false;
   // When an active org is set, only exact matches are permitted — unscoped records do not belong to any tenant
   return record.organizationId === orgId;
+}
+
+async function resolveInternalRecord<T extends { id: string; organizationId?: string | null }>(
+  entity: string,
+  id: string,
+  getById: (id: string) => Promise<T | undefined>,
+  orgId: string | undefined,
+): Promise<T | undefined> {
+  const byPk = await getById(id);
+  if (byPk) return assertOrgOwnership(byPk, orgId) ? byPk : undefined;
+  const canonical = await storage.findCanonicalIdByLegacy(entity, id);
+  if (!canonical || canonical === id) return undefined;
+  const mapped = await getById(canonical);
+  if (!mapped || !assertOrgOwnership(mapped, orgId)) return undefined;
+  return mapped;
+}
+
+async function filterWithLegacySearch<T extends { id: string }>(
+  entity: string,
+  records: T[],
+  search: string | undefined,
+  matches: (record: T, searchLower: string) => boolean,
+): Promise<T[]> {
+  if (!search) return records;
+  const searchLower = search.toLowerCase();
+  const mapped = await storage.findCanonicalIdByLegacy(entity, search.trim());
+  return records.filter(r =>
+    matches(r, searchLower) ||
+    r.id.toLowerCase() === searchLower ||
+    (!!mapped && r.id === mapped)
+  );
 }
 
 // Lead-specific permission middleware.
@@ -611,12 +643,12 @@ export async function registerRoutes(app: Express) {
       // Apply search filter
       const search = req.query.search as string | undefined;
       if (search) {
-        const searchLower = search.toLowerCase();
-        accounts = accounts.filter(a =>
+        accounts = await filterWithLegacySearch("Account", accounts, search, (a, searchLower) =>
           a.name?.toLowerCase().includes(searchLower) ||
           a.accountNumber?.toLowerCase().includes(searchLower) ||
           a.industry?.toLowerCase().includes(searchLower) ||
-          a.website?.toLowerCase().includes(searchLower)
+          a.website?.toLowerCase().includes(searchLower) ||
+          false
         );
       }
       
@@ -661,7 +693,8 @@ export async function registerRoutes(app: Express) {
         }
       });
       
-      return res.json(accounts);
+      const legacyMap = await storage.getLegacyIds("Account", accounts.map(a => a.id));
+      return res.json(accounts.map(a => ({ ...a, legacyId: legacyMap[a.id] ?? null })));
     } catch (error) {
       console.error('[ACCOUNTS-ROUTE] Error fetching accounts:', error);
       console.error('[ACCOUNTS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
@@ -672,11 +705,12 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/accounts/:id", authenticate, requirePermission("Account", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const account = await storage.getAccountById(req.params.id);
-      if (!account || !assertOrgOwnership(account, req.activeOrgId)) {
+      const account = await resolveInternalRecord("Account", req.params.id, (id) => storage.getAccountById(id), req.activeOrgId);
+      if (!account) {
         return res.status(404).json({ error: "Account not found" });
       }
-      return res.json(account);
+      const legacyId = await storage.getLegacyId("Account", account.id);
+      return res.json({ ...account, legacyId });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch account" });
     }
@@ -887,13 +921,13 @@ export async function registerRoutes(app: Express) {
       // Apply search filter
       const search = req.query.search as string | undefined;
       if (search) {
-        const searchLower = search.toLowerCase();
-        contacts = contacts.filter(c =>
+        contacts = await filterWithLegacySearch("Contact", contacts, search, (c, searchLower) =>
           c.firstName?.toLowerCase().includes(searchLower) ||
           c.lastName?.toLowerCase().includes(searchLower) ||
           c.email?.toLowerCase().includes(searchLower) ||
           c.phone?.toLowerCase().includes(searchLower) ||
-          c.title?.toLowerCase().includes(searchLower)
+          c.title?.toLowerCase().includes(searchLower) ||
+          false
         );
       }
       
@@ -940,7 +974,8 @@ export async function registerRoutes(app: Express) {
         }
       });
       
-      return res.json(contacts);
+      const legacyMap = await storage.getLegacyIds("Contact", contacts.map(c => c.id));
+      return res.json(contacts.map(c => ({ ...c, legacyId: legacyMap[c.id] ?? null })));
     } catch (error) {
       console.error('[CONTACTS-ROUTE] Error fetching contacts:', error);
       console.error('[CONTACTS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
@@ -951,11 +986,12 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/contacts/:id", authenticate, requirePermission("Contact", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const contact = await storage.getContactById(req.params.id);
-      if (!contact || !assertOrgOwnership(contact, req.activeOrgId)) {
+      const contact = await resolveInternalRecord("Contact", req.params.id, (id) => storage.getContactById(id), req.activeOrgId);
+      if (!contact) {
         return res.status(404).json({ error: "Contact not found" });
       }
-      return res.json(contact);
+      const legacyId = await storage.getLegacyId("Contact", contact.id);
+      return res.json({ ...contact, legacyId });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch contact" });
     }
@@ -1193,14 +1229,14 @@ export async function registerRoutes(app: Express) {
       // Apply search filter
       const search = req.query.search as string | undefined;
       if (search) {
-        const searchLower = search.toLowerCase();
-        leads = leads.filter(l =>
+        leads = await filterWithLegacySearch("Lead", leads, search, (l, searchLower) =>
           l.firstName?.toLowerCase().includes(searchLower) ||
           l.lastName?.toLowerCase().includes(searchLower) ||
           l.email?.toLowerCase().includes(searchLower) ||
           l.phone?.toLowerCase().includes(searchLower) ||
           l.company?.toLowerCase().includes(searchLower) ||
-          l.topic?.toLowerCase().includes(searchLower)
+          l.topic?.toLowerCase().includes(searchLower) ||
+          false
         );
       }
       
@@ -1251,7 +1287,8 @@ export async function registerRoutes(app: Express) {
         }
       });
       
-      return res.json(leads);
+      const legacyMap = await storage.getLegacyIds("Lead", leads.map(l => l.id));
+      return res.json(leads.map(l => ({ ...l, legacyId: legacyMap[l.id] ?? null })));
     } catch (error) {
       console.error('[LEADS-ROUTE] Error fetching leads:', error);
       console.error('[LEADS-ROUTE] Error message:', error instanceof Error ? error.message : 'Unknown error');
@@ -1262,11 +1299,12 @@ export async function registerRoutes(app: Express) {
   
   app.get("/api/leads/:id", authenticate, requireLeadPermission("read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const lead = await storage.getLeadById(req.params.id);
-      if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
+      const lead = await resolveInternalRecord("Lead", req.params.id, (id) => storage.getLeadById(id), req.activeOrgId);
+      if (!lead) {
         return res.status(404).json({ error: "Lead not found" });
       }
-      return res.json(lead);
+      const legacyId = await storage.getLegacyId("Lead", lead.id);
+      return res.json({ ...lead, legacyId });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch lead" });
     }
@@ -1361,99 +1399,45 @@ export async function registerRoutes(app: Express) {
         opportunityName,
         opportunityAmount
       } = req.body;
-      
+
       const lead = await storage.getLeadById(leadId);
       if (!lead || !assertOrgOwnership(lead, req.activeOrgId)) {
         return res.status(404).json({ error: "Lead not found" });
       }
-      
-      if (lead.status === "converted") {
+
+      const conversionOrgId = (lead.organizationId || req.activeOrgId) as string;
+      const result = await storage.convertLead(leadId, conversionOrgId, {
+        accountId: existingAccountId,
+        createAccount: createAccount || (!existingAccountId && !!accountData),
+        accountName,
+        accountData,
+        createContact: req.body?.createContact !== false,
+        createOpportunity: !!createOpportunity,
+        opportunityName,
+        opportunityAmount,
+        opportunityData,
+      });
+
+      if (result.status === "not_found") {
+        return res.status(404).json({ error: "Lead not found" });
+      }
+      if (result.status === "bad_account") {
+        return res.status(400).json({ error: "The specified account does not belong to this lead's organization" });
+      }
+      if (result.status === "already_converted" || result.status === "conflict") {
         return res.status(400).json({ error: "Lead already converted" });
       }
-      
-      let accountId = existingAccountId;
-      let contactId = null;
-      let opportunityId = null;
-      
-      const conversionOrgId = (lead.organizationId || req.activeOrgId) as string;
 
-      // Validate that a pre-existing account belongs to the lead's org to prevent
-      // cross-org relationships (e.g. contact in org B linked to account in org A).
-      if (existingAccountId) {
-        const existingAccount = await storage.getAccountById(existingAccountId);
-        if (!existingAccount || existingAccount.organizationId !== conversionOrgId) {
-          return res.status(400).json({ error: "The specified account does not belong to this lead's organization" });
-        }
-      }
+      if (result.account) await createAudit(req, "create", "Account", result.account.id, null, result.account);
+      if (result.contact) await createAudit(req, "create", "Contact", result.contact.id, null, result.contact);
+      if (result.opportunity) await createAudit(req, "create", "Opportunity", result.opportunity.id, null, result.opportunity);
+      await createAudit(req, "convert", "Lead", leadId, lead, result.lead);
 
-      // Create Account if requested (backwards compatible with old wizard)
-      if (createAccount || (!accountId && accountData)) {
-        const account = await storage.createAccount({
-          id: "",
-          name: accountData?.name || accountName || lead.company || `${lead.firstName} ${lead.lastName}`,
-          type: accountData?.type || "customer",
-          industry: accountData?.industry || null,
-          website: accountData?.website || null,
-          phone: accountData?.phone || null,
-          billingAddress: accountData?.billingAddress || null,
-          shippingAddress: accountData?.shippingAddress || null,
-          ownerId: lead.ownerId,
-          organizationId: conversionOrgId,
-        });
-        accountId = account.id;
-        await createAudit(req, "create", "Account", account.id, null, account);
-      }
-      
-      // Always create contact from lead
-      const contact = await storage.createContact({
-        id: "",
-        firstName: lead.firstName,
-        lastName: lead.lastName,
-        email: lead.email || null,
-        phone: lead.phone || null,
-        title: lead.title || null,
-        accountId: accountId,
-        ownerId: lead.ownerId,
-        organizationId: conversionOrgId,
-      });
-      contactId = contact.id;
-      await createAudit(req, "create", "Contact", contact.id, null, contact);
-      
-      // Create Opportunity if requested (backwards compatible with old wizard)
-      if (createOpportunity && accountId) {
-        // Default close date is 90 days from now if not provided
-        const defaultCloseDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
-        // Use the schema's parse to get proper types (handles date preprocessing etc.)
-        const oppCreateData = insertOpportunitySchema.parse({
-          id: "",
-          name: opportunityData?.name || opportunityName || `${lead.firstName} ${lead.lastName} - Opportunity`,
-          accountId,
-          stage: opportunityData?.stage || "prospecting",
-          amount: opportunityData?.amount || opportunityAmount || "0",
-          probability: opportunityData?.probability !== undefined ? opportunityData.probability : 10,
-          closeDate: opportunityData?.closeDate || defaultCloseDate.toISOString(),
-          ownerId: lead.ownerId,
-          organizationId: conversionOrgId,
-        });
-        const opportunity = await storage.createOpportunity(oppCreateData);
-        opportunityId = opportunity.id;
-        await createAudit(req, "create", "Opportunity", opportunity.id, null, opportunity);
-      }
-      
-      // Update lead status — use db directly to set convertedAt which is omitted from InsertLead
-      const updatedLead = await storage.markLeadConverted(leadId, {
-        accountId: accountId ?? null,
-        contactId: contactId ?? null,
-        opportunityId: opportunityId ?? null,
-      });
-      
-      await createAudit(req, "convert", "Lead", leadId, lead, updatedLead);
-      
       return res.json({
-        lead: updatedLead,
-        accountId,
-        contactId,
-        opportunityId,
+        lead: result.lead,
+        accountId: result.account?.id ?? null,
+        contactId: result.contact?.id ?? null,
+        opportunityId: result.opportunity?.id ?? null,
       });
     } catch (error) {
       console.error("Lead conversion error:", error);
@@ -1537,17 +1521,17 @@ export async function registerRoutes(app: Express) {
       
       const search = req.query.search as string | undefined;
       if (search) {
-        const searchLower = search.toLowerCase();
-        allOpportunities = allOpportunities.filter((opp) => {
+        allOpportunities = await filterWithLegacySearch("Opportunity", allOpportunities, search, (opp, searchLower) => {
           const oppRecord = opp as Opportunity & { accountName?: string | null };
           return (
             oppRecord.name?.toLowerCase().includes(searchLower) ||
-            oppRecord.accountName?.toLowerCase().includes(searchLower)
+            !!oppRecord.accountName?.toLowerCase().includes(searchLower)
           );
         });
       }
       
-      return res.json(allOpportunities);
+      const legacyMap = await storage.getLegacyIds("Opportunity", allOpportunities.map(o => o.id));
+      return res.json(allOpportunities.map(o => ({ ...o, legacyId: legacyMap[o.id] ?? null })));
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunities" });
     }
@@ -1562,15 +1546,15 @@ export async function registerRoutes(app: Express) {
         return res.status(403).json({ error: "Forbidden", message: "You do not have permission to read Opportunity" });
       }
 
-      const opportunity = await storage.getOpportunityById(req.params.id);
-      if (!opportunity || !assertOrgOwnership(opportunity, req.activeOrgId)) {
+      const opportunity = await resolveInternalRecord("Opportunity", req.params.id, (id) => storage.getOpportunityById(id), req.activeOrgId);
+      if (!opportunity) {
         return res.status(404).json({ error: "Opportunity not found" });
       }
 
       if (!canReadAll && canReadOwn) {
         const [assignment] = await db.select().from(opportunityResources)
           .where(and(
-            eq(opportunityResources.opportunityId, req.params.id),
+            eq(opportunityResources.opportunityId, opportunity.id),
             eq(opportunityResources.userId, req.user!.id)
           ));
         if (!assignment) {
@@ -1578,7 +1562,8 @@ export async function registerRoutes(app: Express) {
         }
       }
 
-      return res.json(opportunity);
+      const legacyId = await storage.getLegacyId("Opportunity", opportunity.id);
+      return res.json({ ...opportunity, legacyId });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch opportunity" });
     }
@@ -1929,14 +1914,15 @@ export async function registerRoutes(app: Express) {
       
       const search = req.query.search as string | undefined;
       if (search) {
-        const searchLower = search.toLowerCase();
-        allActivities = allActivities.filter(a =>
+        allActivities = await filterWithLegacySearch("Activity", allActivities, search, (a, searchLower) =>
           a.subject?.toLowerCase().includes(searchLower) ||
-          a.notes?.toLowerCase().includes(searchLower)
+          a.notes?.toLowerCase().includes(searchLower) ||
+          false
         );
       }
       
-      return res.json(allActivities);
+      const legacyMap = await storage.getLegacyIds("Activity", allActivities.map(a => a.id));
+      return res.json(allActivities.map(a => ({ ...a, legacyId: legacyMap[a.id] ?? null })));
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch activities" });
     }
@@ -2100,11 +2086,12 @@ export async function registerRoutes(app: Express) {
 
   app.get("/api/activities/:id", authenticate, requirePermission("Activity", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
-      const activity = await storage.getActivityById(req.params.id);
-      if (!activity || !assertOrgOwnership(activity, req.activeOrgId)) {
+      const activity = await resolveInternalRecord("Activity", req.params.id, (id) => storage.getActivityById(id), req.activeOrgId);
+      if (!activity) {
         return res.status(404).json({ error: "Activity not found" });
       }
-      return res.json(activity);
+      const legacyId = await storage.getLegacyId("Activity", activity.id);
+      return res.json({ ...activity, legacyId });
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch activity" });
     }
@@ -4629,6 +4616,10 @@ export async function registerRoutes(app: Express) {
   app.get("/api/:entity/:id/comments", authenticate, requirePermission("Comment", "read"), readRateLimiter, async (req: AuthRequest, res) => {
     try {
       const { entity, id } = req.params;
+      const canonicalEntity = canonicalizeCommentEntity(entity);
+      if (!canonicalEntity) {
+        return res.status(400).json({ error: "Invalid comment entity" });
+      }
       const page = parseInt(req.query.page as string) || 1;
       const pageSize = Math.min(parseInt(req.query.pageSize as string) || 25, 100);
       const sort = req.query.sort as string || "newest";
@@ -4639,7 +4630,7 @@ export async function registerRoutes(app: Express) {
       
       // Build query conditions - accumulate all predicates
       const conditions: any[] = [
-        eq(comments.entity, entity),
+        inArray(comments.entity, commentEntityAliases(canonicalEntity)),
         eq(comments.entityId, id),
       ];
       
@@ -4814,6 +4805,10 @@ export async function registerRoutes(app: Express) {
     try{
       
       const { entity, id } = req.params;
+      const canonicalEntity = canonicalizeCommentEntity(entity);
+      if (!canonicalEntity) {
+        return res.status(400).json({ error: "Invalid comment entity" });
+      }
       const { body, parentId, mentions } = req.body;
       
       // Calculate depth if reply
@@ -4829,7 +4824,7 @@ export async function registerRoutes(app: Express) {
       }
       
       const [newComment] = await db.insert(comments).values({
-        entity,
+        entity: canonicalEntity,
         entityId: id,
         body,
         parentId: parentId || null,

@@ -227,6 +227,7 @@ export default function LeadDetailPage() {
               <DetailField label="Last Name" value={lead.lastName} />
               <DetailField label="Title" value={lead.title} />
               <DetailField label="Lead ID" value={lead.id} />
+              <DetailField label="Legacy ID" value={(lead as { legacyId?: string | null }).legacyId} type="copy" />
               <DetailField label="Status" value={lead.status} />
               <DetailField label="Company" value={lead.company} />
               <DetailField label="Email" value={lead.email} type="email" />

@@ -24,6 +24,7 @@ export const IMMUTABLE_FIELDS = [
   "sourceRecordId",
   "importStatus",
   "importNotes",
+  "legacyId",
 ] as const;
 
 /** Per-entity allowlists of mutable fields (documented source of truth). */

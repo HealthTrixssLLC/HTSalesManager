@@ -40,10 +40,14 @@ Statuses: **READY** / **PARTIALLY READY** / **BLOCKED**.
 | 26 | Rate limiting (per-key limits, `RateLimit-*` headers, 429 + `Retry-After` + `RATE_LIMITED`) | READY | 429 tests with per-key limiter active; documented retry policy |
 | 27 | Document references (create/list/get, entity links, credential-bearing URL rejection) | READY | Document API tests; URL-safety validation documented in the spec and integration guide (§25); errors lack `code` (rolled into #25's partial) |
 | 28 | API access logs (`GET /logs`, per-key self-scoping, filterable) | READY | Log endpoint tests; per-key isolation enforced server-side |
+| 29 | Create account/contact/opportunity (`POST`, org key, optional externalId idempotency) | READY | `tests/external-create-api.test.ts` |
+| 30 | Lead conversion (`POST /leads/:id/convert`, transactional, canonical IDs on writes) | READY | `tests/external-convert-api.test.ts` |
+| 31 | Comments list/create on account, contact, lead, opportunity, activity | READY | `tests/external-comments-api.test.ts` |
+| 32 | Read-only legacy ID on detail GET + CRM search; no write aliasing | READY | `tests/external-legacy-id.test.ts` |
 
 ## Summary
 
-- **READY: 27 / 28**
+- **READY: 31 / 32** (item 25 remains PARTIALLY READY)
 - **PARTIALLY READY: 1 / 28** — #25 (error-code coverage on legacy read-endpoint validation errors and document endpoints); additive-only, no breaking impact; clients must already treat `code` as optional per the integration guide.
 - **BLOCKED: 0 / 28**
 
