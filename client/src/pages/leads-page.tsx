@@ -48,6 +48,7 @@ const ratingColors: Record<string, string> = {
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
   { id: "id", label: "ID" },
+  { id: "legacyId", label: "Legacy ID" },
   { id: "name", label: "Name" },
   { id: "title", label: "Title" },
   { id: "email", label: "Email" },
@@ -112,7 +113,7 @@ export default function LeadsPage() {
 
   // Column visibility state — title is hidden by default
   const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    AVAILABLE_COLUMNS.filter(c => c.id !== "title").map(c => c.id)
+    AVAILABLE_COLUMNS.filter(c => c.id !== "title" && c.id !== "legacyId").map(c => c.id)
   );
 
   // Build query string for API
@@ -793,6 +794,9 @@ export default function LeadsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("legacyId") && (
+                  <TableHead>Legacy ID</TableHead>
+                )}
                 {isColumnVisible("name") && (
                   <SortableTableHeader
                     label="Name"
@@ -921,6 +925,11 @@ export default function LeadsPage() {
                     {isColumnVisible("id") && (
                       <TableCell className="font-medium" data-testid={`cell-id-${lead.id}`}>
                         {lead.id}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("legacyId") && (
+                      <TableCell className="font-mono text-muted-foreground" data-testid={`cell-legacyId-${lead.id}`}>
+                        {(lead as { legacyId?: string | null }).legacyId || "—"}
                       </TableCell>
                     )}
                     {isColumnVisible("name") && (

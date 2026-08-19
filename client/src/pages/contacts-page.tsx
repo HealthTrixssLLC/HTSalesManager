@@ -33,6 +33,7 @@ import { EmptyState } from "@/components/empty-state";
 // Define available columns
 const AVAILABLE_COLUMNS: Column[] = [
   { id: "id", label: "ID" },
+  { id: "legacyId", label: "Legacy ID" },
   { id: "firstName", label: "First Name" },
   { id: "lastName", label: "Last Name" },
   { id: "email", label: "Email" },
@@ -91,7 +92,7 @@ export default function ContactsPage() {
 
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    AVAILABLE_COLUMNS.map(c => c.id)
+    AVAILABLE_COLUMNS.filter(c => c.id !== "legacyId").map(c => c.id)
   );
 
   // Build query string for API
@@ -646,6 +647,9 @@ export default function ContactsPage() {
                     onSort={handleSort}
                   />
                 )}
+                {isColumnVisible("legacyId") && (
+                  <TableHead>Legacy ID</TableHead>
+                )}
                 {isColumnVisible("firstName") && (
                   <SortableTableHeader
                     label="First Name"
@@ -746,6 +750,11 @@ export default function ContactsPage() {
                     {isColumnVisible("id") && (
                       <TableCell className="font-medium" onClick={() => setLocation(`/contacts/${contact.id}`)} data-testid={`cell-id-${contact.id}`}>
                         {contact.id}
+                      </TableCell>
+                    )}
+                    {isColumnVisible("legacyId") && (
+                      <TableCell className="font-mono text-muted-foreground" onClick={() => setLocation(`/contacts/${contact.id}`)} data-testid={`cell-legacyId-${contact.id}`}>
+                        {(contact as { legacyId?: string | null }).legacyId || "—"}
                       </TableCell>
                     )}
                     {isColumnVisible("firstName") && (

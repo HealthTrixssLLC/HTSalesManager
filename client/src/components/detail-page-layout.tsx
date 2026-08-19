@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Pencil, Trash2, CalendarPlus } from "lucide-react";
+import { ArrowLeft, Pencil, Trash2, CalendarPlus, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -92,11 +93,12 @@ export function DetailPageLayout({
 interface DetailFieldProps {
   label: string;
   value?: string | number | Date | null;
-  type?: "text" | "email" | "phone" | "url" | "currency" | "date" | "percent";
+  type?: "text" | "email" | "phone" | "url" | "currency" | "date" | "percent" | "copy";
 }
 
 export function DetailField({ label, value, type = "text" }: DetailFieldProps) {
   const canViewFinancials = useFinancialAccess();
+  const [copied, setCopied] = useState(false);
 
   if (!value && value !== 0) {
     return null;
@@ -144,6 +146,20 @@ export function DetailField({ label, value, type = "text" }: DetailFieldProps) {
           <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
             {displayValue}
           </a>
+        ) : type === "copy" ? (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 font-mono text-muted-foreground hover:text-foreground"
+            data-testid={`button-copy-${label.toLowerCase().replace(/\s+/g, "-")}`}
+            onClick={async () => {
+              await navigator.clipboard.writeText(String(value));
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            {displayValue}
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          </button>
         ) : (
           displayValue
         )}

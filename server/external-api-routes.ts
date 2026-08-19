@@ -3,9 +3,12 @@
 
 import { Router, Response, NextFunction } from "express";
 import { z } from "zod";
-import { storage } from "./db";
+import { storage, db } from "./db";
 import { normalizeEmail } from "./lib/normalize-email";
 import { authenticateApiKey, createApiKeyRateLimiter, requirePermission, ApiKeyRequest } from "./api-key-auth";
+import { commentEntityAliases, type CommentEntity } from "./comment-entity";
+import { comments, users } from "@shared/schema";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 /** Extract org ID from API key (null = system key, no org restriction) */
 function getKeyOrgId(req: ApiKeyRequest): string | undefined {
@@ -74,6 +77,61 @@ function attachVersion(res: Response, payload: Record<string, any>, updatedAt: D
   }
 }
 
+async function withLegacyId<T extends { id: string }>(entity: string, payload: T): Promise<T & { legacyId: string | null }> {
+  const legacyId = await storage.getLegacyId(entity, payload.id);
+  return { ...payload, legacyId };
+}
+
+/** Read-only ID resolution: canonical PK wins, then legacy_id_map for this entity. Writes must not use this. */
+async function loadRecordForRead(
+  entity: string,
+  getById: (id: string) => Promise<any>,
+  id: string,
+  orgId: string | undefined,
+): Promise<any | undefined> {
+  const byPk = await getById(id);
+  if (byPk) {
+    return keyOrgOwns(byPk, orgId) ? byPk : undefined;
+  }
+  const canonical = await storage.findCanonicalIdByLegacy(entity, id);
+  if (!canonical || canonical === id) return undefined;
+  const mapped = await getById(canonical);
+  if (!mapped || !keyOrgOwns(mapped, orgId)) return undefined;
+  return mapped;
+}
+
+async function includeExactIdMatch<T extends { id: string; organizationId?: string | null }>(
+  entity: string,
+  records: T[],
+  search: string | undefined,
+  orgId: string | undefined,
+  getById: (id: string) => Promise<T | undefined>,
+): Promise<T[]> {
+  if (!search) return records;
+  const extraIds = new Set<string>();
+  extraIds.add(search);
+  const mapped = await storage.findCanonicalIdByLegacy(entity, search);
+  if (mapped) extraIds.add(mapped);
+  let next = records;
+  for (const extraId of extraIds) {
+    if (next.some(r => r.id === extraId)) continue;
+    const extra = await getById(extraId);
+    if (extra && keyOrgOwns(extra, orgId)) next = [extra, ...next];
+  }
+  return next;
+}
+
+async function applyLegacyIdListFilter<T extends { id: string }>(
+  entity: string,
+  records: T[],
+  legacyId: string | undefined,
+): Promise<T[]> {
+  if (!legacyId) return records;
+  const canonical = await storage.findCanonicalIdByLegacy(entity, legacyId);
+  if (!canonical) return [];
+  return records.filter(r => r.id === canonical);
+}
+
 // ===== Query-parameter parsing helpers (Phase B list filters) =====
 
 /** Return trimmed string value of a query param, or undefined when absent/empty */
@@ -138,6 +196,7 @@ export type ExternalApiErrorCode =
   | "NOT_FOUND"             // 404 — missing or cross-org record
   | "TAG_ALREADY_EXISTS"    // 409 — duplicate tag name in org
   | "IDEMPOTENCY_CONFLICT"  // 409 — externalId replayed with a different body
+  | "CONVERSION_CONFLICT"   // 409 — convert retry disagrees with stored conversion
   | "STALE_RECORD"          // 412 — If-Match precondition failed
   | "RATE_LIMITED";         // 429 — per-key rate limit exceeded
 
@@ -390,12 +449,14 @@ router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
     
     // Get accounts scoped to the API key's org, filtered server-side
-    const accounts = await storage.getAllAccounts(orgId, {
+    let accounts = await storage.getAllAccounts(orgId, {
       search: qs(req.query.search),
       name: qs(req.query.name),
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
     });
+    accounts = await includeExactIdMatch("Account", accounts, qs(req.query.search) || qs(req.query.name), orgId, (id) => storage.getAccountById(id));
+    accounts = await applyLegacyIdListFilter("Account", accounts, qs(req.query.legacyId));
     
     // Apply pagination
     const total = accounts.length;
@@ -417,6 +478,10 @@ router.get("/accounts", requirePermission("crm.read"), async (req: ApiKeyRequest
       };
       
       // Optionally include related opportunities (scoped to same org)
+      if (expandList.includes("legacyId") || qs(req.query.legacyId)) {
+        leanAccount.legacyId = (await storage.getLegacyIds("Account", [account.id]))[account.id] ?? null;
+      }
+
       if (expandList.includes("opportunities")) {
         const allOpps = await storage.getAllOpportunities(orgId);
         leanAccount.opportunities = allOpps
@@ -468,16 +533,16 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
-    const account = await storage.getAccountById(req.params.id);
+    const account = await loadRecordForRead("Account", (id) => storage.getAccountById(id), req.params.id, orgId);
     
-    if (!account || !keyOrgOwns(account, orgId)) {
+    if (!account) {
       return res.status(404).json({
         error: "Account not found",
         message: `No account found with ID: ${req.params.id}`
       });
     }
     
-    const response: any = formatAccountDetailResponse(account);
+    const response: any = await withLegacyId("Account", formatAccountDetailResponse(account));
     
     // Optionally include related data (scoped to same org)
     if (expandList.includes("opportunities")) {
@@ -532,21 +597,28 @@ router.get("/accounts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
 // ========== OPPORTUNITIES ENDPOINTS ==========
 
 /** Format the public opportunity detail representation (without optional expansions). */
+function formatMoney(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return n.toFixed(2);
+}
+
 function formatOpportunityDetailResponse(opp: any) {
   return {
     id: opp.id,
     accountId: opp.accountId,
     name: opp.name,
     stage: opp.stage,
-    amount: opp.amount,
+    amount: formatMoney(opp.amount),
     closeDate: opp.closeDate,
     ownerId: opp.ownerId ?? null,
     probability: opp.probability ?? null,
     status: opp.status ?? null,
     actualCloseDate: opp.actualCloseDate ?? null,
-    actualRevenue: opp.actualRevenue ?? null,
+    actualRevenue: formatMoney(opp.actualRevenue),
     estCloseDate: opp.estCloseDate ?? null,
-    estRevenue: opp.estRevenue ?? null,
+    estRevenue: formatMoney(opp.estRevenue),
     rating: opp.rating ?? null,
     includeInForecast: opp.includeInForecast,
     implementationStartDate: opp.implementationStartDate ?? null,
@@ -609,7 +681,7 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
     
     // Get opportunities scoped to the API key's org, filtered server-side
-    const opportunities = await storage.getAllOpportunities(orgId, {
+    let opportunities = await storage.getAllOpportunities(orgId, {
       search: qs(req.query.search),
       accountId: qs(req.query.accountId),
       status: qs(req.query.status),
@@ -620,6 +692,8 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
     });
+    opportunities = await includeExactIdMatch("Opportunity", opportunities, qs(req.query.search), orgId, (id) => storage.getOpportunityById(id));
+    opportunities = await applyLegacyIdListFilter("Opportunity", opportunities, qs(req.query.legacyId));
     
     // Apply pagination
     const total = opportunities.length;
@@ -632,15 +706,15 @@ router.get("/opportunities", requirePermission("crm.read"), async (req: ApiKeyRe
         accountId: opp.accountId,
         name: opp.name,
         stage: opp.stage,
-        amount: opp.amount,
+        amount: formatMoney(opp.amount),
         closeDate: opp.closeDate,
         ownerId: opp.ownerId,
         probability: opp.probability,
         status: opp.status,
         actualCloseDate: opp.actualCloseDate,
-        actualRevenue: opp.actualRevenue,
+        actualRevenue: formatMoney(opp.actualRevenue),
         estCloseDate: opp.estCloseDate,
-        estRevenue: opp.estRevenue,
+        estRevenue: formatMoney(opp.estRevenue),
         rating: opp.rating,
         includeInForecast: opp.includeInForecast,
         implementationStartDate: opp.implementationStartDate,
@@ -711,16 +785,16 @@ router.get("/opportunities/:id", requirePermission("crm.read"), async (req: ApiK
     const expandList = (expand as string).split(",").filter(Boolean);
     const orgId = getKeyOrgId(req);
     
-    const opp = await storage.getOpportunityById(req.params.id);
+    const opp = await loadRecordForRead("Opportunity", (id) => storage.getOpportunityById(id), req.params.id, orgId);
     
-    if (!opp || !keyOrgOwns(opp, orgId)) {
+    if (!opp) {
       return res.status(404).json({
         error: "Opportunity not found",
         message: `No opportunity found with ID: ${req.params.id}`
       });
     }
     
-    const response: any = formatOpportunityDetailResponse(opp);
+    const response: any = await withLegacyId("Opportunity", formatOpportunityDetailResponse(opp));
     
     // Optionally include account data (only if it belongs to the same org)
     if (expandList.includes("account")) {
@@ -962,13 +1036,15 @@ router.get("/contacts", requirePermission("crm.read"), async (req: ApiKeyRequest
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
 
     // Get contacts scoped to the API key's org, filtered server-side
-    const contacts = await storage.getAllContacts(orgId, {
+    let contacts = await storage.getAllContacts(orgId, {
       search: qs(req.query.search),
       email: qs(req.query.email),
       accountId: qs(req.query.accountId),
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
     });
+    contacts = await includeExactIdMatch("Contact", contacts, qs(req.query.search), orgId, (id) => storage.getContactById(id));
+    contacts = await applyLegacyIdListFilter("Contact", contacts, qs(req.query.legacyId));
 
     const total = contacts.length;
     const page = contacts.slice(offsetNum, offsetNum + limitNum);
@@ -1034,8 +1110,8 @@ router.get("/contacts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
     const { expand = "" } = req.query;
     const expandList = (expand as string).split(",").filter(Boolean);
 
-    const contact = await storage.getContactById(req.params.id);
-    if (!contact || !keyOrgOwns(contact, orgId)) {
+    const contact = await loadRecordForRead("Contact", (id) => storage.getContactById(id), req.params.id, orgId);
+    if (!contact) {
       return res.status(404).json({
         error: "Contact not found",
         message: `No contact found with ID: ${req.params.id}`,
@@ -1053,7 +1129,7 @@ router.get("/contacts/:id", requirePermission("crm.read"), async (req: ApiKeyReq
       }
     }
 
-    const contactPayload: any = formatContactResponse(contact, account);
+    const contactPayload: any = await withLegacyId("Contact", formatContactResponse(contact, account));
     if (expandList.includes("tags")) {
       const entityTags = await storage.getEntityTags("Contact", contact.id);
       contactPayload.tags = orgVisibleTags(entityTags, orgId);
@@ -1278,6 +1354,10 @@ function formatLeadResponse(lead: any, orgName: string | null) {
     rating: lead.rating,
     ownerId: lead.ownerId ?? lead.owner_id ?? null,
     externalId: lead.externalId ?? lead.external_id ?? null,
+    convertedAccountId: lead.convertedAccountId ?? lead.converted_account_id ?? null,
+    convertedContactId: lead.convertedContactId ?? lead.converted_contact_id ?? null,
+    convertedOpportunityId: lead.convertedOpportunityId ?? lead.converted_opportunity_id ?? null,
+    convertedAt: lead.convertedAt ?? lead.converted_at ?? null,
     organizationId: lead.organizationId ?? lead.organization_id ?? null,
     organizationName: orgName,
     createdAt: lead.createdAt ?? lead.created_at ?? null,
@@ -1433,7 +1513,7 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
 
     const organization = await storage.getOrganizationById(orgId);
-    const leads = await storage.getAllLeads(orgId, {
+    let leads = await storage.getAllLeads(orgId, {
       search: qs(req.query.search),
       email: qs(req.query.email),
       status: statusParsed.value,
@@ -1442,6 +1522,8 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
     });
+    leads = await includeExactIdMatch("Lead", leads as any, qs(req.query.search), orgId, (id) => storage.getLeadById(id));
+    leads = await applyLegacyIdListFilter("Lead", leads as any, qs(req.query.legacyId));
 
     const total = leads.length;
     const page = leads.slice(offsetNum, offsetNum + limitNum);
@@ -1478,8 +1560,8 @@ router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyReques
       });
     }
 
-    const lead = await storage.getLeadById(req.params.id);
-    if (!lead || !keyOrgOwns(lead, orgId)) {
+    const lead = await loadRecordForRead("Lead", (id) => storage.getLeadById(id), req.params.id, orgId);
+    if (!lead) {
       return res.status(404).json({
         error: "Lead not found",
         message: `No lead found with ID: ${req.params.id}`,
@@ -1488,7 +1570,7 @@ router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyReques
 
     const organization = await storage.getOrganizationById(orgId);
     const expandList = ((req.query.expand as string) || "").split(",").filter(Boolean);
-    const leadPayload: any = formatLeadResponse(lead, organization?.name ?? null);
+    const leadPayload: any = await withLegacyId("Lead", formatLeadResponse(lead, organization?.name ?? null));
     if (expandList.includes("tags")) {
       const entityTags = await storage.getEntityTags("Lead", lead.id);
       leadPayload.tags = orgVisibleTags(entityTags, orgId);
@@ -1736,7 +1818,7 @@ router.get("/activities", requirePermission("activities.read"), async (req: ApiK
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
 
     // Org-scoped, filtered server-side
-    const activities = await storage.getActivities(orgId, {
+    let activities = await storage.getActivities(orgId, {
       relatedType: relatedTypeParsed.value,
       relatedId: qs(req.query.relatedId),
       type: typeParsed.value,
@@ -1747,6 +1829,8 @@ router.get("/activities", requirePermission("activities.read"), async (req: ApiK
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
     });
+    activities = await includeExactIdMatch("Activity", activities, qs(req.query.search), orgId, async (id) => storage.getActivityById(id, orgId));
+    activities = await applyLegacyIdListFilter("Activity", activities, qs(req.query.legacyId));
 
     const total = activities.length;
     const page = activities.slice(offsetNum, offsetNum + limitNum);
@@ -1783,8 +1867,13 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
       });
     }
 
-    // Org-scoped lookup: missing and cross-org records are indistinguishable
-    const activity = await storage.getActivityById(req.params.id, orgId);
+    // Org-scoped lookup: missing and cross-org records are indistinguishable.
+    // Read-only legacy resolution: if the PK misses, map via legacy_id_map.
+    let activity = await storage.getActivityById(req.params.id, orgId);
+    if (!activity) {
+      const canonical = await storage.findCanonicalIdByLegacy("Activity", req.params.id);
+      if (canonical) activity = await storage.getActivityById(canonical, orgId);
+    }
     if (!activity) {
       return apiError(res, 404, "NOT_FOUND", "Not Found", {
         message: `No activity found with ID: ${req.params.id}`,
@@ -1792,7 +1881,7 @@ router.get("/activities/:id", requirePermission("activities.read"), async (req: 
     }
 
     const expandList = ((req.query.expand as string) || "").split(",").filter(Boolean);
-    const activityPayload: any = formatActivityResponse(activity);
+    const activityPayload: any = await withLegacyId("Activity", formatActivityResponse(activity));
     if (expandList.includes("tags")) {
       const entityTags = await storage.getEntityTags("Activity", activity.id);
       activityPayload.tags = orgVisibleTags(entityTags, orgId);
@@ -2277,7 +2366,10 @@ function makePatchHandler(cfg: PatchEntityConfig) {
         console.error("[EXTERNAL-API] Failed to create PATCH audit log:", err);
       });
 
-      const updatedPayload = await formatPatchResponse(cfg.entity, updated, orgId);
+      const updatedPayload = await withLegacyId(
+        cfg.label,
+        await formatPatchResponse(cfg.entity, updated, orgId) as { id: string },
+      );
       attachVersion(res, updatedPayload, (updated as any).updatedAt);
       return res.json({ data: updatedPayload });
     } catch (error) {
@@ -2677,5 +2769,717 @@ router.delete("/documents/:id/links/:entityType/:entityId", requirePermission("d
     });
   }
 });
+
+// ========== CREATE ACCOUNT / CONTACT / OPPORTUNITY ==========
+
+const optCreateStr = (max: number) => z.string().trim().max(max).nullable().optional();
+
+const externalAccountCreateSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  accountNumber: optCreateStr(100),
+  type: z.enum(["customer", "prospect", "partner", "vendor", "other"]).nullable().optional(),
+  category: optCreateStr(200),
+  ownerId: optCreateStr(50),
+  industry: optCreateStr(200),
+  website: optCreateStr(500),
+  phone: optCreateStr(50),
+  billingAddress: optCreateStr(1000),
+  shippingAddress: optCreateStr(1000),
+  externalId: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
+const externalContactCreateSchema = z.object({
+  firstName: z.string().trim().min(1).max(200),
+  lastName: z.string().trim().min(1).max(200),
+  accountId: optCreateStr(100),
+  email: z.string().trim().email().max(320).nullable().optional(),
+  phone: optCreateStr(50),
+  mobile: optCreateStr(50),
+  title: optCreateStr(200),
+  department: optCreateStr(200),
+  mailingStreet: optCreateStr(300),
+  mailingCity: optCreateStr(200),
+  mailingState: optCreateStr(100),
+  mailingPostalCode: optCreateStr(40),
+  mailingCountry: optCreateStr(100),
+  description: optCreateStr(5000),
+  ownerId: optCreateStr(50),
+  externalId: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
+const isoCreateDate = z.string().trim().min(1).refine(
+  (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) || !Number.isNaN(Date.parse(s)),
+  { message: "Must be YYYY-MM-DD or an ISO 8601 timestamp" },
+).transform((s) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00.000Z` : s));
+const decimalCreate = z.union([z.number(), z.string()])
+  .transform(v => String(v))
+  .refine(v => /^-?\d+(\.\d+)?$/.test(v), "Must be a decimal number")
+  .nullable();
+
+const externalOpportunityCreateSchema = z.object({
+  accountId: z.string().trim().min(1).max(100),
+  name: z.string().trim().min(1).max(300),
+  closeDate: isoCreateDate,
+  stage: z.enum(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]).optional(),
+  amount: decimalCreate.optional(),
+  ownerId: optCreateStr(50),
+  probability: z.number().int().min(0).max(100).nullable().optional(),
+  status: optCreateStr(100),
+  actualCloseDate: isoCreateDate.nullable().optional(),
+  actualRevenue: decimalCreate.optional(),
+  estCloseDate: isoCreateDate.nullable().optional(),
+  estRevenue: decimalCreate.optional(),
+  rating: optCreateStr(50),
+  includeInForecast: z.boolean().optional(),
+  implementationStartDate: isoCreateDate.nullable().optional(),
+  implementationEndDate: isoCreateDate.nullable().optional(),
+  billingEndDate: isoCreateDate.nullable().optional(),
+  description: optCreateStr(10000),
+  externalId: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
+async function assertOwnerInOrg(ownerId: string | null | undefined, orgId: string, res: Response): Promise<boolean> {
+  if (!ownerId) return true;
+  const membership = await storage.getOrgMembership(ownerId, orgId);
+  if (!membership) {
+    apiError(res, 404, "NOT_FOUND", "Related owner not found", {
+      message: `No user with ID ${ownerId} is a member of this record's organization`,
+    });
+    return false;
+  }
+  return true;
+}
+
+router.post("/accounts", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Account creation requires an API key bound to an organization",
+      });
+    }
+    const parsed = externalAccountCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "The account payload is invalid",
+        details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+      });
+    }
+    const data = parsed.data;
+    if (!(await assertOwnerInOrg(data.ownerId, orgId, res))) return;
+
+    const values = {
+      name: data.name,
+      accountNumber: data.accountNumber ?? null,
+      type: data.type ?? null,
+      category: data.category ?? null,
+      ownerId: data.ownerId ?? null,
+      industry: data.industry ?? null,
+      website: data.website ?? null,
+      phone: data.phone ?? null,
+      billingAddress: data.billingAddress ?? null,
+      shippingAddress: data.shippingAddress ?? null,
+      organizationId: orgId,
+      externalId: data.externalId ?? null,
+      sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
+    } as any;
+
+    let account;
+    let created = true;
+    if (data.externalId) {
+      const result = await storage.findOrCreateAccountByExternalId(data.externalId, orgId, values);
+      account = result.account;
+      created = result.created;
+      if (!created) {
+        if (account.name === data.name) {
+          const payload = await withLegacyId("Account", formatAccountDetailResponse(account));
+          attachVersion(res, payload, account.updatedAt);
+          return res.status(200).json({ duplicate: true, data: payload });
+        }
+        return apiError(res, 409, "IDEMPOTENCY_CONFLICT", "External ID already used by a different account", {
+          message: `An account with externalId "${data.externalId}" already exists in this organization but has a different name.`,
+          existingAccountId: account.id,
+        });
+      }
+    } else {
+      account = await storage.createAccount(values);
+    }
+
+    const payload = await withLegacyId("Account", formatAccountDetailResponse(account));
+    attachVersion(res, payload, account.updatedAt);
+    return res.status(201).json({ duplicate: false, data: payload });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating account:", error);
+    return res.status(500).json({ error: "Failed to create account", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+router.post("/contacts", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Contact creation requires an API key bound to an organization",
+      });
+    }
+    const parsed = externalContactCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "The contact payload is invalid",
+        details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+      });
+    }
+    const data = parsed.data;
+    if (!(await assertOwnerInOrg(data.ownerId, orgId, res))) return;
+
+    if (data.accountId) {
+      const refAccount = await storage.getAccountById(data.accountId);
+      if (!refAccount || !keyOrgOwns(refAccount, orgId)) {
+        return apiError(res, 404, "NOT_FOUND", "Related account not found", {
+          message: `No account found with ID: ${data.accountId}`,
+        });
+      }
+    }
+
+    const values = {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      accountId: data.accountId ?? null,
+      email: data.email ?? null,
+      phone: data.phone ?? null,
+      mobile: data.mobile ?? null,
+      title: data.title ?? null,
+      department: data.department ?? null,
+      mailingStreet: data.mailingStreet ?? null,
+      mailingCity: data.mailingCity ?? null,
+      mailingState: data.mailingState ?? null,
+      mailingPostalCode: data.mailingPostalCode ?? null,
+      mailingCountry: data.mailingCountry ?? null,
+      description: data.description ?? null,
+      ownerId: data.ownerId ?? null,
+      organizationId: orgId,
+      externalId: data.externalId ?? null,
+      sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
+    } as any;
+
+    let contact;
+    let created = true;
+    if (data.externalId) {
+      const result = await storage.findOrCreateContactByExternalId(data.externalId, orgId, values);
+      contact = result.contact;
+      created = result.created;
+      if (!created) {
+        const sameIntent =
+          contact.firstName === data.firstName &&
+          contact.lastName === data.lastName &&
+          (normalizeEmail(contact.email) || null) === (normalizeEmail(data.email) || null);
+        if (sameIntent) {
+          const payload = await withLegacyId("Contact", formatContactResponse(contact));
+          attachVersion(res, payload, contact.updatedAt);
+          return res.status(200).json({ duplicate: true, data: payload });
+        }
+        return apiError(res, 409, "IDEMPOTENCY_CONFLICT", "External ID already used by a different contact", {
+          message: `A contact with externalId "${data.externalId}" already exists in this organization but has different identity fields.`,
+          existingContactId: contact.id,
+        });
+      }
+    } else {
+      contact = await storage.createContact(values);
+    }
+
+    const payload = await withLegacyId("Contact", formatContactResponse(contact));
+    attachVersion(res, payload, contact.updatedAt);
+    return res.status(201).json({ duplicate: false, data: payload });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating contact:", error);
+    return res.status(500).json({ error: "Failed to create contact", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+router.post("/opportunities", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Opportunity creation requires an API key bound to an organization",
+      });
+    }
+    const parsed = externalOpportunityCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "The opportunity payload is invalid",
+        details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+      });
+    }
+    const data = parsed.data;
+    if (!(await assertOwnerInOrg(data.ownerId, orgId, res))) return;
+
+    const refAccount = await storage.getAccountById(data.accountId);
+    if (!refAccount || !keyOrgOwns(refAccount, orgId)) {
+      return apiError(res, 404, "NOT_FOUND", "Related account not found", {
+        message: `No account found with ID: ${data.accountId}`,
+      });
+    }
+
+    const startDate = data.implementationStartDate ? new Date(data.implementationStartDate) : null;
+    const endDate = data.implementationEndDate ? new Date(data.implementationEndDate) : null;
+    const billingEnd = data.billingEndDate ? new Date(data.billingEndDate) : null;
+    if (startDate && endDate && startDate > endDate) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Implementation start date must be before end date", {
+        message: "implementationStartDate must not be after implementationEndDate",
+      });
+    }
+    if (endDate && billingEnd && billingEnd < endDate) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Billing end date must not be before implementation end date (billing start)", {
+        message: "billingEndDate must not be before implementationEndDate",
+      });
+    }
+
+    const values = {
+      accountId: data.accountId,
+      name: data.name,
+      closeDate: new Date(data.closeDate),
+      stage: data.stage ?? "prospecting",
+      amount: data.amount ?? null,
+      ownerId: data.ownerId ?? null,
+      probability: data.probability ?? 0,
+      status: data.status ?? null,
+      actualCloseDate: data.actualCloseDate ? new Date(data.actualCloseDate) : null,
+      actualRevenue: data.actualRevenue ?? null,
+      estCloseDate: data.estCloseDate ? new Date(data.estCloseDate) : null,
+      estRevenue: data.estRevenue ?? null,
+      rating: data.rating ?? null,
+      includeInForecast: data.includeInForecast ?? true,
+      implementationStartDate: startDate,
+      implementationEndDate: endDate,
+      billingEndDate: billingEnd,
+      description: data.description ?? null,
+      organizationId: orgId,
+      externalId: data.externalId ?? null,
+      sourceSystem: `External API (${req.apiKey?.name || "unknown key"})`,
+    } as any;
+
+    let opportunity;
+    let created = true;
+    if (data.externalId) {
+      const result = await storage.findOrCreateOpportunityByExternalId(data.externalId, orgId, values);
+      opportunity = result.opportunity;
+      created = result.created;
+      if (!created) {
+        if (opportunity.name === data.name && opportunity.accountId === data.accountId) {
+          const payload = await withLegacyId("Opportunity", formatOpportunityDetailResponse(opportunity));
+          attachVersion(res, payload, opportunity.updatedAt);
+          return res.status(200).json({ duplicate: true, data: payload });
+        }
+        return apiError(res, 409, "IDEMPOTENCY_CONFLICT", "External ID already used by a different opportunity", {
+          message: `An opportunity with externalId "${data.externalId}" already exists in this organization but has a different name or account.`,
+          existingOpportunityId: opportunity.id,
+        });
+      }
+    } else {
+      opportunity = await storage.createOpportunity(values);
+    }
+
+    const payload = await withLegacyId("Opportunity", formatOpportunityDetailResponse(opportunity));
+    attachVersion(res, payload, opportunity.updatedAt);
+    return res.status(201).json({ duplicate: false, data: payload });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating opportunity:", error);
+    return res.status(500).json({ error: "Failed to create opportunity", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+const externalLeadConvertSchema = z.object({
+  accountId: z.string().trim().min(1).max(100).optional(),
+  createAccount: z.boolean().optional(),
+  account: z.object({
+    name: z.string().trim().min(1).max(300).optional(),
+    type: z.enum(["customer", "prospect", "partner", "vendor", "other"]).optional(),
+    industry: optCreateStr(200),
+    website: optCreateStr(500),
+    phone: optCreateStr(50),
+    billingAddress: optCreateStr(1000),
+    shippingAddress: optCreateStr(1000),
+  }).strict().optional(),
+  createContact: z.boolean().optional(),
+  createOpportunity: z.boolean().optional(),
+  includeInForecast: z.boolean().optional(),
+  opportunity: z.object({
+    name: z.string().trim().min(1).max(300).optional(),
+    amount: decimalCreate.optional(),
+    stage: z.enum(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]).optional(),
+    closeDate: isoCreateDate.optional(),
+    probability: z.number().int().min(0).max(100).optional(),
+  }).strict().optional(),
+}).strict();
+
+router.post("/leads/:id/convert", requirePermission("crm.write"), async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Lead conversion requires an API key bound to an organization",
+      });
+    }
+    if (!req.params.id.startsWith("LEAD-")) {
+      return apiError(res, 404, "NOT_FOUND", "Lead not found", {
+        message: `No lead found with ID: ${req.params.id}`,
+      });
+    }
+    const parsed = externalLeadConvertSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "The convert payload is invalid",
+        details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+      });
+    }
+    const data = parsed.data;
+    const result = await storage.convertLead(req.params.id, orgId, {
+      accountId: data.accountId,
+      createAccount: data.accountId ? false : data.createAccount !== false,
+      accountData: data.account,
+      createContact: data.createContact !== false,
+      createOpportunity: data.createOpportunity === true,
+      opportunityData: data.opportunity
+        ? { ...data.opportunity, includeInForecast: data.includeInForecast }
+        : (data.includeInForecast !== undefined ? { includeInForecast: data.includeInForecast } : undefined),
+    });
+
+    if (result.status === "not_found") {
+      return apiError(res, 404, "NOT_FOUND", "Lead not found", {
+        message: `No lead found with ID: ${req.params.id}`,
+      });
+    }
+    if (result.status === "bad_account") {
+      return apiError(res, 404, "NOT_FOUND", "Related account not found", {
+        message: `No account found with ID: ${data.accountId}`,
+      });
+    }
+    if (result.status === "conflict") {
+      return apiError(res, 409, "CONVERSION_CONFLICT", "Lead already converted with different targets", {
+        message: "This lead was already converted to a different account. The existing conversion was not changed.",
+      });
+    }
+
+    const organization = await storage.getOrganizationById(orgId);
+    const leadPayload = await withLegacyId("Lead", formatLeadResponse(result.lead, organization?.name ?? null));
+    let accountPayload = null;
+    let contactPayload = null;
+    let opportunityPayload = null;
+    const accountId = result.status === "already_converted" ? result.accountId : result.account?.id ?? null;
+    const contactId = result.status === "already_converted" ? result.contactId : result.contact?.id ?? null;
+    const opportunityId = result.status === "already_converted" ? result.opportunityId : result.opportunity?.id ?? null;
+    if (accountId) {
+      const account = result.status === "converted" ? result.account : await storage.getAccountById(accountId);
+      if (account) accountPayload = await withLegacyId("Account", formatAccountDetailResponse(account));
+    }
+    if (contactId) {
+      const contact = result.status === "converted" ? result.contact : await storage.getContactById(contactId);
+      if (contact) contactPayload = await withLegacyId("Contact", formatContactResponse(contact));
+    }
+    if (opportunityId) {
+      const opportunity = result.status === "converted" ? result.opportunity : await storage.getOpportunityById(opportunityId);
+      if (opportunity) opportunityPayload = await withLegacyId("Opportunity", formatOpportunityDetailResponse(opportunity));
+    }
+
+    attachVersion(res, leadPayload, result.lead.updatedAt);
+    const created = result.status === "converted";
+    return res.status(created ? 201 : 200).json({
+      converted: true,
+      created,
+      data: {
+        lead: leadPayload,
+        account: accountPayload,
+        contact: contactPayload,
+        opportunity: opportunityPayload,
+        conversion: {
+          leadId: result.lead.id,
+          accountId,
+          contactId,
+          opportunityId,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error converting lead:", error);
+    return res.status(500).json({ error: "Failed to convert lead", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+// ========== COMMENTS ==========
+
+const COMMENT_ROUTE_ENTITIES: Record<string, {
+  label: CommentEntity;
+  readPermission: Parameters<typeof requirePermission>[0];
+  writePermission: Parameters<typeof requirePermission>[0];
+  getById: (id: string, orgId: string) => Promise<any>;
+}> = {
+  accounts: { label: "Account", readPermission: "crm.read", writePermission: "crm.write", getById: (id) => storage.getAccountById(id) },
+  contacts: { label: "Contact", readPermission: "crm.read", writePermission: "crm.write", getById: (id) => storage.getContactById(id) },
+  leads: { label: "Lead", readPermission: "crm.read", writePermission: "crm.write", getById: (id) => storage.getLeadById(id) },
+  opportunities: { label: "Opportunity", readPermission: "crm.read", writePermission: "crm.write", getById: (id) => storage.getOpportunityById(id) },
+  activities: { label: "Activity", readPermission: "activities.read", writePermission: "activities.write", getById: (id, orgId) => storage.getActivityById(id, orgId) },
+};
+
+const externalCommentCreateSchema = z.object({
+  body: z.string().trim().min(1).max(10000),
+  parentId: z.string().trim().min(1).max(50).optional(),
+}).strict();
+
+const firstClassCommentCreateSchema = z.object({
+  entityType: z.enum(["account", "contact", "lead", "opportunity", "activity"]),
+  entityId: z.string().trim().min(1).max(100),
+  body: z.string().trim().min(1).max(10000),
+  parentId: z.string().trim().min(1).max(50).optional(),
+}).strict();
+
+const ENTITY_TYPE_TO_ROUTE: Record<string, string> = {
+  account: "accounts",
+  contact: "contacts",
+  lead: "leads",
+  opportunity: "opportunities",
+  activity: "activities",
+};
+
+router.post("/comments", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Comment creation requires an API key bound to an organization",
+      });
+    }
+    const parsed = firstClassCommentCreateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "The comment payload is invalid",
+        details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+      });
+    }
+    const routeKey = ENTITY_TYPE_TO_ROUTE[parsed.data.entityType];
+    const cfg = COMMENT_ROUTE_ENTITIES[routeKey];
+    const granted = req.apiKey?.permissions ?? [];
+    if (!granted.includes(cfg.writePermission)) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Insufficient permissions", {
+        message: `This API key does not have the '${cfg.writePermission}' permission required for this operation`,
+        requiredPermission: cfg.writePermission,
+      });
+    }
+    const parent = await cfg.getById(parsed.data.entityId, orgId);
+    if (!parent || (routeKey !== "activities" && !keyOrgOwns(parent, orgId))) {
+      return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
+        message: `No ${cfg.label.toLowerCase()} found with ID: ${parsed.data.entityId}`,
+      });
+    }
+    const createdBy = req.apiKey?.createdBy;
+    if (!createdBy) {
+      return res.status(500).json({ error: "Failed to create comment", message: "API key has no owning user" });
+    }
+    let depth = 0;
+    if (parsed.data.parentId) {
+      const [parentComment] = await db.select().from(comments).where(eq(comments.id, parsed.data.parentId)).limit(1);
+      if (!parentComment || parentComment.entity !== cfg.label || parentComment.entityId !== parent.id) {
+        return apiError(res, 400, "VALIDATION_ERROR", "Invalid parent comment", {
+          message: "parentId must refer to a comment on the same record",
+        });
+      }
+      depth = parentComment.depth + 1;
+      if (depth > 2) {
+        return apiError(res, 400, "VALIDATION_ERROR", "Maximum comment depth exceeded", {
+          message: "Comments may be nested at most 2 levels",
+        });
+      }
+    }
+    const [created] = await db.insert(comments).values({
+      entity: cfg.label,
+      entityId: parent.id,
+      body: parsed.data.body,
+      parentId: parsed.data.parentId || null,
+      depth,
+      createdBy,
+    }).returning();
+    const author = await storage.getUserById(createdBy);
+    return res.status(201).json({ data: formatExternalComment(created, author?.name ?? null) });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error creating comment:", error);
+    return res.status(500).json({ error: "Failed to create comment", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+router.get("/comments", async (req: ApiKeyRequest, res) => {
+  try {
+    const orgId = getKeyOrgId(req);
+    if (!orgId) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+        message: "Comment access requires an API key bound to an organization",
+      });
+    }
+    const entityType = qs(req.query.entityType);
+    const entityId = qs(req.query.entityId);
+    if (!entityType || !entityId || !ENTITY_TYPE_TO_ROUTE[entityType]) {
+      return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+        message: "entityType and entityId are required; entityType must be account, contact, lead, opportunity, or activity",
+      });
+    }
+    const routeKey = ENTITY_TYPE_TO_ROUTE[entityType];
+    const cfg = COMMENT_ROUTE_ENTITIES[routeKey];
+    const granted = req.apiKey?.permissions ?? [];
+    if (!granted.includes(cfg.readPermission)) {
+      return apiError(res, 403, "INSUFFICIENT_SCOPE", "Insufficient permissions", {
+        requiredPermission: cfg.readPermission,
+      });
+    }
+    const parent = await loadRecordForRead(cfg.label, (id) => cfg.getById(id, orgId), entityId, orgId);
+    if (!parent || (routeKey !== "activities" && !keyOrgOwns(parent, orgId))) {
+      return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
+        message: `No ${cfg.label.toLowerCase()} found with ID: ${entityId}`,
+      });
+    }
+    const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "100"), 10) || 100, 1), 1000);
+    const offsetNum = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
+    const aliases = commentEntityAliases(cfg.label);
+    const rows = await db.select({
+      comment: comments,
+      createdByName: users.name,
+    }).from(comments)
+      .leftJoin(users, eq(comments.createdBy, users.id))
+      .where(and(inArray(comments.entity, aliases), eq(comments.entityId, parent.id)))
+      .orderBy(desc(comments.createdAt))
+      .limit(limitNum)
+      .offset(offsetNum);
+    const [{ count: total }] = await db.select({ count: sql<number>`count(*)` })
+      .from(comments)
+      .where(and(inArray(comments.entity, aliases), eq(comments.entityId, parent.id)));
+    return res.json({
+      data: rows.map(r => formatExternalComment(r.comment, r.createdByName ?? null)),
+      pagination: {
+        total: Number(total),
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + rows.length < Number(total),
+      },
+    });
+  } catch (error) {
+    console.error("[EXTERNAL-API] Error listing comments:", error);
+    return res.status(500).json({ error: "Failed to list comments", message: error instanceof Error ? error.message : "Unknown error" });
+  }
+});
+
+function formatExternalComment(row: any, createdByName: string | null) {
+  return {
+    id: row.id,
+    entity: row.entity,
+    entityId: row.entityId,
+    parentId: row.parentId ?? null,
+    depth: row.depth,
+    body: row.body,
+    createdBy: row.createdBy,
+    createdByName,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+for (const [entityKey, cfg] of Object.entries(COMMENT_ROUTE_ENTITIES)) {
+  router.get(`/${entityKey}/:id/comments`, requirePermission(cfg.readPermission), async (req: ApiKeyRequest, res) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) {
+        return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+          message: "Comment access requires an API key bound to an organization",
+        });
+      }
+      const parent = await loadRecordForRead(cfg.label, (id) => cfg.getById(id, orgId), req.params.id, orgId);
+      if (!parent || (entityKey !== "activities" && !keyOrgOwns(parent, orgId))) {
+        return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
+          message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
+        });
+      }
+      const limitNum = Math.min(Math.max(parseInt(String(req.query.limit || "100"), 10) || 100, 1), 1000);
+      const offsetNum = Math.max(parseInt(String(req.query.offset || "0"), 10) || 0, 0);
+      const aliases = commentEntityAliases(cfg.label);
+      const rows = await db.select({
+        comment: comments,
+        createdByName: users.name,
+      }).from(comments)
+        .leftJoin(users, eq(comments.createdBy, users.id))
+        .where(and(inArray(comments.entity, aliases), eq(comments.entityId, parent.id)))
+        .orderBy(desc(comments.createdAt))
+        .limit(limitNum)
+        .offset(offsetNum);
+      const [{ count: total }] = await db.select({ count: sql<number>`count(*)` })
+        .from(comments)
+        .where(and(inArray(comments.entity, aliases), eq(comments.entityId, parent.id)));
+      return res.json({
+        data: rows.map(r => formatExternalComment(r.comment, r.createdByName ?? null)),
+        pagination: {
+          total: Number(total),
+          limit: limitNum,
+          offset: offsetNum,
+          hasMore: offsetNum + rows.length < Number(total),
+        },
+      });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error listing ${cfg.label} comments:`, error);
+      return res.status(500).json({ error: "Failed to list comments", message: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+
+  router.post(`/${entityKey}/:id/comments`, requirePermission(cfg.writePermission), async (req: ApiKeyRequest, res) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) {
+        return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+          message: "Comment creation requires an API key bound to an organization",
+        });
+      }
+      const parent = await cfg.getById(req.params.id, orgId);
+      if (!parent || (entityKey !== "activities" && !keyOrgOwns(parent, orgId))) {
+        return apiError(res, 404, "NOT_FOUND", `${cfg.label} not found`, {
+          message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
+        });
+      }
+      const parsed = externalCommentCreateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return apiError(res, 400, "VALIDATION_ERROR", "Validation failed", {
+          message: "The comment payload is invalid",
+          details: parsed.error.errors.map(e => ({ field: e.path.join(".") || "(root)", message: e.message })),
+        });
+      }
+      const createdBy = req.apiKey?.createdBy;
+      if (!createdBy) {
+        return res.status(500).json({ error: "Failed to create comment", message: "API key has no owning user" });
+      }
+      let depth = 0;
+      if (parsed.data.parentId) {
+        const [parentComment] = await db.select().from(comments).where(eq(comments.id, parsed.data.parentId)).limit(1);
+        if (!parentComment || parentComment.entity !== cfg.label || parentComment.entityId !== parent.id) {
+          return apiError(res, 400, "VALIDATION_ERROR", "Invalid parent comment", {
+            message: "parentId must refer to a comment on the same record",
+          });
+        }
+        depth = parentComment.depth + 1;
+        if (depth > 2) {
+          return apiError(res, 400, "VALIDATION_ERROR", "Maximum comment depth exceeded", {
+            message: "Comments may be nested at most 2 levels",
+          });
+        }
+      }
+      const [created] = await db.insert(comments).values({
+        entity: cfg.label,
+        entityId: parent.id,
+        body: parsed.data.body,
+        parentId: parsed.data.parentId || null,
+        depth,
+        createdBy,
+      }).returning();
+      const author = await storage.getUserById(createdBy);
+      return res.status(201).json({ data: formatExternalComment(created, author?.name ?? null) });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error creating ${cfg.label} comment:`, error);
+      return res.status(500).json({ error: "Failed to create comment", message: error instanceof Error ? error.message : "Unknown error" });
+    }
+  });
+}
 
 export default router;

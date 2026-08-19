@@ -1159,7 +1159,7 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
   editHistory: true,
 }).extend({
   body: z.string().min(1, "Comment body is required"),
-  entity: z.enum(["Account", "Contact", "Lead", "Opportunity"]),
+  entity: z.enum(["Account", "Contact", "Lead", "Opportunity", "Activity"]),
   entityId: z.string().min(1, "Entity ID is required"),
   depth: z.number().max(2, "Maximum comment depth is 2"),
 });

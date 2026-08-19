@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Health Trixss CRM External API
-  version: "1.6"
+  version: "1.7"
   description: |
     Secure external access to Health Trixss CRM data for forecasting
     applications, BI tools, and third-party integrations.
@@ -20,11 +20,12 @@ info:
     ## Permission scopes
     Each key carries permission scopes. Routes enforce:
     - `crm.read` — all GET endpoints (accounts, opportunities, contacts, leads, logs)
-    - `crm.write` — POST /leads, PATCH on accounts/contacts/leads/opportunities,
-      POST/DELETE opportunity-contact links
+    - `crm.write` — POST /leads, POST /accounts, POST /contacts, POST /opportunities,
+      POST /leads/{id}/convert, PATCH on accounts/contacts/leads/opportunities,
+      POST/DELETE opportunity-contact links, CRM entity comments create
     - `activities.read` — GET /activities, GET /activities/:id, GET /activities/:id/tags
     - `activities.write` — POST /activities, PATCH /activities/:id,
-      POST/DELETE /activities/:id/tags
+      POST/DELETE /activities/:id/tags, activity comment create
     - Tag management (`/tags`) and CRM entity-tag routes use `crm.read` / `crm.write`.
       All tag routes require an organization-scoped key.
     Missing scopes return `403` with a `requiredPermission` field. Legacy keys
@@ -81,6 +82,7 @@ tags:
   - name: Activities
   - name: Documents
   - name: Tags
+  - name: Comments
   - name: Logs
 
 paths:
@@ -782,13 +784,49 @@ paths:
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Accounts]
+      operationId: createAccount
+      summary: Create an account (org-scoped key required)
+      description: >
+        Requires `crm.write` and an organization-scoped key. Canonical ACCT-*
+        ID is generated server-side. Optional `externalId` is an idempotency
+        token (200 duplicate vs 409 IDEMPOTENCY_CONFLICT).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [duplicate, data]
+                properties:
+                  duplicate: { type: boolean, const: false }
+                  data: { $ref: "#/components/schemas/AccountDetail" }
+        "200":
+          description: Idempotent replay of the same externalId
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "409":
+          description: externalId reused with a different name
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
 
   /accounts/{id}:
     get:
       tags: [Accounts]
       operationId: getAccount
       summary: Get account details
-      description: Requires the `crm.read` scope. 404 for missing or cross-org records.
+      description: >
+        Requires the `crm.read` scope. 404 for missing or cross-org records.
+        Canonical ID or legacy ID for this entity type. Response `id` is always canonical.
       parameters:
         - $ref: "#/components/parameters/RecordId"
         - name: expand
@@ -837,7 +875,7 @@ paths:
       operationId: patchAccount
       summary: Update an account (partial)
       description: >
-        Strict partial update. Requires the `crm.write` scope. Only allowlisted
+        Canonical ID required. Strict partial update. Requires the `crm.write` scope. Only allowlisted
         mutable fields are accepted; immutable fields (`id`, `organizationId`,
         `createdAt`, `updatedAt`, `sourceSystem`, `sourceRecordId`,
         `importStatus`, `importNotes`) and unknown fields return 400 listing
@@ -987,6 +1025,28 @@ paths:
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Opportunities]
+      operationId: createOpportunity
+      summary: Create an opportunity (org-scoped key required)
+      description: >
+        Requires `crm.write` and an organization-scoped key. `accountId` must
+        be a canonical ACCT-* in the same org. `closeDate` is required.
+        Optional `externalId` is an idempotency token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OpportunityCreate"
+      responses:
+        "201":
+          description: Opportunity created
+        "200":
+          description: Idempotent replay
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /opportunities/{id}:
     get:
@@ -1242,13 +1302,35 @@ paths:
         "403": { $ref: "#/components/responses/OrgKeyRequired" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
+    post:
+      tags: [Contacts]
+      operationId: createContact
+      summary: Create a contact (org-scoped key required)
+      description: >
+        Requires `crm.write` and an organization-scoped key. `accountId` must
+        be a canonical ACCT-* in the same org when provided. Optional
+        `externalId` is an idempotency token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContactCreate"
+      responses:
+        "201":
+          description: Contact created
+        "200":
+          description: Idempotent replay
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /contacts/{id}:
     get:
       tags: [Contacts]
       operationId: getContact
       summary: Get contact details (org-scoped key required)
-      description: Requires the `crm.read` scope AND an organization-scoped key.
+      description: Requires the `crm.read` scope AND an organization-scoped key. Canonical or legacy ID. Response id is always canonical.
       parameters:
         - $ref: "#/components/parameters/RecordId"
         - name: expand
@@ -1549,6 +1631,227 @@ paths:
         "412": { $ref: "#/components/responses/StaleRecord" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
+
+  /comments:
+    get:
+      tags: [Comments]
+      operationId: listComments
+      summary: List comments for an entity
+      description: >
+        Requires an org-scoped key. entityType + entityId are required.
+        GET may accept a legacy entityId (read-only). Activity comments
+        require activities.read; others require crm.read.
+      parameters:
+        - name: entityType
+          in: query
+          required: true
+          schema: { type: string, enum: [account, contact, lead, opportunity, activity] }
+        - name: entityId
+          in: query
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createComment
+      summary: Add a comment
+      description: >
+        Canonical entityId required. Activity comments require activities.write;
+        others require crm.write. Org-scoped key required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [entityType, entityId, body]
+              properties:
+                entityType: { type: string, enum: [account, contact, lead, opportunity, activity] }
+                entityId: { type: string }
+                body: { type: string, minLength: 1, maxLength: 10000 }
+                parentId: { type: string }
+      responses:
+        "201":
+          description: Comment created
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /leads/{id}/convert:
+    post:
+      tags: [Leads]
+      operationId: convertLead
+      summary: Convert a lead (canonical LEAD-* required)
+      description: >
+        Requires `crm.write` and an organization-scoped key. `id` must be a
+        canonical LEAD-* ID. Optional `accountId` must be a canonical ACCT-*
+        in the same org. Contact is always created. Opportunity is created
+        only when `createOpportunity` is true. Already-converted leads return
+        200 with the existing records. Does not copy comments, tags, or activities.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadConvert"
+      responses:
+        "201":
+          description: Lead converted
+        "200":
+          description: Already converted; existing records returned
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/OrgKeyRequired" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: CONVERSION_CONFLICT
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /accounts/{id}/comments:
+    get:
+      tags: [Comments]
+      operationId: listAccountComments
+      summary: List comments on an account
+      description: Read-only. Canonical or legacy account ID may be accepted. Response entity IDs are canonical.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createAccountComment
+      summary: Add a comment on an account
+      description: Canonical account ID required.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: Comment created
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contacts/{id}/comments:
+    get:
+      tags: [Comments]
+      operationId: listContactComments
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createContactComment
+      description: Canonical contact ID required.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: Comment created
+
+  /leads/{id}/comments:
+    get:
+      tags: [Comments]
+      operationId: listLeadComments
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createLeadComment
+      description: Canonical lead ID required.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: Comment created
+
+  /opportunities/{id}/comments:
+    get:
+      tags: [Comments]
+      operationId: listOpportunityComments
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createOpportunityComment
+      description: Canonical opportunity ID required.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: Comment created
+
+  /activities/{id}/comments:
+    get:
+      tags: [Comments]
+      operationId: listActivityComments
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Paginated comments
+    post:
+      tags: [Comments]
+      operationId: createActivityComment
+      description: Canonical activity ID required. Requires activities.write.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreate"
+      responses:
+        "201":
+          description: Comment created
 
   /activities:
     get:
@@ -2560,6 +2863,23 @@ components:
           items:
             $ref: "#/components/schemas/EmbeddedOpportunity"
 
+    AccountCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 300 }
+        accountNumber: { type: [string, "null"], maxLength: 100 }
+        type: { type: [string, "null"], enum: [customer, prospect, partner, vendor, other, null] }
+        category: { type: [string, "null"] }
+        ownerId: { type: [string, "null"] }
+        industry: { type: [string, "null"] }
+        website: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        billingAddress: { type: [string, "null"] }
+        shippingAddress: { type: [string, "null"] }
+        externalId: { type: string, minLength: 1, maxLength: 100 }
+
     AccountDetail:
       allOf:
         - $ref: "#/components/schemas/AccountListItem"
@@ -2569,6 +2889,10 @@ components:
             phone: { type: [string, "null"] }
             billingAddress: { type: [string, "null"] }
             shippingAddress: { type: [string, "null"] }
+            legacyId:
+              type: [string, "null"]
+              readOnly: true
+              description: Pre-canonical ID when this record was renamed; never writable.
             contacts:
               type: array
               description: Present only with expand=contacts.
@@ -2769,6 +3093,96 @@ components:
         organizationName: { type: [string, "null"] }
         createdAt: { type: [string, "null"], format: date-time }
         updatedAt: { type: [string, "null"], format: date-time }
+        convertedAccountId: { type: [string, "null"] }
+        convertedContactId: { type: [string, "null"] }
+        convertedOpportunityId: { type: [string, "null"] }
+        convertedAt: { type: [string, "null"], format: date-time }
+        legacyId: { type: [string, "null"], readOnly: true }
+
+    ContactCreate:
+      type: object
+      additionalProperties: false
+      required: [firstName, lastName]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 200 }
+        lastName: { type: string, minLength: 1, maxLength: 200 }
+        accountId: { type: [string, "null"], description: Canonical ACCT-* only }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        mobile: { type: [string, "null"] }
+        title: { type: [string, "null"] }
+        department: { type: [string, "null"] }
+        mailingStreet: { type: [string, "null"] }
+        mailingCity: { type: [string, "null"] }
+        mailingState: { type: [string, "null"] }
+        mailingPostalCode: { type: [string, "null"] }
+        mailingCountry: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        ownerId: { type: [string, "null"] }
+        externalId: { type: string, minLength: 1, maxLength: 100 }
+
+    OpportunityCreate:
+      type: object
+      additionalProperties: false
+      required: [accountId, name, closeDate]
+      properties:
+        accountId: { type: string, description: Canonical ACCT-* only }
+        name: { type: string, minLength: 1, maxLength: 300 }
+        closeDate: { type: string, format: date-time }
+        stage: { type: string, enum: [prospecting, qualification, proposal, negotiation, closed_won, closed_lost] }
+        amount: { $ref: "#/components/schemas/Money" }
+        ownerId: { type: [string, "null"] }
+        probability: { type: [integer, "null"] }
+        status: { type: [string, "null"] }
+        includeInForecast: { type: boolean }
+        description: { type: [string, "null"] }
+        externalId: { type: string, minLength: 1, maxLength: 100 }
+
+    LeadConvert:
+      type: object
+      additionalProperties: false
+      properties:
+        accountId: { type: string, description: Canonical ACCT-* of an existing same-org account }
+        createAccount: { type: boolean }
+        createOpportunity: { type: boolean }
+        account:
+          type: object
+          additionalProperties: false
+          properties:
+            name: { type: string }
+            type: { type: string }
+            industry: { type: [string, "null"] }
+        opportunity:
+          type: object
+          additionalProperties: false
+          properties:
+            name: { type: string }
+            amount: { $ref: "#/components/schemas/Money" }
+            stage: { type: string }
+            closeDate: { type: string, format: date-time }
+            probability: { type: integer }
+
+    CommentCreate:
+      type: object
+      additionalProperties: false
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        parentId: { type: string }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        entity: { type: string, enum: [Account, Contact, Lead, Opportunity, Activity] }
+        entityId: { type: string }
+        parentId: { type: [string, "null"] }
+        depth: { type: integer }
+        body: { type: string }
+        createdBy: { type: string }
+        createdByName: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     LeadCreate:
       type: object

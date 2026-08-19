@@ -5,7 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDefaultRolesAndPermissions } from "./rbac";
 import { initializeDefaultOrganization, runStartupColumnMigration } from "./seed";
-import { storage, fixEntityTagsEntityNames } from "./db";
+import { storage, fixEntityTagsEntityNames, fixCommentEntityNames } from "./db";
 import { csrfProtection, generateCsrfToken } from "./csrf-protection";
 
 // Set default BACKUP_ENCRYPTION_KEY for development if not already set
@@ -141,6 +141,7 @@ app.use((req, res, next) => {
   
   // Fix any entity_tags rows with wrong entity name format
   await fixEntityTagsEntityNames();
+  await fixCommentEntityNames();
   
   // CSRF token endpoint - generates and returns token for frontend
   app.get("/api/csrf-token", (req, res) => {

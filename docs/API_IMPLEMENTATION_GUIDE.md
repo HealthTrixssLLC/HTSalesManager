@@ -109,7 +109,11 @@ User IDs (`ownerId`, resource `userId`) are UUID **strings**, not numbers.
 | GET | `/contacts` | crm.read | **required** | List contacts |
 | GET | `/contacts/:id` | crm.read | **required** | Contact detail |
 | PATCH | `/contacts/:id` | crm.write | optional* | Partial update |
+| POST | `/accounts` | crm.write | **required** | Create account |
+| POST | `/contacts` | crm.write | **required** | Create contact |
+| POST | `/opportunities` | crm.write | **required** | Create opportunity |
 | POST | `/leads` | crm.write | **required** | Create lead (dedup by email) |
+| POST | `/leads/:id/convert` | crm.write | **required** | Convert lead (canonical LEAD-*) |
 | GET | `/leads` | crm.read | **required** | List leads |
 | GET | `/leads/:id` | crm.read | **required** | Lead detail |
 | PATCH | `/leads/:id` | crm.write | optional* | Partial update |
@@ -122,6 +126,8 @@ User IDs (`ownerId`, resource `userId`) are UUID **strings**, not numbers.
 | GET | `/documents/:id` | documents.read | **required** | Document detail (with links) |
 | POST | `/documents/:id/links` | documents.write | **required** | Link document to an entity |
 | DELETE | `/documents/:id/links/:entityType/:entityId` | documents.write | **required** | Remove a document link |
+| GET | `/{entity}/:id/comments` | crm.read / activities.read | **required** | List comments |
+| POST | `/{entity}/:id/comments` | crm.write / activities.write | **required** | Add comment (canonical entity ID) |
 | GET | `/logs` | crm.read | optional | This key's access logs |
 
 \* "optional" for writes means a system key is accepted, but org-scoped keys

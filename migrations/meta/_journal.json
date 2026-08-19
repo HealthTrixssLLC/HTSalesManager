@@ -78,6 +78,13 @@
       "when": 1755996000000,
       "tag": "0017_register_leads_org_email_unique_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776614400000,
+      "tag": "0019_normalize_comment_entity",
+      "breakpoints": true
     }
   ]
 }

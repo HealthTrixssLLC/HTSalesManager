@@ -51,6 +51,13 @@ export interface IStorage {
   // ========== ACCOUNTS ==========
   getAllAccounts(orgId?: string, filters?: AccountListFilters): Promise<Account[]>;
   getAccountById(id: string): Promise<Account | undefined>;
+  getLegacyId(entity: string, canonicalId: string): Promise<string | null>;
+  getLegacyIds(entity: string, canonicalIds: string[]): Promise<Record<string, string>>;
+  findCanonicalIdByLegacy(entity: string, legacyId: string): Promise<string | undefined>;
+  findOrCreateAccountByExternalId(externalId: string, orgId: string, account: InsertAccount): Promise<{ account: Account; created: boolean }>;
+  findOrCreateContactByExternalId(externalId: string, orgId: string, contact: InsertContact): Promise<{ contact: Contact; created: boolean }>;
+  findOrCreateOpportunityByExternalId(externalId: string, orgId: string, opportunity: InsertOpportunity): Promise<{ opportunity: Opportunity; created: boolean }>;
+  convertLead(leadId: string, orgId: string, input: ConvertLeadInput): Promise<ConvertLeadResult>;
   createAccount(account: InsertAccount): Promise<Account>;
   updateAccount(id: string, account: Partial<InsertAccount>): Promise<Account>;
   deleteAccount(id: string): Promise<void>;
@@ -218,6 +225,46 @@ export interface IStorage {
     closeDate: string | null;
   }[]>;
 }
+
+export interface ConvertLeadInput {
+  accountId?: string | null;
+  createAccount?: boolean;
+  accountName?: string;
+  accountData?: {
+    name?: string;
+    type?: string;
+    industry?: string | null;
+    website?: string | null;
+    phone?: string | null;
+    billingAddress?: string | null;
+    shippingAddress?: string | null;
+  };
+  createContact?: boolean;
+  createOpportunity?: boolean;
+  opportunityName?: string;
+  opportunityAmount?: string;
+  opportunityData?: {
+    name?: string;
+    stage?: string;
+    amount?: string | number | null;
+    probability?: number;
+    closeDate?: string | Date;
+    includeInForecast?: boolean;
+  };
+}
+
+export type ConvertLeadResult =
+  | { status: "not_found" }
+  | { status: "bad_account" }
+  | { status: "already_converted"; lead: Lead; accountId: string | null; contactId: string | null; opportunityId: string | null }
+  | { status: "conflict"; lead: Lead }
+  | {
+      status: "converted";
+      lead: Lead;
+      account: Account | null;
+      contact: Contact | null;
+      opportunity: Opportunity | null;
+    };
 
 export interface AccountListFilters {
   tagId?: string;         // Only records that carry this tag (entity_tags join)
