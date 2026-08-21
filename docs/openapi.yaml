@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Health Trixss CRM External API
-  version: "1.7"
+  version: "1.8"
   description: |
     Secure external access to Health Trixss CRM data for forecasting
     applications, BI tools, and third-party integrations.
@@ -21,7 +21,8 @@ info:
     Each key carries permission scopes. Routes enforce:
     - `crm.read` — all GET endpoints (accounts, opportunities, contacts, leads, logs)
     - `crm.write` — POST /leads, POST /accounts, POST /contacts, POST /opportunities,
-      POST /leads/{id}/convert, PATCH on accounts/contacts/leads/opportunities,
+      POST /leads/{id}/convert, POST /leads/{id}/archive, POST /leads/{id}/restore,
+      PATCH on accounts/contacts/leads/opportunities,
       POST/DELETE opportunity-contact links, CRM entity comments create
     - `activities.read` — GET /activities, GET /activities/:id, GET /activities/:id/tags
     - `activities.write` — POST /activities, PATCH /activities/:id,
@@ -46,7 +47,7 @@ info:
     permission failures, and rate limiting carry an additive `code` field
     alongside the legacy `error`/`message` strings:
     `VALIDATION_ERROR` (400), `INSUFFICIENT_SCOPE` (403), `NOT_FOUND` (404),
-    `TAG_ALREADY_EXISTS` (409), `IDEMPOTENCY_CONFLICT` (409),
+    `LEAD_ARCHIVED` (409), `TAG_ALREADY_EXISTS` (409), `IDEMPOTENCY_CONFLICT` (409),
     `STALE_RECORD` (412), `RATE_LIMITED` (429). Older read-endpoint errors
     may omit `code`; clients should treat it as optional.
 
@@ -1432,7 +1433,8 @@ paths:
         rejected (400). Duplicate detection: if a lead with the same email
         (case-insensitive) already exists in the organization, no new record
         is created and the existing lead is returned with `duplicate: true`
-        and HTTP 200.
+         and HTTP 200, including `archived: true` when the matching lead is
+         archived. Restore that record instead of creating a replacement.
       requestBody:
         required: true
         content:
@@ -1534,6 +1536,11 @@ paths:
           schema:
             type: string
             enum: [website, referral, phone, email, event, partner, lead_generation, other]
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: Include archived Leads for historical review. Active Leads only are returned by default.
         - $ref: "#/components/parameters/UpdatedSince"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
@@ -1563,7 +1570,7 @@ paths:
       tags: [Leads]
       operationId: getLead
       summary: Get lead details (org-scoped key required)
-      description: Requires the `crm.read` scope AND an organization-scoped key.
+      description: Requires the `crm.read` scope AND an organization-scoped key. Archived Leads remain readable by canonical ID so related history can be inspected.
       parameters:
         - $ref: "#/components/parameters/RecordId"
         - name: expand
@@ -1599,7 +1606,9 @@ paths:
         reads and creation, this route accepts system keys (org-scoped keys
         can only modify their own organization's records). Supports
         optimistic concurrency via the optional `If-Match` header (412
-        `STALE_RECORD` on version mismatch).
+         `STALE_RECORD` on version mismatch). Archived Leads return `409` with
+         `code: LEAD_ARCHIVED`; restore them before modifying. Lifecycle fields
+         are immutable; use the archive/restore endpoints instead.
       parameters:
         - $ref: "#/components/parameters/RecordId"
         - $ref: "#/components/parameters/IfMatch"
@@ -1625,6 +1634,81 @@ paths:
                   data:
                     $ref: "#/components/schemas/Lead"
         "400": { $ref: "#/components/responses/PatchValidationError" }
+        "409":
+          description: LEAD_ARCHIVED — restore the Lead before modifying it.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /leads/{id}/archive:
+    post:
+      tags: [Leads]
+      operationId: archiveLead
+      summary: Archive a lead while preserving history
+      description: >
+        Requires `crm.write` and an organization-scoped key. Canonical
+        `LEAD-000001` IDs only. The operation does not delete the Lead or any
+        activities, comments, tags, documents, lead-generation links, or audit
+        history. It is idempotent: an already archived Lead returns 200 with
+        `alreadyArchived: true`. Optional strong `If-Match` protects against
+        stale writes.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: Archived Lead (or idempotent readback)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, alreadyArchived]
+                properties:
+                  data: { $ref: "#/components/schemas/Lead" }
+                  alreadyArchived: { type: boolean }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/InsufficientPermissions" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "412": { $ref: "#/components/responses/StaleRecord" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /leads/{id}/restore:
+    post:
+      tags: [Leads]
+      operationId: restoreLead
+      summary: Restore an archived lead
+      description: >
+        Requires `crm.write` and an organization-scoped key. Canonical
+        `LEAD-000001` IDs only. Restore clears the archive state while
+        preserving the Lead's existing business status and all history. It is
+        idempotent: an already active Lead returns 200 with `alreadyActive:
+        true`. Optional strong `If-Match` protects against stale writes.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: Active Lead (or idempotent readback)
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, alreadyActive]
+                properties:
+                  data: { $ref: "#/components/schemas/Lead" }
+                  alreadyActive: { type: boolean }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/InsufficientPermissions" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1690,9 +1774,11 @@ paths:
       description: >
         Requires `crm.write` and an organization-scoped key. `id` must be a
         canonical LEAD-* ID. Optional `accountId` must be a canonical ACCT-*
-        in the same org. Contact is always created. Opportunity is created
-        only when `createOpportunity` is true. Already-converted leads return
-        200 with the existing records. Does not copy comments, tags, or activities.
+        in the same org. A contact is created unless `createContact` is false.
+        Opportunity is created only when `createOpportunity` is true. Archived
+        Leads return `409` with `code: LEAD_ARCHIVED` and must be restored
+        before conversion. Already-converted leads return 200 with the existing
+        records. Does not copy comments, tags, or activities.
       requestBody:
         required: false
         content:
@@ -1709,7 +1795,7 @@ paths:
         "403": { $ref: "#/components/responses/OrgKeyRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: CONVERSION_CONFLICT
+          description: CONVERSION_CONFLICT or LEAD_ARCHIVED
         "429": { $ref: "#/components/responses/RateLimited" }
         "500": { $ref: "#/components/responses/ServerError" }
 
@@ -2758,6 +2844,7 @@ components:
         - VALIDATION_ERROR
         - INSUFFICIENT_SCOPE
         - NOT_FOUND
+        - LEAD_ARCHIVED
         - TAG_ALREADY_EXISTS
         - IDEMPOTENCY_CONFLICT
         - STALE_RECORD
@@ -3097,6 +3184,8 @@ components:
         convertedContactId: { type: [string, "null"] }
         convertedOpportunityId: { type: [string, "null"] }
         convertedAt: { type: [string, "null"], format: date-time }
+        archived: { type: boolean, readOnly: true, description: True when this Lead is archived from active workflows. }
+        archivedAt: { type: [string, "null"], format: date-time, readOnly: true }
         legacyId: { type: [string, "null"], readOnly: true }
 
     ContactCreate:

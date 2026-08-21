@@ -443,6 +443,9 @@ export class PostgresStorage implements IStorage {
       if (orgIds && orgIds.length > 0) {
         conditions.push(sql`l.organization_id IN (${sql.join(orgIds.map(id => sql`${id}`), sql`, `)})`);
       }
+      // Archived leads are retained for history but excluded from active CRM
+      // workflows unless an explicit historical view requests them.
+      if (!filters?.includeArchived) conditions.push(sql`l.archived_at IS NULL`);
       if (filters?.search) {
         const p = containsPattern(filters.search);
         conditions.push(sql`((l.first_name || ' ' || l.last_name) ILIKE ${p} OR l.company ILIKE ${p})`);
@@ -852,7 +855,9 @@ export class PostgresStorage implements IStorage {
   }
 
   async patchLead(id: string, orgId: string | undefined, fields: Record<string, any>, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
-    const conditions = [eq(schema.leads.id, id)];
+    // Keep the archive guard in the UPDATE predicate so a concurrent archive
+    // cannot slip between the external route's read and this write.
+    const conditions = [eq(schema.leads.id, id), isNull(schema.leads.archivedAt)];
     if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
     if (expectedUpdatedAt) conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
     const where = and(...conditions);
@@ -865,6 +870,40 @@ export class PostgresStorage implements IStorage {
     const result = await db.update(schema.leads)
       .set({ ...stripped, updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any })
       .where(where)
+      .returning();
+    return result[0];
+  }
+
+  async archiveLead(id: string, orgId: string | undefined, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
+    const conditions = [eq(schema.leads.id, id), isNull(schema.leads.archivedAt)];
+    if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
+    if (expectedUpdatedAt) {
+      conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
+    }
+    const result = await db.update(schema.leads)
+      .set({
+        archivedAt: new Date(),
+        archivedFromStatus: sql`${schema.leads.status}` as any,
+        updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any,
+      })
+      .where(and(...conditions))
+      .returning();
+    return result[0];
+  }
+
+  async restoreLead(id: string, orgId: string | undefined, expectedUpdatedAt?: Date): Promise<Lead | undefined> {
+    const conditions = [eq(schema.leads.id, id), isNotNull(schema.leads.archivedAt)];
+    if (orgId) conditions.push(eq(schema.leads.organizationId, orgId));
+    if (expectedUpdatedAt) {
+      conditions.push(sql`date_trunc('milliseconds', ${schema.leads.updatedAt}) = date_trunc('milliseconds', ${expectedUpdatedAt}::timestamptz)`);
+    }
+    const result = await db.update(schema.leads)
+      .set({
+        archivedAt: null,
+        archivedFromStatus: null,
+        updatedAt: sql`GREATEST(now(), ${schema.leads.updatedAt} + interval '1 millisecond')` as any,
+      })
+      .where(and(...conditions))
       .returning();
     return result[0];
   }
@@ -999,6 +1038,7 @@ export class PostgresStorage implements IStorage {
       await tx.execute(sql`SELECT id FROM leads WHERE id = ${leadId} FOR UPDATE`);
       const [lead] = await tx.select().from(schema.leads).where(eq(schema.leads.id, leadId)).limit(1);
       if (!lead || lead.organizationId !== orgId) return { status: "not_found" };
+      if (lead.archivedAt) return { status: "archived", lead };
 
       if (lead.status === "converted") {
         if (input.accountId && lead.convertedAccountId && input.accountId !== lead.convertedAccountId) {

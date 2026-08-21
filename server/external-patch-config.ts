@@ -25,6 +25,10 @@ export const IMMUTABLE_FIELDS = [
   "importStatus",
   "importNotes",
   "legacyId",
+  // Lead lifecycle transitions use dedicated archive/restore endpoints so
+  // history-preserving state cannot be changed by an arbitrary PATCH body.
+  "archivedAt",
+  "archivedFromStatus",
 ] as const;
 
 /** Per-entity allowlists of mutable fields (documented source of truth). */

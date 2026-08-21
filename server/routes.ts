@@ -1421,6 +1421,9 @@ export async function registerRoutes(app: Express) {
       if (result.status === "not_found") {
         return res.status(404).json({ error: "Lead not found" });
       }
+      if (result.status === "archived") {
+        return res.status(409).json({ error: "Lead is archived. Restore it before converting." });
+      }
       if (result.status === "bad_account") {
         return res.status(400).json({ error: "The specified account does not belong to this lead's organization" });
       }

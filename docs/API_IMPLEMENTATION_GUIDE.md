@@ -44,7 +44,7 @@ Each key carries a list of permission scopes, enforced per route:
 | Scope | Grants |
 |---|---|
 | `crm.read` | All GET endpoints: accounts, opportunities, contacts, leads, logs |
-| `crm.write` | `POST /leads`, `PATCH` on accounts/contacts/leads/opportunities, `POST`/`DELETE` opportunity-contact links |
+| `crm.write` | `POST /leads`, `POST /leads/:id/archive`, `POST /leads/:id/restore`, `PATCH` on accounts/contacts/leads/opportunities, `POST`/`DELETE` opportunity-contact links |
 | `activities.read` | `GET /activities`, `GET /activities/:id` |
 | `activities.write` | `POST /activities`, `PATCH /activities/:id` |
 | `documents.read` | `GET /documents`, `GET /documents/:id` |
@@ -114,6 +114,8 @@ User IDs (`ownerId`, resource `userId`) are UUID **strings**, not numbers.
 | POST | `/opportunities` | crm.write | **required** | Create opportunity |
 | POST | `/leads` | crm.write | **required** | Create lead (dedup by email) |
 | POST | `/leads/:id/convert` | crm.write | **required** | Convert lead (canonical LEAD-*) |
+| POST | `/leads/:id/archive` | crm.write | **required** | Archive lead and preserve related history |
+| POST | `/leads/:id/restore` | crm.write | **required** | Restore archived lead to active workflows |
 | GET | `/leads` | crm.read | **required** | List leads |
 | GET | `/leads/:id` | crm.read | **required** | Lead detail |
 | PATCH | `/leads/:id` | crm.write | optional* | Partial update |
@@ -299,8 +301,20 @@ Unknown fields return 400 with `rejectedFields` and `allowedFields`.
   PATCH, import, lead-gen approval).
 - **Lead dedup**: `POST /leads` with a meaningful email that matches an existing
   lead (case-insensitive and whitespace-trimmed, same org) creates nothing and
-  returns HTTP 200 with `duplicate: true` and the existing record. Empty or
-  whitespace-only emails do not trigger deduplication.
+  returns HTTP 200 with `duplicate: true` and the existing record. This remains
+  true for archived Leads; the response includes `archived: true` so a client
+  can explicitly restore the existing record. Empty or whitespace-only emails
+  do not trigger deduplication.
+- **Lead archival (External API 1.8)**: `POST /leads/:id/archive` is the supported
+  lifecycle-removal operation. It requires a canonical LEAD ID, an
+  organization-scoped `crm.write` key, and optionally a strong `If-Match` ETag.
+  It preserves every related CRM/history record and is idempotent. External
+  hard deletion is intentionally unsupported because CRM history must be
+  preserved. Archived Leads are excluded from normal Lead lists; pass
+  `includeArchived=true` for historical lists, while direct canonical-ID GET
+  remains available. `POST /leads/:id/restore` clears the archive state
+  idempotently and retains the Lead's prior business status. Archived Leads
+  return `409 LEAD_ARCHIVED` from PATCH and convert until restored.
 - **Document ↔ entity links**: a document can link to any number of
   `account|opportunity|contact|lead` records in its own organization; the
   (document, entityType, entityId) pair is unique — repeat links are
@@ -365,6 +379,7 @@ curl -X POST -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
 
 | Version | Changes |
 |---|---|
+| 1.8 | Lead archival lifecycle: `POST /leads/:id/archive` and `POST /leads/:id/restore`, active-only Lead list default with `includeArchived=true` history access, archived duplicate-email visibility, and ETag-protected state transitions. Archived PATCH and convert return `409 LEAD_ARCHIVED`. External hard Lead deletion remains unsupported. Migration: `0020_add_lead_archival.sql`; index: `leads_org_archived_idx`. |
 | 1.4 | Activity read endpoints (`GET /activities`, `GET /activities/:id`) with the `activities.read` scope, org-scoped key requirement, and server-side filters (`relatedType`, `relatedId`, `type`, `status`, `priority`, `dueBefore`, `dueAfter`, `updatedSince`, `limit`, `offset`). |
 | 1.3 | Document reference endpoints (`POST/GET /documents`, `GET /documents/:id`, `POST /documents/:id/links`, `DELETE /documents/:id/links/:entityType/:entityId`) with `documents.read`/`documents.write` scopes, org-bound key requirement, credential-safe `canonicalUrl` validation, and entity linking to accounts/opportunities/contacts/leads. |
 | 1.2 | Server-side list filters on accounts (`search`/`name`), opportunities (`search`, `accountId`, `status`, `stage`, `ownerId`, `rating`), contacts (`search`, `email`, `accountId`), and leads (`search`, `email`, `status`, `rating`, `source`); permission scopes (`crm.read`, `crm.write`, `activities.write`) enforced on every route; PATCH endpoints for accounts, contacts, leads, opportunities, activities with per-entity allowlists, immutable-field rejection, and opportunity date invariants; opportunity-contact link/unlink endpoints and `expand=contacts` on opportunity detail; `POST /activities`; authoritative OpenAPI 3.1 spec (`docs/openapi.yaml`). |

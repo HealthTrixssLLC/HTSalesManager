@@ -75,6 +75,8 @@ export interface IStorage {
   createLead(lead: InsertLead): Promise<Lead>;
   updateLead(id: string, lead: Partial<InsertLead>): Promise<Lead>;
   markLeadConverted(id: string, refs: { accountId: string | null; contactId: string | null; opportunityId: string | null }): Promise<Lead>;
+  archiveLead(id: string, orgId: string | undefined, expectedUpdatedAt?: Date): Promise<Lead | undefined>;
+  restoreLead(id: string, orgId: string | undefined, expectedUpdatedAt?: Date): Promise<Lead | undefined>;
   deleteLead(id: string): Promise<void>;
   
   // ========== OPPORTUNITIES ==========
@@ -255,6 +257,7 @@ export interface ConvertLeadInput {
 
 export type ConvertLeadResult =
   | { status: "not_found" }
+  | { status: "archived"; lead: Lead }
   | { status: "bad_account" }
   | { status: "already_converted"; lead: Lead; accountId: string | null; contactId: string | null; opportunityId: string | null }
   | { status: "conflict"; lead: Lead }
@@ -281,6 +284,7 @@ export interface LeadListFilters {
   rating?: string;       // Case-insensitive exact match (hot/warm/cold)
   source?: string;       // lead_source enum value
   updatedSince?: Date;
+  includeArchived?: boolean; // Default false: archived leads stay out of active workflows
 }
 
 export interface OpportunityListFilters {

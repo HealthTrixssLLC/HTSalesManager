@@ -176,6 +176,11 @@ export const leads = pgTable("leads", {
   sourceRecordId: text("source_record_id"), // External system record ID
   importStatus: text("import_status"), // Import tracking status
   importNotes: text("import_notes"), // Notes from import process
+  // Lifecycle removal preserves the Lead and all of its related CRM history.
+  // archivedFromStatus is retained only while archived so restore can retain
+  // the pre-archive business state without guessing.
+  archivedAt: timestamp("archived_at"),
+  archivedFromStatus: leadStatusEnum("archived_from_status"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
@@ -184,6 +189,7 @@ export const leads = pgTable("leads", {
   statusIdx: index("leads_status_idx").on(table.status),
   emailIdx: index("leads_email_idx").on(table.email),
   externalIdIdx: index("leads_external_id_idx").on(table.externalId),
+  orgArchivedIdx: index("leads_org_archived_idx").on(table.organizationId, table.archivedAt),
   orgEmailUnique: uniqueIndex("leads_org_email_unique_idx")
     .on(table.organizationId, sql`lower(BTRIM(${table.email}))`)
     .where(sql`NULLIF(BTRIM(${table.email}), ''::text) IS NOT NULL`),

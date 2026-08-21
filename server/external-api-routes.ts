@@ -194,6 +194,7 @@ export type ExternalApiErrorCode =
   | "VALIDATION_ERROR"      // 400 — payload or parameter failed validation
   | "INSUFFICIENT_SCOPE"    // 403 — key lacks a permission or org binding
   | "NOT_FOUND"             // 404 — missing or cross-org record
+  | "LEAD_ARCHIVED"         // 409 — restore the Lead before modifying or converting it
   | "TAG_ALREADY_EXISTS"    // 409 — duplicate tag name in org
   | "IDEMPOTENCY_CONFLICT"  // 409 — externalId replayed with a different body
   | "CONVERSION_CONFLICT"   // 409 — convert retry disagrees with stored conversion
@@ -1340,6 +1341,7 @@ const externalLeadSchema = z.object({
 /** Format a lead for external API responses.
  * Handles both camelCase (Drizzle select) and snake_case (raw SQL) row shapes. */
 function formatLeadResponse(lead: any, orgName: string | null) {
+  const archivedAt = lead.archivedAt ?? lead.archived_at ?? null;
   return {
     id: lead.id,
     firstName: lead.firstName ?? lead.first_name ?? null,
@@ -1358,11 +1360,44 @@ function formatLeadResponse(lead: any, orgName: string | null) {
     convertedContactId: lead.convertedContactId ?? lead.converted_contact_id ?? null,
     convertedOpportunityId: lead.convertedOpportunityId ?? lead.converted_opportunity_id ?? null,
     convertedAt: lead.convertedAt ?? lead.converted_at ?? null,
+    archived: Boolean(archivedAt),
+    archivedAt,
     organizationId: lead.organizationId ?? lead.organization_id ?? null,
     organizationName: orgName,
     createdAt: lead.createdAt ?? lead.created_at ?? null,
     updatedAt: lead.updatedAt ?? lead.updated_at ?? null,
   };
+}
+
+const CANONICAL_LEAD_ID_RE = /^LEAD-\d{6}$/;
+
+function isArchivedLead(lead: any): boolean {
+  return Boolean(lead?.archivedAt ?? lead?.archived_at);
+}
+
+function leadLifecycleIfMatch(
+  req: ApiKeyRequest,
+  lead: any,
+): { expectedUpdatedAt?: Date; stale?: Record<string, any> } {
+  const ifMatchRaw = req.headers["if-match"];
+  const ifMatch = Array.isArray(ifMatchRaw) ? ifMatchRaw.join(",") : ifMatchRaw;
+  if (typeof ifMatch !== "string") return {};
+
+  const currentTag = recordETag(lead.updatedAt ?? lead.updated_at);
+  if (evaluateIfMatch(ifMatch, currentTag) !== "match") {
+    return {
+      stale: {
+        error: "Precondition failed",
+        code: "STALE_RECORD",
+        message: "The lead was modified since you last fetched it. Re-fetch the record and retry with its current version.",
+        ...(currentTag ? { currentVersion: currentTag } : {}),
+      },
+    };
+  }
+
+  return ifMatch.trim() === "*"
+    ? {}
+    : { expectedUpdatedAt: new Date(lead.updatedAt ?? lead.updated_at) };
 }
 
 /**
@@ -1404,7 +1439,7 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
     // normalizeEmail trims whitespace; the DB index uses lower(BTRIM(email)).
     const normalizedEmail = normalizeEmail(data.email);
     if (normalizedEmail) {
-      const existingLeads = await storage.getAllLeads(orgId);
+      const existingLeads = await storage.getAllLeads(orgId, { includeArchived: true });
       const emailKey = normalizedEmail.toLowerCase();
       const duplicate = existingLeads.find(
         (l: any) => normalizeEmail(l.email)?.toLowerCase() === emailKey
@@ -1442,7 +1477,7 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
         createError?.cause?.code === "23505" ||
         /duplicate key value/i.test(createError?.message || "");
       if (isUniqueViolation && normalizedEmail) {
-        const existingLeads = await storage.getAllLeads(orgId);
+        const existingLeads = await storage.getAllLeads(orgId, { includeArchived: true });
         const emailKey = normalizedEmail.toLowerCase();
         const existing = existingLeads.find(
           (l: any) => normalizeEmail(l.email)?.toLowerCase() === emailKey
@@ -1480,6 +1515,7 @@ router.post("/leads", requirePermission("crm.write"), async (req: ApiKeyRequest,
  * - status: Lead status (new, contacted, qualified, unqualified, converted)
  * - rating: Lead temperature (hot, warm, cold)
  * - source: Lead source (website, referral, phone, email, event, partner, lead_generation, other)
+ * - includeArchived: true to include archived history (default false)
  * - updatedSince: ISO 8601 timestamp
  * - limit (default 100, max 1000), offset
  */
@@ -1509,6 +1545,14 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
     const sourceParsed = parseEnumParam(req.query.source, "source", LEAD_SOURCES);
     if (sourceParsed.error) return res.status(400).json(sourceParsed.error);
 
+    const includeArchivedRaw = qs(req.query.includeArchived);
+    if (includeArchivedRaw !== undefined && includeArchivedRaw !== "true" && includeArchivedRaw !== "false") {
+      return apiError(res, 400, "VALIDATION_ERROR", "Invalid includeArchived value", {
+        message: "includeArchived must be true or false",
+      });
+    }
+    const includeArchived = includeArchivedRaw === "true";
+
     const tagFilter = await resolveTagFilter(req, orgId);
     if (tagFilter.error) return res.status(tagFilter.error.status).json(tagFilter.error.body);
 
@@ -1521,9 +1565,13 @@ router.get("/leads", requirePermission("crm.read"), async (req: ApiKeyRequest, r
       source: sourceParsed.value,
       updatedSince: updatedSinceParsed.date,
       tagId: tagFilter.tagId,
+      includeArchived,
     });
     leads = await includeExactIdMatch("Lead", leads as any, qs(req.query.search), orgId, (id) => storage.getLeadById(id));
     leads = await applyLegacyIdListFilter("Lead", leads as any, qs(req.query.legacyId));
+    // includeExactIdMatch deliberately bypasses the list SQL to support direct
+    // canonical/legacy searches, so apply the archive visibility rule again.
+    if (!includeArchived) leads = leads.filter((lead: any) => !isArchivedLead(lead));
 
     const total = leads.length;
     const page = leads.slice(offsetNum, offsetNum + limitNum);
@@ -1585,6 +1633,114 @@ router.get("/leads/:id", requirePermission("crm.read"), async (req: ApiKeyReques
     });
   }
 });
+
+async function leadLifecycleResponse(
+  res: Response,
+  lead: any,
+  orgId: string,
+  stateKey: "alreadyArchived" | "alreadyActive",
+): Promise<void> {
+  const organization = await storage.getOrganizationById(orgId);
+  const payload = await withLegacyId("Lead", formatLeadResponse(lead, organization?.name ?? null));
+  attachVersion(res, payload, lead.updatedAt ?? lead.updated_at);
+  res.json({ data: payload, [stateKey]: true });
+}
+
+function makeLeadLifecycleHandler(action: "archive" | "restore") {
+  const archive = action === "archive";
+  const verb = archive ? "archive" : "restore";
+  const alreadyKey = archive ? "alreadyArchived" : "alreadyActive";
+
+  return async (req: ApiKeyRequest, res: Response) => {
+    try {
+      const orgId = getKeyOrgId(req);
+      if (!orgId) {
+        return apiError(res, 403, "INSUFFICIENT_SCOPE", "Organization-bound API key required", {
+          message: `Lead ${verb} requires an API key bound to an organization`,
+        });
+      }
+      if (!CANONICAL_LEAD_ID_RE.test(req.params.id)) {
+        return apiError(res, 400, "VALIDATION_ERROR", "Canonical Lead ID required", {
+          message: "Lead lifecycle operations require a canonical ID in the form LEAD-000001",
+        });
+      }
+
+      const existing = await storage.getLeadById(req.params.id);
+      if (!existing || !keyOrgOwns(existing, orgId)) {
+        return apiError(res, 404, "NOT_FOUND", "Lead not found", {
+          message: `No lead found with ID: ${req.params.id}`,
+        });
+      }
+
+      const concurrency = leadLifecycleIfMatch(req, existing);
+      if (concurrency.stale) return res.status(412).json(concurrency.stale);
+
+      const alreadyInTargetState = archive ? isArchivedLead(existing) : !isArchivedLead(existing);
+      if (alreadyInTargetState) {
+        return leadLifecycleResponse(res, existing, orgId, alreadyKey);
+      }
+
+      const updated = archive
+        ? await storage.archiveLead(existing.id, orgId, concurrency.expectedUpdatedAt)
+        : await storage.restoreLead(existing.id, orgId, concurrency.expectedUpdatedAt);
+
+      if (!updated) {
+        const recheck = await storage.getLeadById(existing.id);
+        if (recheck && keyOrgOwns(recheck, orgId)) {
+          if (concurrency.expectedUpdatedAt) {
+            return res.status(412).json({
+              error: "Precondition failed",
+              code: "STALE_RECORD",
+              message: "The lead was modified since you last fetched it. Re-fetch the record and retry with its current version.",
+              currentVersion: recordETag((recheck as any).updatedAt),
+            });
+          }
+          return leadLifecycleResponse(res, recheck, orgId, alreadyKey);
+        }
+        return apiError(res, 404, "NOT_FOUND", "Lead not found", {
+          message: `No lead found with ID: ${req.params.id}`,
+        });
+      }
+
+      storage.createAuditLog({
+        actorId: null,
+        action: `external_api_${verb}_lead`,
+        resource: "Lead",
+        resourceId: updated.id,
+        before: {
+          archivedAt: (existing as any).archivedAt ?? null,
+          status: existing.status,
+        },
+        after: {
+          archivedAt: (updated as any).archivedAt ?? null,
+          status: updated.status,
+          apiKeyId: req.apiKey?.id,
+          apiKeyName: req.apiKey?.name,
+        },
+        ipAddress: req.ip || req.connection.remoteAddress || null,
+        userAgent: req.headers["user-agent"] || null,
+      }).catch(err => {
+        console.error(`[EXTERNAL-API] Failed to create Lead ${verb} audit log:`, err);
+      });
+
+      const organization = await storage.getOrganizationById(orgId);
+      const payload = await withLegacyId("Lead", formatLeadResponse(updated, organization?.name ?? null));
+      attachVersion(res, payload, (updated as any).updatedAt);
+      return res.json({ data: payload, [alreadyKey]: false });
+    } catch (error) {
+      console.error(`[EXTERNAL-API] Error attempting to ${verb} lead:`, error);
+      return res.status(500).json({
+        error: `Failed to ${verb} lead`,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+}
+
+// Lead archival is the supported lifecycle-removal operation. These state
+// transitions preserve all CRM history; external hard deletion is unsupported.
+router.post("/leads/:id/archive", requirePermission("crm.write"), makeLeadLifecycleHandler("archive"));
+router.post("/leads/:id/restore", requirePermission("crm.write"), makeLeadLifecycleHandler("restore"));
 
 // ========== ACTIVITIES ENDPOINT ==========
 
@@ -2262,6 +2418,11 @@ function makePatchHandler(cfg: PatchEntityConfig) {
           message: `No ${cfg.label.toLowerCase()} found with ID: ${req.params.id}`,
         });
       }
+      if (cfg.entity === "lead" && isArchivedLead(existing)) {
+        return apiError(res, 409, "LEAD_ARCHIVED", "Lead is archived", {
+          message: "This Lead is archived and must be restored before it can be modified.",
+        });
+      }
 
       // Referenced-record ownership: a mutable accountId must point to an
       // account in the record's own organization (tenant-safe relationships)
@@ -2337,10 +2498,15 @@ function makePatchHandler(cfg: PatchEntityConfig) {
       // so a concurrent writer between our read and this UPDATE causes 0 rows)
       const updated = await cfg.patch(req.params.id, orgId, updates, expectedUpdatedAt);
       if (!updated) {
+        const recheck = await cfg.getById(req.params.id);
+        if (cfg.entity === "lead" && recheck && keyOrgOwns(recheck, orgId) && isArchivedLead(recheck)) {
+          return apiError(res, 409, "LEAD_ARCHIVED", "Lead is archived", {
+            message: "This Lead is archived and must be restored before it can be modified.",
+          });
+        }
         // Distinguish "record vanished" (404) from "record changed underneath
         // the conditional update" (412) when an If-Match precondition was used.
         if (expectedUpdatedAt) {
-          const recheck = await cfg.getById(req.params.id);
           if (recheck && keyOrgOwns(recheck, orgId)) {
             return res.status(412).json({
               error: "Precondition failed",
@@ -3153,6 +3319,11 @@ router.post("/leads/:id/convert", requirePermission("crm.write"), async (req: Ap
     if (result.status === "not_found") {
       return apiError(res, 404, "NOT_FOUND", "Lead not found", {
         message: `No lead found with ID: ${req.params.id}`,
+      });
+    }
+    if (result.status === "archived") {
+      return apiError(res, 409, "LEAD_ARCHIVED", "Lead is archived", {
+        message: "This Lead is archived and must be restored before it can be converted.",
       });
     }
     if (result.status === "bad_account") {
