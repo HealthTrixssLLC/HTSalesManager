@@ -85,6 +85,13 @@
       "when": 1776614400000,
       "tag": "0019_normalize_comment_entity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787319300000,
+      "tag": "0020_add_lead_archival",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ This guide explains how an external system (a website contact form, an email-par
 - **Format**: JSON request and response bodies (`Content-Type: application/json`)
 - **Organization scoping**: Every API key is bound to exactly **one organization**. All leads created with a key are automatically assigned to that key's organization — the caller never chooses (or can override) the organization. The response always returns the assigned `organizationId` and `organizationName` so you can confirm where the lead landed.
 - **Multiple sources → multiple keys**: If your website and your email system should feed **different** organizations, create one API key per organization and give each system its own key. If they feed the same organization, they can share a key (or use separate keys for cleaner audit logs — recommended).
+- **Lifecycle removal**: Lead archival is the supported lifecycle-removal operation. External hard deletion is intentionally not supported because CRM history must be preserved.
 
 ## 2. Getting an API Key
 
@@ -79,7 +80,7 @@ Unknown fields are rejected (400). You **cannot** send `organizationId` — it i
 }
 ```
 
-**Duplicate response (`200 OK`)** — if a lead with the same email (case-insensitive) already exists in the organization, **no new lead is created** and the existing lead is returned:
+**Duplicate response (`200 OK`)** — if a lead with the same email (case-insensitive) already exists in the organization, **no new lead is created** and the existing lead is returned. This includes archived Leads: look for `data.archived: true` and restore that record instead of creating a replacement.
 
 ```json
 {
@@ -97,7 +98,7 @@ Check the `duplicate` flag (and/or status code 201 vs 200) to know whether a new
 GET /api/v1/external/leads/:id
 ```
 
-Returns `{ "data": { ...lead } }` for a lead in your key's organization, or `404` if it doesn't exist (or belongs to another organization).
+Returns `{ "data": { ...lead } }` for a lead in your key's organization, or `404` if it doesn't exist (or belongs to another organization). Direct canonical-ID reads include archived Leads so their history can be inspected. Detail responses include an `ETag` header and `_version` field for optional conditional lifecycle updates.
 
 ### 3.3 List Leads
 
@@ -108,10 +109,60 @@ GET /api/v1/external/leads?updatedSince=2026-07-01T00:00:00Z&limit=100&offset=0
 | Query param | Notes |
 |---|---|
 | `updatedSince` | ISO 8601 timestamp; only leads updated after this time |
+| `search`, `email`, `status`, `rating`, `source` | Server-side Lead filters |
+| `includeArchived` | `false` by default. Pass `true` to include archived Leads for historical review. |
 | `limit` | Default 100, max 1000 |
 | `offset` | Default 0 |
 
 Response: `{ "data": [ ...leads ], "pagination": { "total", "limit", "offset", "hasMore" } }`. Only leads in your key's organization are returned.
+
+### 3.4 Archive a Lead
+
+```text
+POST /api/v1/external/leads/:id/archive
+```
+
+Requires an organization-bound API key with `crm.write`. `:id` must be canonical
+(`LEAD-000123`), and cross-organization records return `404`. Archive is
+idempotent: the response is `200` with `{ "data": { ...lead, "archived": true,
+"archivedAt": "..." }, "alreadyArchived": false }`; calling it again returns
+`alreadyArchived: true` without changing history.
+
+Optional `If-Match: "<ETag from GET>"` provides optimistic concurrency. A stale
+version returns `412` with `code: "STALE_RECORD"`. Archive never deletes or
+changes related activities, comments, tags, documents, lead-generation links,
+or audit records.
+
+### 3.5 Restore a Lead
+
+```text
+POST /api/v1/external/leads/:id/restore
+```
+
+Requires the same organization-bound `crm.write` key and canonical Lead ID.
+Restore is idempotent and returns `{ "data": { ...lead, "archived": false,
+"archivedAt": null }, "alreadyActive": false }`; repeating it returns
+`alreadyActive: true`. Restore preserves the Lead's existing business status
+instead of guessing a new value. It supports the same optional `If-Match` ETag
+protection as archive.
+
+### 3.6 Update or Convert a Lead
+
+```text
+PATCH /api/v1/external/leads/:id
+```
+
+PATCH supports the documented Lead fields (`firstName`, `lastName`, `title`,
+`company`, `email`, `phone`, `topic`, `status`, `source`, `rating`, `ownerId`,
+and `externalId`) and optional `If-Match`. Archive lifecycle fields are
+immutable through PATCH; use the explicit archive/restore endpoints instead.
+An archived Lead returns `409` with `code: "LEAD_ARCHIVED"` and must be restored
+before it can be modified.
+
+`POST /api/v1/external/leads/:id/convert` follows the same lifecycle rule:
+archived Leads return `409` with `code: "LEAD_ARCHIVED"` and are never
+converted. Restore the Lead first; active Leads retain the existing conversion
+and replay behavior.
 
 ## 4. Error Reference
 
@@ -121,6 +172,8 @@ Response: `{ "data": [ ...leads ], "pagination": { "total", "limit", "offset", "
 | `401` | Missing/invalid/expired API key | `{ "error": "Invalid API key", "message": "..." }` |
 | `403` | Key is not bound to an organization | `{ "error": "Organization-bound API key required", "message": "..." }` |
 | `404` | Lead not found (or belongs to another org) | `{ "error": "Lead not found", "message": "..." }` |
+| `409` | Archived Lead must be restored | `{ "error": "Lead is archived", "code": "LEAD_ARCHIVED", "message": "..." }` |
+| `412` | Stale `If-Match` lifecycle/PATCH write | `{ "error": "Precondition failed", "code": "STALE_RECORD", "currentVersion": "\"...\"" }` |
 | `429` | Rate limit exceeded | `{ "error": "Too many requests", "message": "..." }` |
 | `500` | Server error | `{ "error": "Failed to create lead", "message": "..." }` |
 
@@ -257,6 +310,9 @@ Use a **separate API key** for the email integration (e.g. `Email Lead Intake`) 
 - [ ] Key stored as a secret (`CRM_API_KEY`), never exposed client-side
 - [ ] `source` set appropriately (`website` or `email`) on every submission
 - [ ] `duplicate` flag handled (201 = created, 200 = already existed)
+- [ ] Archived duplicate handled by choosing explicit restore or retaining history
+- [ ] Active Lead lists use the default; historical lists pass `includeArchived=true`
+- [ ] Archive/restore requests use a canonical `LEAD-*` ID and, where concurrent writers are possible, the latest `ETag` in `If-Match`
 - [ ] 400 validation errors surfaced during development
 - [ ] 429 retry/backoff and failure fallback (queue or notify) implemented
 - [ ] Confirmed `organizationId`/`organizationName` in responses match the intended org
